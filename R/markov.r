@@ -150,8 +150,6 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
 
   state_names <- colnames(init)
 
-
-  browser()
   # Rename states according to expanded state names using existing function but modifying it to take into account max_st
   # Have values sorted properly and make sure all are represented in each list, and list is ordered by states, and correct names are applied
   trace_transitions_values <- cppMarkovTransitionsAndTrace(
