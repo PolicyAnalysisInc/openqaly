@@ -161,10 +161,10 @@ List cppMarkovTransitionsAndTrace(
             DebugPrintText("    ______________________________________\n");
             DebugPrintValue("    STARTING NEW STATE", fromState);
             DebugPrintText("    ______________________________________\n");
+            std::string fromStateName = std::string(transFromCol[currentTransitionsRow]);
             do {
+
                 std::string toStateName = std::string(transToCol[currentTransitionsRow]);
-                std::string fromStateName = std::string(transFromCol[currentTransitionsRow]);
-                
                 toState = stateIndexDictionary[toStateName];
                 value =  transValueCol[currentTransitionsRow];
                 DebugPrintValue("        CURRENT ROW", currentTransitionsRow);
@@ -196,13 +196,11 @@ List cppMarkovTransitionsAndTrace(
 
                     // Populate row for unconditional transition probabilities
                     utpCycleCol[currentTransitionsRow] = cycle;
-                    utpFromCol[currentTransitionsRow] = fromState;
-                    utpToCol[currentTransitionsRow] = toState;
+                    utpFromCol[currentTransitionsRow] = fromStateName;
+                    utpToCol[currentTransitionsRow] = toStateName;
                     utpValCol[currentTransitionsRow] = uncondTransProb;
 
                     // Set transitional values
-                    std::string fromStateName = std::string(stateNames[fromState]);
-                    std::string toStateName = std::string(stateNames[toState]);
                     valList = transitionalValueDictionary[getTransitionKey(fromStateName,toStateName)];
                     int nVals = valList.length();
                     for (int valIndex = 0; valIndex < nVals; valIndex++) {
@@ -214,14 +212,10 @@ List cppMarkovTransitionsAndTrace(
                         if (nValueCycles > 1) {
                             valValue = valValues[cycle - 1];
                         }
-                    Rcout << ("Value Name: ") << valName << "\n";
-                    Rcout << ("From State: ") << fromStateName << "\n";
-                    Rcout << ("To State: ") << toStateName << "\n";
                         tvalCycleCol[tvalRowIndex] = cycle;
                         tvalStateCol[tvalRowIndex] = fromStateName;
                         tvalDestCol[tvalRowIndex] = toStateName;
                         tvalValCol[tvalRowIndex] = uncondTransProb * valValue;
-                    Rcout << ("foo") << "\n";
                         tvalRowIndex++;
                     }
 
@@ -266,22 +260,16 @@ List cppMarkovTransitionsAndTrace(
 
                 // Set unconditional transition probabilities
                 utpCycleCol[complementRowIndex] = cycle;
-                utpFromCol[complementRowIndex] = fromState;
-                utpToCol[complementRowIndex] = complementToState;
+                utpFromCol[complementRowIndex] = fromStateName;
+                utpToCol[complementRowIndex] = complementToStateName;
                 utpValCol[complementRowIndex] = uncondTransProb;
 
                 // Set transitional values
-                std::string fromStateName = std::string(stateNames[fromState]);
-                std::string toStateName = std::string(stateNames[complementToState]);
                 valList = transitionalValueDictionary[getTransitionKey(fromStateName, complementToStateName)];
                 int nVals = valList.length();
                 for (int valIndex = 0; valIndex < nVals; valIndex++) {
                     valNames = valList.names();
                     std::string valName = std::string(valNames[valIndex]);
-                    Rcout << ("COMPLEMENT STATE") << "\n";
-                    Rcout << ("Value Name: ") << valName << "\n";
-                    Rcout << ("From State: ") << fromStateName << "\n";
-                    Rcout << ("To State: ") << toStateName << "\n";
                     valValues = valList[valIndex];
                     int nValueCycles = valValues.length();
                     double valValue = valValues[0];
@@ -298,8 +286,6 @@ List cppMarkovTransitionsAndTrace(
                 transitionErrors(complementRowIndex, 1) = (complementValue > 1) || (complementValue < 0);
                 transitionErrors(complementRowIndex, 3) = std::isnan(complementValue);
             } else {
-                // Rcout << "Cumulative prob no complement: " << cumulativeProbability << "\n";
-                // Rcout << "Cumulative prob equals 1: " << (cumulativeProbability == 1) << "\n";
                 transitionErrors(currentTransitionsRow - 1, 2) = cumulativeProbability != 1;
             }
 
