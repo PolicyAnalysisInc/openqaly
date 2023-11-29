@@ -103,9 +103,6 @@ handle_state_expansion <- function(init, transitions, values) {
     expanded_transitions$.to_e[ls_i] <- expand_state_name(expanded_transitions$to[ls_i], expanded_transitions$.max_st[ls_i])
     expanded_transitions$.to_e[nx_i] <- expand_state_name(expanded_transitions$to[nx_i], expanded_transitions$state_cycle[nx_i] + 1)
 
-  # Generate data structure of transition probabilities to pass to rcpp function
-  expanded_trans_matrix <- lf_to_lf_mat(expanded_transitions, state_names)
-
   expand_trans_first_cycle <- select(
     filter(expanded_transitions, cycle == 1),
     from, to, .to_e, state_cycle
@@ -138,7 +135,7 @@ handle_state_expansion <- function(init, transitions, values) {
 
   list(
     init = expand_init,
-    transitions = expanded_trans_matrix,
+    transitions = expanded_transitions,
     values = values_expanded
   )
 
@@ -312,7 +309,7 @@ eval_trans_markov_lf <- function(df, ns, state_time_use, simplify = FALSE) {
   
   # Loop through each row in transitions, evaluate, then
   # combine results into a single dataframe
-  rowwise(df) %>%
+  eval_trans_df <- rowwise(df) %>%
     group_split() %>%
     map(function(row, ns, simplify = F) {
       # Populate at dataframe with time, from, to
@@ -354,6 +351,19 @@ eval_trans_markov_lf <- function(df, ns, state_time_use, simplify = FALSE) {
       time_df
     }, ns, simplify = simplify) %>%
     bind_rows()
+
+  state_names <- unique(eval_trans_df$from)
+  
+  sorted_eval_trans_df <- eval_trans_df %>%
+    arrange(
+      cycle,
+      factor(from, levels = state_names),
+      state_cycle,
+      factor(to, levels = state_names)
+    )
+
+  sorted_eval_trans_df
+
 }
 
 #' Convert Lonform Transitions Table to Matrix

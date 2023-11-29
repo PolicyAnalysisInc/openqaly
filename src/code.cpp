@@ -12,6 +12,11 @@ void DebugPrintValue(std::string label, double value) {
         Rcout << (label + ": ") << value << "\n";
     }
 }
+void DebugPrintStringValue(std::string label, std::string value) {
+    if (useDebug) {
+        Rcout << (label + ": ") << value << "\n";
+    }
+}
 
 // [[Rcpp::export]]
 List MarkovTraceAndValues(NumericMatrix transitions, List values, NumericVector init, int ncycles, int nstates, int nvalues, double ccons) {
@@ -130,7 +135,7 @@ List MarkovTraceAndValues(NumericMatrix transitions, List values, NumericVector 
 */
 // [[Rcpp::export]]
 List cppMarkovTransitionsAndTrace(
-    NumericMatrix transitions,
+    DataFrame transitions,
     DataFrame valuesTransitional,
     NumericVector initialProbs,
     CharacterVector stateNames,
@@ -141,6 +146,17 @@ List cppMarkovTransitionsAndTrace(
 
     int nValues = valueNames.length();
     int nStates = stateNames.length();
+
+
+    std::map<String,int> stateIndexDictionary;
+    for (int i = 0; i < nStates; i ++) {
+        stateIndexDictionary[stateNames[i]] = i;
+    }
+
+    CharacterVector transFromCol = transitions[".from_e"];
+    CharacterVector transToCol = transitions[".to_e"];
+    IntegerVector transCycleCol = transitions["cycle"];
+    NumericVector transValueCol = transitions["value"];
 
     // Create a dictionary of transitional values
     std::map<String,List> transitionalValueDictionary;
@@ -157,7 +173,6 @@ List cppMarkovTransitionsAndTrace(
         std::string fromState = std::string(stateCol[i]);
         std::string destState = std::string(destCol[i]);
         std::string mapKey = fromState + "+" + destState;
-        //Rcout << mapKey << "\n";
         transitionalValueDictionary[mapKey] = valCol[i];
         nTransitionalValueInstances++;
     }
@@ -185,7 +200,6 @@ List cppMarkovTransitionsAndTrace(
 
     // Define a data frame to store the transitional values
     int transitionValueRows = nTransitionalValueInstances * nCycles;
-    Rcout << "Row count: " << (transitionValueRows) << "\n";
 
     IntegerVector tvalCycleCol = IntegerVector(transitionValueRows);
     CharacterVector tvalStateCol = CharacterVector(transitionValueRows);
@@ -239,11 +253,16 @@ List cppMarkovTransitionsAndTrace(
             DebugPrintValue("    STARTING NEW STATE", fromState);
             DebugPrintText("    ______________________________________\n");
             do {
-                toState = int (transitions(currentTransitionsRow, 2)) - 1;
-                value =  transitions(currentTransitionsRow, 3);
+                std::string toStateName = std::string(transToCol[currentTransitionsRow]);
+                std::string fromStateName = std::string(transFromCol[currentTransitionsRow]);
+                
+                toState = stateIndexDictionary[toStateName];
+                value =  transValueCol[currentTransitionsRow];
                 DebugPrintValue("        CURRENT ROW", currentTransitionsRow);
-                DebugPrintValue("        FROM", fromState);
-                DebugPrintValue("        TO", toState);
+                DebugPrintStringValue("        FROM", fromStateName);
+                DebugPrintValue("        FROM INDEX", fromState);
+                DebugPrintStringValue("        TO", toStateName);
+                DebugPrintValue("        TO INDEX", toState);
                 DebugPrintValue("        CYCLE", cycle);
                 DebugPrintValue("        VALUE", value);
 
@@ -286,19 +305,10 @@ List cppMarkovTransitionsAndTrace(
                         if (nValueCycles > 1) {
                             valValue = valValues[cycle - 1];
                         }
-                        
-                        Rcout << "From: " << (fromStateName) << "\n";
-                        Rcout << "To: " << (toStateName) << "\n";
-                        Rcout << "Cycle: " << (cycle) << "\n";
-                        Rcout << "Value value: " << (valValue) << "\n";
-                        Rcout << "Uncond Trans Prob: " << (uncondTransProb) << "\n";
-                        Rcout << "Value res: " << (uncondTransProb * valValue) << "\n";
-                        Rcout << "Setting trans value row: " << (tvalRowIndex) << "\n";
                         tvalCycleCol[tvalRowIndex] = cycle;
                         tvalStateCol[tvalRowIndex] = fromStateName;
                         tvalDestCol[tvalRowIndex] = toStateName;
                         tvalValCol[tvalRowIndex] = uncondTransProb * valValue;
-                        Rcout << "Set trans value row: " << (tvalRowIndex) << "\n";
                         tvalRowIndex++;
                     }
 
@@ -313,8 +323,11 @@ List cppMarkovTransitionsAndTrace(
                 if (currentTransitionsRow >= transrows) {
                     doneWithCurrentState = true;
                 } else {
-                    int nextFromState = int (transitions(currentTransitionsRow, 1)) - 1;
-                    int nextCycle = int (transitions(currentTransitionsRow, 0));
+                    int nextFromState = stateIndexDictionary[transFromCol[currentTransitionsRow]];
+
+                    int nextCycle = transCycleCol[currentTransitionsRow];
+                    DebugPrintValue("    NEXT ROW FROM", nextFromState);
+                    DebugPrintValue("    NEXT ROW CYCLE", nextCycle);
                     doneWithCurrentState = (nextFromState != fromState) || (nextCycle != cycle);
                 }
 
@@ -325,11 +338,11 @@ List cppMarkovTransitionsAndTrace(
             // update it in the transitions, then calculate/set the trace and unconditional
             // transition probability.
             if (complementsFoundInState > 0) {
-                int complementToState = int(transitions(complementRowIndex, 2)) - 1;
+                int complementToState = stateIndexDictionary[transToCol[complementRowIndex]];
                 DebugPrintText("    HANDLING COMPLEMENTARY PROBABILITY");
                 DebugPrintValue("    CUMULATIVE PROBABILITY", cumulativeProbability);
                 double complementValue = 1 - cumulativeProbability;
-                transitions(complementRowIndex, 3) = complementValue;
+                transValueCol[complementRowIndex] = complementValue;
                 fromStateTraceProb = trace(cycle - 1, fromState);
                 DebugPrintValue("    PROB OF BEING IN FROM STATE", fromStateTraceProb);
                 uncondTransProb = fromStateTraceProb * complementValue;

@@ -28,12 +28,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // cppMarkovTransitionsAndTrace
-List cppMarkovTransitionsAndTrace(NumericMatrix transitions, DataFrame valuesTransitional, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant);
+List cppMarkovTransitionsAndTrace(DataFrame transitions, DataFrame valuesTransitional, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant);
 RcppExport SEXP _heRomod2_cppMarkovTransitionsAndTrace(SEXP transitionsSEXP, SEXP valuesTransitionalSEXP, SEXP initialProbsSEXP, SEXP stateNamesSEXP, SEXP valueNamesSEXP, SEXP nCyclesSEXP, SEXP complementConstantSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type transitions(transitionsSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type transitions(transitionsSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type valuesTransitional(valuesTransitionalSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type initialProbs(initialProbsSEXP);
     Rcpp::traits::input_parameter< CharacterVector >::type stateNames(stateNamesSEXP);
