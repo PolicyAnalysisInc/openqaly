@@ -189,7 +189,7 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     res <- eval_formula(value, ns)
     
     # Check if the object was an error
-    if (class(res) == 'heRo_error') {
+    if ('heRo_error' %in% class(res)) {
       error_params <<- append(error_params, name)
       warning(
         'Error in evaluation of ', context, ' ',
