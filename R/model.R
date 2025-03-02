@@ -15,7 +15,7 @@ run_model <- function(model, ...) {
   
   # Create a results object
   res <- list()
-  
+
   # Parse the model
   parsed_model <- parse_model(model, ...)
   
@@ -42,14 +42,14 @@ parse_model <- function(model, ...) {
   # Create a new environment from the calling environment which will be used
   # to store model variables.
   model$env <- new.env(parent = parent.frame())
-  
+
   # Load tables & trees into the environment
   load_tables(model$tables, model$env)
   load_trees(model$trees, model$env)
-  
+
   # Run any model scripts within that environment
   run_scripts(model$scripts, model$env)
-  
+
   # If no groups are defined, create one group representing entire population
   if (nrow(model$groups) == 0) {
     model$groups <- create_default_group()
@@ -61,8 +61,8 @@ parse_model <- function(model, ...) {
     values = unique(model$values$name)
   )
 
-  model$n_cycles <- get_n_cycles(model$settings)
-  model$cycle_length_days <- get_cycle_length_days(model$settings)
+  model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
+  model$settings$n_cycles <- get_n_cycles(model$settings)
 
   # Set the class of the object based on model type
   class(model) <- c(model$settings$model_type, 'list')

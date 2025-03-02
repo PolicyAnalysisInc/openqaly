@@ -3,7 +3,7 @@ get_cycle_length_days <- function(settings) {
 
   # Extract cycle length & unit from settings
   cl_unit <- settings$cycle_length_unit
-  if (cl_unit == 'Cycles') {
+  if (cl_unit == 'cycles') {
     # Can't define cycle length in terms of cycles!
     stop('Error: Cannot define cycle length in terms of a number of cycles, please select another unit.', call. = FALSE)
   }
@@ -44,12 +44,12 @@ get_n_cycles <- function(settings) {
 
 days_per_unit <- function(unit, cycle_length_days, days_per_year) {
   vswitch(
-    unit,
-    "Days" = 1,
-    "Weeks" = 7,
-    "Months" = days_per_year / 12,
-    "Years" = days_per_year,
-    'Cycles' = cycle_length_days
+    tolower(unit),
+    "days" = 1,
+    "weeks" = 7,
+    "months" = days_per_year / 12,
+    "years" = days_per_year,
+    'cycles' = cycle_length_days
   )
 }
 
@@ -59,6 +59,7 @@ convert_time <- function(x, from, to, settings) {
 
 # Generate time variables
 time_variables <- function(settings, states) {
+
   n_cycles <- get_n_cycles(settings)
   cl <- get_cycle_length_days(settings)
   st_days_max <- max(
@@ -66,7 +67,7 @@ time_variables <- function(settings, states) {
       as.numeric(states$state_cycle_limit)
   )
   st_cycles <- min(n_cycles, max(1, floor(st_days_max / cl)))
-  
+  if (is.na(st_cycles)) st_cycles <- n_cycles
   # Create a table of model & state time variables
   tibble(
     # Model time variables (i.e. time since start of model)

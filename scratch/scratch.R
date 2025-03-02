@@ -5,6 +5,7 @@ model_name <- "checkimab_simple"
   model <- system.file("models", model_name, package = "heRomod2") %>%
     read_model()
   res <- run_model(model)
+  
 # #mark(rcpp = res <- run_model(model), max_iterations=1,check=F)
 
 

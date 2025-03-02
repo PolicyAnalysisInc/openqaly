@@ -11,15 +11,15 @@ read_model <- function(path) {
     purrr::set_names(., gsub('.R$', '', ., fixed = T)) %>%
     purrr::map(~readr::read_file(file.path(path,'scripts', .)))
 
-  model$settings <- convert_settings_from_xlsx(model$settings)
+  model$settings <- convert_settings_from_df(model$settings)
   
   define_object_(model, 'heRomodel')
 }
 
-convert_settings_from_xlsx <- function(settings_df) {
+convert_settings_from_df <- function(settings_df) {
   settings <- map(settings_df$value, function(x) {
     num <- suppressWarnings(as.numeric(x))
-    if (is.na(num)) return(x)
+    if (is.na(num)) return(tolower(x))
     num
   })
   names(settings) <- settings_df$setting
@@ -96,7 +96,7 @@ get_segments <- function(model) {
   expand.grid(
     group = model$groups$name,
     strategy =  model$strategies$name,
-    stringsAsFactors = F
+    stringsAsFactors = FALSE
   )
 }
 
@@ -203,6 +203,7 @@ check_state_time <- function(vars, states, transitions, values) {
     rbind(
       select(values, state, formula)
     ) %>%
+    filter(!is.na(state)) %>%
     group_by(state) %>%
     do({
       tibble(
@@ -312,4 +313,99 @@ check_tbl <- function(df, spec, context) {
 convert_to_type <- function(x, type) {
   func <- eval(parse(text = paste0('as.', type)))
   func(x)
+}
+
+#' Read Model from JSON
+#' 
+#' Takes a JSON string and parses it into a heRomodel object.
+#' 
+#' @param json_string A string containing the model in JSON format.
+#' 
+#' @return A heRomodel object
+#' 
+#' @export
+read_model_json <- function(json_string) {
+  # Parse JSON string into a list
+  model <- fromJSON(json_string, simplifyVector = TRUE)
+  
+  # Process tables - use from JSON or empty if not present
+  if (is.null(model$tables)) {
+    model$tables <- list()
+  } else if (!is.list(model$tables)) {
+    # If tables exists but isn't a list, convert it
+    model$tables <- as.list(model$tables)
+  }
+  
+  # Process scripts - use from JSON or empty if not present
+  if (is.null(model$scripts)) {
+    model$scripts <- list()
+  } else if (!is.list(model$scripts)) {
+    # If scripts exists but isn't a list, convert it
+    model$scripts <- as.list(model$scripts)
+  }
+  
+  # Convert settings if they exist
+  if (!is.null(model$settings) && is.data.frame(model$settings)) {
+    model$settings <- convert_settings_from_df(model$settings)
+  } else {
+    stop('Settings must be a data frame')
+  }
+
+  if (class(model$trees) == 'list') {
+    model$trees <- NULL
+  }
+  
+  # Convert data frames that might have been simplified too much
+  model <- convert_json_dataframes(model)
+  
+  # Define as heRomodel object
+  define_object_(model, 'heRomodel')
+}
+
+#' Convert JSON data frames
+#' 
+#' Ensures that data frames in the model are properly formatted
+#' 
+#' @param model The model list parsed from JSON
+#' @return The model with properly formatted data frames
+convert_json_dataframes <- function(model) {
+  # List of expected data frames in the model
+  expected_dfs <- c("strategies", "groups", "states", "transitions", "values")
+  
+  for (df_name in expected_dfs) {
+    if (!is.null(model[[df_name]])) {
+      # Ensure it's a data frame
+      if (!is.data.frame(model[[df_name]])) {
+        if (is.list(model[[df_name]])) {
+          # Convert list to data frame
+          model[[df_name]] <- as.data.frame(model[[df_name]], stringsAsFactors = FALSE)
+        } else {
+          # Create empty data frame if it's not a valid structure
+          model[[df_name]] <- data.frame()
+        }
+      }
+      
+      # Convert to tibble for consistency with the rest of the code
+      model[[df_name]] <- as_tibble(model[[df_name]])
+      
+      # Convert empty strings to NA
+      model[[df_name]] <- model[[df_name]] %>%
+        mutate(across(everything(), ~ifelse(. == "", NA, .)))
+      
+      # Convert column names in transitions from "from_state" and "to_state" to "from" and "to"
+      if (df_name == "transitions") {
+        if ("from_state" %in% colnames(model[[df_name]])) {
+          model[[df_name]] <- rename(model[[df_name]], from = from_state)
+        }
+        if ("to_state" %in% colnames(model[[df_name]])) {
+          model[[df_name]] <- rename(model[[df_name]], to = to_state)
+        }
+      }
+    } else {
+      # Create empty tibble if missing
+      model[[df_name]] <- tibble::tibble()
+    }
+  }
+  
+  return(model)
 }

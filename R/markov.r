@@ -14,7 +14,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   # Parse the specification tables provided for states,
   # variables, transitions, values, and summaries
 
-  uneval_states <- parse_states(model$states, model$cycle_length_days, model$settings$days_per_year) #10ms
+  uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year) #10ms
   uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees) #64ms  - IMPROVE BY CONVERTING SORT to RCPP
   uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars) #18ms
   uneval_values <- parse_values(model$values, uneval_states, uneval_vars) # 18ms - IMPROVE BY CONVERTING SORT to RCPP
@@ -51,7 +51,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     as.logical(model$settings$reduce_state_cycle)
   ) #6ms
 
-  expanded <- handle_state_expansion(eval_states, eval_trans, eval_values)
+  expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
 
   calculated_trace_and_values <- calculate_trace_and_values(
     expanded$init,
@@ -69,7 +69,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   segment
 }
 
-handle_state_expansion <- function(init, transitions, values) {
+handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
   # Determine number of cycles
   n_cycles <- max(transitions$cycle)
@@ -153,8 +153,6 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
 
   state_names <- colnames(init)
 
-
-  browser()
   # Rename states according to expanded state names using existing function but modifying it to take into account max_st
   # Have values sorted properly and make sure all are represented in each list, and list is ordered by states, and correct names are applied
   trace_transitions_values <- cppMarkovTransitionsAndTrace(
@@ -258,10 +256,12 @@ check_trans_markov <- function(x, state_names) {
   
   # Check column names
   missing_cols <- check_missing_colnames(x, trans_markov_cols)
+
   if (length(missing_cols) > 0) {
     plural <- if (length(missing_cols) > 1) 's' else ''
     missing_msg <- paste(missing_cols, collapse = ', ')
     error_msg <- glue('Transitions definition was missing column{plural}: {missing_msg}.')
+    stop(error_msg, call. = F)
   }
   
   # Check that all from states are represented
@@ -271,6 +271,7 @@ check_trans_markov <- function(x, state_names) {
     plural <- if (length(missing_state_names) > 1) 's' else ''
     missing_state_msg <- paste(missing_state_names, collapse = ', ')
     error_msg <- glue('Transitions definition missing state{plural}: {missing_state_msg}.')
+    stop(error_msg, call. = F)
   }
   
   # Check that no transitions are duplicated
@@ -281,6 +282,7 @@ check_trans_markov <- function(x, state_names) {
     plural <- if (length(dupe_names) > 1) 's' else ''
     dupe_msg <- paste(dupe_names, collapse = ', ')
     error_msg <- glue('Transitions definition contains duplicate enties for transition{plural}: {dupe_msg}.')
+    stop(error_msg, call. = F)
   }
   
   # Check that formulas are not blank
@@ -290,9 +292,9 @@ check_trans_markov <- function(x, state_names) {
     blank_names <- paste0(x$from[blank_index], '→', x$to[blank_index])
     blank_msg <- paste(blank_names, collapse = ', ')
     error_msg <- glue('Transitions definition contained blank formula for transitions{plural}: {blank_msg}.')
+    stop(error_msg, call. = F)
   }
   
-  if (error_msg != '') stop(error_msg, call. = F)
 }
 
 

@@ -4,6 +4,7 @@
 #' @import tidyr
 #' @import purrr openxlsx tidygraph ggraph ggplot2
 #' @importFrom stringr str_split_fixed
+#' @importFrom jsonlite fromJSON
 #' @importFrom tibble tibble as_tibble
 #' @importFrom glue glue
 #' @importFrom lazyeval lazy lazy_eval interp as.lazy as.lazy_dots
