@@ -75,7 +75,14 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   n_cycles <- max(transitions$cycle)
 
   # Calculate maximum number of tunnels needed for each state
-  st_maxes <- get_st_max(transitions, values, n_cycles)
+  # Join with state_time_use to only expand states that use state time
+  st_maxes <- get_st_max(transitions, values, n_cycles) %>%
+    left_join(state_time_use, by = "state") %>%
+    mutate(
+      # If uses_st is FALSE or NA, set max_st to 1 (no expansion)
+      max_st = ifelse(is.na(uses_st) | !uses_st, 1, max_st)
+    ) %>%
+    select(state, max_st)
 
   # Expand initial state probabilities to include tunnel states
   expand_init <- expand_init_states(init, st_maxes)
@@ -141,7 +148,6 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
     transitions = expanded_trans_matrix,
     values = values_expanded
   )
-
 }
 
 calculate_trace_and_values <- function(init, transitions, values, value_names) {

@@ -2,6 +2,22 @@ parse_values <- function(x, states, extra_vars) {
   
   # Check that values definition is valid
   check_values_df(x)
+  
+  # Check for duplicate values by name, state, and destination
+  duplicates <- x %>%
+    group_by(name, state, destination) %>%
+    filter(n() > 1) %>%
+    ungroup()
+  
+  if (nrow(duplicates) > 0) {
+    dup_values <- duplicates %>%
+      select(name, state, destination) %>%
+      distinct() %>%
+      mutate(combined = paste0("name: ", name, ", state: ", state, ", destination: ", destination))
+    
+    stop("Duplicate values found. Values must be unique by name, state, and destination combination:\n",
+         paste(dup_values$combined, collapse = "\n"))
+  }
 
   # Parse values and sort
   vars <- x %>%
