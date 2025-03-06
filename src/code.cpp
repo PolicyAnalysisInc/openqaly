@@ -185,7 +185,7 @@ List cppMarkovTransitionsAndTrace(
 
     // Define a data frame to store the transitional values
     int transitionValueRows = nTransitionalValueInstances * nCycles;
-    Rcout << "Row count: " << (transitionValueRows) << "\n";
+    // Rcout << "Row count: " << (transitionValueRows) << "\n";
 
     IntegerVector tvalCycleCol = IntegerVector(transitionValueRows);
     CharacterVector tvalStateCol = CharacterVector(transitionValueRows);
@@ -287,18 +287,18 @@ List cppMarkovTransitionsAndTrace(
                             valValue = valValues[cycle - 1];
                         }
                         
-                        Rcout << "From: " << (fromStateName) << "\n";
-                        Rcout << "To: " << (toStateName) << "\n";
-                        Rcout << "Cycle: " << (cycle) << "\n";
-                        Rcout << "Value value: " << (valValue) << "\n";
-                        Rcout << "Uncond Trans Prob: " << (uncondTransProb) << "\n";
-                        Rcout << "Value res: " << (uncondTransProb * valValue) << "\n";
-                        Rcout << "Setting trans value row: " << (tvalRowIndex) << "\n";
+                        // Rcout << "From: " << (fromStateName) << "\n";
+                        // Rcout << "To: " << (toStateName) << "\n";
+                        // Rcout << "Cycle: " << (cycle) << "\n";
+                        // Rcout << "Value value: " << (valValue) << "\n";
+                        // Rcout << "Uncond Trans Prob: " << (uncondTransProb) << "\n";
+                        // Rcout << "Value res: " << (uncondTransProb * valValue) << "\n";
+                        // Rcout << "Setting trans value row: " << (tvalRowIndex) << "\n";
                         tvalCycleCol[tvalRowIndex] = cycle;
                         tvalStateCol[tvalRowIndex] = fromStateName;
                         tvalDestCol[tvalRowIndex] = toStateName;
                         tvalValCol[tvalRowIndex] = uncondTransProb * valValue;
-                        Rcout << "Set trans value row: " << (tvalRowIndex) << "\n";
+                        // Rcout << "Set trans value row: " << (tvalRowIndex) << "\n";
                         tvalRowIndex++;
                     }
 

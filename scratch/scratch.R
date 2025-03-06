@@ -1,10 +1,17 @@
+devtools::build()
+devtools::install()
 library(heRomod2)
-library(bench)
+
+library(jsonlite)
+
+#library(bench)
 
 model_name <- "checkimab_simple"
   model <- system.file("models", model_name, package = "heRomod2") %>%
     read_model()
   res <- run_model(model)
+
+  jsonlite::toJSON(res)
   
 # #mark(rcpp = res <- run_model(model), max_iterations=1,check=F)
 

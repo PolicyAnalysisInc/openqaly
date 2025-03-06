@@ -2,8 +2,9 @@
 #' @import furrr
 #' @import future
 #' @import tidyr
-#' @import purrr openxlsx tidygraph ggraph ggplot2
+#' @import purrr tidygraph ggraph ggplot2
 #' @importFrom stringr str_split_fixed
+#' @importFrom openxlsx read_workbook
 #' @importFrom jsonlite fromJSON
 #' @importFrom tibble tibble as_tibble
 #' @importFrom glue glue

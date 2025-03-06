@@ -38,7 +38,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   # values, & summaries.
   eval_vars <- eval_variables(uneval_vars, ns) # 50ms - HARD TO IMPROVE
   eval_states <- eval_states(uneval_states, eval_vars) # <1 ms
-  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, state_time_use, model$settings$reduce_state_cycle) #3ms
+  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, model$settings$reduce_state_cycle) #3ms
 
   value_names <- unique(model$values$name)
   state_names <- unique(model$states$name)
@@ -156,6 +156,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
   n_cycles <- max(transitions[,1])
 
   transitional_values <- filter(values, !is.na(state), !is.na(destination))
+  residency_values <- filter(values, is.na(state))
 
   state_names <- colnames(init)
 
@@ -316,7 +317,7 @@ limit_state_time <- function(df, state_time_limits) {
 
 
 #' Evaluate a Longform Transition Matrix
-eval_trans_markov_lf <- function(df, ns, state_time_use, simplify = FALSE) {
+eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
   
   # Loop through each row in transitions, evaluate, then
   # combine results into a single dataframe

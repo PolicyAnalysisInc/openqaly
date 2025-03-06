@@ -21,7 +21,7 @@ parse_values <- function(x, states, extra_vars) {
 
   # Parse values and sort
   vars <- x %>%
-    group_by(state) %>%
+    group_by(state, destination) %>%
     do({
       as.data.frame(.) %>%
         select(name, display_name, description, state, destination, formula) %>%

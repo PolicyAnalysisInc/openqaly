@@ -214,8 +214,7 @@ check_state_time <- function(vars, states, transitions, values) {
     left_join(select(states, name, max_state_time), by = c('state' = 'name')) %>%
     transmute(
       state,
-      uses_st = ifelse(max_state_time > 1 && uses_st, TRUE, FALSE),
-      max_st = ifelse(uses_st, max_state_time, 1)
+      uses_st = ifelse(max_state_time > 1 && uses_st, TRUE, FALSE)
     )
   
   st_df
