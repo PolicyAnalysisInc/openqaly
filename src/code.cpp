@@ -132,13 +132,14 @@ List MarkovTraceAndValues(NumericMatrix transitions, List values, NumericVector 
 List cppMarkovTransitionsAndTrace(
     NumericMatrix transitions,
     DataFrame valuesTransitional,
+    DataFrame valuesResidency,
+    DataFrame modelStartValues,
     NumericVector initialProbs,
     CharacterVector stateNames,
     CharacterVector valueNames,
     int nCycles,
     double complementConstant
 ) {
-
     int nValues = valueNames.length();
     int nStates = stateNames.length();
 
@@ -157,9 +158,35 @@ List cppMarkovTransitionsAndTrace(
         std::string fromState = std::string(stateCol[i]);
         std::string destState = std::string(destCol[i]);
         std::string mapKey = fromState + "+" + destState;
-        //Rcout << mapKey << "\n";
         transitionalValueDictionary[mapKey] = valCol[i];
         nTransitionalValueInstances++;
+    }
+
+    // Create a dictionary of residency values
+    std::map<String,List> residencyValueDictionary;
+    int residencyValueRows = valuesResidency.nrow();
+    Rcpp::CharacterVector residStateCol;
+    Rcpp::List residValCol;
+    // Declare these variables which are used later
+    Rcpp::CharacterVector residValNames;
+    Rcpp::NumericVector residValValues;
+    int nResidencyValueInstances = 0;
+    for (int i = 0; i < residencyValueRows; i++) {
+        residStateCol = valuesResidency["state"];
+        residValCol = valuesResidency["values_list"];
+        std::string stateName = std::string(residStateCol[i]);
+        residencyValueDictionary[stateName] = residValCol[i];
+        nResidencyValueInstances++;
+    }
+
+    // Create a dictionary for model start values
+    std::map<String, List> modelStartValueDictionary;
+    int modelStartValueRows = modelStartValues.nrow();
+    Rcpp::List msValCol;
+    
+    for (int i = 0; i < modelStartValueRows; i++) {
+        msValCol = modelStartValues["values_list"];
+        modelStartValueDictionary["model_start"] = msValCol[i];
     }
 
     Rcpp::NumericMatrix transValueRes(nCycles * nTransitionalValueInstances, 4);
@@ -183,20 +210,16 @@ List cppMarkovTransitionsAndTrace(
         )
     );
 
-    // Define a data frame to store the transitional values
-    int transitionValueRows = nTransitionalValueInstances * nCycles;
-    // Rcout << "Row count: " << (transitionValueRows) << "\n";
-
-    IntegerVector tvalCycleCol = IntegerVector(transitionValueRows);
-    CharacterVector tvalStateCol = CharacterVector(transitionValueRows);
-    CharacterVector tvalDestCol = CharacterVector(transitionValueRows);
-    NumericVector tvalValCol = NumericVector(transitionValueRows);
-    DataFrame transitionalValueResults = DataFrame::create(
-        Named("cycle") = tvalCycleCol,
-        Named("state") = tvalStateCol,
-        Named("destination") = tvalDestCol,
-        Named("value") = tvalValCol
+    // Define a matrix to store the transitional values (replacing DataFrame format)
+    NumericMatrix transitionalValueResults(nCycles, nValues);
+    rownames(transitionalValueResults) = asCharacter(
+        seq(
+            Named("from") = 1,
+            Named("to") = nCycles,
+            Named("by") = 1
+        )
     );
+    colnames(transitionalValueResults) = valueNames;
 
     // Define matrix to store the table of unconditional transition probabilities
     Rcpp::NumericMatrix uncondTransProbs(transRows, 4); // Unconditional probabilities of transtitions
@@ -275,31 +298,40 @@ List cppMarkovTransitionsAndTrace(
                     // Set transitional values
                     std::string fromStateName = std::string(stateNames[fromState]);
                     std::string toStateName = std::string(stateNames[toState]);
-                    valList = transitionalValueDictionary[fromStateName + "+" + toStateName];
-                    int nVals = valList.length();
-                    for (int valIndex = 0; valIndex < nVals; valIndex++) {
-                        valNames = valList.names();
-                        std::string valName = std::string(valNames[valIndex]);
-                        valValues = valList[valIndex];
-                        int nValueCycles = valValues.length();
-                        double valValue = valValues[0];
-                        if (nValueCycles > 1) {
-                            valValue = valValues[cycle - 1];
-                        }
+                    std::string mapKey = fromStateName + "+" + toStateName;
+                    
+                    // Check if we have transitional values for this state transition
+                    if (transitionalValueDictionary.find(mapKey) != transitionalValueDictionary.end()) {
+                        valList = transitionalValueDictionary[mapKey];
+                        int nVals = valList.length();
                         
-                        // Rcout << "From: " << (fromStateName) << "\n";
-                        // Rcout << "To: " << (toStateName) << "\n";
-                        // Rcout << "Cycle: " << (cycle) << "\n";
-                        // Rcout << "Value value: " << (valValue) << "\n";
-                        // Rcout << "Uncond Trans Prob: " << (uncondTransProb) << "\n";
-                        // Rcout << "Value res: " << (uncondTransProb * valValue) << "\n";
-                        // Rcout << "Setting trans value row: " << (tvalRowIndex) << "\n";
-                        tvalCycleCol[tvalRowIndex] = cycle;
-                        tvalStateCol[tvalRowIndex] = fromStateName;
-                        tvalDestCol[tvalRowIndex] = toStateName;
-                        tvalValCol[tvalRowIndex] = uncondTransProb * valValue;
-                        // Rcout << "Set trans value row: " << (tvalRowIndex) << "\n";
-                        tvalRowIndex++;
+                        // For each value in this transition
+                        for (int valIndex = 0; valIndex < nVals; valIndex++) {
+                            Rcpp::CharacterVector valNames = valList.names();
+                            std::string valName = std::string(valNames[valIndex]);
+                            Rcpp::NumericVector valValues = valList[valIndex];
+                            int nValueCycles = valValues.length();
+                            double valValue = valValues[0];
+                            
+                            // Handle cycle-specific values
+                            if (nValueCycles > 1) {
+                                valValue = valValues[cycle - 1];
+                            }
+                            
+                            // Find the index of this value name in valueNames
+                            int valueIndex = -1;
+                            for (int i = 0; i < nValues; i++) {
+                                if (std::string(valueNames[i]) == valName) {
+                                    valueIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            if (valueIndex >= 0) {
+                                // Add transition contribution to result (uncond transition prob * value)
+                                transitionalValueResults(cycle - 1, valueIndex) += uncondTransProb * valValue;
+                            }
+                        }
                     }
 
                     // Populate row for error tracking of transition probabilities.
@@ -346,10 +378,41 @@ List cppMarkovTransitionsAndTrace(
                 // Set transitional values
                 std::string fromStateName = std::string(stateNames[fromState]);
                 std::string toStateName = std::string(stateNames[complementToState]);
-                valList = transitionalValueDictionary[fromStateName + "+" + toStateName];
-                //Rcout << "Value list length: " << (fromStateName + "+" + toStateName) << "\n";
-                //Rcout << "Value list length: " << valList.length() << "\n";
-
+                std::string mapKey = fromStateName + "+" + toStateName;
+                
+                // Check if we have transitional values for this state transition
+                if (transitionalValueDictionary.find(mapKey) != transitionalValueDictionary.end()) {
+                    valList = transitionalValueDictionary[mapKey];
+                    int nVals = valList.length();
+                    
+                    // For each value in this transition
+                    for (int valIndex = 0; valIndex < nVals; valIndex++) {
+                        Rcpp::CharacterVector valNames = valList.names();
+                        std::string valName = std::string(valNames[valIndex]);
+                        Rcpp::NumericVector valValues = valList[valIndex];
+                        int nValueCycles = valValues.length();
+                        double valValue = valValues[0];
+                        
+                        // Handle cycle-specific values
+                        if (nValueCycles > 1) {
+                            valValue = valValues[cycle - 1];
+                        }
+                        
+                        // Find the index of this value name in valueNames
+                        int valueIndex = -1;
+                        for (int i = 0; i < nValues; i++) {
+                            if (std::string(valueNames[i]) == valName) {
+                                valueIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        if (valueIndex >= 0) {
+                            // Add transition contribution to result (uncond transition prob * value)
+                            transitionalValueResults(cycle - 1, valueIndex) += uncondTransProb * valValue;
+                        }
+                    }
+                }
 
                 transitionErrors(complementRowIndex, 1) = (complementValue > 1) || (complementValue < 0);
                 transitionErrors(complementRowIndex, 3) = std::isnan(complementValue);
@@ -371,11 +434,136 @@ List cppMarkovTransitionsAndTrace(
         // state/cycle.
     }
 
+    // Create residency values results DataFrame
+    NumericMatrix residencyResults(nCycles, nValues);
+    rownames(residencyResults) = asCharacter(
+        seq(
+            Named("from") = 1,
+            Named("to") = nCycles,
+            Named("by") = 1
+        )
+    );
+    colnames(residencyResults) = valueNames;
+
+    // Calculate residency values for each cycle after trace is calculated
+    for(int cycle = 1; cycle <= nCycles; cycle++) {
+        // For each state
+        for(int stateIndex = 0; stateIndex < nStates; stateIndex++) {
+            std::string stateName = std::string(stateNames[stateIndex]);
+            double stateProb = trace(cycle - 1, stateIndex);
+            
+            // Find the values for this state
+            if (residencyValueDictionary.find(stateName) != residencyValueDictionary.end()) {
+                valList = residencyValueDictionary[stateName];
+                int nVals = valList.length();
+                
+                // For each value in the list
+                for (int valIndex = 0; valIndex < nVals; valIndex++) {
+                    residValNames = valList.names();
+                    std::string valName = std::string(residValNames[valIndex]);
+                    residValValues = valList[valIndex];
+                    int nValueCycles = residValValues.length();
+                    double valValue = residValValues[0];
+                    
+                    // Handle cycle-specific values
+                    if (nValueCycles > 1) {
+                        valValue = residValValues[cycle - 1];
+                    }
+                    
+                    // Find the index of this value name in valueNames
+                    int valueIndex = -1;
+                    for (int i = 0; i < nValues; i++) {
+                        if (std::string(valueNames[i]) == valName) {
+                            valueIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (valueIndex >= 0) {
+                        // Add state contribution to result (state probability * value)
+                        residencyResults(cycle - 1, valueIndex) += stateProb * valValue;
+                    }
+                }
+            }
+        }
+    }
+
+    // Create model start values results DataFrame
+    NumericMatrix modelStartResults(nCycles, nValues);
+    rownames(modelStartResults) = asCharacter(
+        seq(
+            Named("from") = 1,
+            Named("to") = nCycles,
+            Named("by") = 1
+        )
+    );
+    colnames(modelStartResults) = valueNames;
+
+    // Process model start values (only applied in first cycle)
+    if (modelStartValueDictionary.find("model_start") != modelStartValueDictionary.end()) {
+        valList = modelStartValueDictionary["model_start"];
+        int nVals = valList.length();
+        Rcpp::CharacterVector msValNames;
+        Rcpp::NumericVector msValValues;
+        
+        // For each value in the list
+        for (int valIndex = 0; valIndex < nVals; valIndex++) {
+            msValNames = valList.names();
+            std::string valName = std::string(msValNames[valIndex]);
+            msValValues = valList[valIndex];
+            double valValue = 0;
+            
+            // Get the value for the first cycle
+            if (msValValues.length() > 0) {
+                valValue = msValValues[0];
+            }
+            
+            // Find the index of this value name in valueNames
+            int valueIndex = -1;
+            for (int i = 0; i < nValues; i++) {
+                if (std::string(valueNames[i]) == valName) {
+                    valueIndex = i;
+                    break;
+                }
+            }
+            
+            if (valueIndex >= 0) {
+                // Set the value for the first cycle, all others remain zero
+                modelStartResults(0, valueIndex) = valValue;
+            }
+        }
+    }
+
+    // Calculate the total values (sum of transitional, residency, and model start)
+    NumericMatrix totalValues(nCycles, nValues);
+    rownames(totalValues) = asCharacter(
+        seq(
+            Named("from") = 1,
+            Named("to") = nCycles,
+            Named("by") = 1
+        )
+    );
+    colnames(totalValues) = valueNames;
+    
+    // Sum all three value types
+    for(int cycle = 0; cycle < nCycles; cycle++) {
+        for(int value = 0; value < nValues; value++) {
+            totalValues(cycle, value) = 
+                transitionalValueResults(cycle, value) + 
+                residencyResults(cycle, value) + 
+                modelStartResults(cycle, value);
+        }
+    }
+
+    // Return with all results matrices including the new total values
     return List::create(
         Named("trace") = trace,
         Named("uncondtransprod") = uncondTransProbs,
         Named("transitions") = transitions,
         Named("errors") = transitionErrors,
-        Named("transitionalValues") = transitionalValueResults
+        Named("transitionalValues") = transitionalValueResults,
+        Named("residencyValues") = residencyResults,
+        Named("modelStartValues") = modelStartResults,
+        Named("values") = totalValues  // Add the summed values matrix
     );
 }

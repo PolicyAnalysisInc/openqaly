@@ -19,7 +19,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars) #18ms
   uneval_values <- parse_values(model$values, uneval_states, uneval_vars) # 18ms - IMPROVE BY CONVERTING SORT to RCPP
   #uneval_econ_values <- parse_values(model$economic_values)
-  
+
   # Check inside the variables, transitions, & values for
   # any state-time dependency since this will inform the
   # creation of tunnel states
@@ -118,6 +118,8 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
     from, to, .to_e, state_cycle
   )
 
+  model_start_values <- filter(values, is.na(state), is.na(destination), state_cycle == 1)
+
   # Filter values to only include required tunnel states
   values_expanded <- select(values, -max_st) %>%
     left_join(st_maxes, by = c('state' = 'state')) %>%
@@ -141,7 +143,8 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
       destination = .to_e,
       max_st,
       values_list
-    )
+    ) %>%
+    bind_rows(model_start_values)
 
   list(
     init = expand_init,
@@ -156,8 +159,8 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
   n_cycles <- max(transitions[,1])
 
   transitional_values <- filter(values, !is.na(state), !is.na(destination))
-  residency_values <- filter(values, is.na(state))
-
+  residency_values <- filter(values, !is.na(state), is.na(destination))
+  model_start_values <- filter(values, is.na(state), is.na(destination))
   state_names <- colnames(init)
 
   # Rename states according to expanded state names using existing function but modifying it to take into account max_st
@@ -165,13 +168,15 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
   trace_transitions_values <- cppMarkovTransitionsAndTrace(
     transitions,
     transitional_values,
+    residency_values,
+    model_start_values,
     as.numeric(init),
     state_names,
     value_names,
     as.integer(n_cycles),
     -pi
   )
-
+  
   # Calculate trace and values in rcpp
   # foo <- MarkovTraceAndValues(
   #   trans_lf_mat,

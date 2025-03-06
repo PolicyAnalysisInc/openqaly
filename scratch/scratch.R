@@ -1,3 +1,4 @@
+Rcpp::compileAttributes()
 devtools::build()
 devtools::install()
 library(heRomod2)
@@ -11,7 +12,7 @@ model_name <- "checkimab_simple"
     read_model()
   res <- run_model(model)
 
-  jsonlite::toJSON(res)
+  #jsonlite::toJSON(res)
   
 # #mark(rcpp = res <- run_model(model), max_iterations=1,check=F)
 
