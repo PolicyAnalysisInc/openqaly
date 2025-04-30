@@ -4,7 +4,7 @@
 #' @import tidyr
 #' @import purrr tidygraph ggraph ggplot2
 #' @importFrom stringr str_split_fixed
-#' @importFrom openxlsx read_workbook
+#' @importFrom openxlsx readWorkbook getSheetNames
 #' @importFrom jsonlite fromJSON
 #' @importFrom tibble tibble as_tibble
 #' @importFrom glue glue
@@ -12,6 +12,9 @@
 #' @importFrom rlang .data sym
 #' @importFrom readr read_csv
 #' @importFrom utils capture.output
+#' @importFrom tidyr separate_rows pivot_longer
+#' @importFrom dplyr select mutate group_by summarize left_join
+#' @importFrom tibble rownames_to_column
 NULL
 
 ## usethis namespace: start

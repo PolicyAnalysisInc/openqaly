@@ -189,15 +189,25 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     res <- eval_formula(value, ns)
     
     # Check if the object was an error
-    if ('heRo_error' %in% class(res)) {
-      error_params <<- append(error_params, name)
-      warning(
+    if (is_hero_error(res)) {
+      # Construct error message string once
+      error_msg <- paste0(
         'Error in evaluation of ', context, ' ',
         err_name_string(name),
         ": ",
-        paste0(res),
-        call. = F
+        paste0(res)
       )
+      
+      # Check global option: stop or warn?
+      if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+        # Stop execution with the constructed message
+        stop(error_msg, call. = FALSE)
+      } else {
+        # Original behavior: record error parameter and issue warning
+        error_params <<- append(error_params, name)
+        warning(error_msg, call. = FALSE)
+      }
+      # The error object 'res' will be assigned below regardless
     }
     
     # Determine whether result is a vector or object parameter
@@ -209,7 +219,6 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
       # If an object parameter, assign to environment
       assign(name, res, envir = ns$env)
     }
-    
     
   })
   

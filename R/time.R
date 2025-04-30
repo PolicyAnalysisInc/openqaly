@@ -66,7 +66,7 @@ time_variables <- function(settings, states) {
     days_per_unit(states$state_cycle_limit_unit, settings$cycle_length_days, settings$days_per_year) *
       as.numeric(states$state_cycle_limit)
   )
-  st_cycles <- min(n_cycles, max(1, floor(st_days_max / cl)))
+  st_cycles <- min(n_cycles, max(1, floor(st_days_max / cl)), na.rm = TRUE)
   if (is.na(st_cycles)) st_cycles <- n_cycles
   # Create a table of model & state time variables
   tibble(
@@ -83,7 +83,7 @@ time_variables <- function(settings, states) {
     year_lag = convert_time(day_lag, from = 'Days', to = 'Years', settings),
     # State time variables (i.e. time since entering state)
     state_cycle = rep(seq_len(st_cycles), each = n_cycles),
-    state_day = cycle * cl,
+    state_day = state_cycle * cl,
     state_week = convert_time(state_day, from = 'Days', to = 'Weeks', settings),
     state_month = convert_time(state_day, from = 'Days', to = 'Months', settings),
     state_year = convert_time(state_day, from = 'Days', to = 'Years', settings),

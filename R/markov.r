@@ -13,13 +13,17 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Parse the specification tables provided for states,
   # variables, transitions, values, and summaries
-
-  uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year) #10ms
-  uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees) #64ms  - IMPROVE BY CONVERTING SORT to RCPP
-  uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars) #18ms
-  uneval_values <- parse_values(model$values, uneval_states, uneval_vars) # 18ms - IMPROVE BY CONVERTING SORT to RCPP
-  #uneval_econ_values <- parse_values(model$economic_values)
-
+  uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year)
+  uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
+  uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars)
+  uneval_values <- parse_values(model$values, uneval_states, uneval_vars)
+  
+  # Parse summaries if they exist
+  parsed_summaries <- NULL
+  if (!is.null(model$summaries)) {
+    parsed_summaries <- parse_summaries(model$summaries, unique(model$values$name))
+  }
+  
   # Check inside the variables, transitions, & values for
   # any state-time dependency since this will inform the
   # creation of tunnel states
@@ -28,7 +32,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     uneval_states,
     uneval_trans,
     uneval_values
-  ) # 11ms
+  )
   
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
@@ -36,9 +40,9 @@ run_segment.markov <- function(segment, model, env, ...) {
   
   # Evaluate variables, initial state probabilities, transitions,
   # values, & summaries.
-  eval_vars <- eval_variables(uneval_vars, ns) # 50ms - HARD TO IMPROVE
-  eval_states <- eval_states(uneval_states, eval_vars) # <1 ms
-  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, model$settings$reduce_state_cycle) #3ms
+  eval_vars <- eval_variables(uneval_vars, ns)
+  eval_states <- eval_states(uneval_states, eval_vars)
+  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, model$settings$reduce_state_cycle)
 
   value_names <- unique(model$values$name)
   state_names <- unique(model$states$name)
@@ -49,7 +53,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     value_names,
     state_names,
     as.logical(model$settings$reduce_state_cycle)
-  ) #6ms
+  )
 
   expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
 
@@ -58,7 +62,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     expanded$transitions,
     expanded$values,
     value_names
-  ) #11ms
+  )
   
   # Create the object to return that will summarize the results of
   # this segment.
@@ -66,6 +70,15 @@ run_segment.markov <- function(segment, model, env, ...) {
   segment$eval_vars <- list(eval_vars)
   segment$inital_state <- list(eval_states)
   segment$trace_and_values <- list(calculated_trace_and_values)
+  
+  # Calculate summaries if parsed_summaries exists
+  if (!is.null(parsed_summaries)) {
+    segment$summaries <- list(calculate_summaries(
+      parsed_summaries, 
+      calculated_trace_and_values$values
+    ))
+  }
+  
   segment
 }
 
@@ -157,12 +170,11 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
 
   # Determine number of cycles
   n_cycles <- max(transitions[,1])
-
   transitional_values <- filter(values, !is.na(state), !is.na(destination))
   residency_values <- filter(values, !is.na(state), is.na(destination))
   model_start_values <- filter(values, is.na(state), is.na(destination))
   state_names <- colnames(init)
-
+  
   # Rename states according to expanded state names using existing function but modifying it to take into account max_st
   # Have values sorted properly and make sure all are represented in each list, and list is ordered by states, and correct names are applied
   trace_transitions_values <- cppMarkovTransitionsAndTrace(
@@ -341,19 +353,37 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       
       # Evalulate transition formula
       value <- eval_formula(row$formula[[1]], ns)
-      
       # Check if value was an error in evaluating the formula
-      if (is_error(value)) {
-        time_df$error <- value$message
+      if (is_hero_error(value)) {
+        # Construct the error message using the transition name
+        error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
+        # Check global option: stop or record error?
+        if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+          stop(error_msg, call. = FALSE)
+        } else {
+          # Original behavior: record the error message
+          time_df$error <- value$message
+        }
       }
       
       # Check if value is numeric
       if (any(class(value) %in% c('numeric', 'integer'))) {
         time_df$value <- as.numeric(value)
       } else {
-        # If not numeric, mark it as an error
-        type <- class(value)[1]
-        time_df$error <- glue('Result of formula was of type {type}, expected numeric.')
+        # If not numeric, check if it's already an error handled above
+        if (!is_hero_error(value)) {
+            # Handle non-numeric result
+            type <- class(value)[1]
+            error_msg <- glue("Error evaluating transition '{row$name}': Result was type '{type}', expected numeric.")
+            # Check global option: stop or record error?
+            if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+                stop(error_msg, call. = FALSE)
+            } else {
+                # Original behavior: record the error message
+                time_df$error <- error_msg
+            }
+        }
+        # If it IS a hero_error, it was handled by the previous if block
       }
       
       if (simplify) {
@@ -482,4 +512,83 @@ as.lf_markov_trans.lf_markov_trans <- function(x) x
 as.lf_markov_trans.data.frame <- function(x) {
   class(x) <- c('lf_markov_trans', class(x))
   x
+}
+
+# Function to Calculate Summaries
+
+calculate_summaries <- function(parsed_summaries, values_df) {
+  # Convert matrix to data frame if needed
+  if (!is.data.frame(values_df)) {
+    values_df <- as.data.frame(values_df)
+  }
+  
+  # Expand the summaries dataframe using parsed values
+  expanded_summaries <- parsed_summaries %>%
+    select(summary = name, parsed_values) %>%
+    unnest(parsed_values) %>%
+    rename(value = parsed_values)
+  
+  # Convert values dataframe to long format and sum across cycles
+  value_amounts <- values_df %>%
+    rownames_to_column("cycle") %>%
+    pivot_longer(
+      cols = -cycle,
+      names_to = "value",
+      values_to = "amount"
+    ) %>%
+    group_by(value) %>%
+    summarize(amount = sum(amount), .groups = "drop")
+  
+  # Join the expanded summaries with the value amounts
+  result <- expanded_summaries %>%
+    left_join(value_amounts, by = "value") %>%
+    mutate(amount = ifelse(is.na(amount), 0, amount)) %>%
+    select(summary, value, amount)
+  
+  return(result)
+}
+
+#' Parse and validate summaries
+#'
+#' @param summaries A dataframe containing summary definitions
+#' @param model_values Vector of value names available in the model
+#'
+#' @return A validated summaries dataframe with parsed values
+parse_summaries <- function(summaries, model_values) {
+  # Check if summaries is NULL - if so, return NULL
+  if (is.null(summaries)) {
+    return(NULL)
+  }
+  
+  # Check required columns
+  required_cols <- c("name", "display_name", "description", "values")
+  missing_cols <- setdiff(required_cols, colnames(summaries))
+  
+  if (length(missing_cols) > 0) {
+    stop(paste0("Missing required columns in summaries: ", 
+                paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Parse the comma-separated values
+  parsed_summaries <- summaries %>%
+    mutate(
+      parsed_values = map(values, function(val_str) {
+        if (is.na(val_str) || val_str == "") {
+          return(character(0))
+        }
+        trimws(unlist(strsplit(val_str, ",")))
+      })
+    )
+  
+  # Validate that all referenced values exist in model_values
+  all_summary_values <- unique(unlist(parsed_summaries$parsed_values))
+  unknown_values <- setdiff(all_summary_values, model_values)
+  
+  if (length(unknown_values) > 0) {
+    warning(paste0("The following values referenced in summaries do not exist in the model: ",
+                  paste(unknown_values, collapse = ", ")))
+  }
+  
+  # Return the parsed and validated summaries
+  return(parsed_summaries)
 }

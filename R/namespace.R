@@ -4,7 +4,7 @@ create_namespace <- function(model, segment) {
   # for each model cycle. 
   cl_vars <- cycle_length_variables(model$settings)
   time_vars <- time_variables(model$settings, model$states)
-  
+
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
   ns <- define_namespace(model$env, time_vars, cl_vars) %>%

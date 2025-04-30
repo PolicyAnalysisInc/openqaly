@@ -143,13 +143,33 @@ parse_csl <- function(string, flatten = T) {
 vswitch <- function(x, ...) {
   args <- list(...)
   opts <- names(args)
-  xMat <- matrix(rep(x, length(args)), nrow = length(x), ncol = length(args), byrow = T)
-  optsMat <- matrix(rep(opts, length(x)), nrow = length(x), ncol = length(args), byrow = T)
-  mat <- as.matrix(do.call(tibble, args))
-  if (nrow(mat) == 1) {
-    mat <- mat[rep(1, nrow(xMat)), ]
+  
+  target_length <- length(x)
+  
+  first_val <- Filter(Negate(is.null), args)
+  na_val <- if (length(first_val) > 0) { 
+      as(NA, class(first_val[[1]]))
+  } else { 
+      NA
+  } 
+  res <- rep(na_val, target_length)
+  
+  for (i in seq_along(args)) {
+    opt_name <- opts[i]
+    opt_value <- args[[i]]
+    
+    match_indices <- which(x == opt_name & !is.na(x))
+    
+    if (length(match_indices) > 0) {
+      if (length(opt_value) == 1) {
+        res[match_indices] <- opt_value
+      } else {
+        res[match_indices] <- opt_value[match_indices]
+      }
+    }
   }
-  unname(mat[which(xMat == optsMat)])
+  
+  res
 }
 
 is.empty <- function(x) {
@@ -165,22 +185,55 @@ extract_call_vars <- function(expr) {
 }
 
 extract_func_calls <- function(expr, funcs) {
+  # Base case: empty or NULL
+  if (is.null(expr) || length(expr) == 0) {
+    return(list())
+  }
+  
+  # When expression is a call
   if (is.call(expr)) {
-    if (as.character(expr[[1]]) %in% funcs) {
+    # Get function name safely
+    func_name <- NULL
+    if (is.name(expr[[1]]) || is.character(expr[[1]])) {
+      func_name <- as.character(expr[[1]])
+    }
+    
+    # Check if this is a target function call
+    if (length(func_name) == 1 && func_name %in% funcs) {
+      # Found a matching function call
       ret <- list(extract_call_vars(expr))
     } else {
-      ret <- unlist(
-        lapply(expr, function(x) extract_func_calls(x, funcs)),
-        recursive = F
-      )
+      # Not a target function, but check all parts of the call
+      ret <- list()
+      # Process all elements of the call
+      for (i in seq_along(expr)) {
+        nested_calls <- extract_func_calls(expr[[i]], funcs)
+        if (length(nested_calls) > 0) {
+          ret <- c(ret, nested_calls)
+        }
+      }
     }
-  } else if (is.name(expr) || is.atomic(expr)) {
+  } else if (is.pairlist(expr)) {
+    # Handle function argument pairlists
     ret <- list()
+    for (i in seq_along(expr)) {
+      nested_calls <- extract_func_calls(expr[[i]], funcs)
+      if (length(nested_calls) > 0) {
+        ret <- c(ret, nested_calls)
+      }
+    }
+  } else if (is.expression(expr) || is.list(expr)) {
+    # Handle expression or list objects
+    ret <- list()
+    for (i in seq_along(expr)) {
+      nested_calls <- extract_func_calls(expr[[i]], funcs)
+      if (length(nested_calls) > 0) {
+        ret <- c(ret, nested_calls)
+      }
+    }
   } else {
-    ret <- unlist(
-      lapply(expr, function(x) extract_func_calls(x, funcs)),
-      recursive = F
-    )
+    # Atomic values, names, etc. - no function calls here
+    ret <- list()
   }
   
   ret
@@ -327,20 +380,42 @@ read_model_json <- function(json_string) {
   # Parse JSON string into a list
   model <- fromJSON(json_string, simplifyVector = TRUE)
   
-  # Process tables - use from JSON or empty if not present
-  if (is.null(model$tables)) {
+  # Process tables - convert to named list of data frames
+  if (is.null(model$tables) || 
+      (is.data.frame(model$tables) && nrow(model$tables) == 0) ||
+      (is.list(model$tables) && length(model$tables) == 0)) {
     model$tables <- list()
-  } else if (!is.list(model$tables)) {
-    # If tables exists but isn't a list, convert it
-    model$tables <- as.list(model$tables)
+  } else if (!is.data.frame(model$tables) || !all(c("name", "data") %in% colnames(model$tables))) {
+    stop("Tables must be provided as an array of objects with 'name' and 'data' fields")
+  } else {
+    # Convert array of objects to named list of tables
+    table_list <- list()
+    for (i in 1:nrow(model$tables)) {
+      table_name <- model$tables$name[i]
+      table_data <- model$tables$data$rows[[i]]
+      
+      # Convert to tibble for consistency
+      table_list[[table_name]] <- as_tibble(table_data)
+    }
+    model$tables <- table_list
   }
   
-  # Process scripts - use from JSON or empty if not present
-  if (is.null(model$scripts)) {
+  # Process scripts - convert from array of objects to named list
+  if (is.null(model$scripts) || 
+      (is.data.frame(model$scripts) && nrow(model$scripts) == 0) ||
+      (is.list(model$scripts) && length(model$scripts) == 0)) {
     model$scripts <- list()
-  } else if (!is.list(model$scripts)) {
-    # If scripts exists but isn't a list, convert it
-    model$scripts <- as.list(model$scripts)
+  } else if (!is.data.frame(model$scripts) || !all(c("name", "code") %in% colnames(model$scripts))) {
+    stop("Scripts must be provided as an array of objects with 'name' and 'code' fields")
+  } else {
+    # Convert array of objects to named list of scripts
+    script_list <- list()
+    for (i in 1:nrow(model$scripts)) {
+      script_name <- model$scripts$name[i]
+      script_code <- model$scripts$code[i]
+      script_list[[script_name]] <- script_code
+    }
+    model$scripts <- script_list
   }
   
   # Convert settings if they exist

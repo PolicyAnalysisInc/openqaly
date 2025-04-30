@@ -85,7 +85,7 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
     dist_func <- eval_formula(formula, seg_ns)
     
     # Check if value was an evaluation error
-    if (is_error(dist_func)) {
+    if (is_hero_error(dist_func)) {
       msg <- paste0(
         'Error in evaluation of sampling distribution for parameter ',
         err_name_string(var_row$name),
@@ -100,7 +100,7 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
       res <- safe_eval(dist_func(mat_p[ ,i]))
       
       # Check whether drawing samples resulted in error
-      if (is_error(res)) {
+      if (is_hero_error(res)) {
         msg <- paste0(
           'Error in evaluation of sampling distribution for parameter ',
           err_name_string(var_row$name),

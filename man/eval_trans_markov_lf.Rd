@@ -4,7 +4,7 @@
 \alias{eval_trans_markov_lf}
 \title{Evaluate a Longform Transition Matrix}
 \usage{
-eval_trans_markov_lf(df, ns, state_time_use, simplify = FALSE)
+eval_trans_markov_lf(df, ns, simplify = FALSE)
 }
 \description{
 Evaluate a Longform Transition Matrix

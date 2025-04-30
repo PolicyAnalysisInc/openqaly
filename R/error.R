@@ -16,7 +16,8 @@ modify_error_msg <- function(x) {
 }
 
 # Determine whether a given object is an error
-is_error <- function(x) {
+#' @export
+is_hero_error <- function(x) {
   'heRo_error' %in% class(x)
 }
 

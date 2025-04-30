@@ -49,13 +49,13 @@ eval_formula <- function(x, ns) {
   # Attempt to evaluate expression
   suppressWarnings({x$lazy$env <- ns$env})
   res <- safe_eval(lazy_eval(x$lazy, data = ns$df))
-  if (is_error(res)) {
+  if (is_hero_error(res)) {
     # Check if any of the variables referenced is an error 
     vars <- x$depends
     for (i in rev(vars)) {
       if (i %in% get_names(ns, 'all', keywords = F)) {
         value <- ns[i]
-        if (is_error(value)) {
+        if (is_hero_error(value)) {
           error_msg <- glue('Error in dependency "{i}".')
           res <- define_error(error_msg)
         }

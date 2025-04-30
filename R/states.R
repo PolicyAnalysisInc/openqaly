@@ -19,7 +19,7 @@ parse_states <- function(states, cycle_length_days, days_per_year) {
     'cycles',
     states$state_cycle_limit_unit
   )
-  
+
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
     mutate(

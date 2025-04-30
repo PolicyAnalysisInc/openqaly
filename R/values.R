@@ -50,7 +50,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
     group_by(state, destination) %>%
     group_split() %>%
     map(function(x) {
-      state_ns <- eval_variables(x, clone_namespace(ns), F)
+      state_ns <- eval_variables(x, clone_namespace(ns), FALSE)
       state_res <- state_ns$df
       state_res$state <- x$state[1]
       value_names_in_df <- intersect(colnames(state_res), value_names)
@@ -64,6 +64,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
         val_mat <- state_res %>%
           pivot_longer(names_to = "variable", values_to = "value", all_of(value_names_in_df)) %>%
           lf_to_arr(c('cycle', 'state_cycle'), 'value')
+
         x$max_st <- min(x$max_st[1], arr_last_unique(val_mat, 2))
       }
       state_res$state <- x$state[1]

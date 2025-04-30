@@ -1,15 +1,20 @@
 Rcpp::compileAttributes()
+devtools::document()
+roxygen2::roxygenize()
 devtools::build()
-devtools::install()
+devtools::install(upgrade=FALSE)
 library(heRomod2)
 
 library(jsonlite)
 
 #library(bench)
 
-model_name <- "checkimab_simple"
-  model <- system.file("models", model_name, package = "heRomod2") %>%
-    read_model()
+# model_name <- "checkimab_simple"
+#   model <- system.file("models", model_name, package = "heRomod2") %>%
+#     read_model()
+options(heRomod2.stop_on_error = TRUE)
+model <- read_model_json("~/Downloads/test1.json")
+
   res <- run_model(model)
 
   #jsonlite::toJSON(res)
