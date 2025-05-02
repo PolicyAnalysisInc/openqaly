@@ -179,8 +179,8 @@ sort_variables <- function(x, extra_vars = NULL) {
 # Evaluate a variables object
 eval_variables <- function(x, ns, df_only = F, context = 'variables') {
   
-  # Keep list of parameters that generated errors
-  error_params <- c()
+  # Keep list of parameters that generated errors - NOTE: using <<- inside walk2 is questionable style
+  error_params <- c() 
   
   # Iterate over each parameter and its name
   walk2(x$name, x$formula, function(name, value) {
@@ -190,37 +190,51 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     
     # Check if the object was an error
     if (is_hero_error(res)) {
-      # Construct error message string once
-      error_msg <- paste0(
-        'Error in evaluation of ', context, ' ',
-        err_name_string(name),
-        ": ",
-        paste0(res)
-      )
+      # Always accumulate if in a capture scope
+      accumulate_hero_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
       
-      # Check global option: stop or warn?
-      if (getOption("heRomod2.stop_on_error", default = FALSE)) {
-        # Stop execution with the constructed message
-        stop(error_msg, call. = FALSE)
-      } else {
-        # Original behavior: record error parameter and issue warning
-        error_params <<- append(error_params, name)
-        warning(error_msg, call. = FALSE)
-      }
-      # The error object 'res' will be assigned below regardless
+      # Check the desired error handling mode (warning is default)
+      error_mode <- getOption("heRomod2.error_mode", default = "warning")
+      stop_on_error <- getOption("heRomod2.stop_on_error", default = FALSE)
+      
+      # Only issue immediate stop/warning if NOT in checkpoint mode
+      if (error_mode != "checkpoint") {
+        # Construct error message string only if needed now
+        error_msg <- paste0(
+            'Error in evaluation of ', context, ' ',
+            err_name_string(name),
+            ": ",
+            paste0(res)
+        )
+        
+        if (stop_on_error) {
+            # Stop execution with the constructed message
+            stop(error_msg, call. = FALSE)
+        } else {
+            # Mode is 'warning' and stop_on_error is FALSE
+            # Original behavior: record error parameter and issue warning
+            error_params <<- append(error_params, name)
+            warning(error_msg, call. = FALSE)
+        }
+      } 
+      # If mode IS "checkpoint", we do nothing here; error is accumulated and handled later.
+      # The error object 'res' will still be assigned below.
     }
     
     # Determine whether result is a vector or object parameter
     vector_type <- is.vector(res) && !is.list(res)
     if (df_only || (vector_type && (length(res) == nrow(ns$df)))) {
       # If a vector parameter, assign to data frame
-      ns$df[name] <<- res
+      ns$df[name] <<- res 
     } else {
       # If an object parameter, assign to environment
       assign(name, res, envir = ns$env)
     }
     
   })
+  
+  # Trigger error checkpoint mechanism (checks mode internally)
+  hero_error_checkpoint()
   
   return(ns)
 }

@@ -64,10 +64,10 @@ test_that('formula syntax errors are handled properly', {
   expect_equal(eval_vars['d'], NA)
   
   # Check that the value of the variables are heRo_error objects.
-  expect_equal(class(eval_vars['a']), 'heRo_error')
-  expect_equal(class(eval_vars['c']), 'heRo_error')
-  expect_equal(class(eval_vars['e']), 'heRo_error')
-  expect_equal(class(eval_vars['g']), 'heRo_error')
+  expect_true(is_hero_error(eval_vars['a']), info = "'a' should be heRo_error")
+  expect_true(is_hero_error(eval_vars['c']), info = "'c' should be heRo_error (dependency)")
+  expect_true(is_hero_error(eval_vars['e']), info = "'e' should be heRo_error (dependency)")
+  expect_true(is_hero_error(eval_vars['g']), info = "'g' should be heRo_error (dependency)")
   
   # Check that the error messages print correctly
   expect_output(
@@ -77,10 +77,10 @@ test_that('formula syntax errors are handled properly', {
     print(eval_vars['c'], 'Error: Error in dependency "a".')
   )
   expect_output(
-    print(eval_vars['e'], 'Error: Error in dependency "c".')
+    print(eval_vars['e'], 'Error: Error in dependency "c".') # Note: This dependency is indirect via 'c'
   )
   expect_output(
-    print(eval_vars['g'], 'Error: Error in dependency "c".')
+    print(eval_vars['g'], 'Error: Error in dependency "c".') # Note: This dependency is indirect via 'c'
   )
 })
 test_that('formula evaluation errors are handled properly', {
@@ -96,10 +96,10 @@ test_that('formula evaluation errors are handled properly', {
   )
   
   # Check that the value of the parameters are heRo_error objects.
-  expect_equal(class(eval_vars['a']), 'heRo_error')
-  expect_equal(class(eval_vars['c']), 'heRo_error')
-  expect_equal(class(eval_vars['e']), 'heRo_error')
-  expect_equal(class(eval_vars['g']), 'heRo_error')
+  expect_true(is_hero_error(eval_vars['a']), info = "'a' should be heRo_error")
+  expect_true(is_hero_error(eval_vars['c']), info = "'c' should be heRo_error (dependency)")
+  expect_true(is_hero_error(eval_vars['e']), info = "'e' should be heRo_error (dependency)")
+  expect_true(is_hero_error(eval_vars['g']), info = "'g' should be heRo_error (dependency)")
   
   # Check that the error messages print correctly
   expect_output(
@@ -109,10 +109,10 @@ test_that('formula evaluation errors are handled properly', {
     print(eval_vars['c'], 'Error: Error in dependency "a".')
   )
   expect_output(
-    print(eval_vars['e'], 'Error: Error in dependency "c".')
+    print(eval_vars['e'], 'Error: Error in dependency "c".') # Note: Indirect dependency
   )
   expect_output(
-    print(eval_vars['g'], 'Error: Error in dependency "c".')
+    print(eval_vars['g'], 'Error: Error in dependency "c".') # Note: Indirect dependency
   )
 })
 test_that('variables are evaluated properly when sorted', {

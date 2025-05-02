@@ -52,7 +52,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     eval_vars,
     value_names,
     state_names,
-    as.logical(model$settings$reduce_state_cycle)
+    model$settings$reduce_state_cycle
   )
 
   expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
@@ -338,7 +338,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
   
   # Loop through each row in transitions, evaluate, then
   # combine results into a single dataframe
-  rowwise(df) %>%
+  res <- rowwise(df) %>%
     group_split() %>%
     map(function(row, ns, simplify = F) {
       # Populate at dataframe with time, from, to
@@ -353,8 +353,10 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       
       # Evalulate transition formula
       value <- eval_formula(row$formula[[1]], ns)
+      is_error <- is_hero_error(value)
       # Check if value was an error in evaluating the formula
-      if (is_hero_error(value)) {
+      if (is_error) {
+        accumulate_hero_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
         # Construct the error message using the transition name
         error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
         # Check global option: stop or record error?
@@ -385,8 +387,8 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
         }
         # If it IS a hero_error, it was handled by the previous if block
       }
-      
-      if (simplify) {
+
+      if (simplify && !is_error) {
         # Transform to matrix to check st-dependency
         val_mat <- lf_to_arr(time_df, c('state_cycle', 'cycle'), 'value')
         time_df$max_st <- min(row$max_st, arr_last_unique(val_mat, 1))
@@ -398,6 +400,10 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       time_df
     }, ns, simplify = simplify) %>%
     bind_rows()
+
+  hero_error_checkpoint()
+
+  res
 }
 
 #' Convert Lonform Transitions Table to Matrix

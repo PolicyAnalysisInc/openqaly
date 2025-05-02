@@ -49,13 +49,22 @@ test_that('markov trace calculations work success case', {
   expected_trace[3, ] <- expected_trace[2, ] %*% mat1_c23
   expected_trace[4, ] <- expected_trace[3, ] %*% mat1_c23
 
+  # Define empty placeholders for the value arguments
+  empty_transitional_values <- data.frame(state=character(), destination=character(), values_list=I(list()))
+  empty_residency_values <- data.frame(state=character(), values_list=I(list()))
+  empty_model_start_values <- data.frame(values_list=I(list()))
+  empty_value_names <- character(0)
+
   res <- cppMarkovTransitionsAndTrace(
-    mat1,
-    init1,
-    statenames1,
-    3,
-    3,
-    -pi
+    mat1,                   # transitions
+    empty_transitional_values, # transitional_values placeholder
+    empty_residency_values,    # residency_values placeholder
+    empty_model_start_values,  # model_start_values placeholder
+    init1,                  # init
+    statenames1,            # state_names
+    empty_value_names,      # value_names placeholder
+    3,                      # n_cycles
+    -pi                     # sentinel
   )
   
   expect_equal(res$trace, expected_trace)
@@ -124,13 +133,22 @@ test_that('markov trace calculations work with complement error', {
   expected_trace[3, ] <- expected_trace[2, ] %*% mat1_c23
   expected_trace[4, ] <- expected_trace[3, ] %*% mat1_c23
 
+  # Define empty placeholders for the value arguments
+  empty_transitional_values <- data.frame(state=character(), destination=character(), values_list=I(list()))
+  empty_residency_values <- data.frame(state=character(), values_list=I(list()))
+  empty_model_start_values <- data.frame(values_list=I(list()))
+  empty_value_names <- character(0)
+
   res <- heRomod2:::cppMarkovTransitionsAndTrace(
-    mat1,
-    init1,
-    statenames1,
-    3,
-    3,
-    -pi
+    mat1,                   # transitions
+    empty_transitional_values,
+    empty_residency_values,
+    empty_model_start_values,
+    init1,                  # init
+    statenames1,            # state_names
+    empty_value_names,      # value_names
+    3,                      # n_cycles
+    -pi                     # sentinel
   )
 
   error_states_cycles <- as.data.frame(res$errors) %>%
@@ -193,13 +211,22 @@ test_that('markov trace calculations work with bounds error', {
   expected_trace[3, ] <- expected_trace[2, ] %*% mat1_c23
   expected_trace[4, ] <- expected_trace[3, ] %*% mat1_c23
 
+  # Define empty placeholders for the value arguments
+  empty_transitional_values <- data.frame(state=character(), destination=character(), values_list=I(list()))
+  empty_residency_values <- data.frame(state=character(), values_list=I(list()))
+  empty_model_start_values <- data.frame(values_list=I(list()))
+  empty_value_names <- character(0)
+
   res <- heRomod2:::cppMarkovTransitionsAndTrace(
-    mat1,
-    init1,
-    statenames1,
-    3,
-    3,
-    -pi
+    mat1,                   # transitions
+    empty_transitional_values,
+    empty_residency_values,
+    empty_model_start_values,
+    init1,                  # init
+    statenames1,            # state_names
+    empty_value_names,      # value_names
+    3,                      # n_cycles
+    -pi                     # sentinel
   )
 
   error_states_cycles <- as.data.frame(res$errors) %>%
@@ -262,13 +289,22 @@ test_that('markov trace calculations work with sum error', {
   expected_trace[3, ] <- expected_trace[2, ] %*% mat1_c23
   expected_trace[4, ] <- expected_trace[3, ] %*% mat1_c23
 
+  # Define empty placeholders for the value arguments
+  empty_transitional_values <- data.frame(state=character(), destination=character(), values_list=I(list()))
+  empty_residency_values <- data.frame(state=character(), values_list=I(list()))
+  empty_model_start_values <- data.frame(values_list=I(list()))
+  empty_value_names <- character(0)
+
   res <- heRomod2:::cppMarkovTransitionsAndTrace(
-    mat1,
-    init1,
-    statenames1,
-    3,
-    3,
-    -pi
+    mat1,                   # transitions
+    empty_transitional_values,
+    empty_residency_values,
+    empty_model_start_values,
+    init1,                  # init
+    statenames1,            # state_names
+    empty_value_names,      # value_names
+    3,                      # n_cycles
+    -pi                     # sentinel
   )
 
   error_states_cycles <- as.data.frame(res$errors) %>%
@@ -331,13 +367,22 @@ test_that('markov trace calculations work with NA/NaN error', {
   expected_trace[3, ] <- expected_trace[2, ] %*% mat1_c23
   expected_trace[4, ] <- expected_trace[3, ] %*% mat1_c23
 
+  # Define empty placeholders for the value arguments
+  empty_transitional_values <- data.frame(state=character(), destination=character(), values_list=I(list()))
+  empty_residency_values <- data.frame(state=character(), values_list=I(list()))
+  empty_model_start_values <- data.frame(values_list=I(list()))
+  empty_value_names <- character(0)
+
   res <- heRomod2:::cppMarkovTransitionsAndTrace(
-    mat1,
-    init1,
-    statenames1,
-    3,
-    3,
-    -pi
+    mat1,                   # transitions
+    empty_transitional_values,
+    empty_residency_values,
+    empty_model_start_values,
+    init1,                  # init
+    statenames1,            # state_names
+    empty_value_names,      # value_names
+    3,                      # n_cycles
+    -pi                     # sentinel
   )
 
   error_states_cycles <- as.data.frame(res$errors) %>%

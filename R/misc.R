@@ -17,12 +17,36 @@ read_model <- function(path) {
 }
 
 convert_settings_from_df <- function(settings_df) {
-  settings <- map(settings_df$value, function(x) {
+  settings <- map(setNames(settings_df$value, settings_df$setting), function(x) {
     num <- suppressWarnings(as.numeric(x))
-    if (is.na(num)) return(tolower(x))
-    num
+    if (!is.na(num)) return(num)
+    tolower(x)
   })
-  names(settings) <- settings_df$setting
+  # Explicitly convert reduce_state_cycle to logical
+  if ("reduce_state_cycle" %in% names(settings)) {
+    val <- settings[["reduce_state_cycle"]]
+    # Handle potential TRUE/FALSE, T/F, 1/0 string representations
+    if (is.character(val)) {
+        val_lower <- tolower(val)
+        if (val_lower %in% c("true", "t", "1")) {
+            settings[["reduce_state_cycle"]] <- TRUE
+        } else if (val_lower %in% c("false", "f", "0")) {
+            settings[["reduce_state_cycle"]] <- FALSE
+        } else {
+            # Handle unexpected string values, maybe default to FALSE or raise warning/error
+            warning(paste("Unexpected string value for reduce_state_cycle:", val, "- defaulting to FALSE"))
+            settings[["reduce_state_cycle"]] <- FALSE 
+        }
+    } else if (is.numeric(val)) {
+        settings[["reduce_state_cycle"]] <- as.logical(val)
+    } else if (!is.logical(val)) {
+        # Handle other non-logical types if necessary, default to FALSE
+         warning(paste("Unexpected type for reduce_state_cycle:", class(val), "- defaulting to FALSE"))
+        settings[["reduce_state_cycle"]] <- FALSE
+    }
+    # If it's already logical, it remains unchanged.
+  }
+  
   settings
 }
 

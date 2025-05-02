@@ -108,18 +108,19 @@ test_that('duplicate uses of "C" within a level are detected.', {
   )
   
   # Check that the value of the parameters are heRo_error objects.
-  expect_equal(class(var_res['p_event']), 'heRo_error')
-  expect_equal(class(var_res['p_died']), 'heRo_error')
-  expect_equal(class(var_res['p_survived']), 'heRo_error')
-  expect_equal(class(var_res['p_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_given_event']), 'heRo_error')
-  expect_equal(class(var_res['p_event_given_died']), 'heRo_error')
-  expect_equal(class(var_res['p_died_or_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_or_not_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_and_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_or_survived_and_had_event_given_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_or_survived_and_event_given_surgery']), 'heRo_error')
-  expect_equal(class(var_res['p_died_or_survived_and_surgery_given_event']), 'heRo_error')
+  # Use is_hero_error which checks class inheritance
+  expect_true(is_hero_error(var_res['p_event']), info = "p_event should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died']), info = "p_died should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_survived']), info = "p_survived should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_surgery']), info = "p_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_given_event']), info = "p_died_given_event should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_event_given_died']), info = "p_event_given_died should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_or_surgery']), info = "p_died_or_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_or_not_surgery']), info = "p_died_or_not_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_and_surgery']), info = "p_died_and_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_or_survived_and_had_event_given_surgery']), info = "p_died_or_survived_and_had_event_given_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_or_survived_and_event_given_surgery']), info = "p_died_or_survived_and_event_given_surgery should be a heRo_error")
+  expect_true(is_hero_error(var_res['p_died_or_survived_and_surgery_given_event']), info = "p_died_or_survived_and_surgery_given_event should be a heRo_error")
   
   # Check that the error messages print correctly
   expect_output(

@@ -49,6 +49,9 @@ eval_formula <- function(x, ns) {
   # Attempt to evaluate expression
   suppressWarnings({x$lazy$env <- ns$env})
   res <- safe_eval(lazy_eval(x$lazy, data = ns$df))
+  
+  # If the initial evaluation did not result in a heRo_error, return it
+  # Otherwise, check if it was caused by a dependency error
   if (is_hero_error(res)) {
     # Check if any of the variables referenced is an error 
     vars <- x$depends
@@ -56,14 +59,18 @@ eval_formula <- function(x, ns) {
       if (i %in% get_names(ns, 'all', keywords = F)) {
         value <- ns[i]
         if (is_hero_error(value)) {
+          # Use the specific constructor for dependency errors
           error_msg <- glue('Error in dependency "{i}".')
-          res <- define_error(error_msg)
+          # Overwrite the original error with a dependency error
+          res <- define_dependency_error(error_msg) 
+          # Once a dependency error is found, no need to check others for this formula
+          break 
         }
       }
     }
   }
   
-  # Return the result
+  # Return the result (which might be the original error or a dependency error)
   res
 }
 
