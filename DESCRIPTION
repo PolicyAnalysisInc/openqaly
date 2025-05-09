@@ -30,6 +30,8 @@ Imports:
     tidygraph,
     Rcpp,
     jsonlite
+Depends:
+    herosurv
 License: AGPL-3
 Encoding: UTF-8
 LazyData: true

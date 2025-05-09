@@ -18,10 +18,28 @@ run_segment.markov <- function(segment, model, env, ...) {
   uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars)
   uneval_values <- parse_values(model$values, uneval_states, uneval_vars)
   
-  # Parse summaries if they exist
-  parsed_summaries <- NULL
-  if (!is.null(model$summaries)) {
-    parsed_summaries <- parse_summaries(model$summaries, unique(model$values$name))
+  # Determine model_value_names safely for parse_summaries
+  model_value_names <- character(0)
+  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
+    # Filter out NA names before unique, as unique(NA) is NA, which can cause issues
+    valid_names <- model$values$name[!is.na(model$values$name)]
+    if (length(valid_names) > 0) {
+      model_value_names <- unique(valid_names)
+    }
+  }
+
+  # Parse summaries if they exist, ensuring parsed_summaries is always a structured tibble
+  if (!is.null(model$summaries) && nrow(model$summaries) > 0) { # model$summaries is now a structured tibble
+    parsed_summaries <- parse_summaries(model$summaries, model_value_names) 
+  } else {
+    # Create an empty structured tibble for summaries, including the parsed_values column
+    parsed_summaries <- tibble::tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      values = character(0),
+      parsed_values = list() # parse_summaries adds this, so we ensure it exists
+    )
   }
   
   # Check inside the variables, transitions, & values for
@@ -44,8 +62,15 @@ run_segment.markov <- function(segment, model, env, ...) {
   eval_states <- eval_states(uneval_states, eval_vars)
   eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, model$settings$reduce_state_cycle)
 
-  value_names <- unique(model$values$name)
-  state_names <- unique(model$states$name)
+  # Determine value_names safely for evaluate_values and cppMarkovTransitionsAndTrace
+  value_names <- character(0)
+  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
+    valid_names <- model$values$name[!is.na(model$values$name)]
+    if (length(valid_names) > 0) {
+      value_names <- unique(valid_names)
+    }
+  }
+  state_names <- unique(model$states$name) # Assuming model$states is always non-empty and has a name column
 
   eval_values <- evaluate_values(
     uneval_values,
@@ -71,12 +96,26 @@ run_segment.markov <- function(segment, model, env, ...) {
   segment$inital_state <- list(eval_states)
   segment$trace_and_values <- list(calculated_trace_and_values)
   
-  # Calculate summaries if parsed_summaries exists
-  if (!is.null(parsed_summaries)) {
+  # Calculate the collapsed trace using the expanded_state_map from handle_state_expansion
+  collapsed_trace <- calculate_collapsed_trace(
+    calculated_trace_and_values, # This is the list from cppMarkovTransitionsAndTrace
+    expanded$expanded_state_map
+  )
+  segment$collapsed_trace <- list(collapsed_trace)
+  
+  # Calculate summaries: parsed_summaries is now guaranteed to be a tibble (possibly 0-row)
+  # calculate_summaries should be robust to a 0-row parsed_summaries or 0-col/0-row trace values.
+  if (!is.null(parsed_summaries)) { # This check might be redundant if parsed_summaries is always a tibble
+                                   # but good for safety if parse_summaries could return NULL.
+                                   # parse_summaries should ideally return empty structured tibble, not NULL.
     segment$summaries <- list(calculate_summaries(
       parsed_summaries, 
       calculated_trace_and_values$values
     ))
+  } else {
+    # Fallback: ensure summaries field exists as an empty list or tibble
+    # This path should ideally not be taken if parsed_summaries is always initialized properly.
+     segment$summaries <- list(tibble::tibble(summary = character(), value = character(), amount = numeric()))
   }
   
   segment
@@ -126,6 +165,11 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   # Generate data structure of transition probabilities to pass to rcpp function
   expanded_trans_matrix <- lf_to_lf_mat(expanded_transitions, state_names)
 
+  # Create the mapping of original state names to their actual expanded names used
+  expanded_state_map <- expanded_transitions %>%
+    select(from, .from_e) %>%
+    distinct()
+
   expand_trans_first_cycle <- select(
     filter(expanded_transitions, cycle == 1),
     from, to, .to_e, state_cycle
@@ -162,7 +206,8 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   list(
     init = expand_init,
     transitions = expanded_trans_matrix,
-    values = values_expanded
+    values = values_expanded,
+    expanded_state_map = expanded_state_map
   )
 }
 
@@ -188,20 +233,54 @@ calculate_trace_and_values <- function(init, transitions, values, value_names) {
     as.integer(n_cycles),
     -pi
   )
-  
-  # Calculate trace and values in rcpp
-  # foo <- MarkovTraceAndValues(
-  #   trans_lf_mat,
-  #   values_list_of_lists,
-  #   as.numeric(expand_init),
-  #   as.integer(n_cycles),
-  #   as.integer(length(expand_init)),
-  #   length(eval_values_limited$values_list[[1]]),
-  #   -pi
-  # )
 
   trace_transitions_values
+}
 
+calculate_collapsed_trace <- function(expanded_results, expanded_state_map) {
+  
+  # The trace is the first element of the list returned by cppMarkovTransitionsAndTrace
+  expanded_trace_matrix <- expanded_results[[1]] 
+  
+  # Get all actual expanded state names that are column names in the trace matrix
+  actual_trace_col_names <- colnames(expanded_trace_matrix)
+  
+  # Get unique original state names from the mapping
+  # These will be the columns in our collapsed trace
+  original_state_names <- unique(expanded_state_map$from)
+  
+  # Initialize the collapsed trace matrix
+  num_cycles <- nrow(expanded_trace_matrix)
+  if (is.null(num_cycles)) num_cycles <- 0 # Handle empty trace matrix
+  
+  collapsed_trace <- matrix(
+    0.0, 
+    nrow = num_cycles, 
+    ncol = length(original_state_names),
+    dimnames = list(rownames(expanded_trace_matrix), original_state_names)
+  )
+  
+  # Iterate over each original state name
+  for (original_name in original_state_names) {
+    # Get the list of expanded names corresponding to this original_name from the map
+    child_expanded_names_from_map <- expanded_state_map$.from_e[expanded_state_map$from == original_name]
+    
+    # Filter this list to include only those expanded names that actually exist as columns in the trace matrix
+    # This is a safeguard, as ideally, .from_e names used in transitions should match trace columns.
+    actual_children_in_trace <- intersect(child_expanded_names_from_map, actual_trace_col_names)
+    
+    if (length(actual_children_in_trace) > 0) {
+      # Select the sub-matrix of these children's columns from the expanded trace
+      # drop = FALSE ensures it remains a matrix even if only one column is selected
+      sub_matrix <- expanded_trace_matrix[, actual_children_in_trace, drop = FALSE]
+      
+      # Sum the rows of this sub-matrix and assign to the collapsed_trace
+      collapsed_trace[, original_name] <- rowSums(sub_matrix, na.rm = TRUE)
+    }
+    # If no actual_children_in_trace found for this original_name, its column in collapsed_trace remains 0.
+  }
+  
+  return(collapsed_trace)
 }
 
 get_st_max <- function(trans, values, n_cycles) {
@@ -520,36 +599,81 @@ as.lf_markov_trans.data.frame <- function(x) {
   x
 }
 
-# Function to Calculate Summaries
+# Ensure this is defined if not already, e.g., from R/misc.R or a common utils file
+# For this edit, assuming it might not be directly available and defining a local version for safety.
+# If R/misc.R is always sourced/loaded first, this redefinition is not strictly needed here.
+create_empty_summaries_stubs_with_parsed <- function() {
+  tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    values = character(0),
+    parsed_values = list() # Key addition for parse_summaries output consistency
+  )
+}
 
+# Function to Calculate Summaries
 calculate_summaries <- function(parsed_summaries, values_df) {
-  # Convert matrix to data frame if needed
+  empty_summary_result <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+
+  # If parsed_summaries is empty (0 rows), no summaries to calculate.
+  if (nrow(parsed_summaries) == 0) {
+    return(empty_summary_result)
+  }
+
+  # Expand the summaries dataframe using parsed values
+  # This should be safe even if parsed_summaries has 0 rows (though caught above now),
+  # or if a row in parsed_summaries has an empty list in its parsed_values cell.
+  expanded_summaries <- parsed_summaries %>%
+    dplyr::select(summary_col = name, pv = parsed_values) %>%
+    tidyr::unnest(cols = pv) %>%
+    dplyr::rename(summary = summary_col, value = pv)
+
+  # If after unnesting, there are no value mappings, return empty result.
+  if (nrow(expanded_summaries) == 0) {
+    return(empty_summary_result)
+  }
+
+  # Convert matrix to data frame if needed (e.g., from Rcpp output)
   if (!is.data.frame(values_df)) {
     values_df <- as.data.frame(values_df)
   }
   
-  # Expand the summaries dataframe using parsed values
-  expanded_summaries <- parsed_summaries %>%
-    select(summary = name, parsed_values) %>%
-    unnest(parsed_values) %>%
-    rename(value = parsed_values)
-  
-  # Convert values dataframe to long format and sum across cycles
-  value_amounts <- values_df %>%
-    rownames_to_column("cycle") %>%
-    pivot_longer(
-      cols = -cycle,
-      names_to = "value",
-      values_to = "amount"
-    ) %>%
-    group_by(value) %>%
-    summarize(amount = sum(amount), .groups = "drop")
+  value_amounts <- tibble::tibble(value = character(0), amount = numeric(0))
+
+  # Check if values_df has columns to pivot (besides a potential 'cycle' column)
+  if (ncol(values_df) > 0) {
+    # Add rownames as 'cycle' column if it doesn't exist and there are rows
+    # cppMarkovTransitionsAndTrace already adds rownames "0" to nCycles for trace,
+    # and "1" to nCycles for value matrices.
+    # For safety, ensure 'cycle' exists if we expect it or handle its absence.
+    # The original code just did rownames_to_column.
+    if (nrow(values_df) > 0 && !("cycle" %in% colnames(values_df))) {
+        values_df <- tibble::rownames_to_column(values_df, "cycle")
+    }
+
+    cols_to_pivot <- setdiff(colnames(values_df), "cycle")
+
+    if (length(cols_to_pivot) > 0 && nrow(values_df) > 0) {
+      value_amounts <- values_df %>%
+        tidyr::pivot_longer(
+          cols = dplyr::all_of(cols_to_pivot),
+          names_to = "value",
+          values_to = "amount"
+        ) %>%
+        dplyr::group_by(value) %>%
+        dplyr::summarize(amount = sum(amount, na.rm = TRUE), .groups = "drop")
+    } else if (length(cols_to_pivot) == 0 && nrow(values_df) > 0) {
+      # Handle case where values_df has rows but only a cycle column (no actual values)
+      # value_amounts remains an empty tibble, which is correct.
+    }
+  } # If ncol(values_df) == 0, value_amounts remains empty.
   
   # Join the expanded summaries with the value amounts
   result <- expanded_summaries %>%
-    left_join(value_amounts, by = "value") %>%
-    mutate(amount = ifelse(is.na(amount), 0, amount)) %>%
-    select(summary, value, amount)
+    dplyr::left_join(value_amounts, by = "value") %>%
+    dplyr::mutate(amount = ifelse(is.na(amount), 0, amount)) %>%
+    dplyr::select(summary, value, amount)
   
   return(result)
 }
@@ -561,40 +685,49 @@ calculate_summaries <- function(parsed_summaries, values_df) {
 #'
 #' @return A validated summaries dataframe with parsed values
 parse_summaries <- function(summaries, model_values) {
-  # Check if summaries is NULL - if so, return NULL
-  if (is.null(summaries)) {
-    return(NULL)
+  # summaries is now guaranteed by read_model/convert_json_dataframes to be a tibble (possibly 0-row)
+  # with columns: name, display_name, description, values.
+
+  # If summaries is a 0-row tibble, return the standard empty structure for parsed summaries.
+  if (nrow(summaries) == 0) {
+    return(create_empty_summaries_stubs_with_parsed())
   }
   
-  # Check required columns
+  # Check required columns (already ensured by stubs, but good for direct calls)
+  # This check can be removed if we fully trust the input now.
   required_cols <- c("name", "display_name", "description", "values")
   missing_cols <- setdiff(required_cols, colnames(summaries))
-  
   if (length(missing_cols) > 0) {
-    stop(paste0("Missing required columns in summaries: ", 
-                paste(missing_cols, collapse = ", ")))
+    stop(paste0("Summaries table is missing required columns: ", paste(missing_cols, collapse = ", ")))
   }
   
-  # Parse the comma-separated values
-  parsed_summaries <- summaries %>%
-    mutate(
-      parsed_values = map(values, function(val_str) {
+  # Parse the comma-separated values in the 'values' column
+  parsed_s <- summaries %>%
+    dplyr::mutate(
+      parsed_values = purrr::map(values, function(val_str) {
         if (is.na(val_str) || val_str == "") {
-          return(character(0))
+          return(character(0)) # Return empty character vector for empty/NA strings
         }
         trimws(unlist(strsplit(val_str, ",")))
       })
     )
   
   # Validate that all referenced values exist in model_values
-  all_summary_values <- unique(unlist(parsed_summaries$parsed_values))
-  unknown_values <- setdiff(all_summary_values, model_values)
+  # model_values could be character(0) if no values in model
+  all_referenced_values_in_summaries <- unique(unlist(parsed_s$parsed_values))
   
-  if (length(unknown_values) > 0) {
-    warning(paste0("The following values referenced in summaries do not exist in the model: ",
-                  paste(unknown_values, collapse = ", ")))
+  if (length(all_referenced_values_in_summaries) > 0) { 
+    if (length(model_values) > 0) { 
+      unknown_values <- setdiff(all_referenced_values_in_summaries, model_values)
+      if (length(unknown_values) > 0) {
+        warning(paste0("The following values referenced in summaries do not exist in the model: ",
+                      paste(unknown_values, collapse = ", ")))
+      }
+    } else {
+      warning(paste0("Summaries reference values (e.g., '", all_referenced_values_in_summaries[1] ,"'), but no values are defined in the model."))
+    }
   }
   
-  # Return the parsed and validated summaries
-  return(parsed_summaries)
+  # Return the parsed and validated summaries (now includes parsed_values column)
+  return(parsed_s)
 }

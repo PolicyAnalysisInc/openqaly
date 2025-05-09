@@ -199,14 +199,24 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
       
       # Only issue immediate stop/warning if NOT in checkpoint mode
       if (error_mode != "checkpoint") {
-        # Construct error message string only if needed now
+        # Construct error message string using the message from the heRo_error object
+        # Ensure 'res' is actually a heRo_error before accessing $message
+        error_detail <- if (is_hero_error(res) && !is.null(res$message)) {
+                           res$message
+                         } else {
+                           as.character(res) # Fallback if somehow not a heRo_error with message
+                         }
+
+        # Explicitly ensure error_detail is a simple character string for the warning
+        error_detail_char <- as.character(error_detail)
+
         error_msg <- paste0(
             'Error in evaluation of ', context, ' ',
             err_name_string(name),
             ": ",
-            paste0(res)
+            error_detail_char # Use the explicitly character version
         )
-        
+
         if (stop_on_error) {
             # Stop execution with the constructed message
             stop(error_msg, call. = FALSE)

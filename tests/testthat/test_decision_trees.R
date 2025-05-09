@@ -104,7 +104,8 @@ test_that('duplicate uses of "C" within a level are detected.', {
   # Evaluate the variables
   expect_warning(
     var_res <- heRomod2:::eval_variables(parsed_vars, test_ns),
-    'Error in evaluation of variables "tree": Error in calculating complementary probabilities, "C" may be used only once per level.'
+    regexp = "Error in evaluation of variables \"tree\": Error in calculating complementary probabilities, \"C\" may be used only once per level",
+    fixed = TRUE
   )
   
   # Check that the value of the parameters are heRo_error objects.

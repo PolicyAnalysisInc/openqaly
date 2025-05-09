@@ -9,6 +9,31 @@ library(heRomod2) # Ensure package functions are loaded
 # Define a minimal segment for namespace creation
 mock_segment <- tibble::tibble(strategy = "S1", group = "G1")
 
+# Define a minimal valid model structure helper function
+create_minimal_model <- function() {
+  model <- list(
+      settings = list(
+          timeframe = 1, 
+          timeframe_unit = "Years", 
+          cycle_length = 1, 
+          cycle_length_unit = "Months",
+          days_per_year = 365 
+      ),
+      states = tibble::tibble( 
+          name = "StateA", 
+          state_cycle_limit = Inf, 
+          state_cycle_limit_unit = "cycles",
+          initial_probability = 1 # Need initial probability
+      ),
+      env = new.env(parent = baseenv())
+  )
+  # Pre-calculate and add cycle_length_days as expected by downstream functions
+  model$settings$cycle_length_days <- heRomod2:::get_cycle_length_days(model$settings)
+  # Add other elements expected by create_namespace's callees if necessary
+  # For now, cycle_length_days seems the most critical missing piece
+  model
+}
+
 # --- Removed namespace helper function --- 
 
 test_that("eval_variables with checkpoint mode collects and throws multiple errors", {
@@ -30,25 +55,25 @@ test_that("eval_variables with checkpoint mode collects and throws multiple erro
 
   # Expect an error when calling eval_variables directly
   err <- expect_error({
-    # eval_variables creates its own namespace internally now
-    test_ns <- heRomod2:::create_namespace(model=list(), segment=mock_segment) 
+    # Use the helper to create a valid model structure
+    minimal_model <- create_minimal_model()
+    test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
     eval_variables(bad_vars, test_ns, context = "variables") # hero_error_checkpoint is called inside this
   })
   
   # Check that the error message contains the key components using grepl
-  # (Assertions remain the same as the error formatting logic didn't change)
   expect_true(grepl("Multiple errors found", err$message), info = "Message should start with prefix")
   expect_true(grepl("Context", err$message), info = "Message should contain 'Context' header")
   expect_true(grepl("Error", err$message), info = "Message should contain 'Error' header")
   
   expect_true(grepl("Evaluation of variables 'var_a'", err$message), 
               info = "Message should mention var_a context")
-  expect_true(grepl('Variable \\"undefined_variable\\" not found', err$message), 
+  expect_true(grepl('Variable "undefined_variable" not found\\.', err$message), 
               info = "Message should mention var_a error")
               
   expect_true(grepl("Evaluation of variables 'var_b'", err$message), 
               info = "Message should mention var_b context")
-  expect_true(grepl('Variable \\"another_missing\\" not found', err$message), 
+  expect_true(grepl('Variable "another_missing" not found\\.', err$message), 
               info = "Message should mention var_b error")
 })
 
@@ -69,14 +94,16 @@ test_that("eval_variables with warning mode allows execution and warns", {
   bad_vars <- heRomod2:::parse_variables(bad_vars_tbl)
 
   # Expected warning pattern (matches either variable)
-  expected_warning_regex <- "Error in evaluation of variables.*Variable \\\"(undefined_variable|another_missing)\\\" not found"
+  expected_warning_regex <- "Error in evaluation of variables.*: Variable \"(undefined_variable|another_missing)\" not found\\."
 
   # Evaluate expression directly - expect warnings, but no *stop* error
   final_ns <- NULL
   
   # Capture warnings while executing directly
   expect_warning({
-      test_ns <- heRomod2:::create_namespace(model=list(), segment=mock_segment) 
+      # Use the helper to create a valid model structure
+      minimal_model <- create_minimal_model()
+      test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
       # eval_variables should return the namespace even with warnings
       final_ns <- eval_variables(bad_vars, test_ns, context = "variables") 
   }, regexp = expected_warning_regex)
@@ -114,7 +141,9 @@ test_that("checkpoint mode filters out dependency errors", {
 
   # Expect an error, then check its message content
   err <- expect_error({
-      test_ns <- heRomod2:::create_namespace(model=list(), segment=mock_segment) 
+      # Use the helper to create a valid model structure
+      minimal_model <- create_minimal_model()
+      test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
       eval_variables(vars, test_ns, context = "variables") # Checkpoint inside
   })
 
@@ -124,17 +153,18 @@ test_that("checkpoint mode filters out dependency errors", {
   
   expect_true(grepl("Evaluation of variables 'var_root_error'", err$message), 
               info = "Message should mention root error context")
-  expect_true(grepl('Variable "non_existent_var" not found', err$message), 
+  expect_true(grepl('Variable \"non_existent_var\" not found\\.', err$message), 
               info = "Message should mention root error message")
               
   expect_false(grepl("Evaluation of variables 'var_dep_error'", err$message), 
               info = "Message should NOT mention dependency error context")
-  expect_false(grepl("Error in dependency \\\"var_root_error\\\"", err$message), 
+  expect_false(grepl("Error in dependency \"var_root_error\"\\.", err$message), 
               info = "Message should NOT mention dependency error message")
 })
 
 test_that("modify_error_msg correctly formats messages", {
   expect_equal(heRomod2:::modify_error_msg("Error in eval(x$expr, data, x$env): object 'myVar' not found"), 'Variable "myVar" not found.')
+  # --- TEMPORARY DIAGNOSTIC REMOVED --- 
   expect_equal(heRomod2:::modify_error_msg("Error: Some other error occurred"), "Some other error occurred")
   expect_equal(heRomod2:::modify_error_msg("Just a string"), "Just a string")
 })

@@ -28,13 +28,50 @@ define_error <- function(x) {
 }
 
 modify_error_msg <- function(x) {
-  x <- gsub("Error in eval(x$expr, data, x$env): ", "", x, fixed = T)
-  x <- gsub("Error: ", "", x, fixed = T)
-  if (grepl('object.*not found', x)) {
-    name <- strsplit(x, "'")[[1]][2]
-    x <- glue('Variable "{name}" not found.')
+  # Convert input to character defensively and store original
+  original_x <- as.character(x)
+  x_char <- original_x
+
+  # --- Prefix Removal --- 
+  # Store original cleaned value before pattern matching
+  x_cleaned_prefixes <- gsub("^Error in [^:]+: ", "", x_char) # Remove specific 'Error in ...:'
+  x_cleaned_prefixes <- gsub("^Error: ", "", x_cleaned_prefixes, fixed = TRUE) # Remove generic 'Error:'
+  
+  # --- Pattern Matching --- 
+  # Check 1: Standard object not found (use cleaned string for matching)
+  if (grepl("object.*not found", x_cleaned_prefixes)) {
+    name_match <- regmatches(x_cleaned_prefixes, regexpr("'([^']*)'", x_cleaned_prefixes))
+    if (length(name_match) > 0) {
+        name <- gsub("'", "", name_match)
+        return(glue('Variable "{name}" not found.')) # Return formatted message
+    }
   }
-  x
+  # Check 2: 'could not find function' (use cleaned string for matching)
+  else if (grepl("could not find function", x_cleaned_prefixes)) {
+     func_match <- regmatches(x_cleaned_prefixes, regexpr('\\"([^\\\"]*)\\"\'', x_cleaned_prefixes))
+     
+     # Only construct the custom message if function name parsing was successful
+     if (length(func_match) > 0) {
+       func_name <- gsub('\\"', '', func_match)
+       context_match <- regmatches(original_x, regexpr("^Error in ([^:]+):", original_x))
+       context_hint <- if(length(context_match) > 1) paste0(" in expression '", context_match[2], "'") else ""
+       return(glue('Evaluation failed: Undefined variable likely used with `{func_name}`{context_hint}.')) # Return formatted message
+     }
+     # If func_match has length 0, parsing failed.
+     # We do nothing further in this block, allowing execution to proceed
+     # to the final fallback logic which returns the cleaned original message.
+  }
+
+  # --- Fallback --- 
+  # If no specific pattern matched, return the string with prefixes removed.
+  # Ensure the generic "Error: " prefix is definitely removed.
+  final_fallback <- x_cleaned_prefixes # Start with already cleaned string
+  if (startsWith(final_fallback, "Error: ")) { 
+      final_fallback <- substring(final_fallback, 8) # Remove first 7 chars ("Error: ")
+  }
+  # Remove trailing newline if present.
+  final_fallback <- gsub("\\n$", "", final_fallback) 
+  return(final_fallback)
 }
 
 #' @export

@@ -3,6 +3,23 @@ read_model <- function(path) {
 
   model <- read_workbook(file.path(path, 'model.xlsx'))
 
+  # Ensure model$values has a defined structure
+  if (is.null(model$values)) {
+    model$values <- create_empty_values_stubs()
+  } else {
+    # Ensure it's a tibble first, then ensure columns
+    model$values <- tibble::as_tibble(model$values) 
+    model$values <- ensure_tibble_columns(model$values, create_empty_values_stubs())
+  }
+
+  # Ensure model$summaries has a defined structure
+  if (is.null(model$summaries)) {
+    model$summaries <- create_empty_summaries_stubs()
+  } else {
+    model$summaries <- tibble::as_tibble(model$summaries)
+    model$summaries <- ensure_tibble_columns(model$summaries, create_empty_summaries_stubs())
+  }
+
   model$tables <- list.files(file.path(path, 'data')) %>%
     purrr::set_names(., gsub('.csv$', '', .)) %>%
     purrr::map(~read.csv(file.path(path, 'data', .), stringsAsFactor = F, check.names = F))
@@ -467,43 +484,105 @@ read_model_json <- function(json_string) {
 #' @param model The model list parsed from JSON
 #' @return The model with properly formatted data frames
 convert_json_dataframes <- function(model) {
-  # List of expected data frames in the model
-  expected_dfs <- c("strategies", "groups", "states", "transitions", "values")
+  expected_dfs <- c("strategies", "groups", "states", "transitions", "values", "summaries")
   
+  df_stubs <- list(
+    values = create_empty_values_stubs(),
+    summaries = create_empty_summaries_stubs()
+  )
+
   for (df_name in expected_dfs) {
-    if (!is.null(model[[df_name]])) {
-      # Ensure it's a data frame
-      if (!is.data.frame(model[[df_name]])) {
-        if (is.list(model[[df_name]])) {
-          # Convert list to data frame
-          model[[df_name]] <- as.data.frame(model[[df_name]], stringsAsFactors = FALSE)
+    stub_to_use <- df_stubs[[df_name]]
+
+    if (is.null(model[[df_name]])) {
+      model[[df_name]] <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
+    } else {
+      current_input <- model[[df_name]]
+      if (!is.data.frame(current_input)) {
+        if (is.list(current_input) && length(current_input) > 0) {
+          attempt_df <- tryCatch(as.data.frame(current_input, stringsAsFactors = FALSE), error = function(e) NULL)
+          if (!is.null(attempt_df) && is.data.frame(attempt_df)) {
+            current_input <- attempt_df
+          } else {
+            current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
+          }
         } else {
-          # Create empty data frame if it's not a valid structure
-          model[[df_name]] <- data.frame()
+          current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
         }
       }
+      model[[df_name]] <- tibble::as_tibble(current_input)
       
-      # Convert to tibble for consistency with the rest of the code
-      model[[df_name]] <- as_tibble(model[[df_name]])
+      if (!is.null(stub_to_use)) {
+        model[[df_name]] <- ensure_tibble_columns(model[[df_name]], stub_to_use)
+      }
       
-      # Convert empty strings to NA
-      model[[df_name]] <- model[[df_name]] %>%
-        mutate(across(everything(), ~ifelse(. == "", NA, .)))
+      if (nrow(model[[df_name]]) > 0) { 
+         model[[df_name]] <- model[[df_name]] %>%
+           dplyr::mutate(dplyr::across(everything(), ~ifelse(. == "", NA, .)))
+      }
       
-      # Convert column names in transitions from "from_state" and "to_state" to "from" and "to"
       if (df_name == "transitions") {
         if ("from_state" %in% colnames(model[[df_name]])) {
-          model[[df_name]] <- rename(model[[df_name]], from = from_state)
+          model[[df_name]] <- dplyr::rename(model[[df_name]], from = from_state)
         }
         if ("to_state" %in% colnames(model[[df_name]])) {
-          model[[df_name]] <- rename(model[[df_name]], to = to_state)
+          model[[df_name]] <- dplyr::rename(model[[df_name]], to = to_state)
         }
       }
-    } else {
-      # Create empty tibble if missing
-      model[[df_name]] <- tibble::tibble()
     }
   }
   
   return(model)
+}
+
+create_empty_values_stubs <- function() {
+  tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    state = character(0),
+    destination = character(0),
+    formula = character(0)
+  )
+}
+
+create_empty_summaries_stubs <- function() {
+  tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    values = character(0)
+  )
+}
+
+# Ensure columns exist in a tibble, adding them as NA of the correct type if missing
+ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
+  if (!inherits(tbl, "tbl_df") && !is.data.frame(tbl)) {
+     # If it's not even a data.frame, it's too far off; return the clean stub directly.
+     # This might happen if as_tibble(model$values) failed for some reason before this call
+     # though read_model attempts as_tibble first.
+    return(required_cols_spec_tibble) 
+  }
+  if (!inherits(tbl, "tbl_df")) {
+    tbl <- tibble::as_tibble(tbl)
+  }
+
+  for (col_name in colnames(required_cols_spec_tibble)) {
+    if (!col_name %in% colnames(tbl)) {
+      spec_col_vector <- required_cols_spec_tibble[[col_name]]
+      na_to_use <- switch(typeof(spec_col_vector),
+                          "character" = NA_character_,
+                          "double" = NA_real_,
+                          "integer" = NA_integer_,
+                          "logical" = NA,
+                          NA)
+
+      if (nrow(tbl) > 0) {
+        tbl[[col_name]] <- rep(na_to_use, nrow(tbl))
+      } else {
+        tbl[[col_name]] <- spec_col_vector
+      }
+    }
+  }
+  return(tbl)
 }

@@ -53,19 +53,52 @@
 #' @export
 look_up <- function(data, ..., bin = FALSE, value = "value") {
 
+  # --- Argument Pre-checks (Before Evaluation) ---
+  call <- match.call(expand.dots = FALSE)
+  dots <- call$... # Get the list of unevaluated ... arguments
+
+  if (length(dots) > 0) {
+    dot_names <- names(dots)
+    if (is.null(dot_names)) dot_names <- rep("", length(dots)) # Handle case where no args are named
+    
+    unnamed_indices <- which(dot_names == "")
+    
+    if (length(unnamed_indices) > 0) {
+      # Check specifically for unnamed '==' calls
+      is_equality_check <- sapply(dots[unnamed_indices], function(arg) {
+        is.call(arg) && length(arg) == 3 && deparse(arg[[1]]) == "=="
+      })
+      
+      if (any(is_equality_check)) {
+        # Get the first offending argument expression for the example
+        offending_arg_expr <- deparse(dots[unnamed_indices][is_equality_check][[1]])
+        # Try to reconstruct a corrected example
+        corrected_example <- gsub("==", "=", offending_arg_expr, fixed = TRUE)
+        
+        stop(paste0(
+          "Error in look_up: Use '=' instead of '==' to specify lookup variables.",
+          " Found an argument like ", sQuote(offending_arg_expr), ".",
+          " Did you mean ", sQuote(corrected_example), "?"
+        ))
+      } else {
+        # Original error for other unnamed args
+        stop("All lookup variables passed to 'look_up()' must be named using '='.")
+      }
+    }
+  }
+  # --- End Argument Pre-checks ---
+
   # Handle case where this may be a vector by using first el
   value <- value[1]
 
   if (!inherits(data, "data.frame"))
     stop("'data' must be a data.frame")
 
-  data <- clean_factors(data)
-
+  # Now evaluate the ... arguments safely
   list_specs <- list(...)
-
-  if (any(names(list_specs) == "")) {
-    stop("All variables passed to 'look_up()' must be named.")
-  }
+  # nms <- names(list_specs) # No longer needed here, checked above
+  
+  data <- clean_factors(data)
 
   df_vars <- do.call(
     tibble::tibble,

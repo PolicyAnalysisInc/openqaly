@@ -57,7 +57,8 @@ test_that('formula syntax errors are handled properly', {
   # errors.
   expect_warning(
     eval_vars <- heRomod2:::eval_variables(parsed_vars, test_ns),
-    c('Error in evaluation of variables "a": Error in formula syntax.')
+    regexp = "Error in evaluation of variables \"a\": Error in formula syntax",
+    fixed = TRUE
   )
   
   # Check that the blank formula evaluated to NA

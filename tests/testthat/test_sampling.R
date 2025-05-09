@@ -165,7 +165,8 @@ test_that("errors in distribution parsing are handled properly", {
   syntax_error_eval <- run_model(syntax_error)
   expect_warning(
     sampled_segments <- heRomod2:::resample(syntax_error, 10, syntax_error_eval$segments, seed = 1),
-    'Error in evaluation of sampling distribution for parameter "start_age": Error in formula syntax.'
+    regexp = "Error in evaluation of sampling distribution for parameter \"start_age\": Error in formula syntax",
+    fixed = TRUE
   )
   
   # Model with no sampling distributions
