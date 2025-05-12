@@ -62,10 +62,10 @@ time_variables <- function(settings, states) {
 
   n_cycles <- get_n_cycles(settings)
   cl <- get_cycle_length_days(settings)
-  st_days_max <- max(
-    days_per_unit(states$state_cycle_limit_unit, settings$cycle_length_days, settings$days_per_year) *
+  st_days <- days_per_unit(states$state_cycle_limit_unit, settings$cycle_length_days, settings$days_per_year) *
       as.numeric(states$state_cycle_limit)
-  )
+  st_days[st_days == 0] <- Inf
+  st_days_max <- max(st_days)
   st_cycles <- min(n_cycles, max(1, floor(st_days_max / cl)), na.rm = TRUE)
   if (is.na(st_cycles)) st_cycles <- n_cycles
   # Create a table of model & state time variables

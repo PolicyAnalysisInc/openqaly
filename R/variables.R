@@ -187,7 +187,6 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     
     # Evaluate it
     res <- eval_formula(value, ns)
-    
     # Check if the object was an error
     if (is_hero_error(res)) {
       # Always accumulate if in a capture scope

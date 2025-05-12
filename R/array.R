@@ -43,9 +43,9 @@ arr_last_unique <- function(mat, dim_index) {
   )
   last_mat <- eval(parse(text = access_str))
   diff_from_last <- apply(mat, dim_index, function(x) {
-    all(x != last_mat)
+    any(x != last_mat)
   })
 
   if (!any(diff_from_last)) return(1)
-  max(which(diff_from_last))
+  max(which(diff_from_last)) + 1
 }

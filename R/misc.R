@@ -568,19 +568,36 @@ ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
   }
 
   for (col_name in colnames(required_cols_spec_tibble)) {
+    spec_col_vector <- required_cols_spec_tibble[[col_name]]
+    spec_target_class <- class(spec_col_vector)[1] # Get target class like "character", "numeric"
+
     if (!col_name %in% colnames(tbl)) {
-      spec_col_vector <- required_cols_spec_tibble[[col_name]]
+      # Column is missing, add it
+      # Determine NA type based on the typeof the spec_col_vector
       na_to_use <- switch(typeof(spec_col_vector),
                           "character" = NA_character_,
                           "double" = NA_real_,
                           "integer" = NA_integer_,
-                          "logical" = NA,
-                          NA)
+                          "logical" = NA, # Default base NA for logical
+                          NA_character_) # Fallback, though spec should be well-defined
 
       if (nrow(tbl) > 0) {
         tbl[[col_name]] <- rep(na_to_use, nrow(tbl))
       } else {
+        # If tbl has 0 rows, assign the empty typed vector from spec
         tbl[[col_name]] <- spec_col_vector
+      }
+    } else {
+      # Column exists, ensure it has the correct type
+      current_col_class <- class(tbl[[col_name]])[1]
+      if (current_col_class != spec_target_class) {
+        # Special handling for factors if target is character
+        if (spec_target_class == "character" && current_col_class == "factor") {
+            tbl[[col_name]] <- as.character(tbl[[col_name]])
+        } else {
+            # Use the existing convert_to_type function for coercion
+            tbl[[col_name]] <- convert_to_type(tbl[[col_name]], spec_target_class)
+        }
       }
     }
   }

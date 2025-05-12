@@ -53,8 +53,8 @@ parse_values <- function(x, states, extra_vars) {
         sort_variables(extra_vars)
     }) %>%
     ungroup() %>%
-    left_join(select(states, name, max_st = max_state_time), by = c('state' = 'name')) %>%
-    mutate(max_st = ifelse(is.na(max_st), 1, max_st))
+    left_join(select(states, name, max_st_from_state = max_state_time), by = c('state' = 'name')) %>%
+    mutate(max_st = ifelse(is.na(max_st_from_state), 1, ifelse(max_st_from_state == 0, Inf, max_st_from_state)))
   
   # Construct Object & Return
   as.values(vars)

@@ -86,7 +86,8 @@ run_segment.markov <- function(segment, model, env, ...) {
     expanded$init,
     expanded$transitions,
     expanded$values,
-    value_names
+    value_names,
+    expanded$expanded_state_map
   )
   
   # Create the object to return that will summarize the results of
@@ -211,29 +212,77 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   )
 }
 
-calculate_trace_and_values <- function(init, transitions, values, value_names) {
+calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map) {
 
   # Determine number of cycles
   n_cycles <- max(transitions[,1])
   transitional_values <- filter(values, !is.na(state), !is.na(destination))
   residency_values <- filter(values, !is.na(state), is.na(destination))
   model_start_values <- filter(values, is.na(state), is.na(destination))
-  state_names <- colnames(init)
+  state_names <- colnames(init) # These are the expanded state names, used by C++ and for mapping below
   
-  # Rename states according to expanded state names using existing function but modifying it to take into account max_st
-  # Have values sorted properly and make sure all are represented in each list, and list is ordered by states, and correct names are applied
   trace_transitions_values <- cppMarkovTransitionsAndTrace(
-    transitions,
+    transitions, # This is expanded_trans_matrix with 1-based indices for from/to
     transitional_values,
     residency_values,
     model_start_values,
     as.numeric(init),
-    state_names,
+    state_names, # Pass expanded state names to C++
     value_names,
     as.integer(n_cycles),
-    -pi
+    -pi # complementConstant
   )
+  
+  # Modify the transitions component of the result
+  output_trans_matrix <- trace_transitions_values$transitions
+  
+  if (!is.null(output_trans_matrix) && is.matrix(output_trans_matrix) && nrow(output_trans_matrix) > 0) {
+    # Ensure colnames are set if they are not (e.g. cycle, from, to, value)
+    # The C++ function cppMarkovTransitionsAndTrace returns a matrix for 'transitions'
+    # which is based on the input 'transitions' matrix structure. Assuming it has these cols.
+    # Input 'transitions' to cppMarkovTransitionsAndTrace has columns: cycle, from, to, value.
+    # 'from' and 'to' are 1-based indices.
+    
+    trans_df <- as_tibble(output_trans_matrix)
+    # If C++ output matrix doesn't have names, assign them based on expected structure
+    # Typically, the C++ function would preserve or set names. This is a fallback.
+    if(is.null(colnames(trans_df)) || !all(c("cycle", "from", "to", "value") %in% colnames(trans_df))) {
+        colnames(trans_df) <- c("cycle", "from", "to", "value")
+    }
 
+    # 'state_names' are the expanded state names corresponding to the 1-based indices
+    trans_df_processed <- trans_df %>%
+      mutate(
+        from_expanded = state_names[from], # 'from' is 1-based index
+        to_expanded = state_names[to]      # 'to' is 1-based index
+      ) %>%
+      # expanded_state_map has 'from' (original/collapsed) and '.from_e' (expanded)
+      left_join(expanded_state_map %>% select(from_coll = from, from_exp_key = .from_e),
+                by = c("from_expanded" = "from_exp_key")) %>%
+      left_join(expanded_state_map %>% select(to_coll = from, to_exp_key = .from_e),
+                by = c("to_expanded" = "to_exp_key")) %>%
+      select(
+        cycle,
+        from_collapsed = from_coll,
+        from_expanded,
+        to_collapsed = to_coll,
+        to_expanded,
+        value
+      )
+      
+    trace_transitions_values$transitions <- trans_df_processed
+  } else {
+    # If transitions matrix is empty or NULL, create an empty tibble with the new schema
+    trace_transitions_values$transitions <- tibble::tibble(
+      cycle = integer(0),
+      from_collapsed = character(0),
+      from_expanded = character(0),
+      to_collapsed = character(0),
+      to_expanded = character(0),
+      value = numeric(0)
+    )
+  }
+  
   trace_transitions_values
 }
 
@@ -339,7 +388,7 @@ parse_trans_markov <- function(x, states, vars) {
         name = name,
         to_state_group = state_group,
         share_state_time = share_state_time,
-        max_st = max_state_time
+        max_st = ifelse(max_state_time == 0, Inf, max_state_time)
       ),
       by = c('to' = 'name')
     )
@@ -470,7 +519,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       if (simplify && !is_error) {
         # Transform to matrix to check st-dependency
         val_mat <- lf_to_arr(time_df, c('state_cycle', 'cycle'), 'value')
-        time_df$max_st <- min(row$max_st, arr_last_unique(val_mat, 1))
+        time_df$max_st <- min(row$max_st, arr_last_unique(val_mat, 1), na.rm = TRUE)
       } else {
         time_df$max_st <- row$max_st
       }
