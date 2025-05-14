@@ -233,6 +233,207 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     -pi # complementConstant
   )
   
+  # Use the correct name from the C++ return list
+  errors_df <- trace_transitions_values$errors
+
+  # Proceed only if errors_df exists and contains errors
+  # Ensure errors_df has the same number of rows as the input transitions matrix if we are to bind columns
+  if (!is.null(errors_df) && nrow(errors_df) > 0 && ncol(errors_df) > 0 && 
+      !is.null(transitions) && nrow(transitions) == nrow(errors_df)) { 
+
+    # Add 'cycle' and 'from' (expanded state index) from the input C++ transitions matrix
+    # The 'transitions' variable here is the input to this R function, which was expanded_trans_matrix
+    # It should have columns named "cycle" and "from" (1-based index)
+    errors_df <- dplyr::bind_cols(
+      dplyr::tibble(cycle = transitions[, "cycle"], from = transitions[, "from"]),
+      errors_df
+    )
+
+    # Convert to tibble for further processing (if bind_cols didn't already make it one)
+    errors_df <- tibble::as_tibble(errors_df)
+    
+    # Define expected columns *after* adding cycle and from
+    expected_error_cols <- c("cycle", "from", "complement", "outsideBounds", "sumNotEqualOne", "NaOrNaN")
+
+    if (all(expected_error_cols %in% colnames(errors_df))) {
+
+      # --- 1. Process Raw Errors ---
+      # Add expanded names (assuming 'from' is 1-based index from C++)
+      errors_df <- errors_df %>%
+        dplyr::mutate(expanded_state_name = state_names[from])
+
+      # Parse collapsed name and state time (handles names ending in .digit)
+      # Use regex for names ending in .digit separator
+      state_name_parts <- stringr::str_match(errors_df$expanded_state_name, "^(.*)\\.(\\d+)$") 
+      errors_df <- errors_df %>%
+        dplyr::mutate(
+          # Use group 1 for name, group 2 for time index
+          collapsed_state_name = ifelse(is.na(state_name_parts[, 2]), expanded_state_name, state_name_parts[, 2]),
+          state_time = ifelse(is.na(state_name_parts[, 3]), 1L, as.integer(state_name_parts[, 3])) # Default state_time = 1 if not expanded
+        )
+
+      # Determine which states involved in errors are expanded
+      state_expansion_info <- errors_df %>%
+        dplyr::filter(complement | outsideBounds | sumNotEqualOne | NaOrNaN) %>%
+        dplyr::group_by(collapsed_state_name) %>%
+        # Calculate max state time, checking for finite result to avoid warning
+        dplyr::summarize(
+           # Only call max if there are non-NA values, otherwise return NA
+           .max_st = if (any(!is.na(state_time))) max(state_time, na.rm = TRUE) else NA_real_,
+           .groups = 'drop'
+         ) %>%
+        dplyr::mutate(is_expanded_calc = is.finite(.max_st) & .max_st > 1) %>%
+        dplyr::select(collapsed_state_name, is_expanded_calc) # Keep only necessary columns
+      # Ensure state_expansion_info has the column even if empty, though dplyr::left_join usually handles this.
+      # if (nrow(state_expansion_info) == 0) {
+      #   state_expansion_info <- tibble::tibble(collapsed_state_name = character(0), is_expanded_calc = logical(0))
+      # }
+
+      # Pivot error flags to long format
+      processed_errors <- errors_df %>%
+        tidyr::pivot_longer(
+          cols = dplyr::all_of(c("complement", "outsideBounds", "sumNotEqualOne", "NaOrNaN")),
+          names_to = "error_raw",
+          values_to = "is_error"
+        ) %>%
+        dplyr::filter(is_error == TRUE) %>%
+        dplyr::mutate(
+          error_type = dplyr::case_when(
+            error_raw == "complement" ~ "Complement ('C') specified more than once for state/cycle",
+            error_raw == "outsideBounds" ~ "Transition probability outside range [0,1]",
+            error_raw == "sumNotEqualOne" ~ "Transition probabilities for state do not sum to 1",
+            error_raw == "NaOrNaN" ~ "NA or NaN value found in transition probabilities",
+            TRUE ~ paste("Unknown Error Type:", error_raw) # Fallback for safety
+          )
+        ) %>%
+        # Join expansion info
+        dplyr::left_join(state_expansion_info, by = "collapsed_state_name") %>%
+        # Now, explicitly create/replace is_expanded using the joined column (is_expanded_calc)
+        dplyr::mutate(is_expanded = ifelse(is.na(is_expanded_calc), FALSE, is_expanded_calc)) %>%
+        dplyr::select(cycle, collapsed_state_name, state_time, error_type, is_expanded) %>%
+        dplyr::distinct()
+
+      # Proceed only if there are processed errors
+      if (nrow(processed_errors) > 0) {
+
+        # --- 2. Consolidate State Time Ranges ---
+        cycle_st_errors <- processed_errors %>%
+          dplyr::arrange(collapsed_state_name, error_type, cycle, state_time) %>%
+          dplyr::group_by(collapsed_state_name, error_type, cycle, is_expanded) %>%
+          dplyr::summarise(
+            state_time_range = if (dplyr::first(is_expanded)) {
+              # Calculate range based on overall min/max for the group if expanded
+              min_st = min(state_time); max_st = max(state_time)
+              ifelse(min_st == max_st, as.character(min_st), paste0(min_st, "-", max_st))
+            } else {
+              "N/A" # Mark as N/A for non-expanded states
+            },
+            # Keep is_expanded flag, it's constant within the group
+            is_expanded = dplyr::first(is_expanded),
+            .groups = 'drop'
+          )
+
+        # --- 3. Consolidate Cycle Ranges ---
+        final_consolidated_errors <- cycle_st_errors %>%
+          # Ensure types are correct before arrange/group
+          dplyr::mutate(
+             cycle = as.integer(cycle),
+             state_time_range = as.character(state_time_range) 
+          ) %>% 
+          dplyr::arrange(collapsed_state_name, error_type, state_time_range, cycle) %>%
+          # Group by everything EXCEPT cycle to find consecutive cycles within those groups
+          dplyr::group_by(collapsed_state_name, error_type, state_time_range, is_expanded) %>%
+          # Identify consecutive cycle blocks using lag()
+          dplyr::mutate(new_block_flag = (cycle != dplyr::lag(cycle, default = dplyr::first(cycle) - 1) + 1)) %>%
+          dplyr::mutate(cycle_block_id = cumsum(new_block_flag)) %>%
+          # Now group by the block_id as well to summarize each block
+          dplyr::group_by(collapsed_state_name, error_type, state_time_range, is_expanded, cycle_block_id) %>%
+          dplyr::summarise(
+            min_cycle = min(cycle),
+            max_cycle = max(cycle),
+            .groups = 'drop' # Drop cycle_block_id group
+          ) %>%
+          dplyr::mutate(
+            cycle_range = ifelse(min_cycle == max_cycle, as.character(min_cycle), paste0(min_cycle, "-", max_cycle))
+          ) %>%
+          # Rename and select final columns for reporting logic
+          dplyr::select(
+            State = collapsed_state_name,
+            `State Times` = state_time_range,
+            `Cycles` = cycle_range,
+            `Error Message` = error_type,
+            is_expanded # Keep for column inclusion logic
+          )
+
+        # --- 4. Format and Issue Warning ---
+        if (nrow(final_consolidated_errors) > 0) {
+          
+          total_errors <- nrow(final_consolidated_errors)
+          trunc_msg <- ""
+          table_data_processed <- final_consolidated_errors # Start with full data
+
+          # Check if truncation is needed
+          if (total_errors > 10) {
+            table_data_processed <- utils::head(final_consolidated_errors, 10)
+            trunc_msg <- paste0("\n... (showing top 10 of ", total_errors, " errors)")
+          }
+
+          # Check if State Time Column is Needed (based on the full error set)
+          include_st_col <- any(final_consolidated_errors$is_expanded)
+
+          # Select columns for the final table (using the potentially truncated data)
+          if (include_st_col) {
+            # Order: State, State Times, Cycles, Error Message
+            table_data <- table_data_processed %>% dplyr::select(State, `State Times`, `Cycles`, `Error Message`)
+          } else {
+            # Order: State, Cycles, Error Message
+            table_data <- table_data_processed %>% dplyr::select(State, `Cycles`, `Error Message`)
+          }
+
+          # Determine max widths for formatting (using the potentially truncated data)
+          col_widths <- sapply(colnames(table_data), function(col) {
+              # Use pmax for robustness, ensure minimum width for header
+              pmax(nchar(col), if(nrow(table_data) > 0) max(nchar(as.character(table_data[[col]])), na.rm = TRUE) else 0)
+          })
+
+          # Create table components with left justification
+          header <- paste0("| ", paste(format(colnames(table_data), width = col_widths, justify = "left"), collapse = " | "), " |")
+          separator <- paste0("|-", paste(sapply(col_widths, function(w) paste(rep("-", w), collapse = "")), collapse = "-|-"), "-|")
+
+          rows <- apply(table_data, 1, function(row) {
+            # Ensure row elements are character for format
+            paste0("| ", paste(format(as.character(row), width = col_widths, justify = "left"), collapse = " | "), " |")
+          })
+
+          # Combine components into final message, adding truncation note if needed
+          table_string <- paste(c(header, separator, rows), collapse = "\n")
+          console_message <- paste0("Transition probability errors detected:\n\n", table_string, trunc_msg)
+          
+          # Issue the warning OR stop based on error mode
+          error_mode <- getOption("heRomod2.error_mode", default = "warning")
+          if (error_mode == "checkpoint") {
+            stop(console_message, call. = FALSE)
+          } else {
+            warning(console_message, call. = FALSE)
+          }
+        } # End if final_consolidated_errors has rows
+      } # End if processed_errors has rows
+    } else {
+       warning("Transition probability errors might exist, but the 'errors' table from C++ has unexpected columns.", call. = FALSE)
+    }
+  } else {
+    # Errors might exist, but C++ returned unexpected columns or errors_df wasn't valid
+    # Check if it's actually a matrix/df before warning
+    if(is.matrix(errors_df) || is.data.frame(errors_df)) {
+      # This case means errors_df existed but didn't have the expected columns
+      warning("Transition probability errors might exist, but the 'errors' table from C++ has unexpected columns.", call. = FALSE)
+    } else if (!is.null(errors_df)) {
+      # If it's not NULL but not matrix/df, something else is wrong
+      warning("Transition probability errors might exist, but the 'errors' object returned by C++ is not a matrix or data frame.", call. = FALSE)
+    }
+    # If errors_df was NULL or 0 rows initially, this outer 'if' is skipped, so no warning here
+  }
+
   # Modify the transitions component of the result
   output_trans_matrix <- trace_transitions_values$transitions
   
@@ -373,12 +574,15 @@ parse_trans_markov <- function(x, states, vars) {
   # Construct the transitions object
   x$formula <- map(x$formula, as.heRoFormula)
   x$name <- paste0(x$from, '→', x$to)
+
   res <- sort_variables(x, vars) %>%
     select(name, from, to, formula) %>%
     left_join(
       transmute(
         states, name = name,
-        from_state_group = state_group
+        from_state_group = state_group,
+        share_state_time = share_state_time,
+        max_st = ifelse(max_state_time == 0, Inf, max_state_time)
       ),
       by = c('from' = 'name')
     ) %>%
@@ -386,9 +590,7 @@ parse_trans_markov <- function(x, states, vars) {
       transmute(
         states,
         name = name,
-        to_state_group = state_group,
-        share_state_time = share_state_time,
-        max_st = ifelse(max_state_time == 0, Inf, max_state_time)
+        to_state_group = state_group
       ),
       by = c('to' = 'name')
     )

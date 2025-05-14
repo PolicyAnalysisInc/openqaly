@@ -191,7 +191,7 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     if (is_hero_error(res)) {
       # Always accumulate if in a capture scope
       accumulate_hero_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
-      
+
       # Check the desired error handling mode (warning is default)
       error_mode <- getOption("heRomod2.error_mode", default = "warning")
       stop_on_error <- getOption("heRomod2.stop_on_error", default = FALSE)

@@ -289,7 +289,7 @@ check_state_time <- function(vars, states, transitions, values) {
 
   # Identify which vars have references to state time
   st_vars <- vars$name[map_lgl(vars$formula, ~has_st_dependency(.))]
-  
+
   # Combine values & transitions, group by state, and identify
   # references to state time or variables referencing state time
   st_df <- select(transitions, from, formula) %>%
@@ -308,7 +308,7 @@ check_state_time <- function(vars, states, transitions, values) {
     left_join(select(states, name, max_state_time), by = c('state' = 'name')) %>%
     transmute(
       state,
-      uses_st = ifelse(max_state_time > 1 && uses_st, TRUE, FALSE)
+      uses_st = ifelse((max_state_time > 1 | max_state_time == 0) && uses_st, TRUE, FALSE)
     )
   
   st_df
