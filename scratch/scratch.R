@@ -29,10 +29,13 @@ state_mapper <- function(x) {
     ref_model$states$name[index]
 }
 
-reorder_indices <- c(1,4,3,2,5,6,7,8)
-head(ref_res$segments$collapsed_trace[[1]] - res$segments$collapsed_trace[[1]][,reorder_indices], 10)
+reorder_indices <- c(1,2,7,3,4,5,6,8)
+ref_trace <- ref_res$segments$collapsed_trace[[1]]
+res_trace <- res$segments$collapsed_trace[[1]]
+colnames(res_trace) <- state_mapper(colnames(res_trace))
+res_trace <- res_trace[,colnames(ref_trace)]
 
-round((colSums(ref_res$segments$collapsed_trace[[1]]) - colSums(res$segments$collapsed_trace[[1]][,reorder_indices])) * 7/365, 3)
+round((colSums(res_trace) - colSums(ref_trace)) * 7/365, 3)
 
 res_mat <- res$segments$trace_and_values[[1]]$transitions %>%
     mutate(
@@ -58,3 +61,23 @@ mat_comp <- full_join(ref_res_mat, res_mat, by = c("cycle", "from_collapsed", "t
 
 
 # res <- run_model(model)
+ref_outcomes <- ref_res$segments %>%
+  rowwise() %>%
+  group_split() %>%
+  map(function(x) cbind(select(x, group, strategy)[rep(1, nrow(x$summaries[[1]])),], x$summaries[[1]])) %>%
+  bind_rows() %>%
+  group_by(group,strategy,summary) %>%
+  summarize(value=sum(amount), .groups = 'drop')
+
+outcomes <- res$segments %>%
+  rowwise() %>%
+  group_split() %>%
+  map(function(x) cbind(select(x, group, strategy)[rep(1, nrow(x$summaries[[1]])),], x$summaries[[1]])) %>%
+  bind_rows() %>%
+  group_by(group,strategy,summary) %>%
+  summarize(value=sum(amount), .groups = 'drop')
+
+
+
+
+

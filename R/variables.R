@@ -177,7 +177,7 @@ sort_variables <- function(x, extra_vars = NULL) {
 }
 
 # Evaluate a variables object
-eval_variables <- function(x, ns, df_only = F, context = 'variables') {
+eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
   
   # Keep list of parameters that generated errors - NOTE: using <<- inside walk2 is questionable style
   error_params <- c() 
@@ -241,7 +241,7 @@ eval_variables <- function(x, ns, df_only = F, context = 'variables') {
     }
     
   })
-  
+
   # Trigger error checkpoint mechanism (checks mode internally)
   hero_error_checkpoint()
   

@@ -214,6 +214,43 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
 calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map) {
 
+  # --- Helper Function Definition ---
+  format_ranges <- function(numbers) {
+    if (is.null(numbers) || length(numbers) == 0) {
+      return("N/A")
+    }
+    unique_sorted_numbers <- sort(unique(as.integer(numbers)))
+    if (length(unique_sorted_numbers) == 0) {
+      return("N/A")
+    }
+    
+    range_strings <- c()
+    if (length(unique_sorted_numbers) == 0) return("N/A") # Defensive
+
+    current_block_start <- unique_sorted_numbers[1]
+    
+    for (i in seq_along(unique_sorted_numbers)) {
+      is_last_element <- (i == length(unique_sorted_numbers))
+      is_discontinuity <- FALSE
+      if (!is_last_element) {
+        is_discontinuity <- (unique_sorted_numbers[i+1] != unique_sorted_numbers[i] + 1)
+      }
+
+      if (is_last_element || is_discontinuity) {
+        if (current_block_start == unique_sorted_numbers[i]) {
+          range_strings <- c(range_strings, as.character(current_block_start))
+        } else {
+          range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+        }
+        if (!is_last_element && is_discontinuity) {
+          current_block_start <- unique_sorted_numbers[i+1]
+        }
+      }
+    }
+    return(paste(range_strings, collapse = ", "))
+  }
+  # --- End Helper Function Definition ---
+
   # Determine number of cycles
   n_cycles <- max(transitions[,1])
   transitional_values <- filter(values, !is.na(state), !is.na(destination))
@@ -241,58 +278,67 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
   if (!is.null(errors_df) && nrow(errors_df) > 0 && ncol(errors_df) > 0 && 
       !is.null(transitions) && nrow(transitions) == nrow(errors_df)) { 
 
-    # Add 'cycle' and 'from' (expanded state index) from the input C++ transitions matrix
+    # Add 'cycle', 'from' (expanded state index), and 'to' (expanded state index) from the input C++ transitions matrix
     # The 'transitions' variable here is the input to this R function, which was expanded_trans_matrix
-    # It should have columns named "cycle" and "from" (1-based index)
+    # It should have columns named "cycle", "from", "to" (1-based index)
     errors_df <- dplyr::bind_cols(
-      dplyr::tibble(cycle = transitions[, "cycle"], from = transitions[, "from"]),
+      dplyr::tibble(
+        cycle = transitions[, "cycle"], 
+        from_idx = transitions[, "from"], # Renamed to from_idx to avoid clash with 'from' function
+        to_idx = transitions[, "to"]      # Added to_idx
+      ),
       errors_df
     )
 
     # Convert to tibble for further processing (if bind_cols didn't already make it one)
     errors_df <- tibble::as_tibble(errors_df)
     
-    # Define expected columns *after* adding cycle and from
-    expected_error_cols <- c("cycle", "from", "complement", "outsideBounds", "sumNotEqualOne", "NaOrNaN")
+    # Define expected columns *after* adding cycle, from_idx, and to_idx
+    expected_error_cols <- c("cycle", "from_idx", "to_idx", "complement", "probLessThanZero", "probGreaterThanOne", "sumNotEqualOne", "NaOrNaN")
 
     if (all(expected_error_cols %in% colnames(errors_df))) {
 
       # --- 1. Process Raw Errors ---
-      # Add expanded names (assuming 'from' is 1-based index from C++)
-      errors_df <- errors_df %>%
-        dplyr::mutate(expanded_state_name = state_names[from])
-
-      # Parse collapsed name and state time (handles names ending in .digit)
-      # Use regex for names ending in .digit separator
-      state_name_parts <- stringr::str_match(errors_df$expanded_state_name, "^(.*)\\.(\\d+)$") 
+      # Add expanded names using indices
       errors_df <- errors_df %>%
         dplyr::mutate(
-          # Use group 1 for name, group 2 for time index
-          collapsed_state_name = ifelse(is.na(state_name_parts[, 2]), expanded_state_name, state_name_parts[, 2]),
-          state_time = ifelse(is.na(state_name_parts[, 3]), 1L, as.integer(state_name_parts[, 3])) # Default state_time = 1 if not expanded
+          expanded_from_state_name = state_names[from_idx],
+          expanded_to_state_name = state_names[to_idx] # Added expanded_to_state_name
         )
 
-      # Determine which states involved in errors are expanded
+      # Parse collapsed name and state time for FROM state
+      from_state_name_parts <- stringr::str_match(errors_df$expanded_from_state_name, "^(.*)\\.(\\d+)$") 
+      errors_df <- errors_df %>%
+        dplyr::mutate(
+          collapsed_from_state_name = ifelse(is.na(from_state_name_parts[, 2]), expanded_from_state_name, from_state_name_parts[, 2]),
+          from_state_time = ifelse(is.na(from_state_name_parts[, 3]), 1L, as.integer(from_state_name_parts[, 3]))
+        )
+
+      # Parse collapsed name and state time for TO state
+      to_state_name_parts <- stringr::str_match(errors_df$expanded_to_state_name, "^(.*)\\.(\\d+)$")
+      errors_df <- errors_df %>%
+        dplyr::mutate(
+          collapsed_to_state_name = ifelse(is.na(to_state_name_parts[, 2]), expanded_to_state_name, to_state_name_parts[, 2]),
+          # to_state_time might not be directly used in the table if "State Times" refers to 'from'
+          to_state_time = ifelse(is.na(to_state_name_parts[, 3]), 1L, as.integer(to_state_name_parts[, 3]))
+        )
+
+      # Determine which states involved in errors are expanded (based on FROM state)
+      # This logic for 'is_expanded' remains based on the 'from' state perspective for the error.
       state_expansion_info <- errors_df %>%
-        dplyr::filter(complement | outsideBounds | sumNotEqualOne | NaOrNaN) %>%
-        dplyr::group_by(collapsed_state_name) %>%
-        # Calculate max state time, checking for finite result to avoid warning
+        dplyr::filter(complement | probLessThanZero | probGreaterThanOne | sumNotEqualOne | NaOrNaN) %>%
+        dplyr::group_by(collapsed_from_state_name) %>%
         dplyr::summarize(
-           # Only call max if there are non-NA values, otherwise return NA
-           .max_st = if (any(!is.na(state_time))) max(state_time, na.rm = TRUE) else NA_real_,
+           .max_st = if (any(!is.na(from_state_time))) max(from_state_time, na.rm = TRUE) else NA_real_,
            .groups = 'drop'
          ) %>%
         dplyr::mutate(is_expanded_calc = is.finite(.max_st) & .max_st > 1) %>%
-        dplyr::select(collapsed_state_name, is_expanded_calc) # Keep only necessary columns
-      # Ensure state_expansion_info has the column even if empty, though dplyr::left_join usually handles this.
-      # if (nrow(state_expansion_info) == 0) {
-      #   state_expansion_info <- tibble::tibble(collapsed_state_name = character(0), is_expanded_calc = logical(0))
-      # }
+        dplyr::select(collapsed_from_state_name, is_expanded_calc)
 
       # Pivot error flags to long format
       processed_errors <- errors_df %>%
         tidyr::pivot_longer(
-          cols = dplyr::all_of(c("complement", "outsideBounds", "sumNotEqualOne", "NaOrNaN")),
+          cols = dplyr::all_of(c("complement", "probLessThanZero", "probGreaterThanOne", "sumNotEqualOne", "NaOrNaN")),
           names_to = "error_raw",
           values_to = "is_error"
         ) %>%
@@ -300,69 +346,75 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
         dplyr::mutate(
           error_type = dplyr::case_when(
             error_raw == "complement" ~ "Complement ('C') specified more than once for state/cycle",
-            error_raw == "outsideBounds" ~ "Transition probability outside range [0,1]",
+            error_raw == "probLessThanZero" ~ "Transition probability less than 0",
+            error_raw == "probGreaterThanOne" ~ "Transition probability greater than 1",
             error_raw == "sumNotEqualOne" ~ "Transition probabilities for state do not sum to 1",
             error_raw == "NaOrNaN" ~ "NA or NaN value found in transition probabilities",
-            TRUE ~ paste("Unknown Error Type:", error_raw) # Fallback for safety
+            TRUE ~ paste("Unknown Error Type:", error_raw)
+          ),
+          # Determine final "To State" based on error type
+          # For state-level errors (complement, sumNotEqualOne), "To State" is not applicable
+          final_to_state = ifelse(
+            error_raw %in% c("probLessThanZero", "probGreaterThanOne", "NaOrNaN"),
+            collapsed_to_state_name,
+            NA_character_ # Use NA, will be replaced by "" later for display
           )
         ) %>%
-        # Join expansion info
-        dplyr::left_join(state_expansion_info, by = "collapsed_state_name") %>%
-        # Now, explicitly create/replace is_expanded using the joined column (is_expanded_calc)
+        dplyr::left_join(state_expansion_info, by = "collapsed_from_state_name") %>%
         dplyr::mutate(is_expanded = ifelse(is.na(is_expanded_calc), FALSE, is_expanded_calc)) %>%
-        dplyr::select(cycle, collapsed_state_name, state_time, error_type, is_expanded) %>%
+        # Select relevant columns for consolidation
+        dplyr::select(
+            cycle, 
+            collapsed_from_state_name, 
+            from_state_time, 
+            final_to_state, # Added
+            error_type, 
+            is_expanded
+        ) %>%
         dplyr::distinct()
 
-      # Proceed only if there are processed errors
       if (nrow(processed_errors) > 0) {
 
-        # --- 2. Consolidate State Time Ranges ---
+        # --- 2. Consolidate State Time Ranges (for FROM state) ---
         cycle_st_errors <- processed_errors %>%
-          dplyr::arrange(collapsed_state_name, error_type, cycle, state_time) %>%
-          dplyr::group_by(collapsed_state_name, error_type, cycle, is_expanded) %>%
+          dplyr::arrange(collapsed_from_state_name, final_to_state, error_type, cycle, from_state_time) %>%
+          dplyr::group_by(collapsed_from_state_name, final_to_state, error_type, cycle, is_expanded) %>%
           dplyr::summarise(
-            state_time_range = if (dplyr::first(is_expanded)) {
-              # Calculate range based on overall min/max for the group if expanded
-              min_st = min(state_time); max_st = max(state_time)
-              ifelse(min_st == max_st, as.character(min_st), paste0(min_st, "-", max_st))
-            } else {
-              "N/A" # Mark as N/A for non-expanded states
-            },
-            # Keep is_expanded flag, it's constant within the group
-            is_expanded = dplyr::first(is_expanded),
+            # Collect all from_state_time values for the group
+            all_from_state_times = list(unique(from_state_time)), 
+            is_expanded = dplyr::first(is_expanded), # Keep, refers to from_state expansion
             .groups = 'drop'
-          )
+          ) %>%
+          # Apply format_ranges to the collected state times
+          dplyr::mutate(
+            from_state_time_range = ifelse(is_expanded, sapply(all_from_state_times, format_ranges), "N/A")
+          ) %>%
+          dplyr::select(-all_from_state_times) # Remove the temporary list column
 
         # --- 3. Consolidate Cycle Ranges ---
         final_consolidated_errors <- cycle_st_errors %>%
-          # Ensure types are correct before arrange/group
+          # Ensure types are correct before arrange/group for from_state_time_range
           dplyr::mutate(
-             cycle = as.integer(cycle),
-             state_time_range = as.character(state_time_range) 
+             from_state_time_range = as.character(from_state_time_range) 
           ) %>% 
-          dplyr::arrange(collapsed_state_name, error_type, state_time_range, cycle) %>%
-          # Group by everything EXCEPT cycle to find consecutive cycles within those groups
-          dplyr::group_by(collapsed_state_name, error_type, state_time_range, is_expanded) %>%
-          # Identify consecutive cycle blocks using lag()
-          dplyr::mutate(new_block_flag = (cycle != dplyr::lag(cycle, default = dplyr::first(cycle) - 1) + 1)) %>%
-          dplyr::mutate(cycle_block_id = cumsum(new_block_flag)) %>%
-          # Now group by the block_id as well to summarize each block
-          dplyr::group_by(collapsed_state_name, error_type, state_time_range, is_expanded, cycle_block_id) %>%
+          dplyr::arrange(collapsed_from_state_name, final_to_state, error_type, from_state_time_range, cycle) %>%
+          # Group by everything EXCEPT cycle to collect all cycles for these groups
+          dplyr::group_by(collapsed_from_state_name, final_to_state, error_type, from_state_time_range, is_expanded) %>%
+          # Summarize to get the formatted cycle_range string
           dplyr::summarise(
-            min_cycle = min(cycle),
-            max_cycle = max(cycle),
-            .groups = 'drop' # Drop cycle_block_id group
-          ) %>%
-          dplyr::mutate(
-            cycle_range = ifelse(min_cycle == max_cycle, as.character(min_cycle), paste0(min_cycle, "-", max_cycle))
+            cycle_range = format_ranges(cycle), # Use the helper function here
+            # is_expanded is constant within this group, take the first
+            is_expanded = dplyr::first(is_expanded),
+            .groups = 'drop' 
           ) %>%
           # Rename and select final columns for reporting logic
           dplyr::select(
-            State = collapsed_state_name,
-            `State Times` = state_time_range,
+            `From State` = collapsed_from_state_name,
+            `State Time` = from_state_time_range, # Renamed
+            `To State` = final_to_state,                 # Added
             `Cycles` = cycle_range,
             `Error Message` = error_type,
-            is_expanded # Keep for column inclusion logic
+            is_expanded # Keep for 'State Time' column inclusion logic
           )
 
         # --- 4. Format and Issue Warning ---
@@ -370,46 +422,40 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
           
           total_errors <- nrow(final_consolidated_errors)
           trunc_msg <- ""
-          table_data_processed <- final_consolidated_errors # Start with full data
+          # Replace NA in 'To State' with empty string for display
+          table_data_processed <- final_consolidated_errors %>%
+            dplyr::mutate(`To State` = ifelse(is.na(`To State`), "", `To State`))
 
-          # Check if truncation is needed
-          if (total_errors > 10) {
-            table_data_processed <- utils::head(final_consolidated_errors, 10)
-            trunc_msg <- paste0("\n... (showing top 10 of ", total_errors, " errors)")
+          if (total_errors > 40) {
+            table_data_processed <- utils::head(table_data_processed, 40)
+            trunc_msg <- paste0("\n... (showing top 40 of ", total_errors, " errors)")
           }
 
-          # Check if State Time Column is Needed (based on the full error set)
-          include_st_col <- any(final_consolidated_errors$is_expanded)
+          # Check if 'State Time' Column is Needed (based on the FROM state's expansion)
+          include_st_col <- any(final_consolidated_errors$is_expanded) # Based on original full error set
 
-          # Select columns for the final table (using the potentially truncated data)
           if (include_st_col) {
-            # Order: State, State Times, Cycles, Error Message
-            table_data <- table_data_processed %>% dplyr::select(State, `State Times`, `Cycles`, `Error Message`)
+            table_data <- table_data_processed %>% 
+                dplyr::select(`From State`, `State Time`, `To State`, `Cycles`, `Error Message`)
           } else {
-            # Order: State, Cycles, Error Message
-            table_data <- table_data_processed %>% dplyr::select(State, `Cycles`, `Error Message`)
+            table_data <- table_data_processed %>% 
+                dplyr::select(`From State`, `To State`, `Cycles`, `Error Message`)
           }
 
-          # Determine max widths for formatting (using the potentially truncated data)
           col_widths <- sapply(colnames(table_data), function(col) {
-              # Use pmax for robustness, ensure minimum width for header
               pmax(nchar(col), if(nrow(table_data) > 0) max(nchar(as.character(table_data[[col]])), na.rm = TRUE) else 0)
           })
 
-          # Create table components with left justification
           header <- paste0("| ", paste(format(colnames(table_data), width = col_widths, justify = "left"), collapse = " | "), " |")
           separator <- paste0("|-", paste(sapply(col_widths, function(w) paste(rep("-", w), collapse = "")), collapse = "-|-"), "-|")
 
           rows <- apply(table_data, 1, function(row) {
-            # Ensure row elements are character for format
             paste0("| ", paste(format(as.character(row), width = col_widths, justify = "left"), collapse = " | "), " |")
           })
 
-          # Combine components into final message, adding truncation note if needed
           table_string <- paste(c(header, separator, rows), collapse = "\n")
           console_message <- paste0("Transition probability errors detected:\n\n", table_string, trunc_msg)
           
-          # Issue the warning OR stop based on error mode
           error_mode <- getOption("heRomod2.error_mode", default = "warning")
           if (error_mode == "checkpoint") {
             stop(console_message, call. = FALSE)
@@ -654,14 +700,48 @@ check_trans_markov <- function(x, state_names) {
 
 # Helpers --------------------------------------------------------------
 
+# Helper function to format sorted numbers into comma-separated strings with ranges
+format_ranges <- function(numbers) {
+  if (is.null(numbers) || length(numbers) == 0) {
+    return("N/A")
+  }
+  unique_sorted_numbers <- sort(unique(as.integer(numbers)))
+  if (length(unique_sorted_numbers) == 0) {
+    return("N/A")
+  }
+  
+  range_strings <- c()
+  if (length(unique_sorted_numbers) == 0) return("N/A") # Defensive
+
+  current_block_start <- unique_sorted_numbers[1]
+  
+  for (i in seq_along(unique_sorted_numbers)) {
+    is_last_element <- (i == length(unique_sorted_numbers))
+    is_discontinuity <- FALSE
+    if (!is_last_element) {
+      is_discontinuity <- (unique_sorted_numbers[i+1] != unique_sorted_numbers[i] + 1)
+    }
+
+    if (is_last_element || is_discontinuity) {
+      if (current_block_start == unique_sorted_numbers[i]) {
+        range_strings <- c(range_strings, as.character(current_block_start))
+      } else {
+        range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+      }
+      if (!is_last_element && is_discontinuity) {
+        current_block_start <- unique_sorted_numbers[i+1]
+      }
+    }
+  }
+  return(paste(range_strings, collapse = ", "))
+}
+
 limit_state_time <- function(df, state_time_limits) {
   # Join data with state time limit
   left_join(df, state_time_limits, by = "state") %>%
     # Remove any entries that exceed limit
     filter(state_cycle <= st_limit)
 }
-
-
 
 #' Evaluate a Longform Transition Matrix
 eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {

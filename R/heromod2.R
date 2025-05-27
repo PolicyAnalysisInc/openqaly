@@ -58,7 +58,9 @@ default_days_per_year <- 365
 
 # Keywords that represent a reference to state time
 state_time_keywords <- c('state_cycle', 'state_day', 'state_week',
-                         'state_month', 'state_year')
+                         'state_month', 'state_year', 'state_cycle_lag',
+                         'state_day_lag', 'state_week_lag', 'state_month_lag', 'state_year_lag'
+                        )
 
 # Columns that are required in a variables definition
 vars_def_columns <- c('name', 'display_name',	'description')

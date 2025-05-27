@@ -66,8 +66,82 @@ check_values_df <- function(x) {
 
 as.values <- function(x) x
 
+# Helper function to format sorted numbers into comma-separated strings with ranges
+# (Similar to the one in R/markov.R)
+format_ranges_for_eval_values <- function(numbers) {
+  if (is.null(numbers) || length(numbers) == 0 || all(is.na(numbers))) {
+    return("N/A")
+  }
+  unique_sorted_numbers <- sort(unique(as.integer(stats::na.omit(numbers))))
+  if (length(unique_sorted_numbers) == 0) {
+    return("N/A")
+  }
+  
+  range_strings <- c()
+  current_block_start <- unique_sorted_numbers[1]
+  
+  for (i in seq_along(unique_sorted_numbers)) {
+    is_last_element <- (i == length(unique_sorted_numbers))
+    is_discontinuity <- FALSE
+    if (!is_last_element) {
+      is_discontinuity <- (unique_sorted_numbers[i+1] != unique_sorted_numbers[i] + 1)
+    }
+
+    if (is_last_element || is_discontinuity) {
+      if (current_block_start == unique_sorted_numbers[i]) {
+        range_strings <- c(range_strings, as.character(current_block_start))
+      } else {
+        range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+      }
+      if (!is_last_element && is_discontinuity) {
+        current_block_start <- unique_sorted_numbers[i+1]
+      }
+    }
+  }
+  return(paste(range_strings, collapse = ", "))
+}
+
+# Helper function to format a data frame into a markdown table string
+format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_prefix) {
+  if (nrow(table_data_df) == 0) {
+    return("")
+  }
+
+  # Ensure 'Destination' is character for consistent formatting if it contains actual NAs
+  if ("Destination" %in% colnames(table_data_df)) {
+    table_data_df <- dplyr::mutate(table_data_df, Destination = as.character(Destination))
+  }
+  
+  # Replace NA with "N/A" for display in all relevant columns
+  # (Value Name, State, Destination, Cycles, State Cycles)
+  cols_to_format_na <- intersect(colnames(table_data_df), c("Value Name", "State", "Destination", "Cycles", "State Cycles"))
+  for(col_name in cols_to_format_na) {
+    table_data_df[[col_name]] <- ifelse(is.na(table_data_df[[col_name]]), "N/A", table_data_df[[col_name]])
+  }
+
+  col_widths <- sapply(colnames(table_data_df), function(col) {
+      max(nchar(col), if(nrow(table_data_df) > 0) max(nchar(as.character(table_data_df[[col]])), na.rm = TRUE) else 0, na.rm=TRUE)
+  })
+
+  header <- paste0("| ", paste(format(colnames(table_data_df), width = col_widths, justify = "left"), collapse = " | "), " |")
+  separator <- paste0("|-", paste(sapply(col_widths, function(w) paste(rep("-", w), collapse = "")), collapse = "-|-"), "-|")
+
+  rows <- apply(table_data_df, 1, function(row_vec) {
+    paste0("| ", paste(format(as.character(row_vec), width = col_widths, justify = "left"), collapse = " | "), " |")
+  })
+
+  table_string <- paste(c(header, separator, rows), collapse = "\n")
+  
+  total_rows <- nrow(table_data_df) # Should be based on original before potential head()
+  # For NA reporting, showing all might be better unless it's excessively long.
+  # The prompt did not specify truncation for NA value errors, unlike transition errors.
+  # We'll not truncate for now, but this could be added if needed.
+
+  paste0(message_prefix, "\n\n", table_string)
+}
+
 #' @export
-evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
+evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) {
 
   # df is uneval_values. 
   # If model had no values, parse_values returns an empty, structured tibble:
@@ -92,31 +166,62 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
   }
 
   # Existing logic for when df has rows:
-  names_in_order <- unique(df$name) # df$name exists due to parse_values structure
+  # names_in_order <- unique(df$name) # df$name exists due to parse_values structure. Not directly used below.
   
   # The list of tibbles, one for each group of (state, destination)
   grouped_df_list <- df %>%
-    dplyr::group_by(state, destination) %>%
+    dplyr::group_by(state, destination) %>% # destination can be NA
     dplyr::group_split()
 
-  # Process each group
-  mapped_results_list <- purrr::map(grouped_df_list, function(x_group) {
+  # Process each group and collect NA information
+  processed_groups_and_na_info <- purrr::map(grouped_df_list, function(x_group) {
       state_ns <- eval_variables(x_group, clone_namespace(ns), FALSE)
       state_res <- state_ns$df # This contains cycle, state_cycle, and evaluated variable columns
+      
+      # Add group's state to state_res for reference in NA reporting if needed (though x_group has it)
+      # state_res$state_group_ref <- x_group$state[1] # This was previously done and is fine
+
+      # Determine which of the model's value_names are present as columns in state_res
+      # These are the names of the values defined in this x_group
+      value_cols_in_stateres <- intersect(colnames(state_res), value_names)
+      
+      # Collect NA details for the current group
+      current_group_na_details_list <- list()
+      if (nrow(state_res) > 0 && length(value_cols_in_stateres) > 0) {
+          for (v_col_name in value_cols_in_stateres) {
+              # Check if the column itself exists before trying to access it
+              if (v_col_name %in% colnames(state_res)) {
+                  if (anyNA(state_res[[v_col_name]])) {
+                      na_indices <- which(is.na(state_res[[v_col_name]]))
+                      if (length(na_indices) > 0) {
+                          current_group_na_details_list[[length(current_group_na_details_list) + 1]] <-
+                              tibble::tibble(
+                                  value_name = v_col_name,
+                                  state = x_group$state[1],
+                                  # Handle destination being NA_character_ if x_group$destination[1] is NA
+                                  destination = if (is.na(x_group$destination[1])) NA_character_ else as.character(x_group$destination[1]),
+                                  cycle = state_res$cycle[na_indices],
+                                  state_cycle = state_res$state_cycle[na_indices]
+                              )
+                      }
+                  }
+              }
+          }
+      }
+      na_report_for_this_group <- dplyr::bind_rows(current_group_na_details_list)
+
+      # --- Resume original logic for processing state_res ---
       state_res$state <- x_group$state[1] # Add the group's state to state_res
       
-      value_names_in_df <- intersect(colnames(state_res), value_names)
+      value_names_in_df <- intersect(colnames(state_res), value_names) # Re-calc based on state_res with 'state'
       value_names_in_env <- intersect(names(state_ns$env), value_names)
-      # value_names_missing <- setdiff(value_names, c(value_names_in_df, value_names_in_env)) # Not directly used for output structure here
 
-      current_max_st <- x_group$max_st[1] # Initial max_st for the group
+      current_max_st <- x_group$max_st[1]
 
       if (simplify && length(value_names_in_df) > 0 && nrow(state_res) > 0) {
-        # Ensure columns for pivot exist in state_res
         cols_for_pivot <- c("state", "cycle", "state_cycle", value_names_in_df)
         missing_pivot_cols <- setdiff(cols_for_pivot, colnames(state_res))
         if (length(missing_pivot_cols) > 0) {
-            # This shouldn't happen if state_res is structured as expected
             warning(paste("evaluate_values simplify: missing columns in state_res:", paste(missing_pivot_cols, collapse=", ")))
         } else {
             simplified_state_res <- state_res[ ,cols_for_pivot, drop = FALSE]
@@ -128,9 +233,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
             }
         }
       }
-      # state_res$state <- x_group$state[1] # Already done above
-
-      # Inner map over state_cycle within the current group
+      
       expanded_state_res_list <- state_res %>%
         dplyr::group_by(state_cycle) %>%
         dplyr::group_split()
@@ -143,22 +246,65 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = F) {
           
           tibble::tibble(
             state = x_group$state[1],
-            destination = x_group$destination[1],
-            max_st = current_max_st, # Use the (potentially) simplified max_st for the group
+            destination = x_group$destination[1], # This can be NA
+            max_st = current_max_st,
             state_cycle = state_cycle_df$state_cycle[1],
             values_list = list(expanded_state_values_list)
           )
       })
-      dplyr::bind_rows(inner_mapped_rows)
+      
+      list(
+          data_output = dplyr::bind_rows(inner_mapped_rows),
+          na_report = na_report_for_this_group
+      )
   })
   
-  # Combine results from all groups
+  # Extract the main data results and the NA reports
+  mapped_results_list <- purrr::map(processed_groups_and_na_info, "data_output")
+  all_na_reports_list <- purrr::map(processed_groups_and_na_info, "na_report")
+  
+  # Combine all NA reports into one tibble
+  all_na_df <- dplyr::bind_rows(all_na_reports_list)
+
+  # If NA values were found, process and potentially throw error
+  if (nrow(all_na_df) > 0) {
+    # Consolidate NA report
+    consolidated_na_summary <- all_na_df %>%
+      dplyr::group_by(value_name, state, destination) %>%
+      dplyr::summarise(
+        Cycles = format_ranges_for_eval_values(cycle),
+        State_Cycles = format_ranges_for_eval_values(state_cycle),
+        .groups = 'drop'
+      ) %>%
+      dplyr::select(
+        `Value Name` = value_name,
+        State = state,
+        Destination = destination, # This column might contain NA_character_
+        Cycles,
+        `State Cycles` = State_Cycles
+      )
+
+    error_mode <- getOption("heRomod2.error_mode", default = "warning")
+    if (error_mode == "checkpoint") {
+      table_message <- format_na_table_to_markdown_for_eval_values(
+        consolidated_na_summary,
+        "NA values detected in evaluated model values:"
+      )
+      stop(table_message, call. = FALSE)
+    } else {
+      # Optionally, issue a warning if not in checkpoint mode and NAs are found
+      # For now, following prompt for checkpoint mode only.
+      # warning_message <- .format_na_table_to_markdown_for_eval_values(
+      #   consolidated_na_summary,
+      #   "Warning: NA values detected in evaluated model values:"
+      # )
+      # warning(warning_message, call. = FALSE)
+    }
+  }
+  
+  # Combine results from all groups (original logic)
   final_evaluated_values <- dplyr::bind_rows(mapped_results_list)
   
-  # Final arrange step
-  # If final_evaluated_values is 0-row (e.g. if df had rows but all groups led to empty inner_mapped_rows),
-  # it should still have the columns: state, destination, max_st, state_cycle, values_list.
-  # So, factor(state, ...) should be fine.
   dplyr::arrange(final_evaluated_values, factor(state, levels = state_names))
 }
 

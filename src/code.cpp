@@ -225,9 +225,9 @@ List cppMarkovTransitionsAndTrace(
     Rcpp::NumericMatrix uncondTransProbs(transRows, 4); // Unconditional probabilities of transtitions
     colnames(uncondTransProbs) = CharacterVector::create("cycle", "from", "to", "value");
 
-    Rcpp::LogicalMatrix transitionErrors(transRows, 4); // Store errors related to transition matrix,
-    colnames(transitionErrors) = CharacterVector::create("complement", "outsideBounds", "sumNotEqualOne", "NaOrNaN");
-    // columns: ComplementErrors, OutsideBoundsErrors, SumNotEqualOneErrors, NAOrNaNError
+    Rcpp::LogicalMatrix transitionErrors(transRows, 5); // Store errors related to transition matrix,
+    colnames(transitionErrors) = CharacterVector::create("complement", "probLessThanZero", "probGreaterThanOne", "sumNotEqualOne", "NaOrNaN");
+    // columns: ComplementErrors, probLessThanZero, probGreaterThanOne, SumNotEqualOneErrors, NAOrNaNError
 
     DebugPrintValue("Number of rows", trace.nrow());
     DebugPrintValue("Number of columns", trace.ncol());
@@ -251,6 +251,7 @@ List cppMarkovTransitionsAndTrace(
     int tvalRowIndex = 0;
     Rcpp::CharacterVector valNames;
     Rcpp::NumericVector valValues;
+    const double FPOINT_TOLERANCE = 1e-9; // Define tolerance for floating point comparisons
 
     // Loop through each cycle and from state
     for(int cycle = 1; cycle <= nCycles; cycle++) {
@@ -336,8 +337,9 @@ List cppMarkovTransitionsAndTrace(
 
                     // Populate row for error tracking of transition probabilities.
                     transitionErrors(currentTransitionsRow, 0) = complementsFoundInState > 1;
-                    transitionErrors(currentTransitionsRow, 1) = (value > 1) || (value < 0);
-                    transitionErrors(currentTransitionsRow, 3) = std::isnan(value);
+                    transitionErrors(currentTransitionsRow, 1) = (value < -FPOINT_TOLERANCE); // probLessThanZero
+                    transitionErrors(currentTransitionsRow, 2) = (value > 1.0 + FPOINT_TOLERANCE); // probGreaterThanOne
+                    transitionErrors(currentTransitionsRow, 4) = std::isnan(value); // NaOrNaN (index shifted)
                 }
 
                 // Check if it is time to move to the next set of transitions
@@ -376,50 +378,49 @@ List cppMarkovTransitionsAndTrace(
                 uncondTransProbs(complementRowIndex, 3) = uncondTransProb;
 
                 // Set transitional values
-                std::string fromStateName = std::string(stateNames[fromState]);
-                std::string toStateName = std::string(stateNames[complementToState]);
-                std::string mapKey = fromStateName + "+" + toStateName;
+                std::string fromStateName_c = std::string(stateNames[fromState]); // Renamed to avoid conflict
+                std::string toStateName_c = std::string(stateNames[complementToState]); // Renamed to avoid conflict
+                std::string mapKey_c = fromStateName_c + "+" + toStateName_c; // Renamed to avoid conflict
                 
                 // Check if we have transitional values for this state transition
-                if (transitionalValueDictionary.find(mapKey) != transitionalValueDictionary.end()) {
-                    valList = transitionalValueDictionary[mapKey];
+                if (transitionalValueDictionary.find(mapKey_c) != transitionalValueDictionary.end()) {
+                    valList = transitionalValueDictionary[mapKey_c];
                     int nVals = valList.length();
                     
                     // For each value in this transition
                     for (int valIndex = 0; valIndex < nVals; valIndex++) {
-                        Rcpp::CharacterVector valNames = valList.names();
-                        std::string valName = std::string(valNames[valIndex]);
-                        Rcpp::NumericVector valValues = valList[valIndex];
-                        int nValueCycles = valValues.length();
-                        double valValue = valValues[0];
+                        Rcpp::CharacterVector currentValNames = valList.names(); // Renamed
+                        std::string valName = std::string(currentValNames[valIndex]);
+                        Rcpp::NumericVector currentValValues = valList[valIndex]; // Renamed
+                        int nValueCycles = currentValValues.length();
+                        double valValue = currentValValues[0];
                         
                         // Handle cycle-specific values
                         if (nValueCycles > 1) {
-                            valValue = valValues[cycle - 1];
+                            valValue = currentValValues[cycle - 1];
                         }
                         
                         // Find the index of this value name in valueNames
-                        int valueIndex = -1;
+                        int valueResultIndex = -1; // Renamed
                         for (int i = 0; i < nValues; i++) {
                             if (std::string(valueNames[i]) == valName) {
-                                valueIndex = i;
+                                valueResultIndex = i;
                                 break;
                             }
                         }
                         
-                        if (valueIndex >= 0) {
+                        if (valueResultIndex >= 0) {
                             // Add transition contribution to result (uncond transition prob * value)
-                            transitionalValueResults(cycle - 1, valueIndex) += uncondTransProb * valValue;
+                            transitionalValueResults(cycle - 1, valueResultIndex) += uncondTransProb * valValue;
                         }
                     }
                 }
 
-                transitionErrors(complementRowIndex, 1) = (complementValue > 1) || (complementValue < 0);
-                transitionErrors(complementRowIndex, 3) = std::isnan(complementValue);
+                transitionErrors(complementRowIndex, 1) = (complementValue < -FPOINT_TOLERANCE); // probLessThanZero
+                transitionErrors(complementRowIndex, 2) = (complementValue > 1.0 + FPOINT_TOLERANCE); // probGreaterThanOne
+                transitionErrors(complementRowIndex, 4) = std::isnan(complementValue); // NaOrNaN (index shifted)
             } else {
-                // Rcout << "Cumulative prob no complement: " << cumulativeProbability << "\n";
-                // Rcout << "Cumulative prob equals 1: " << (cumulativeProbability == 1) << "\n";
-                transitionErrors(currentTransitionsRow - 1, 2) = cumulativeProbability != 1;
+                transitionErrors(currentTransitionsRow - 1, 3) = std::abs(cumulativeProbability - 1.0) > FPOINT_TOLERANCE; // sumNotEqualOne (index shifted)
             }
 
             // Reset everything for move to next set of transitions
