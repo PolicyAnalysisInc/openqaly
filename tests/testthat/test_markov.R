@@ -231,14 +231,14 @@ test_that('markov trace calculations work with bounds error', {
 
   error_states_cycles <- as.data.frame(res$errors) %>%
     mutate(cycle = res$transitions[,1], from = res$transitions[,2]) %>%
+    mutate(hasError = probLessThanZero | probGreaterThanOne) %>%
     group_by(cycle, from) %>%
-    summarize(outsideBounds = any(outsideBounds)) %>%
-    filter(outsideBounds) %>%
-    ungroup()
+    summarize(hasError = any(hasError), .groups = "drop") %>%
+    filter(hasError)
 
   expect_equal(
     error_states_cycles,
-    tibble(cycle = c(1, 3), from = c(1, 1), outsideBounds = c(TRUE, TRUE))
+    tibble(cycle = c(1, 3), from = c(1, 1), hasError = c(TRUE, TRUE))
   )
 
 })

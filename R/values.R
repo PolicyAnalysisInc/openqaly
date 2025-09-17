@@ -160,6 +160,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       values_list = list(),
       .rows = 0
     )
+
     # The arrange step on a 0-row tibble with a 'state' column is valid.
     # factor(character(0), levels=state_names) results in factor(0 levels=...)
     return(dplyr::arrange(empty_evaluated_values, factor(state, levels = state_names)))
@@ -215,7 +216,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       
       value_names_in_df <- intersect(colnames(state_res), value_names) # Re-calc based on state_res with 'state'
       value_names_in_env <- intersect(names(state_ns$env), value_names)
-
+      
       current_max_st <- x_group$max_st[1]
 
       if (simplify && length(value_names_in_df) > 0 && nrow(state_res) > 0) {
@@ -228,7 +229,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
             if (nrow(simplified_state_res) > 0 && length(value_names_in_df) > 0) {
                 val_mat <- simplified_state_res %>%
                     tidyr::pivot_longer(names_to = "variable", values_to = "value", dplyr::all_of(value_names_in_df)) %>%
-                    lf_to_arr(c('cycle', 'state_cycle'), 'value')
+                    lf_to_arr(c('cycle', 'state_cycle','variable'), 'value')
                 current_max_st <- min(current_max_st, arr_last_unique(val_mat, 2), na.rm = TRUE)
             }
         }
@@ -284,23 +285,14 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
         `State Cycles` = State_Cycles
       )
 
-    error_mode <- getOption("heRomod2.error_mode", default = "warning")
-    if (error_mode == "checkpoint") {
-      table_message <- format_na_table_to_markdown_for_eval_values(
-        consolidated_na_summary,
-        "NA values detected in evaluated model values:"
-      )
-      stop(table_message, call. = FALSE)
-    } else {
-      # Optionally, issue a warning if not in checkpoint mode and NAs are found
-      # For now, following prompt for checkpoint mode only.
-      # warning_message <- .format_na_table_to_markdown_for_eval_values(
-      #   consolidated_na_summary,
-      #   "Warning: NA values detected in evaluated model values:"
-      # )
-      # warning(warning_message, call. = FALSE)
-    }
+    # Always use checkpoint behavior for NA value errors
+    table_message <- format_na_table_to_markdown_for_eval_values(
+      consolidated_na_summary,
+      "NA values detected in evaluated model values:"
+    )
+    stop(table_message, call. = FALSE)
   }
+
   
   # Combine results from all groups (original logic)
   final_evaluated_values <- dplyr::bind_rows(mapped_results_list)

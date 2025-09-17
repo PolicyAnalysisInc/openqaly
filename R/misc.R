@@ -30,6 +30,25 @@ read_model <- function(path) {
 
   model$settings <- convert_settings_from_df(model$settings)
   
+  # Handle PSM-specific transitions structure
+  if (!is.null(model$settings$model_type) && tolower(model$settings$model_type) == "psm") {
+    if (!is.null(model$transitions)) {
+      # Ensure PSM transitions have required columns
+      psm_required <- c("endpoint", "time_unit", "formula")
+      for (col in psm_required) {
+        if (!(col %in% colnames(model$transitions))) {
+          if (nrow(model$transitions) > 0) {
+            model$transitions[[col]] <- NA_character_
+          } else {
+            model$transitions <- create_empty_psm_transitions_stubs()
+          }
+        }
+      }
+    } else {
+      model$transitions <- create_empty_psm_transitions_stubs()
+    }
+  }
+  
   define_object_(model, 'heRomodel')
 }
 
@@ -486,9 +505,14 @@ read_model_json <- function(json_string) {
 convert_json_dataframes <- function(model) {
   expected_dfs <- c("strategies", "groups", "states", "transitions", "values", "summaries")
   
+  # Determine if this is a PSM model
+  is_psm <- !is.null(model$settings) && !is.null(model$settings$model_type) && 
+            tolower(model$settings$model_type) == "psm"
+  
   df_stubs <- list(
     values = create_empty_values_stubs(),
-    summaries = create_empty_summaries_stubs()
+    summaries = create_empty_summaries_stubs(),
+    transitions = if (is_psm) create_empty_psm_transitions_stubs() else NULL
   )
 
   for (df_name in expected_dfs) {
@@ -522,11 +546,24 @@ convert_json_dataframes <- function(model) {
       }
       
       if (df_name == "transitions") {
-        if ("from_state" %in% colnames(model[[df_name]])) {
-          model[[df_name]] <- dplyr::rename(model[[df_name]], from = from_state)
-        }
-        if ("to_state" %in% colnames(model[[df_name]])) {
-          model[[df_name]] <- dplyr::rename(model[[df_name]], to = to_state)
+        # Handle transitions differently for PSM vs Markov models
+        if (is_psm) {
+          # PSM transitions have different structure
+          # Ensure required columns exist
+          psm_required <- c("endpoint", "time_unit", "formula")
+          for (col in psm_required) {
+            if (!(col %in% colnames(model[[df_name]]))) {
+              model[[df_name]][[col]] <- NA_character_
+            }
+          }
+        } else {
+          # Markov transitions - handle column renaming
+          if ("from_state" %in% colnames(model[[df_name]])) {
+            model[[df_name]] <- dplyr::rename(model[[df_name]], from = from_state)
+          }
+          if ("to_state" %in% colnames(model[[df_name]])) {
+            model[[df_name]] <- dplyr::rename(model[[df_name]], to = to_state)
+          }
         }
       }
     }
@@ -552,6 +589,14 @@ create_empty_summaries_stubs <- function() {
     display_name = character(0),
     description = character(0),
     values = character(0)
+  )
+}
+
+create_empty_psm_transitions_stubs <- function() {
+  tibble::tibble(
+    endpoint = character(0),
+    time_unit = character(0),
+    formula = character(0)
   )
 }
 
@@ -602,4 +647,118 @@ ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
     }
   }
   return(tbl)
+}
+
+#' Write Model to JSON
+#'
+#' Takes a heRomodel object (typically loaded from Excel) and converts it
+#' to a JSON string format.
+#'
+#' @param model A heRomodel object to be converted to JSON.
+#'
+#' @return A JSON string representing the model.
+#'
+#' @export
+write_model_json <- function(model) {
+  # Ensure model is a heRomodel object
+  if (!"heRomodel" %in% class(model)) {
+    stop("Input must be a heRomodel object", call. = FALSE)
+  }
+
+  # Create a copy to avoid modifying the original
+  json_model <- list()
+
+  # Convert settings from list to dataframe format expected by JSON
+  if (!is.null(model$settings) && is.list(model$settings)) {
+    settings_df <- tibble::tibble(
+      setting = names(model$settings),
+      value = as.character(unlist(model$settings))
+    )
+    json_model$settings <- settings_df
+  } else {
+    stop("Model settings must be a list", call. = FALSE)
+  }
+
+  # Copy standard dataframes
+  standard_dfs <- c("strategies", "groups", "states", "transitions",
+                    "values", "summaries", "variables", "trees")
+  for (df_name in standard_dfs) {
+    if (!is.null(model[[df_name]])) {
+      # Ensure it's a data frame
+      if (is.data.frame(model[[df_name]])) {
+        # Convert factors to characters
+        df_copy <- model[[df_name]]
+        df_copy[] <- lapply(df_copy, function(x) {
+          if (is.factor(x)) as.character(x) else x
+        })
+        json_model[[df_name]] <- df_copy
+      } else {
+        warning(paste0("Skipping ", df_name, " - not a data frame"))
+      }
+    }
+  }
+
+  # Convert tables to array format expected by JSON
+  if (!is.null(model$tables) && is.list(model$tables)) {
+    table_names <- names(model$tables)
+    if (length(table_names) > 0) {
+      tables_array <- list()
+      for (i in seq_along(table_names)) {
+        table_name <- table_names[i]
+        table_data <- model$tables[[table_name]]
+
+        # Ensure table_data is a data frame
+        if (is.data.frame(table_data)) {
+          # Convert factors to characters
+          table_data[] <- lapply(table_data, function(x) {
+            if (is.factor(x)) as.character(x) else x
+          })
+
+          tables_array[[i]] <- list(
+            name = table_name,
+            data = list(rows = table_data)
+          )
+        }
+      }
+      json_model$tables <- tables_array
+    } else {
+      json_model$tables <- list()
+    }
+  } else {
+    json_model$tables <- list()
+  }
+
+  # Convert scripts to array format expected by JSON
+  if (!is.null(model$scripts) && is.list(model$scripts)) {
+    script_names <- names(model$scripts)
+    if (length(script_names) > 0) {
+      scripts_array <- list()
+      for (i in seq_along(script_names)) {
+        script_name <- script_names[i]
+        script_code <- model$scripts[[script_name]]
+
+        scripts_array[[i]] <- list(
+          name = script_name,
+          code = as.character(script_code)
+        )
+      }
+      json_model$scripts <- scripts_array
+    } else {
+      json_model$scripts <- list()
+    }
+  } else {
+    json_model$scripts <- list()
+  }
+
+  # Convert to JSON using jsonlite
+  json_string <- jsonlite::toJSON(
+    json_model,
+    auto_unbox = TRUE,
+    pretty = TRUE,
+    na = "null",
+    null = "null",
+    digits = 17  # Preserve full double precision
+  )
+
+  as.character(json_string)
 }

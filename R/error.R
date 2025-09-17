@@ -180,19 +180,15 @@ format_and_throw_errors <- function(error_list) {
   # If only dependency errors existed or list was empty, the function implicitly returns NULL here
 }
 
-#' Check for and report errors at a checkpoint (INTERNAL - Revised).
+#' Check for and report errors at a checkpoint (INTERNAL).
 #'
 #' Called by package functions at specific points.
-#' If the global option `heRomod2.error_mode` is "checkpoint", this checks
-#' the internal error list (.hero_error_env$errors).
+#' This checks the internal error list (.hero_error_env$errors).
 #' If non-dependency errors exist, they are formatted and thrown via `format_and_throw_errors`.
 #' Regardless of whether errors were thrown, the internal error list is cleared.
 #'
 #' @return Invisibly returns NULL.
 hero_error_checkpoint <- function() {
-  # Only act if mode is 'checkpoint'
-  if (getOption("heRomod2.error_mode", default = "warning") != "checkpoint") return(invisible(NULL))
-
   # Get the errors directly from the dedicated environment
   errors <- .hero_error_env$errors
 

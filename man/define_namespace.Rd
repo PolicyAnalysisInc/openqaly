@@ -4,7 +4,7 @@
 \alias{define_namespace}
 \title{Define a Namespace Object}
 \usage{
-define_namespace(env, df, additional = NULL)
+define_namespace(env, df, additional = NULL, ...)
 }
 \arguments{
 \item{env}{An environment of pre-existing values}

@@ -179,9 +179,6 @@ sort_variables <- function(x, extra_vars = NULL) {
 # Evaluate a variables object
 eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
   
-  # Keep list of parameters that generated errors - NOTE: using <<- inside walk2 is questionable style
-  error_params <- c() 
-  
   # Iterate over each parameter and its name
   walk2(x$name, x$formula, function(name, value) {
     
@@ -189,45 +186,8 @@ eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
     res <- eval_formula(value, ns)
     # Check if the object was an error
     if (is_hero_error(res)) {
-      # Always accumulate if in a capture scope
+      # Always accumulate errors for checkpoint handling
       accumulate_hero_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
-
-      # Check the desired error handling mode (warning is default)
-      error_mode <- getOption("heRomod2.error_mode", default = "warning")
-      stop_on_error <- getOption("heRomod2.stop_on_error", default = FALSE)
-      
-      # Only issue immediate stop/warning if NOT in checkpoint mode
-      if (error_mode != "checkpoint") {
-        # Construct error message string using the message from the heRo_error object
-        # Ensure 'res' is actually a heRo_error before accessing $message
-        error_detail <- if (is_hero_error(res) && !is.null(res$message)) {
-                           res$message
-                         } else {
-                           as.character(res) # Fallback if somehow not a heRo_error with message
-                         }
-
-        # Explicitly ensure error_detail is a simple character string for the warning
-        error_detail_char <- as.character(error_detail)
-
-        error_msg <- paste0(
-            'Error in evaluation of ', context, ' ',
-            err_name_string(name),
-            ": ",
-            error_detail_char # Use the explicitly character version
-        )
-
-        if (stop_on_error) {
-            # Stop execution with the constructed message
-            stop(error_msg, call. = FALSE)
-        } else {
-            # Mode is 'warning' and stop_on_error is FALSE
-            # Original behavior: record error parameter and issue warning
-            error_params <<- append(error_params, name)
-            warning(error_msg, call. = FALSE)
-        }
-      } 
-      # If mode IS "checkpoint", we do nothing here; error is accumulated and handled later.
-      # The error object 'res' will still be assigned below.
     }
     
     # Determine whether result is a vector or object parameter

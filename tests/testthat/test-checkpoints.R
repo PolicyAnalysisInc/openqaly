@@ -36,12 +36,7 @@ create_minimal_model <- function() {
 
 # --- Removed namespace helper function --- 
 
-test_that("eval_variables with checkpoint mode collects and throws multiple errors", {
-  # Save current option and restore on exit
-  old_option <- getOption("heRomod2.error_mode")
-  options(heRomod2.error_mode = "checkpoint")
-  on.exit(options(heRomod2.error_mode = old_option), add = TRUE)
-  
+test_that("eval_variables collects and throws multiple errors", {
   # Clear errors before test
   clear_hero_errors()
 
@@ -77,57 +72,11 @@ test_that("eval_variables with checkpoint mode collects and throws multiple erro
               info = "Message should mention var_b error")
 })
 
-test_that("eval_variables with warning mode allows execution and warns", {
-  # Save current option and restore on exit
-  old_option <- getOption("heRomod2.error_mode")
-  options(heRomod2.error_mode = "warning")
-  on.exit(options(heRomod2.error_mode = old_option), add = TRUE)
-  
-  # No need to clear errors in warning mode unless checking accumulation state later
-
-  # Define variables with errors
-  bad_vars_tbl <- tibble::tribble(
-    ~name,   ~display_name, ~description, ~formula,
-    "var_a", "Var A",       "Desc A",     "undefined_variable * 2",
-    "var_b", "Var B",       "Desc B",     "another_missing + 5"
-  )
-  bad_vars <- heRomod2:::parse_variables(bad_vars_tbl)
-
-  # Expected warning pattern (matches either variable)
-  expected_warning_regex <- "Error in evaluation of variables.*: Variable \"(undefined_variable|another_missing)\" not found\\."
-
-  # Evaluate expression directly - expect warnings, but no *stop* error
-  final_ns <- NULL
-  
-  # Capture warnings while executing directly
-  expect_warning({
-      # Use the helper to create a valid model structure
-      minimal_model <- create_minimal_model()
-      test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
-      # eval_variables should return the namespace even with warnings
-      final_ns <- eval_variables(bad_vars, test_ns, context = "variables") 
-  }, regexp = expected_warning_regex)
-
-  # Verify that eval_variables still returned the namespace
-  expect_true(inherits(final_ns, "namespace"))
-
-  # Check that the errored variables were assigned heRo_error objects in the returned namespace
-  expect_true(inherits(final_ns$env$var_a, "heRo_error"))
-  expect_true(inherits(final_ns$env$var_b, "heRo_error"))
-  
-  # Optionally, check accumulation state if needed (not strictly necessary for this test)
-  # errors <- get_accumulated_errors()
-  # expect_length(errors, 2) # Check errors were accumulated
-  # clear_hero_errors() # Clean up if checked
-})
+# Test removed - warning mode no longer supported
 
 # --- Keep basic helper function tests --- 
 
-test_that("checkpoint mode filters out dependency errors", {
-  old_option <- getOption("heRomod2.error_mode")
-  options(heRomod2.error_mode = "checkpoint")
-  on.exit(options(heRomod2.error_mode = old_option), add = TRUE)
-  
+test_that("checkpoint filters out dependency errors", {
   # Clear errors before test
   clear_hero_errors()
 

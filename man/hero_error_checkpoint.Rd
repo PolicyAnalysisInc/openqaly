@@ -2,7 +2,7 @@
 % Please edit documentation in R/error.R
 \name{hero_error_checkpoint}
 \alias{hero_error_checkpoint}
-\title{Check for and report errors at a checkpoint (INTERNAL - Revised).}
+\title{Check for and report errors at a checkpoint (INTERNAL).}
 \usage{
 hero_error_checkpoint()
 }
@@ -11,8 +11,7 @@ Invisibly returns NULL.
 }
 \description{
 Called by package functions at specific points.
-If the global option `heRomod2.error_mode` is "checkpoint", this checks
-the internal error list (.hero_error_env$errors).
+This checks the internal error list (.hero_error_env$errors).
 If non-dependency errors exist, they are formatted and thrown via `format_and_throw_errors`.
 Regardless of whether errors were thrown, the internal error list is cleared.
 }

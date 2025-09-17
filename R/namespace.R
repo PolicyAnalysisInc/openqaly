@@ -4,10 +4,11 @@ create_namespace <- function(model, segment) {
   # for each model cycle. 
   cl_vars <- cycle_length_variables(model$settings)
   time_vars <- time_variables(model$settings, model$states)
+  unit_vars <- time_unit_variables(model$settings)
 
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
-  ns <- define_namespace(model$env, time_vars, cl_vars) %>%
+  ns <- define_namespace(model$env, time_vars, cl_vars, unit_vars) %>%
     update_segment_ns(segment)
   
   ns
@@ -24,10 +25,40 @@ create_namespace <- function(model, segment) {
 #' @param env An environment of pre-existing values
 #'
 #' @export
-define_namespace <- function(env, df, additional = NULL) {
+define_namespace <- function(env, df, additional = NULL, ...) {
+  # Merge dataframes if additional ones are provided
+  extra_dfs <- list(...)
+  if (length(extra_dfs) > 0) {
+    # Bind all dataframes column-wise
+    all_dfs <- list(df, additional)
+    all_dfs <- c(all_dfs, extra_dfs)
+    all_dfs <- all_dfs[!sapply(all_dfs, is.null)]
+    
+    # Check if all are dataframes
+    df_mask <- sapply(all_dfs, is.data.frame)
+    df_list <- all_dfs[df_mask]
+    non_df_list <- all_dfs[!df_mask]
+    
+    # Merge dataframes by columns
+    if (length(df_list) > 1) {
+      df <- do.call(cbind, df_list)
+    } else if (length(df_list) == 1) {
+      df <- df_list[[1]]
+    }
+    
+    # Handle non-dataframe additional items
+    additional <- if (length(non_df_list) > 0) non_df_list[[1]] else NULL
+  } else if (!is.null(additional) && is.data.frame(additional)) {
+    # If additional is a dataframe, merge it with df
+    df <- cbind(df, additional)
+    additional <- NULL
+  }
+  
   ns <- list(df = df, env = rlang::env_clone(env))
-  for (nm in names(additional)) {
-    assign(nm, additional[[nm]], envir = ns$env)
+  if (!is.null(additional)) {
+    for (nm in names(additional)) {
+      assign(nm, additional[[nm]], envir = ns$env)
+    }
   }
   class(ns) <- 'namespace'
   ns
@@ -108,8 +139,16 @@ summary.namespace <- function(object, ...) {
   for (i in seq_len(length(env_names))) {
     name <- env_names[i]
     export_res <- export(get(name, envir = object$env))
-    res_env$print[i] <- export_res$print
-    res_env$summary[i] <- export_res$summary
+    res_env$print[i] <- if (!is.null(export_res$print)) {
+      export_res$print
+    } else {
+      NA_character_
+    }
+    res_env$summary[i] <- if (!is.null(export_res$summary)) {
+      export_res$summary
+    } else {
+      NA_character_
+    }
   }
 
   res_env <- select(

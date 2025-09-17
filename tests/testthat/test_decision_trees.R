@@ -101,35 +101,65 @@ test_that('duplicate uses of "C" within a level are detected.', {
     parsed_vars <- heRomod2:::parse_seg_variables(tree_tests$vars, segment, tree_tests$trees_double_C)
   )
   
-  # Evaluate the variables
-  expect_warning(
-    var_res <- heRomod2:::eval_variables(parsed_vars, test_ns),
-    regexp = "Error in evaluation of variables \"tree\": Error in calculating complementary probabilities, \"C\" may be used only once per level",
-    fixed = TRUE
+  # Clear any existing errors before test
+  heRomod2:::clear_hero_errors()
+  
+  # Evaluate the variables - expect error due to checkpoint
+  expect_error(
+    heRomod2:::eval_variables(parsed_vars, test_ns),
+    regexp = "Multiple errors found during evaluation",
+    fixed = FALSE
   )
+  
+  # To check the individual error objects, evaluate again without checkpoint
+  heRomod2:::clear_hero_errors()
+  test_ns_copy <- heRomod2:::create_test_ns(segment)
+  test_ns_copy$env$.trees <- tree_tests$trees_double_C
+  
+  # Manually evaluate to inspect error objects
+  suppressWarnings({
+    for (i in seq_len(nrow(parsed_vars))) {
+      name <- parsed_vars$name[i]
+      formula <- parsed_vars$formula[[i]]
+      res <- heRomod2:::eval_formula(formula, test_ns_copy)
+      
+      if (is_hero_error(res)) {
+        assign(name, res, envir = test_ns_copy$env)
+      } else {
+        vector_type <- is.vector(res) && !is.list(res)
+        if (vector_type && (length(res) == nrow(test_ns_copy$df))) {
+          test_ns_copy$df[name] <- res
+        } else {
+          assign(name, res, envir = test_ns_copy$env)
+        }
+      }
+    }
+  })
   
   # Check that the value of the parameters are heRo_error objects.
   # Use is_hero_error which checks class inheritance
-  expect_true(is_hero_error(var_res['p_event']), info = "p_event should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died']), info = "p_died should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_survived']), info = "p_survived should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_surgery']), info = "p_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_given_event']), info = "p_died_given_event should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_event_given_died']), info = "p_event_given_died should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_or_surgery']), info = "p_died_or_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_or_not_surgery']), info = "p_died_or_not_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_and_surgery']), info = "p_died_and_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_or_survived_and_had_event_given_surgery']), info = "p_died_or_survived_and_had_event_given_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_or_survived_and_event_given_surgery']), info = "p_died_or_survived_and_event_given_surgery should be a heRo_error")
-  expect_true(is_hero_error(var_res['p_died_or_survived_and_surgery_given_event']), info = "p_died_or_survived_and_surgery_given_event should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_event), info = "p_event should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died), info = "p_died should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_survived), info = "p_survived should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_surgery), info = "p_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_given_event), info = "p_died_given_event should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_event_given_died), info = "p_event_given_died should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_or_surgery), info = "p_died_or_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_or_not_surgery), info = "p_died_or_not_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_and_surgery), info = "p_died_and_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_or_survived_and_had_event_given_surgery), info = "p_died_or_survived_and_had_event_given_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_or_survived_and_event_given_surgery), info = "p_died_or_survived_and_event_given_surgery should be a heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$p_died_or_survived_and_surgery_given_event), info = "p_died_or_survived_and_surgery_given_event should be a heRo_error")
   
   # Check that the error messages print correctly
   expect_output(
-    print(var_res['tree'], 'Error in calculating complementary probabilities, "C" may be used only once per level.')
+    print(test_ns_copy$env$tree),
+    'Error: Error in calculating complementary probabilities, "C" may be used only once per level.'
   )
   
   expect_output(
-    print(var_res['p_event'], 'Error: Error in dependency "tree".')
+    print(test_ns_copy$env$p_event),
+    'Error: Error in dependency "tree".'
   )
   
 })

@@ -109,10 +109,6 @@ print.heRoFormula <- function(x, ...) {
   cat(paste0('FORMULA: ', x$text))
 }
 
-asJSON.heRoFormula <- function(x) {
-  x$text
-}
-
 #' Convert to Formula
 #'
 #' Convert an object to a heRovar object.

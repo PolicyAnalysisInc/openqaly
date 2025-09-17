@@ -106,3 +106,12 @@ cycle_length_variables <- function(settings) {
   )
 }
 
+# Generate time unit variables
+time_unit_variables <- function(settings) {
+  days_per_year <- get_days_per_year(settings)
+  tibble(
+    days_per_year = days_per_year,
+    days_per_month = days_per_year / 12
+  )
+}
+

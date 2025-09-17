@@ -6,6 +6,91 @@ run_segment <- function(segment, model, env, ...) {
   UseMethod('run_segment', model)
 }
 
+#' Evaluate Group Weight
+#'
+#' Takes a groups dataframe row and a namespace object and uses eval_formula 
+#' to evaluate the group's weight in the namespace.
+#'
+#' @param group_row A single row from the groups dataframe containing group information
+#' @param namespace A namespace object containing evaluated variables
+#'
+#' @return The evaluated weight as a numeric value, or NA if evaluation fails
+#' @keywords internal
+evaluate_group_weight <- function(group_row, namespace) {
+  # Convert weight to formula (handles both numeric and character inputs)
+  weight_formula <- as.heRoFormula(as.character(group_row$weight))
+  
+  # Evaluate the formula in the namespace
+  evaluated_weight <- eval_formula(weight_formula, namespace)
+  
+  # Check for errors in evaluation
+  if (is_hero_error(evaluated_weight)) {
+    accumulate_hero_error(evaluated_weight, context_msg = glue("Evaluation of weight for group '{group_row$name}'"))
+    return(NA_real_)
+  }
+  
+  # Validate the evaluated result
+  if (!is.numeric(evaluated_weight)) {
+    error_msg <- glue("Weight for group '{group_row$name}' must be numeric (got {class(evaluated_weight)[1]}).")
+    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    return(NA_real_)
+  }
+  
+  if (length(evaluated_weight) != 1) {
+    error_msg <- glue("Weight for group '{group_row$name}' must be length 1 (got length {length(evaluated_weight)}). Weight formulas cannot be time-dependent.")
+    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    return(NA_real_)
+  }
+  
+  weight_value <- as.numeric(evaluated_weight)
+  
+  if (is.na(weight_value)) {
+    error_msg <- glue("Weight for group '{group_row$name}' evaluated to NA.")
+    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    return(NA_real_)
+  }
+  
+  if (!is.finite(weight_value)) {
+    error_msg <- glue("Weight for group '{group_row$name}' must be finite (got {weight_value}).")
+    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    return(NA_real_)
+  }
+  
+  # Return the validated weight
+  return(weight_value)
+}
+
+#' Calculate Segment Weight
+#'
+#' Calculates the weight for a segment based on its group and the model's groups definition.
+#' Returns the evaluated weight for the segment.
+#'
+#' @param segment The segment to calculate weight for
+#' @param model The model containing groups information
+#' @param namespace The namespace containing evaluated variables
+#'
+#' @return The evaluated weight as a numeric value, or NA if evaluation fails
+#' @keywords internal
+calculate_segment_weight <- function(segment, model, namespace) {
+  # Check if groups information is available
+  if (is.null(model$groups) || nrow(model$groups) == 0) {
+    return(1)  # Default weight if no groups defined
+  }
+  
+  # Find the group row for this segment
+  group_row <- model$groups %>%
+    filter(name == segment$group) %>%
+    slice(1)
+  
+  if (nrow(group_row) == 0) {
+    warning(glue("Group '{segment$group}' not found in model groups. Using default weight of 1."))
+    return(1)  # Default weight if group not found
+  }
+  
+  # Evaluate and return the weight
+  return(evaluate_group_weight(group_row, namespace))
+}
+
 run_segment.markov <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
@@ -118,6 +203,14 @@ run_segment.markov <- function(segment, model, env, ...) {
     # This path should ideally not be taken if parsed_summaries is always initialized properly.
      segment$summaries <- list(tibble::tibble(summary = character(), value = character(), amount = numeric()))
   }
+  
+  # Calculate segment weight
+  segment$weight <- calculate_segment_weight(segment, model, eval_vars)
+  
+  # Reorder columns to have strategy, group, weight first
+  col_order <- c("strategy", "group", "weight")
+  other_cols <- setdiff(names(segment), col_order)
+  segment <- segment[, c(col_order, other_cols)]
   
   segment
 }
@@ -586,7 +679,7 @@ get_st_max <- function(trans, values, n_cycles) {
     rename(trans[ , c('from', 'max_st')], state = from),
     filter(values, !is.na(state))[ , c('state', 'max_st')]
   )
-
+  
   # Group by state and get the maximum state time. For any
   # states where the maximum is infinite, set it to the
   # maximum number of cycles

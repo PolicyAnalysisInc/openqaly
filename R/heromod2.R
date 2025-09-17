@@ -5,7 +5,7 @@
 #' @import purrr tidygraph ggraph ggplot2
 #' @importFrom stringr str_split_fixed
 #' @importFrom openxlsx readWorkbook getSheetNames
-#' @importFrom jsonlite fromJSON
+#' @importFrom jsonlite fromJSON toJSON asJSON
 #' @importFrom tibble tibble as_tibble
 #' @importFrom glue glue
 #' @importFrom lazyeval lazy lazy_eval interp as.lazy as.lazy_dots
@@ -27,6 +27,7 @@ heRo_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_mont
                    "cycle_lag", "day_lag", "week_lag", "month_lag", "year_lag",
                    "state_cycle", "state_day", "state_week", "state_month", "state_year",
                    "state_cycle_lag", "state_day_lag", "state_week_lag", "state_month_lag", "state_year_lag",
+                   "days_per_year", "days_per_month",
                     "group", "strategy", "simulation", "bc", "analysis_type", '.trees', 'class')
 
 heRo_vars_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_months", "cycle_length_years",
@@ -34,6 +35,7 @@ heRo_vars_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length
                         "cycle_lag", "day_lag", "week_lag", "month_lag", "year_lag",
                         "state_cycle", "state_day", "state_week", "state_month", "state_year",
                         "state_cycle_lag", "state_day_lag", "state_week_lag", "state_month_lag", "state_year_lag",
+                        "days_per_year", "days_per_month",
                         "group", "strategy")
 
 error_codes <- list(
