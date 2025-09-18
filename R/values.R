@@ -61,7 +61,25 @@ parse_values <- function(x, states, extra_vars) {
 }
 
 check_values_df <- function(x) {
-  
+  # At this point, x already has correct types from check_tbl() in read_model
+  # This function adds business logic validation
+
+  # Validate name format (only for non-NA names)
+  non_na_names <- x$name[!is.na(x$name)]
+  invalid_names <- non_na_names[!is_valid_name(non_na_names)]
+  if (length(invalid_names) > 0) {
+    stop(glue("Invalid value names: {err_name_string(invalid_names)}. Names must start with a letter and contain only letters, numbers, and underscores."))
+  }
+
+  # Validate formulas are parseable (only non-NA formulas)
+  non_na_formulas <- which(!is.na(x$formula))
+  for (i in non_na_formulas) {
+    tryCatch({
+      parse(text = x$formula[i])
+    }, error = function(e) {
+      stop(glue("Invalid formula syntax for value '{x$name[i]}': {e$message}"))
+    })
+  }
 }
 
 as.values <- function(x) x

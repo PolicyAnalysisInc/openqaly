@@ -4,7 +4,7 @@
 \alias{convert_json_dataframes}
 \title{Convert JSON data frames}
 \usage{
-convert_json_dataframes(model)
+convert_json_dataframes(model, values_spec = NULL)
 }
 \arguments{
 \item{model}{The model list parsed from JSON}

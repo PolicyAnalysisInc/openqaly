@@ -3,13 +3,17 @@ read_model <- function(path) {
 
   model <- read_workbook(file.path(path, 'model.xlsx'))
 
-  # Ensure model$values has a defined structure
-  if (is.null(model$values)) {
+  # Load the values spec
+  values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
+    readr::read_csv(col_types = 'clccc', progress = FALSE)
+
+  # Ensure model$values has correct structure AND types
+  if (is.null(model$values) || nrow(model$values) == 0) {
     model$values <- create_empty_values_stubs()
   } else {
-    # Ensure it's a tibble first, then ensure columns
-    model$values <- tibble::as_tibble(model$values) 
-    model$values <- ensure_tibble_columns(model$values, create_empty_values_stubs())
+    # Convert to tibble and apply spec to enforce types
+    model$values <- tibble::as_tibble(model$values)
+    model$values <- check_tbl(model$values, values_spec, 'Values')
   }
 
   # Ensure model$summaries has a defined structure
@@ -384,38 +388,54 @@ check_tbl <- function(df, spec, context) {
   n_col <- nrow(spec)
   n_row <- nrow(df)
   
+  # First pass: ensure all columns exist and have correct types
+  for (i in seq_len(n_col)) {
+    col_name <- spec$name[i]
+    type <- spec$type[i]
+    values <- df[[col_name]]
+
+    # Handle case where the entire column is missing or has wrong type
+    if (is.null(values)) {
+      # Column is completely missing - create with NAs of correct type
+      na_val <- switch(type,
+        "character" = NA_character_,
+        "numeric" = NA_real_,
+        "integer" = NA_integer_,
+        "logical" = NA,
+        NA_character_
+      )
+      df[[col_name]] <- rep(na_val, n_row)
+    } else {
+      # Column exists - convert to correct type
+      df[[col_name]] <- convert_to_type(values, type)
+    }
+  }
+
+  # Second pass: handle defaults and fallbacks
   for (i in seq_len(n_col)) {
     col_name <- spec$name[i]
     required <- spec$required[i]
-    type <- spec$type[i]
     default <- spec$default[i]
     fallback <- spec$fallback[i]
-    values <- df[[spec_cn[i]]]
-    
-    # Handle case where the entire column is missing
-    if (is.null(values)) {
-      miss_data <- rep(TRUE, n_row)
-    } else {
-      miss_data <- is_faslsy_chr(values)
-    }
-    
+    values <- df[[col_name]]
+
+    # Check for missing data
+    miss_data <- is_faslsy_chr(values)
+
     # Impute missing values
     if (any(miss_data)) {
-      if (required) {
-        # Throw error if a required column has missing values
+      if (required && all(miss_data)) {
+        # Throw error only if a required column has ALL missing values
         err_msg <- glue('{context} has missing values in required column: {col_name}.')
         stop(err_msg, call. = F)
-      } else if (!is.na(fallback)) {
-        # If a fallback is specified, replace missing values with fallback
-        values[miss_data] <- df[[fallback]][miss_data]
-      } else {
-        # If a default is specified, replace missing values with default
-        values[miss_data] <- default
+      } else if (!is.na(fallback) && fallback %in% colnames(df)) {
+        # If a fallback column is specified and exists, use its values
+        df[[col_name]][miss_data] <- df[[fallback]][miss_data]
+      } else if (!is.na(default)) {
+        # If a default is specified, use it
+        df[[col_name]][miss_data] <- default
       }
     }
-    
-    # Update data frame
-    df[[col_name]] <- convert_to_type(values, type)
   }
   
   # Use only the columns defined in the spec
@@ -439,9 +459,13 @@ convert_to_type <- function(x, type) {
 read_model_json <- function(json_string) {
   # Parse JSON string into a list
   model <- fromJSON(json_string, simplifyVector = TRUE)
-  
+
+  # Load the values spec
+  values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
+    readr::read_csv(col_types = 'clccc', progress = FALSE)
+
   # Process tables - convert to named list of data frames
-  if (is.null(model$tables) || 
+  if (is.null(model$tables) ||
       (is.data.frame(model$tables) && nrow(model$tables) == 0) ||
       (is.list(model$tables) && length(model$tables) == 0)) {
     model$tables <- list()
@@ -453,7 +477,7 @@ read_model_json <- function(json_string) {
     for (i in 1:nrow(model$tables)) {
       table_name <- model$tables$name[i]
       table_data <- model$tables$data$rows[[i]]
-      
+
       # Convert to tibble for consistency
       table_list[[table_name]] <- as_tibble(table_data)
     }
@@ -490,8 +514,8 @@ read_model_json <- function(json_string) {
   }
   
   # Convert data frames that might have been simplified too much
-  model <- convert_json_dataframes(model)
-  
+  model <- convert_json_dataframes(model, values_spec)
+
   # Define as heRomodel object
   define_object_(model, 'heRomodel')
 }
@@ -502,13 +526,13 @@ read_model_json <- function(json_string) {
 #' 
 #' @param model The model list parsed from JSON
 #' @return The model with properly formatted data frames
-convert_json_dataframes <- function(model) {
+convert_json_dataframes <- function(model, values_spec = NULL) {
   expected_dfs <- c("strategies", "groups", "states", "transitions", "values", "summaries")
-  
+
   # Determine if this is a PSM model
-  is_psm <- !is.null(model$settings) && !is.null(model$settings$model_type) && 
+  is_psm <- !is.null(model$settings) && !is.null(model$settings$model_type) &&
             tolower(model$settings$model_type) == "psm"
-  
+
   df_stubs <- list(
     values = create_empty_values_stubs(),
     summaries = create_empty_summaries_stubs(),
@@ -535,16 +559,24 @@ convert_json_dataframes <- function(model) {
         }
       }
       model[[df_name]] <- tibble::as_tibble(current_input)
-      
-      if (!is.null(stub_to_use)) {
-        model[[df_name]] <- ensure_tibble_columns(model[[df_name]], stub_to_use)
+
+      # Use spec-based validation for values, otherwise use ensure_tibble_columns
+      if (df_name == "values" && !is.null(values_spec)) {
+        # Always apply spec, even for empty dataframes (to get correct types)
+        model[[df_name]] <- check_tbl(model[[df_name]], values_spec, 'Values')
+        # Don't apply the empty string to NA conversion for values - spec handles it
+      } else {
+        if (!is.null(stub_to_use)) {
+          model[[df_name]] <- ensure_tibble_columns(model[[df_name]], stub_to_use)
+        }
+
+        # Apply empty string to NA conversion for non-values dataframes
+        if (nrow(model[[df_name]]) > 0) {
+          model[[df_name]] <- model[[df_name]] %>%
+            dplyr::mutate(dplyr::across(everything(), ~ifelse(. == "", NA, .)))
+        }
       }
-      
-      if (nrow(model[[df_name]]) > 0) { 
-         model[[df_name]] <- model[[df_name]] %>%
-           dplyr::mutate(dplyr::across(everything(), ~ifelse(. == "", NA, .)))
-      }
-      
+
       if (df_name == "transitions") {
         # Handle transitions differently for PSM vs Markov models
         if (is_psm) {
