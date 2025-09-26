@@ -33,14 +33,14 @@ calculate_discount_factors <- function(n_cycles, discount_rate, cycle_length_yea
 #' @param values_matrix Matrix or data frame of undiscounted values
 #' @param discount_factors_cost Vector of discount factors for costs
 #' @param discount_factors_outcomes Vector of discount factors for outcomes
-#' @param value_types Named vector indicating type ("cost" or "outcome") for each value
+#' @param types Named vector indicating type ("cost" or "outcome") for each value
 #'
 #' @return Matrix or data frame with discounted values
 #' @export
 apply_discounting <- function(values_matrix,
                              discount_factors_cost,
                              discount_factors_outcomes,
-                             value_types) {
+                             types) {
 
   # Handle case where values_matrix is a data frame
   if (is.data.frame(values_matrix)) {
@@ -62,15 +62,15 @@ apply_discounting <- function(values_matrix,
     value_name <- value_names[i]
 
     # Determine which discount factors to use
-    if (!is.null(value_types) && value_name %in% names(value_types)) {
-      value_type <- value_types[value_name]
+    if (!is.null(types) && value_name %in% names(types)) {
+      type <- types[value_name]
     } else {
       # Default to outcome if type not specified
-      value_type <- "outcome"
+      type <- "outcome"
     }
 
     # Apply appropriate discount factors
-    if (value_type == "cost") {
+    if (type == "cost") {
       discount_factors <- discount_factors_cost
     } else {
       discount_factors <- discount_factors_outcomes

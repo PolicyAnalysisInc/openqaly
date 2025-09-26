@@ -8,7 +8,7 @@ apply_discounting(
   values_matrix,
   discount_factors_cost,
   discount_factors_outcomes,
-  value_types
+  types
 )
 }
 \arguments{
@@ -18,7 +18,7 @@ apply_discounting(
 
 \item{discount_factors_outcomes}{Vector of discount factors for outcomes}
 
-\item{value_types}{Named vector indicating type ("cost" or "outcome") for each value}
+\item{types}{Named vector indicating type ("cost" or "outcome") for each value}
 }
 \value{
 Matrix or data frame with discounted values

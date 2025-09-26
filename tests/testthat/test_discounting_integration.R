@@ -34,10 +34,10 @@ test_that("Discounting produces mathematically exact results", {
     {"from": "Dead", "to": "Alive", "formula": "0"}
   ],
   "values": [
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "value_type": "cost"},
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "value_type": "cost"},
-    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "value_type": "outcome"},
-    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "value_type": "outcome"}
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "type": "outcome"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "outcome"}
   ],
   "summaries": [
     {"name": "total_cost", "display_name": "Total Cost", "description": "", "values": "cost"},
@@ -113,10 +113,10 @@ test_that("Zero discount rate produces identical values", {
     {"from": "Dead", "to": "Alive", "formula": "0"}
   ],
   "values": [
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "value_type": "cost"},
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "value_type": "cost"},
-    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "value_type": "outcome"},
-    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "value_type": "outcome"}
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "type": "outcome"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "outcome"}
   ],
   "summaries": [
     {"name": "total_cost", "display_name": "Total Cost", "description": "", "values": "cost"},
@@ -169,8 +169,8 @@ test_that("Different discount rates for costs vs outcomes work correctly", {
     {"from": "Healthy", "to": "Healthy", "formula": "1"}
   ],
   "values": [
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Healthy", "destination": "", "formula": "1000", "value_type": "cost"},
-    {"name": "qaly", "display_name": "QALY", "description": "", "state": "Healthy", "destination": "", "formula": "1", "value_type": "outcome"}
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Healthy", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "qaly", "display_name": "QALY", "description": "", "state": "Healthy", "destination": "", "formula": "1", "type": "outcome"}
   ],
   "summaries": [],
   "variables": [
@@ -237,8 +237,8 @@ test_that("High discount rate (50%) works correctly", {
     {"from": "Alive", "to": "Alive", "formula": "1"}
   ],
   "values": [
-    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "value_type": "cost"},
-    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "1", "value_type": "outcome"}
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "1", "type": "outcome"}
   ],
   "summaries": [],
   "variables": [

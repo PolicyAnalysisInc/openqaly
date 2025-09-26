@@ -487,7 +487,7 @@ normalize_model_nulls <- function(model) {
   # Helper function to normalize a single value
   normalize_value <- function(x) {
     if (is.null(x)) return(NA)
-    if (is.character(x) && length(x) == 1 && x == "") return(NA_character_)
+    if (is.character(x) && length(x) == 1 && !is.na(x) && x == "") return(NA_character_)
     return(x)
   }
 
@@ -578,9 +578,14 @@ validate_model_data <- function(model) {
   # Validate transitions - just check structure, not state references (those are expanded later)
   if (!is.null(model$transitions) && is.data.frame(model$transitions)) {
     if (nrow(model$transitions) > 0) {
-      # Ensure from and to fields exist
+      # Ensure from and to fields exist (they should already be renamed from from_state/to_state)
       if (!all(c("from", "to") %in% names(model$transitions))) {
-        stop("Transitions must have 'from' and 'to' fields")
+        # Check if the JavaScript field names are present (shouldn't happen after renaming)
+        if (all(c("from_state", "to_state") %in% names(model$transitions))) {
+          stop("Transitions have 'from_state' and 'to_state' but should have been renamed to 'from' and 'to'")
+        } else {
+          stop("Transitions must have 'from' and 'to' fields")
+        }
       }
     }
   }
@@ -614,6 +619,24 @@ read_model_json <- function(json_string) {
 
   # Normalize NULLs and empty strings to NA immediately after reading
   model <- normalize_model_nulls(model)
+
+  # Rename transition fields from JavaScript-safe names to R names
+  # This must happen before validation
+  # Handle both data.frame and list cases (fromJSON may return either)
+  if (!is.null(model$transitions)) {
+    # Ensure it's a data frame
+    if (!is.data.frame(model$transitions)) {
+      model$transitions <- as.data.frame(model$transitions, stringsAsFactors = FALSE)
+    }
+
+    # Now rename the columns
+    if ("from_state" %in% colnames(model$transitions)) {
+      colnames(model$transitions)[colnames(model$transitions) == "from_state"] <- "from"
+    }
+    if ("to_state" %in% colnames(model$transitions)) {
+      colnames(model$transitions)[colnames(model$transitions) == "to_state"] <- "to"
+    }
+  }
 
   # Validate model structure and data types
   model <- validate_model_data(model)
@@ -759,7 +782,8 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
             }
           }
         } else {
-          # Markov transitions - handle column renaming
+          # Markov transitions - handle column renaming (as fallback, should already be done)
+          # This is kept as a safety measure in case the earlier renaming was skipped
           if ("from_state" %in% colnames(model[[df_name]])) {
             model[[df_name]] <- dplyr::rename(model[[df_name]], from = from_state)
           }
@@ -782,7 +806,7 @@ create_empty_values_stubs <- function() {
     state = character(0),
     destination = character(0),
     formula = character(0),
-    value_type = character(0)
+    type = character(0)
   )
 }
 

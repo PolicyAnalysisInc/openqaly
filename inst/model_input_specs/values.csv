@@ -5,4 +5,4 @@ description,FALSE,character,,display_name
 state,FALSE,character,,
 destination,FALSE,character,,
 formula,TRUE,character,,
-value_type,FALSE,character,outcome,
+type,FALSE,character,outcome,

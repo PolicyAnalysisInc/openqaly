@@ -81,15 +81,15 @@ run_segment.psm <- function(segment, model, env, ...) {
   discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
 
   # Get value types from uneval_values
-  value_type_mapping <- setNames(uneval_values$value_type, uneval_values$name)
-  value_type_mapping <- value_type_mapping[!is.na(names(value_type_mapping))]
+  type_mapping <- setNames(uneval_values$type, uneval_values$name)
+  type_mapping <- type_mapping[!is.na(names(type_mapping))]
 
   # Apply discounting to get discounted values
   calculated_trace_and_values$values_discounted <- apply_discounting(
     calculated_trace_and_values$values,
     discount_factors_cost,
     discount_factors_outcomes,
-    value_type_mapping
+    type_mapping
   )
 
   # Create the object to return

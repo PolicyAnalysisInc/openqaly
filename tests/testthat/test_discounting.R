@@ -47,7 +47,7 @@ test_that("apply_discounting correctly applies discount factors", {
   colnames(values_matrix) <- c("cost1", "qaly1")
 
   # Define value types
-  value_types <- c(cost1 = "cost", qaly1 = "outcome")
+  types <- c(cost1 = "cost", qaly1 = "outcome")
 
   # Calculate discount factors (annual cycles)
   discount_factors_cost <- calculate_discount_factors(3, 0.03, cycle_length_years = 1)
@@ -58,7 +58,7 @@ test_that("apply_discounting correctly applies discount factors", {
     values_matrix,
     discount_factors_cost,
     discount_factors_outcomes,
-    value_types
+    types
   )
 
   # Check dimensions preserved
@@ -83,7 +83,7 @@ test_that("apply_discounting handles data frames", {
     qaly1 = c(50, 50, 50)
   )
 
-  value_types <- c(cost1 = "cost", qaly1 = "outcome")
+  types <- c(cost1 = "cost", qaly1 = "outcome")
   discount_factors_cost <- calculate_discount_factors(3, 0.03)
   discount_factors_outcomes <- calculate_discount_factors(3, 0.015)
 
@@ -91,7 +91,7 @@ test_that("apply_discounting handles data frames", {
     values_df,
     discount_factors_cost,
     discount_factors_outcomes,
-    value_types
+    types
   )
 
   # Should return a data frame
@@ -131,7 +131,7 @@ test_that("apply_discounting handles mismatched discount factor lengths", {
   )
   colnames(values_matrix) <- c("cost1")
 
-  value_types <- c(cost1 = "cost")
+  types <- c(cost1 = "cost")
 
   # Only 3 discount factors for 5 cycles
   discount_factors_cost <- calculate_discount_factors(3, 0.03)
@@ -142,7 +142,7 @@ test_that("apply_discounting handles mismatched discount factor lengths", {
       values_matrix,
       discount_factors_cost,
       discount_factors_outcomes,
-      value_types
+      types
     ),
     "Discount factors length"
   )
@@ -164,7 +164,7 @@ test_that("discounting produces same results with 0% rate", {
   )
   colnames(values_matrix) <- c("cost1", "qaly1")
 
-  value_types <- c(cost1 = "cost", qaly1 = "outcome")
+  types <- c(cost1 = "cost", qaly1 = "outcome")
 
   # 0% discount rate
   discount_factors_zero <- calculate_discount_factors(3, 0, cycle_length_years = 1)
@@ -173,7 +173,7 @@ test_that("discounting produces same results with 0% rate", {
     values_matrix,
     discount_factors_zero,
     discount_factors_zero,
-    value_types
+    types
   )
 
   # Should be identical to original

@@ -16,7 +16,7 @@ parse_values <- function(x, states, extra_vars) {
       state = character(0),
       destination = character(0),
       formula = list(), # Formulas are parsed to heRoFormula objects, so list() for empty case
-      value_type = character(0),
+      type = character(0),
       max_st = numeric(0),
       # Add other columns that `sort_variables` might consistently produce on an empty input
       # or that as.values expects. For now, these are the main ones.
@@ -49,7 +49,7 @@ parse_values <- function(x, states, extra_vars) {
     group_by(state, destination) %>%
     do({
       as.data.frame(.) %>%
-        select(name, display_name, description, state, destination, formula, value_type) %>%
+        select(name, display_name, description, state, destination, formula, type) %>%
         mutate(formula = map(formula, as.heRoFormula)) %>%
         sort_variables(extra_vars)
     }) %>%

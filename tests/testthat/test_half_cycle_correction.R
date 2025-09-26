@@ -309,7 +309,7 @@ test_that("PSM model respects half-cycle method", {
       as.heRoFormula("0.8"),
       as.heRoFormula("0.6")
     )),
-    value_type = c("outcome", "outcome")
+    type = c("outcome", "outcome")
   )
 
   # Create mock namespace with env
