@@ -68,8 +68,7 @@ test_that('formula syntax errors are handled properly', {
   # without triggering checkpoint to check the values
   heRomod2:::clear_hero_errors()
   
-  # Temporarily remove checkpoint call to examine values
-  # We'll use a modified namespace for this check
+  # Test without checkpoint to verify values
   test_ns_copy <- heRomod2:::create_test_ns(segment)
   
   # Manually evaluate without checkpoint to inspect results

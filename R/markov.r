@@ -172,9 +172,36 @@ run_segment.markov <- function(segment, model, env, ...) {
     expanded$transitions,
     expanded$values,
     value_names,
-    expanded$expanded_state_map
+    expanded$expanded_state_map,
+    model$settings$half_cycle_method
   )
-  
+
+  # Apply discounting to values
+  n_cycles <- model$settings$n_cycles
+  discount_cost <- if (!is.null(model$settings$discount_cost)) model$settings$discount_cost else 0.035
+  discount_outcomes <- if (!is.null(model$settings$discount_outcomes)) model$settings$discount_outcomes else 0.035
+
+  # Calculate cycle length in years for discounting
+  cycle_length_days <- model$settings$cycle_length_days
+  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
+  cycle_length_years <- cycle_length_days / days_per_year
+
+  # Calculate discount factors
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
+
+  # Get value types from uneval_values
+  value_type_mapping <- setNames(uneval_values$value_type, uneval_values$name)
+  value_type_mapping <- value_type_mapping[!is.na(names(value_type_mapping))]
+
+  # Apply discounting to get discounted values
+  calculated_trace_and_values$values_discounted <- apply_discounting(
+    calculated_trace_and_values$values,
+    discount_factors_cost,
+    discount_factors_outcomes,
+    value_type_mapping
+  )
+
   # Create the object to return that will summarize the results of
   # this segment.
   segment$uneval_vars <- list(uneval_vars)
@@ -194,14 +221,22 @@ run_segment.markov <- function(segment, model, env, ...) {
   if (!is.null(parsed_summaries)) { # This check might be redundant if parsed_summaries is always a tibble
                                    # but good for safety if parse_summaries could return NULL.
                                    # parse_summaries should ideally return empty structured tibble, not NULL.
-    segment$summaries <- list(calculate_summaries(
-      parsed_summaries, 
+    summaries_undiscounted <- calculate_summaries(
+      parsed_summaries,
       calculated_trace_and_values$values
-    ))
+    )
+    summaries_discounted <- calculate_summaries(
+      parsed_summaries,
+      calculated_trace_and_values$values_discounted
+    )
+    segment$summaries <- list(summaries_undiscounted)
+    segment$summaries_discounted <- list(summaries_discounted)
   } else {
     # Fallback: ensure summaries field exists as an empty list or tibble
     # This path should ideally not be taken if parsed_summaries is always initialized properly.
-     segment$summaries <- list(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+    empty_summary <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+    segment$summaries <- list(empty_summary)
+    segment$summaries_discounted <- list(empty_summary)
   }
   
   # Calculate segment weight
@@ -305,7 +340,7 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   )
 }
 
-calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map) {
+calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map, half_cycle_method = "start") {
 
   # --- Helper Function Definition ---
   format_ranges <- function(numbers) {
@@ -360,7 +395,8 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     state_names, # Pass expanded state names to C++
     value_names,
     as.integer(n_cycles),
-    -pi # complementConstant
+    -pi, # complementConstant
+    half_cycle_method
   )
   
   # Use the correct name from the C++ return list

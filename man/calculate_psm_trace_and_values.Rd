@@ -10,7 +10,8 @@ calculate_psm_trace_and_values(
   namespace,
   value_names,
   state_names,
-  n_cycles
+  n_cycles,
+  half_cycle_method = "start"
 )
 }
 \arguments{

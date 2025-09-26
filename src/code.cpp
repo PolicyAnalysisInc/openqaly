@@ -138,10 +138,32 @@ List cppMarkovTransitionsAndTrace(
     CharacterVector stateNames,
     CharacterVector valueNames,
     int nCycles,
-    double complementConstant
+    double complementConstant,
+    std::string halfCycleMethod = "start"
 ) {
+    DebugPrintText("=== cppMarkovTransitionsAndTrace START ===");
     int nValues = valueNames.length();
     int nStates = stateNames.length();
+    DebugPrintValue("nValues", nValues);
+    DebugPrintValue("nStates", nStates);
+    DebugPrintValue("nCycles", nCycles);
+
+    // Defensive checks for invalid inputs
+    if (nStates == 0) {
+        stop("cppMarkovTransitionsAndTrace: No states provided (nStates = 0)");
+    }
+    if (stateNames.length() != nStates) {
+        stop("cppMarkovTransitionsAndTrace: stateNames length does not match nStates");
+    }
+    if (initialProbs.length() != nStates) {
+        stop("cppMarkovTransitionsAndTrace: initialProbs length does not match number of states");
+    }
+    if (nCycles <= 0) {
+        stop("cppMarkovTransitionsAndTrace: nCycles must be positive");
+    }
+    if (nValues < 0) {
+        stop("cppMarkovTransitionsAndTrace: nValues cannot be negative");
+    }
 
     // Create a dictionary of transitional values
     std::map<String,List> transitionalValueDictionary;
@@ -451,20 +473,51 @@ List cppMarkovTransitionsAndTrace(
         // For each state
         for(int stateIndex = 0; stateIndex < nStates; stateIndex++) {
             std::string stateName = std::string(stateNames[stateIndex]);
-            double stateProb = trace(cycle - 1, stateIndex);
+
+            // Calculate state probability based on half-cycle method
+            double stateProb;
+            if (halfCycleMethod == "end") {
+                stateProb = trace(cycle, stateIndex);
+            } else if (halfCycleMethod == "life-table") {
+                if (cycle == 1) {
+                    // First cycle: average of initial (cycle 0) and cycle 1
+                    stateProb = (trace(0, stateIndex) + trace(1, stateIndex)) / 2.0;
+                } else if (cycle == nCycles) {
+                    // Last cycle: just use end probability
+                    stateProb = trace(cycle, stateIndex);
+                } else {
+                    // Middle cycles: average of start and end
+                    stateProb = (trace(cycle - 1, stateIndex) + trace(cycle, stateIndex)) / 2.0;
+                }
+            } else {  // "start" or default
+                stateProb = trace(cycle - 1, stateIndex);
+            }
             
             // Find the values for this state
             if (residencyValueDictionary.find(stateName) != residencyValueDictionary.end()) {
+                DebugPrintText("                Found state in residency dictionary");
                 valList = residencyValueDictionary[stateName];
+                DebugPrintValue("                valList length", valList.length());
                 int nVals = valList.length();
-                
+
                 // For each value in the list
                 for (int valIndex = 0; valIndex < nVals; valIndex++) {
+                    DebugPrintValue("                Processing value index", valIndex);
                     residValNames = valList.names();
+                    DebugPrintValue("                residValNames length", residValNames.length());
                     std::string valName = std::string(residValNames[valIndex]);
+                    DebugPrintText("                Value name: " + valName);
+
+                    DebugPrintText("                About to access valList[valIndex]...");
                     residValValues = valList[valIndex];
+                    DebugPrintText("                Successfully assigned to residValValues");
+
                     int nValueCycles = residValValues.length();
+                    DebugPrintValue("                nValueCycles", nValueCycles);
+
+                    DebugPrintText("                About to access residValValues[0]...");
                     double valValue = residValValues[0];
+                    DebugPrintText("                Successfully got valValue");
                     
                     // Handle cycle-specific values
                     if (nValueCycles > 1) {

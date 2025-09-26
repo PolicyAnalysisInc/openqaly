@@ -16,6 +16,7 @@ parse_values <- function(x, states, extra_vars) {
       state = character(0),
       destination = character(0),
       formula = list(), # Formulas are parsed to heRoFormula objects, so list() for empty case
+      value_type = character(0),
       max_st = numeric(0),
       # Add other columns that `sort_variables` might consistently produce on an empty input
       # or that as.values expects. For now, these are the main ones.
@@ -48,7 +49,7 @@ parse_values <- function(x, states, extra_vars) {
     group_by(state, destination) %>%
     do({
       as.data.frame(.) %>%
-        select(name, display_name, description, state, destination, formula) %>%
+        select(name, display_name, description, state, destination, formula, value_type) %>%
         mutate(formula = map(formula, as.heRoFormula)) %>%
         sort_variables(extra_vars)
     }) %>%
@@ -130,8 +131,7 @@ format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_p
     table_data_df <- dplyr::mutate(table_data_df, Destination = as.character(Destination))
   }
   
-  # Replace NA with "N/A" for display in all relevant columns
-  # (Value Name, State, Destination, Cycles, State Cycles)
+  # Format NA values as "N/A" for display purposes
   cols_to_format_na <- intersect(colnames(table_data_df), c("Value Name", "State", "Destination", "Cycles", "State Cycles"))
   for(col_name in cols_to_format_na) {
     table_data_df[[col_name]] <- ifelse(is.na(table_data_df[[col_name]]), "N/A", table_data_df[[col_name]])
@@ -163,13 +163,10 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
 
   # df is uneval_values. 
   # If model had no values, parse_values returns an empty, structured tibble:
-  # tibble(name, display_name, description, state, destination, formula=list(), max_st, .rows = 0)
 
   # Handle 0-row input df (e.g., from a model with no values defined)
   if (nrow(df) == 0) {
-    # The structure should match what the map/bind_rows would produce if there was data.
-    # These are the columns returned by the inner map's bind_rows:
-    # state, destination, max_st, state_cycle, values_list
+    # Return empty tibble with expected columns
     empty_evaluated_values <- tibble::tibble(
       state = character(0),
       destination = character(0),
@@ -185,7 +182,6 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   }
 
   # Existing logic for when df has rows:
-  # names_in_order <- unique(df$name) # df$name exists due to parse_values structure. Not directly used below.
   
   # The list of tibbles, one for each group of (state, destination)
   grouped_df_list <- df %>%
@@ -198,7 +194,6 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       state_res <- state_ns$df # This contains cycle, state_cycle, and evaluated variable columns
       
       # Add group's state to state_res for reference in NA reporting if needed (though x_group has it)
-      # state_res$state_group_ref <- x_group$state[1] # This was previously done and is fine
 
       # Determine which of the model's value_names are present as columns in state_res
       # These are the names of the values defined in this x_group

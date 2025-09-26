@@ -32,10 +32,9 @@ modify_error_msg <- function(x) {
   original_x <- as.character(x)
   x_char <- original_x
 
-  # --- Prefix Removal --- 
-  # Store original cleaned value before pattern matching
-  x_cleaned_prefixes <- gsub("^Error in [^:]+: ", "", x_char) # Remove specific 'Error in ...:'
-  x_cleaned_prefixes <- gsub("^Error: ", "", x_cleaned_prefixes, fixed = TRUE) # Remove generic 'Error:'
+  # Clean error message prefixes
+  x_cleaned_prefixes <- gsub("^Error in [^:]+: ", "", x_char)
+  x_cleaned_prefixes <- gsub("^Error: ", "", x_cleaned_prefixes, fixed = TRUE)
   
   # --- Pattern Matching --- 
   # Check 1: Standard object not found (use cleaned string for matching)
@@ -62,14 +61,11 @@ modify_error_msg <- function(x) {
      # to the final fallback logic which returns the cleaned original message.
   }
 
-  # --- Fallback --- 
-  # If no specific pattern matched, return the string with prefixes removed.
-  # Ensure the generic "Error: " prefix is definitely removed.
-  final_fallback <- x_cleaned_prefixes # Start with already cleaned string
-  if (startsWith(final_fallback, "Error: ")) { 
-      final_fallback <- substring(final_fallback, 8) # Remove first 7 chars ("Error: ")
+  # Return cleaned message as fallback
+  final_fallback <- x_cleaned_prefixes
+  if (startsWith(final_fallback, "Error: ")) {
+      final_fallback <- substring(final_fallback, 8)
   }
-  # Remove trailing newline if present.
   final_fallback <- gsub("\\n$", "", final_fallback) 
   return(final_fallback)
 }
@@ -96,11 +92,6 @@ define_dependency_error <- function(msg) {
   )
 }
 
-# --- REMOVED Error Capture Mechanism ---
-# with_hero_error_capture is no longer needed.
-
-# --- REMOVED Internal Helper for Stack Traversal ---
-# find_capture_helper_in_stack is no longer needed.
 
 # --- Error Accumulation and Checkpoint Logic (Revised) ---
 

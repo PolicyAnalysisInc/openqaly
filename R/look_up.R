@@ -55,7 +55,7 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   # --- Argument Pre-checks (Before Evaluation) ---
   call <- match.call(expand.dots = FALSE)
-  dots <- call$... # Get the list of unevaluated ... arguments
+  dots <- call$...
 
   if (length(dots) > 0) {
     dot_names <- names(dots)
@@ -64,13 +64,11 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
     unnamed_indices <- which(dot_names == "")
     
     if (length(unnamed_indices) > 0) {
-      # Check specifically for unnamed '==' calls
       is_equality_check <- sapply(dots[unnamed_indices], function(arg) {
         is.call(arg) && length(arg) == 3 && deparse(arg[[1]]) == "=="
       })
       
       if (any(is_equality_check)) {
-        # Get the first offending argument expression for the example
         offending_arg_expr <- deparse(dots[unnamed_indices][is_equality_check][[1]])
         # Try to reconstruct a corrected example
         corrected_example <- gsub("==", "=", offending_arg_expr, fixed = TRUE)
@@ -96,7 +94,6 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   # Now evaluate the ... arguments safely
   list_specs <- list(...)
-  # nms <- names(list_specs) # No longer needed here, checked above
   
   data <- clean_factors(data)
 

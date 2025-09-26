@@ -2,7 +2,7 @@
 % Please edit documentation in R/misc.R
 \name{read_model_json}
 \alias{read_model_json}
-\title{Read Model from JSON}
+\title{Takes a JSON string and parses it into a heRomodel object.}
 \usage{
 read_model_json(json_string)
 }

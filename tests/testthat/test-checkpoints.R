@@ -34,7 +34,7 @@ create_minimal_model <- function() {
   model
 }
 
-# --- Removed namespace helper function --- 
+ 
 
 test_that("eval_variables collects and throws multiple errors", {
   # Clear errors before test
@@ -72,9 +72,8 @@ test_that("eval_variables collects and throws multiple errors", {
               info = "Message should mention var_b error")
 })
 
-# Test removed - warning mode no longer supported
 
-# --- Keep basic helper function tests --- 
+ 
 
 test_that("checkpoint filters out dependency errors", {
   # Clear errors before test
@@ -113,7 +112,7 @@ test_that("checkpoint filters out dependency errors", {
 
 test_that("modify_error_msg correctly formats messages", {
   expect_equal(heRomod2:::modify_error_msg("Error in eval(x$expr, data, x$env): object 'myVar' not found"), 'Variable "myVar" not found.')
-  # --- TEMPORARY DIAGNOSTIC REMOVED --- 
+ 
   expect_equal(heRomod2:::modify_error_msg("Error: Some other error occurred"), "Some other error occurred")
   expect_equal(heRomod2:::modify_error_msg("Just a string"), "Just a string")
 })

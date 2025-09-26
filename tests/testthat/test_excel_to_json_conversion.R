@@ -122,17 +122,31 @@ test_that("Excel to JSON conversion preserves model structure and results", {
     }
     
     # Compare summaries
-    excel_summaries <- excel_strat$summaries[[1]]
-    json_summaries <- json_strat$summaries[[1]]
-    
-    if (!is.null(excel_summaries) && !is.null(json_summaries)) {
+    excel_summaries_raw <- excel_strat$summaries[[1]]
+    json_summaries_raw <- json_strat$summaries[[1]]
+
+    # Summaries are nested with undiscounted/discounted
+    if (is.list(excel_summaries_raw) && "undiscounted" %in% names(excel_summaries_raw)) {
+      excel_summaries <- excel_summaries_raw$undiscounted
+    } else {
+      excel_summaries <- excel_summaries_raw
+    }
+
+    if (is.list(json_summaries_raw) && "undiscounted" %in% names(json_summaries_raw)) {
+      json_summaries <- json_summaries_raw$undiscounted
+    } else {
+      json_summaries <- json_summaries_raw
+    }
+
+    if (!is.null(excel_summaries) && !is.null(json_summaries) &&
+        is.data.frame(excel_summaries) && is.data.frame(json_summaries)) {
       # Sort by summary and value for consistent comparison
       excel_summaries <- excel_summaries[order(excel_summaries$summary, excel_summaries$value), ]
       json_summaries <- json_summaries[order(json_summaries$summary, json_summaries$value), ]
-      
+
       expect_equal(nrow(excel_summaries), nrow(json_summaries),
                    info = paste("Summaries should have same number of rows for strategy", strat))
-      
+
       # Compare summary amounts with tolerance
       expect_equal(excel_summaries$amount, json_summaries$amount, tolerance = 1e-10,
                    info = paste("Summary amounts should match for strategy", strat))

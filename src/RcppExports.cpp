@@ -28,8 +28,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cppMarkovTransitionsAndTrace
-List cppMarkovTransitionsAndTrace(NumericMatrix transitions, DataFrame valuesTransitional, DataFrame valuesResidency, DataFrame modelStartValues, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant);
-RcppExport SEXP _heRomod2_cppMarkovTransitionsAndTrace(SEXP transitionsSEXP, SEXP valuesTransitionalSEXP, SEXP valuesResidencySEXP, SEXP modelStartValuesSEXP, SEXP initialProbsSEXP, SEXP stateNamesSEXP, SEXP valueNamesSEXP, SEXP nCyclesSEXP, SEXP complementConstantSEXP) {
+List cppMarkovTransitionsAndTrace(NumericMatrix transitions, DataFrame valuesTransitional, DataFrame valuesResidency, DataFrame modelStartValues, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant, std::string halfCycleMethod);
+RcppExport SEXP _heRomod2_cppMarkovTransitionsAndTrace(SEXP transitionsSEXP, SEXP valuesTransitionalSEXP, SEXP valuesResidencySEXP, SEXP modelStartValuesSEXP, SEXP initialProbsSEXP, SEXP stateNamesSEXP, SEXP valueNamesSEXP, SEXP nCyclesSEXP, SEXP complementConstantSEXP, SEXP halfCycleMethodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -42,14 +42,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< CharacterVector >::type valueNames(valueNamesSEXP);
     Rcpp::traits::input_parameter< int >::type nCycles(nCyclesSEXP);
     Rcpp::traits::input_parameter< double >::type complementConstant(complementConstantSEXP);
-    rcpp_result_gen = Rcpp::wrap(cppMarkovTransitionsAndTrace(transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant));
+    Rcpp::traits::input_parameter< std::string >::type halfCycleMethod(halfCycleMethodSEXP);
+    rcpp_result_gen = Rcpp::wrap(cppMarkovTransitionsAndTrace(transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_heRomod2_MarkovTraceAndValues", (DL_FUNC) &_heRomod2_MarkovTraceAndValues, 7},
-    {"_heRomod2_cppMarkovTransitionsAndTrace", (DL_FUNC) &_heRomod2_cppMarkovTransitionsAndTrace, 9},
+    {"_heRomod2_cppMarkovTransitionsAndTrace", (DL_FUNC) &_heRomod2_cppMarkovTransitionsAndTrace, 10},
     {NULL, NULL, 0}
 };
 

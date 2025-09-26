@@ -41,7 +41,18 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
     missing_msg <- err_name_string(missing_cols)
     stop(context, ' definition was missing columns: ', missing_msg, '.', call. = F)
   }
-  
+
+  # Handle empty variables case
+  if (nrow(x) == 0 && (is.null(extras) || nrow(extras) == 0)) {
+    empty_vars <- tibble::tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      formula = list()
+    )
+    return(as.variables(empty_vars))
+  }
+
   # Parse formulas, and sort
   vars <- x %>%
     rowwise() %>%

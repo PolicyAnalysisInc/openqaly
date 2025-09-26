@@ -12,10 +12,8 @@
 #' @export
 resample <- function(model, n, segments, corr = NULL, seed = NULL) {
   
-  # Check sampling specification
   check_sampling_spec(model$variables)
   
-  # Get the variables that are sampled
   sampled_vars <- model$variables %>%
     filter(!is.na(sampling), sampling != '') %>%
     mutate(.index = seq_len(n()))
@@ -27,7 +25,6 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
     corr <- diag(rep(1, n_var))
   }
   
-  # Set seed and sample uniform random
   set.seed(seed)
   r_norm <- mvnfast::rmvn(n = n, mu = rep(0, n_var), sigma = corr)
   mat_p <- stats::pnorm(r_norm)
@@ -35,12 +32,10 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
   # Prepopulate a list to store simulations
   cols <- vector(mode = "list", length = n_var + 1)
   cols[[1]] <- seq_len(n)
-  #names(cols) <- c('simulation', params_df$name)
   
   # Fill list with sampled values
   for (i in seq_len(n_var)) {
     
-    # Get the namespace of the relevant segment for variable
     var_row <- sampled_vars[i, ]
     var_name <- var_row$name
     row_strat <- var_row$strategy

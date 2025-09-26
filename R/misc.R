@@ -86,7 +86,35 @@ convert_settings_from_df <- function(settings_df) {
     }
     # If it's already logical, it remains unchanged.
   }
-  
+
+  # Handle half_cycle_method setting
+  if ("half_cycle_method" %in% names(settings)) {
+    val <- settings[["half_cycle_method"]]
+    if (is.character(val)) {
+      val_lower <- tolower(val)
+      if (val_lower %in% c("start", "end", "life-table")) {
+        settings[["half_cycle_method"]] <- val_lower
+      } else {
+        warning(paste("Invalid half_cycle_method:", val, "- must be 'start', 'end', or 'life-table'. Defaulting to 'start'"))
+        settings[["half_cycle_method"]] <- "start"
+      }
+    } else {
+      warning(paste("half_cycle_method must be a string, got:", class(val), "- defaulting to 'start'"))
+      settings[["half_cycle_method"]] <- "start"
+    }
+  } else {
+    # Default to "start" if not specified (maintains backward compatibility)
+    settings[["half_cycle_method"]] <- "start"
+  }
+
+  # Set default discount rates if not provided
+  if (!("discount_cost" %in% names(settings))) {
+    settings[["discount_cost"]] <- 0.035  # Default 3.5% for costs
+  }
+  if (!("discount_outcomes" %in% names(settings))) {
+    settings[["discount_outcomes"]] <- 0.035  # Default 3.5% for outcomes
+  }
+
   settings
 }
 
@@ -448,17 +476,147 @@ convert_to_type <- function(x, type) {
 }
 
 #' Read Model from JSON
-#' 
+#' Normalize NULLs and empty strings in model data
+#'
+#' Converts NULL values and empty strings to NA for consistent handling
+#' throughout the model processing pipeline.
+#'
+#' @param model The model object from JSON parsing
+#' @return The model with normalized values
+normalize_model_nulls <- function(model) {
+  # Helper function to normalize a single value
+  normalize_value <- function(x) {
+    if (is.null(x)) return(NA)
+    if (is.character(x) && length(x) == 1 && x == "") return(NA_character_)
+    return(x)
+  }
+
+  # Helper function to normalize a dataframe
+  normalize_dataframe <- function(df) {
+    if (is.null(df) || !is.data.frame(df)) return(df)
+
+    # Apply normalization to each column
+    for (col in names(df)) {
+      if (is.list(df[[col]])) {
+        # For list columns, apply element-wise
+        df[[col]] <- lapply(df[[col]], normalize_value)
+      } else {
+        # For regular columns, vectorize the normalization
+        df[[col]] <- sapply(df[[col]], normalize_value, USE.NAMES = FALSE)
+      }
+    }
+    return(df)
+  }
+
+  # Normalize each dataframe in the model
+  if (!is.null(model$states)) {
+    model$states <- normalize_dataframe(model$states)
+  }
+
+  if (!is.null(model$transitions)) {
+    model$transitions <- normalize_dataframe(model$transitions)
+  }
+
+  if (!is.null(model$values)) {
+    model$values <- normalize_dataframe(model$values)
+  }
+
+  if (!is.null(model$variables)) {
+    model$variables <- normalize_dataframe(model$variables)
+  }
+
+  if (!is.null(model$summaries)) {
+    model$summaries <- normalize_dataframe(model$summaries)
+  }
+
+  if (!is.null(model$strategies)) {
+    model$strategies <- normalize_dataframe(model$strategies)
+  }
+
+  if (!is.null(model$groups)) {
+    model$groups <- normalize_dataframe(model$groups)
+  }
+
+  return(model)
+}
+
+#' Validate model data structure and types
+#'
+#' Ensures that model data has correct structure and types after normalization
+#'
+#' @param model The normalized model object
+#' @return The validated model object
+validate_model_data <- function(model) {
+  # Validate states
+  if (!is.null(model$states) && is.data.frame(model$states)) {
+    if (nrow(model$states) == 0) {
+      stop("Model must have at least one state defined")
+    }
+
+    # Ensure critical fields exist
+    if (!"name" %in% names(model$states)) {
+      stop("States must have 'name' field")
+    }
+
+    # Ensure initial_probability exists and is valid
+    if (!"initial_probability" %in% names(model$states)) {
+      stop("States must have 'initial_probability' field")
+    }
+
+    # Validate state names are unique and non-empty
+    state_names <- model$states$name
+    if (any(is.na(state_names)) || any(state_names == "")) {
+      stop("All states must have non-empty names")
+    }
+    if (length(unique(state_names)) != length(state_names)) {
+      stop("State names must be unique")
+    }
+  } else {
+    stop("Model must have a 'states' dataframe")
+  }
+
+  # Validate transitions - just check structure, not state references (those are expanded later)
+  if (!is.null(model$transitions) && is.data.frame(model$transitions)) {
+    if (nrow(model$transitions) > 0) {
+      # Ensure from and to fields exist
+      if (!all(c("from", "to") %in% names(model$transitions))) {
+        stop("Transitions must have 'from' and 'to' fields")
+      }
+    }
+  }
+
+  # Validate values if present
+  if (!is.null(model$values) && is.data.frame(model$values)) {
+    if (nrow(model$values) > 0) {
+      # Ensure name field exists
+      if (!"name" %in% names(model$values)) {
+        stop("Values must have 'name' field")
+      }
+
+      # Values state validation removed - states are expanded later
+    }
+  }
+
+  return(model)
+}
+
+#'
 #' Takes a JSON string and parses it into a heRomodel object.
-#' 
+#'
 #' @param json_string A string containing the model in JSON format.
-#' 
+#'
 #' @return A heRomodel object
-#' 
+#'
 #' @export
 read_model_json <- function(json_string) {
   # Parse JSON string into a list
   model <- fromJSON(json_string, simplifyVector = TRUE)
+
+  # Normalize NULLs and empty strings to NA immediately after reading
+  model <- normalize_model_nulls(model)
+
+  # Validate model structure and data types
+  model <- validate_model_data(model)
 
   # Load the values spec
   values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
@@ -527,7 +685,8 @@ read_model_json <- function(json_string) {
 #' @param model The model list parsed from JSON
 #' @return The model with properly formatted data frames
 convert_json_dataframes <- function(model, values_spec = NULL) {
-  expected_dfs <- c("strategies", "groups", "states", "transitions", "values", "summaries")
+  expected_dfs <- c("strategies", "groups", "states", "transitions",
+                    "values", "summaries", "variables")
 
   # Determine if this is a PSM model
   is_psm <- !is.null(model$settings) && !is.null(model$settings$model_type) &&
@@ -536,7 +695,8 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
   df_stubs <- list(
     values = create_empty_values_stubs(),
     summaries = create_empty_summaries_stubs(),
-    transitions = if (is_psm) create_empty_psm_transitions_stubs() else NULL
+    transitions = if (is_psm) create_empty_psm_transitions_stubs() else NULL,
+    variables = create_empty_variables_stubs()
   )
 
   for (df_name in expected_dfs) {
@@ -564,7 +724,17 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
       if (df_name == "values" && !is.null(values_spec)) {
         # Always apply spec, even for empty dataframes (to get correct types)
         model[[df_name]] <- check_tbl(model[[df_name]], values_spec, 'Values')
-        # Don't apply the empty string to NA conversion for values - spec handles it
+        # Convert empty strings to NA for state and destination columns in values
+        if (nrow(model[[df_name]]) > 0) {
+          if ("state" %in% names(model[[df_name]])) {
+            # Use direct assignment to preserve character type
+            model[[df_name]]$state[!is.na(model[[df_name]]$state) & model[[df_name]]$state == ""] <- NA_character_
+          }
+          if ("destination" %in% names(model[[df_name]])) {
+            # Use direct assignment to preserve character type
+            model[[df_name]]$destination[!is.na(model[[df_name]]$destination) & model[[df_name]]$destination == ""] <- NA_character_
+          }
+        }
       } else {
         if (!is.null(stub_to_use)) {
           model[[df_name]] <- ensure_tibble_columns(model[[df_name]], stub_to_use)
@@ -611,7 +781,8 @@ create_empty_values_stubs <- function() {
     description = character(0),
     state = character(0),
     destination = character(0),
-    formula = character(0)
+    formula = character(0),
+    value_type = character(0)
   )
 }
 
@@ -629,6 +800,17 @@ create_empty_psm_transitions_stubs <- function() {
     endpoint = character(0),
     time_unit = character(0),
     formula = character(0)
+  )
+}
+
+create_empty_variables_stubs <- function() {
+  tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = character(0),
+    strategy = character(0),
+    group = character(0)
   )
 }
 
@@ -697,7 +879,7 @@ write_model_json <- function(model) {
     stop("Input must be a heRomodel object", call. = FALSE)
   }
 
-  # Create a copy to avoid modifying the original
+  # Build JSON structure
   json_model <- list()
 
   # Convert settings from list to dataframe format expected by JSON

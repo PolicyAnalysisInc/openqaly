@@ -53,10 +53,31 @@ eval_states <- function(x, ns) {
   # Limit variables to first cycle
   cloned_ns <- clone_namespace(ns)
   cloned_ns$df <- cloned_ns$df[1, ]
-  eval_variables(x, cloned_ns, T)$df[ ,x$name]
+  result <- eval_variables(x, cloned_ns, T)$df[ ,x$name, drop = FALSE]
+
+  # Ensure the result has column names
+  if (is.null(colnames(result))) {
+    # If only one state and result is a matrix/dataframe without names
+    if (ncol(result) == length(x$name)) {
+      colnames(result) <- x$name
+    } else {
+      stop("eval_states: Cannot determine column names for initial state probabilities")
+    }
+  }
+
+  return(result)
 }
 
 expand_init_states <- function(x, expand) {
+  # Ensure x has column names
+  if (is.null(colnames(x)) || length(colnames(x)) == 0) {
+    # If single state in expand, use it
+    if (nrow(expand) == 1) {
+      colnames(x) <- expand$state[1]
+    } else {
+      stop("expand_init_states: Initial state matrix has no column names and cannot infer them")
+    }
+  }
 
   n_states_exp <- sum(ifelse(is.na(expand$max_st), 1, expand$max_st))
   init_mat <- matrix(numeric(n_states_exp), nrow = 1)

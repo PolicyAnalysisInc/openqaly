@@ -135,20 +135,21 @@ aggregate_segments <- function(segments, parsed_model) {
     # Aggregate collapsed trace
     aggregated_trace <- aggregate_trace(strat_segments)
     
-    # Aggregate values  
+    # Aggregate values
     aggregated_values <- aggregate_values(strat_segments)
-    
+
     # Aggregate summaries
     aggregated_summaries <- aggregate_summaries(strat_segments)
-    
+
     # Return aggregated results for this strategy as a single-row tibble
     tibble(
       strategy = strat,
       group = "_aggregated",  # Special marker for aggregated results
       weight = total_weight,  # Total weight for the strategy
       collapsed_trace = list(aggregated_trace),
-      trace_and_values = list(list(values = aggregated_values)),  # Match segment structure
-      summaries = list(aggregated_summaries)
+      trace_and_values = list(aggregated_values),  # Now contains both values and values_discounted
+      summaries = list(aggregated_summaries$summaries),
+      summaries_discounted = list(aggregated_summaries$summaries_discounted)
     )
   })
   
@@ -205,66 +206,79 @@ aggregate_trace <- function(segments) {
 #' @return A matrix containing the weighted average values
 #' @keywords internal
 aggregate_values <- function(segments) {
-  # Extract values matrices and weights
-  if ("trace_and_values" %in% colnames(segments)) {
-    values_list <- segments$trace_and_values
-    # Extract values from the nested structure
-    if (is.list(values_list) && length(values_list) > 0) {
-      values_list <- map(values_list, function(x) {
-        if (is.list(x) && length(x) > 0) {
-          if (is.list(x[[1]]) && "values" %in% names(x[[1]])) {
-            return(x[[1]]$values)
-          } else if ("values" %in% names(x)) {
-            return(x$values)
+  # Helper function to aggregate a specific value type
+  aggregate_value_type <- function(value_field) {
+    # Extract values matrices and weights
+    if ("trace_and_values" %in% colnames(segments)) {
+      values_list <- segments$trace_and_values
+      # Extract values from the nested structure
+      if (is.list(values_list) && length(values_list) > 0) {
+        values_list <- map(values_list, function(x) {
+          if (is.list(x) && length(x) > 0) {
+            if (is.list(x[[1]]) && value_field %in% names(x[[1]])) {
+              return(x[[1]][[value_field]])
+            } else if (value_field %in% names(x)) {
+              return(x[[value_field]])
+            } else if (is.list(x[[1]]) && "values" %in% names(x[[1]]) && value_field == "values") {
+              return(x[[1]]$values)
+            } else if ("values" %in% names(x) && value_field == "values") {
+              return(x$values)
+            }
           }
-        }
-        return(NULL)
-      })
+          return(NULL)
+        })
+      }
+    } else {
+      return(NULL)
     }
-  } else {
-    return(NULL)
-  }
-  weights <- segments$normalized_weight
-  
-  if (length(values_list) == 0) return(NULL)
-  
-  # Get first non-null values matrix to determine structure
-  first_values <- NULL
-  for (v in values_list) {
-    if (!is.null(v) && length(v) > 0) {
-      first_values <- v
-      break
-    }
-  }
-  
-  if (is.null(first_values)) return(NULL)
-  
-  # Initialize aggregated values with same dimensions
-  if (is.matrix(first_values)) {
-    aggregated <- matrix(0, nrow = nrow(first_values), ncol = ncol(first_values))
-    rownames(aggregated) <- rownames(first_values)
-    colnames(aggregated) <- colnames(first_values)
-  } else if (is.data.frame(first_values)) {
-    # If values is a data frame, convert to matrix for aggregation
-    value_cols <- setdiff(colnames(first_values), "cycle")
-    aggregated <- as.matrix(first_values[, value_cols, drop = FALSE]) * 0
-  } else {
-    return(NULL)
-  }
-  
-  # Weight and sum values
-  for (i in seq_along(values_list)) {
-    if (!is.null(values_list[[i]]) && length(values_list[[i]]) > 0) {
-      if (is.matrix(values_list[[i]])) {
-        aggregated <- aggregated + values_list[[i]] * weights[i]
-      } else if (is.data.frame(values_list[[i]])) {
-        value_cols <- setdiff(colnames(values_list[[i]]), "cycle")
-        aggregated <- aggregated + as.matrix(values_list[[i]][, value_cols, drop = FALSE]) * weights[i]
+    weights <- segments$normalized_weight
+
+    if (length(values_list) == 0) return(NULL)
+
+    # Get first non-null values matrix to determine structure
+    first_values <- NULL
+    for (v in values_list) {
+      if (!is.null(v) && length(v) > 0) {
+        first_values <- v
+        break
       }
     }
+
+    if (is.null(first_values)) return(NULL)
+
+    # Initialize aggregated values with same dimensions
+    if (is.matrix(first_values)) {
+      aggregated <- matrix(0, nrow = nrow(first_values), ncol = ncol(first_values))
+      rownames(aggregated) <- rownames(first_values)
+      colnames(aggregated) <- colnames(first_values)
+    } else if (is.data.frame(first_values)) {
+      # If values is a data frame, convert to matrix for aggregation
+      value_cols <- setdiff(colnames(first_values), "cycle")
+      aggregated <- as.matrix(first_values[, value_cols, drop = FALSE]) * 0
+    } else {
+      return(NULL)
+    }
+
+    # Weight and sum values
+    for (i in seq_along(values_list)) {
+      if (!is.null(values_list[[i]]) && length(values_list[[i]]) > 0) {
+        if (is.matrix(values_list[[i]])) {
+          aggregated <- aggregated + values_list[[i]] * weights[i]
+        } else if (is.data.frame(values_list[[i]])) {
+          value_cols <- setdiff(colnames(values_list[[i]]), "cycle")
+          aggregated <- aggregated + as.matrix(values_list[[i]][, value_cols, drop = FALSE]) * weights[i]
+        }
+      }
+    }
+
+    aggregated
   }
-  
-  aggregated
+
+  # Aggregate both undiscounted and discounted values
+  list(
+    values = aggregate_value_type("values"),
+    values_discounted = aggregate_value_type("values_discounted")
+  )
 }
 
 #' Aggregate Summaries Results
@@ -277,52 +291,69 @@ aggregate_values <- function(segments) {
 #' @return A data frame containing the aggregated summaries with weighted amounts
 #' @keywords internal
 aggregate_summaries <- function(segments) {
-  # Extract summaries and weights
-  if (!("summaries" %in% colnames(segments))) {
-    return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+  # Helper function to aggregate summaries from a list
+  aggregate_summary_list <- function(summaries_list, weights) {
+    if (length(summaries_list) == 0) {
+      return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+    }
+
+    # Extract summaries from each segment
+    combined_summaries <- map2_dfr(summaries_list, weights, function(summary_obj, weight) {
+      # Extract the nested structure
+      if (is.list(summary_obj) && length(summary_obj) == 1) {
+        summary_df <- summary_obj[[1]]
+      } else {
+        summary_df <- summary_obj
+      }
+
+      # Skip if summary_df is NULL or not a data frame
+      if (is.null(summary_df) || !is.data.frame(summary_df)) {
+        return(tibble::tibble(summary = character(), value = character(), amount = numeric(), weight = numeric()))
+      }
+
+      # Add weight to each row
+      summary_df %>%
+        mutate(weight = weight)
+    })
+
+    # If no valid summaries were found, return empty result
+    if (nrow(combined_summaries) == 0) {
+      return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+    }
+
+    # Calculate weighted average by grouping by summary and value
+    combined_summaries %>%
+      group_by(summary, value) %>%
+      summarize(
+        weighted_sum = sum(amount * weight, na.rm = TRUE),
+        weight_sum = sum(weight, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        amount = weighted_sum / weight_sum
+      ) %>%
+      select(summary, value, amount)
   }
-  
-  summaries_list <- segments$summaries
+
   weights <- segments$normalized_weight
-  
-  if (length(summaries_list) == 0) {
-    return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+
+  # Aggregate undiscounted summaries
+  undiscounted_summaries <- if ("summaries" %in% colnames(segments)) {
+    aggregate_summary_list(segments$summaries, weights)
+  } else {
+    tibble::tibble(summary = character(), value = character(), amount = numeric())
   }
-  
-  # Combine all summaries with their segment weights
-  combined_summaries <- map2_dfr(summaries_list, weights, function(summary_df, weight) {
-    # Extract the summary dataframe from the list if necessary
-    if (is.list(summary_df) && length(summary_df) == 1) {
-      summary_df <- summary_df[[1]]
-    }
-    
-    # Skip if summary_df is NULL or not a data frame
-    if (is.null(summary_df) || !is.data.frame(summary_df)) {
-      return(tibble::tibble(summary = character(), value = character(), amount = numeric(), weight = numeric()))
-    }
-    
-    # Add weight to each row
-    summary_df %>%
-      mutate(weight = weight)
-  })
-  
-  # If no valid summaries were found, return empty result
-  if (nrow(combined_summaries) == 0) {
-    return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+
+  # Aggregate discounted summaries
+  discounted_summaries <- if ("summaries_discounted" %in% colnames(segments)) {
+    aggregate_summary_list(segments$summaries_discounted, weights)
+  } else {
+    tibble::tibble(summary = character(), value = character(), amount = numeric())
   }
-  
-  # Calculate weighted average by grouping by summary and value
-  aggregated_summaries <- combined_summaries %>%
-    group_by(summary, value) %>%
-    summarize(
-      weighted_sum = sum(amount * weight, na.rm = TRUE),
-      weight_sum = sum(weight, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      amount = weighted_sum / weight_sum
-    ) %>%
-    select(summary, value, amount)
-  
-  aggregated_summaries
+
+  # Return both as separate fields (not nested)
+  list(
+    summaries = undiscounted_summaries,
+    summaries_discounted = discounted_summaries
+  )
 }

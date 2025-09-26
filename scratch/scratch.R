@@ -15,7 +15,7 @@ library(dplyr)
     #read_model()
 # Error handling options removed - checkpoint mode is now always used
 
-model <- read_model_json("/Users/jrdnmdhl/downloads/model_68cafab0c4242e3312128818_2025-09-17.json")
+model <- read_model_json("/Users/jrdnmdhl/downloads/model_68d1f913575d326468fff8ca_2025-09-23.json")
 
 res <- run_model(model)
 

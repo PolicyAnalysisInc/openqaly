@@ -12,8 +12,7 @@ define_namespace(env, df, additional = NULL, ...)
 \item{df}{A data frame of pre-existing parameter values}
 }
 \description{
-Creates a new namespace object which can be used
-to store evaluated parameters.  A namespace object
-combines a data frame for storing vector parameters
-with an environment for storing non-vector parameters.
+A namespace object stores evaluated parameters by combining
+a data frame for vector parameters with an environment
+for non-vector parameters.
 }

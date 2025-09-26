@@ -62,24 +62,59 @@ run_segment.psm <- function(segment, model, env, ...) {
     eval_vars,
     model_value_names,
     unique(model$states$name),
-    model$settings$n_cycles
+    model$settings$n_cycles,
+    model$settings$half_cycle_method
   )
-  
+
+  # Apply discounting to values
+  n_cycles <- model$settings$n_cycles
+  discount_cost <- if (!is.null(model$settings$discount_cost)) model$settings$discount_cost else 0.035
+  discount_outcomes <- if (!is.null(model$settings$discount_outcomes)) model$settings$discount_outcomes else 0.035
+
+  # Calculate cycle length in years for discounting
+  cycle_length_days <- model$settings$cycle_length_days
+  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
+  cycle_length_years <- cycle_length_days / days_per_year
+
+  # Calculate discount factors
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
+
+  # Get value types from uneval_values
+  value_type_mapping <- setNames(uneval_values$value_type, uneval_values$name)
+  value_type_mapping <- value_type_mapping[!is.na(names(value_type_mapping))]
+
+  # Apply discounting to get discounted values
+  calculated_trace_and_values$values_discounted <- apply_discounting(
+    calculated_trace_and_values$values,
+    discount_factors_cost,
+    discount_factors_outcomes,
+    value_type_mapping
+  )
+
   # Create the object to return
   segment$uneval_vars <- list(uneval_vars)
   segment$eval_vars <- list(eval_vars)
   segment$inital_state <- list(eval_states)
   segment$trace_and_values <- list(calculated_trace_and_values)
   segment$collapsed_trace <- list(calculated_trace_and_values$trace)
-  
-  # Calculate summaries
+
+  # Calculate summaries for both discounted and undiscounted values
   if (!is.null(parsed_summaries)) {
-    segment$summaries <- list(calculate_summaries(
-      parsed_summaries, 
+    summaries_undiscounted <- calculate_summaries(
+      parsed_summaries,
       calculated_trace_and_values$values
-    ))
+    )
+    summaries_discounted <- calculate_summaries(
+      parsed_summaries,
+      calculated_trace_and_values$values_discounted
+    )
+    segment$summaries <- list(summaries_undiscounted)
+    segment$summaries_discounted <- list(summaries_discounted)
   } else {
-    segment$summaries <- list(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+    empty_summary <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+    segment$summaries <- list(empty_summary)
+    segment$summaries_discounted <- list(empty_summary)
   }
   
   # Calculate segment weight
@@ -208,7 +243,7 @@ evaluate_psm_endpoint <- function(endpoint_def, endpoint_name, namespace) {
 #'
 #' @return A list containing trace matrix and values matrix
 #' @keywords internal
-calculate_psm_trace_and_values <- function(survival_distributions, uneval_values, namespace, value_names, state_names, n_cycles) {
+calculate_psm_trace_and_values <- function(survival_distributions, uneval_values, namespace, value_names, state_names, n_cycles, half_cycle_method = "start") {
   
   # Validate we have exactly 3 states
   if (length(state_names) != 3) {
@@ -275,14 +310,15 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   
   # Calculate values
   values_matrix <- calculate_psm_values(
-    uneval_values, 
+    uneval_values,
     namespace,
     trace,
     trans_pfs_to_pp,
     trans_pp_to_dead,
     value_names,
     state_names,
-    n_cycles
+    n_cycles,
+    half_cycle_method
   )
   
   list(trace = trace, values = values_matrix)
@@ -358,7 +394,7 @@ convert_cycles_to_time_unit <- function(cycles, time_unit, namespace) {
   result
 }
 
-calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles) {
+calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles, half_cycle_method = "start") {
   
   # Initialize values matrix
   values_matrix <- matrix(0, nrow = n_cycles, ncol = length(value_names))
@@ -372,7 +408,7 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
   # Evaluate values for each cycle
   for (cycle in 1:n_cycles) {
     
-    # Update namespace with current cycle
+    # Set current cycle in namespace
     cycle_ns <- clone_namespace(namespace)
     cycle_ns$df$cycle <- cycle
     cycle_ns$df$state_cycle <- cycle  # PSM doesn't use state_cycle differently
@@ -403,9 +439,28 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
         # Residency value
         state_index <- which(state_names == value_row$state)
         if (length(state_index) == 1) {
+          # Calculate state probability based on half-cycle method
+          # Note: PSM trace is 0-indexed (cycle 0 = initial, cycle 1 = first cycle, etc.)
+          state_prob <- if (half_cycle_method == "end") {
+            trace[cycle + 1, state_index]  # End of cycle
+          } else if (half_cycle_method == "life-table") {
+            if (cycle == 1) {
+              # First cycle: average of initial (row 1) and end of cycle 1 (row 2)
+              (trace[1, state_index] + trace[2, state_index]) / 2
+            } else if (cycle == n_cycles) {
+              # Last cycle: just use end probability
+              trace[cycle + 1, state_index]
+            } else {
+              # Middle cycles: average of start (row cycle) and end (row cycle+1)
+              (trace[cycle, state_index] + trace[cycle + 1, state_index]) / 2
+            }
+          } else {  # "start" or default
+            trace[cycle, state_index]  # Start of cycle
+          }
+
           # Multiply by state occupancy probability
-          values_matrix[cycle, value_name] <- values_matrix[cycle, value_name] + 
-            evaluated_value * trace[cycle, state_index]
+          values_matrix[cycle, value_name] <- values_matrix[cycle, value_name] +
+            evaluated_value * state_prob
         }
       } else if (!is.na(value_row$state) && !is.na(value_row$destination)) {
         # Transitional value

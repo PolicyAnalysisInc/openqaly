@@ -16,10 +16,9 @@ create_namespace <- function(model, segment) {
 
 #' Define a Namespace Object
 #'
-#' Creates a new namespace object which can be used
-#' to store evaluated parameters.  A namespace object
-#' combines a data frame for storing vector parameters
-#' with an environment for storing non-vector parameters.
+#' A namespace object stores evaluated parameters by combining
+#' a data frame for vector parameters with an environment
+#' for non-vector parameters.
 #'
 #' @param df A data frame of pre-existing parameter values
 #' @param env An environment of pre-existing values
@@ -77,7 +76,7 @@ get_names <- function(ns, type = "all", keywords = T) {
     stop("Invalid value for argument 'type'")
   }
 
-  # Remove keywords
+  # Exclude keywords if requested
   if (!keywords) {
     res <- setdiff(res, heRo_keywords)
   }
@@ -207,11 +206,11 @@ update_segment_ns <- function(x, newdata) {
   # Clone the namespace
   new_ns <- clone_namespace(x)
   
-  # Remove existing vars from df
+  # Clear overlapping column names from dataframe
   names_to_clear <- dplyr::intersect(colnames(newdata), colnames(new_ns$df))
   new_ns$df <- dplyr::select(new_ns$df, !all_of(names_to_clear))
   
-  # Assign new values
+  # Store new data in environment
   purrr::iwalk(newdata, function(x, n) {
     assign(n, x[[1]], envir = new_ns$env)
   })
