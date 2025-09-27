@@ -111,8 +111,12 @@ test_that("checkpoint filters out dependency errors", {
 })
 
 test_that("modify_error_msg correctly formats messages", {
+  # Test old lazy_eval format (for backwards compatibility)
   expect_equal(heRomod2:::modify_error_msg("Error in eval(x$expr, data, x$env): object 'myVar' not found"), 'Variable "myVar" not found.')
- 
+
+  # Test new eval_tidy format
+  expect_equal(heRomod2:::modify_error_msg("Error: object 'myVar' not found"), 'Variable "myVar" not found.')
+
   expect_equal(heRomod2:::modify_error_msg("Error: Some other error occurred"), "Some other error occurred")
   expect_equal(heRomod2:::modify_error_msg("Just a string"), "Just a string")
 })

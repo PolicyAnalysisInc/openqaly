@@ -9,8 +9,7 @@ Description: An R package for creating and running reproducible and
   creating using a consistent tabular structure which defines features
   of the model such as the strategies being compared and the health
   states between which patients transit.
-Imports: 
-    lazyeval,
+Imports:
     dplyr,
     magrittr,
     future,
@@ -21,7 +20,7 @@ Imports:
     stringr,
     readr,
     openxlsx,
-    rlang,
+    rlang (>= 1.1.0),
     purrr,
     glue,
     ggplot2,

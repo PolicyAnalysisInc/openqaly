@@ -143,7 +143,7 @@ sort_variables <- function(x, extra_vars = NULL) {
         )
         
         # Extract any decision tree probability calls
-        p_calls <- extract_func_calls(x$formula[[which(x$name == current_var)]]$lazy$expr, 'p')
+        p_calls <- extract_func_calls(quo_get_expr(x$formula[[which(x$name == current_var)]]$quo), 'p')
         tree_deps <- map(p_calls, function(y) {
           referenced_nodes <- all_vars[[y$arg2]]$node_depends %>%
             keep(~any(.$tags %in% y$arg1)) %>%

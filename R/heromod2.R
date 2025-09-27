@@ -8,7 +8,7 @@
 #' @importFrom jsonlite fromJSON toJSON asJSON
 #' @importFrom tibble tibble as_tibble
 #' @importFrom glue glue
-#' @importFrom lazyeval lazy lazy_eval interp as.lazy as.lazy_dots
+#' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env new_quosure enexpr expr is_call call2 env global_env empty_env
 #' @importFrom rlang .data sym
 #' @importFrom readr read_csv
 #' @importFrom utils capture.output
