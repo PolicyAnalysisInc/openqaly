@@ -157,7 +157,7 @@ as.heRoFormula.list <- function(x) {
   # Check for essential fields then set class property.
   props_to_check <- c('text', 'depends', 'quo')
   for (prop in props_to_check) {
-    if (is.null(x[[prop]])) stop(paste0('Property "', prop, '" was missing.'))
+    if (is.null(x[[prop]])) stop(glue('Property "{prop}" was missing.'))
   }
   class(x) <- c('heRoFormula', 'list')
   x

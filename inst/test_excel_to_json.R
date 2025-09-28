@@ -36,7 +36,7 @@ components <- c("settings", "strategies", "groups", "states", "transitions", "va
 for (comp in components) {
   orig_rows <- if (!is.null(model[[comp]]) && is.data.frame(model[[comp]])) nrow(model[[comp]]) else 0
   json_rows <- if (!is.null(model_from_json[[comp]]) && is.data.frame(model_from_json[[comp]])) nrow(model_from_json[[comp]]) else 0
-  cat(sprintf("%-15s: original = %3d rows, json = %3d rows\n", comp, orig_rows, json_rows))
+  cat(glue("{format(comp, width=15, justify='left')}: original = {format(orig_rows, width=3)} rows, json = {format(json_rows, width=3)} rows\n"))
 }
 
 cat("\nConversion test completed!\n")

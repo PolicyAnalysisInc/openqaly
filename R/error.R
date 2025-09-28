@@ -1,4 +1,4 @@
-# --- Internal Environment for Error State ---
+# Internal error state environment
 .hero_error_env <- new.env(parent = emptyenv())
 .hero_error_env$errors <- list()
 
@@ -19,7 +19,7 @@ get_accumulated_errors <- function() {
   .hero_error_env$errors
 }
 
-# --- Core Error Definitions (Unchanged) ---
+# Core error definitions
 define_error <- function(x) {
   define_object(
     message = modify_error_msg(as.character(x)),
@@ -53,7 +53,7 @@ modify_error_msg <- function(x) {
      if (length(func_match) > 0) {
        func_name <- gsub('\\"', '', func_match)
        context_match <- regmatches(original_x, regexpr("^Error in ([^:]+):", original_x))
-       context_hint <- if(length(context_match) > 1) paste0(" in expression '", context_match[2], "'") else ""
+       context_hint <- if(length(context_match) > 1) glue(" in expression '{context_match[2]}'") else ""
        return(glue('Evaluation failed: Undefined variable likely used with `{func_name}`{context_hint}.')) # Return formatted message
      }
      # If func_match has length 0, parsing failed.
@@ -93,7 +93,7 @@ define_dependency_error <- function(msg) {
 }
 
 
-# --- Error Accumulation and Checkpoint Logic (Revised) ---
+# Error accumulation and checkpoint logic
 
 #' Accumulate a heRo_error (INTERNAL).
 #'
@@ -115,7 +115,7 @@ accumulate_hero_error <- function(error_obj, context_msg) {
   invisible(NULL)
 }
 
-#' Format and throw collected errors (INTERNAL HELPER - Unchanged Logic).
+#' Format and throw collected errors (INTERNAL HELPER).
 #'
 #' Takes a list of error entries, formats them into a single markdown table,
 #' and calls `stop()`. Filters out dependency errors before stopping.
@@ -164,7 +164,7 @@ format_and_throw_errors <- function(error_list) {
     # Combine components into final message
     prefix <- "Multiple errors found during evaluation:"
     table_string <- paste(header, separator, paste(rows, collapse = "\n"), sep = "\n")
-    final_message <- paste0(prefix, "\n\n", table_string)
+    final_message <- glue("{prefix}\n\n{table_string}")
     
     stop(final_message, call. = FALSE)
   }

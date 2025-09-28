@@ -90,7 +90,6 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
 }
 
 # Sort a dataframe of variables based on dependency tree
-# CONVERT_TO_CPP
 sort_variables <- function(x, extra_vars = NULL) {
 
   # Deal with extra vars if given
@@ -100,7 +99,6 @@ sort_variables <- function(x, extra_vars = NULL) {
     extras <- set_names(extra_vars$formula, extra_vars$name)
   }
   
-  # Extract variable names
   par_names <- x$name
   
   # Extract the variable names referenced in each variable's
@@ -111,28 +109,22 @@ sort_variables <- function(x, extra_vars = NULL) {
     }) %>%
     set_names(x$name)
   
-  # Define the lists of ordered and unordered variables
   ordered <- c()
   unordered <- var_list
   
   # While we still have variables in the unordered list...
   while (length(unordered) > 0) {
     
-    # Define a vector which will hold the indices of each
-    # variable to be moved to the ordered list
     to_remove <- c()
     
-    # Loop through each unordered variable
     for (i in seq_len(length(unordered))) {
       
       # If all the variables its formula references are in the ordered
       # list then it can be added to ordered list.
       if (all(unordered[[i]] %in% ordered)) {
         
-        # Append it to the list of ordered variables
         ordered <- c(ordered, names(unordered)[i])
         
-        # Get current variable
         current_var <-  names(unordered)[i]
         
         # Make a named list of all variables
@@ -183,7 +175,6 @@ sort_variables <- function(x, extra_vars = NULL) {
     }
   }
   
-  # Return variables in sorted order
   as_tibble(x[order(factor(x$name, levels = ordered)), ])
 }
 
@@ -229,7 +220,7 @@ check_variables_df <- function(x, context = "Variables") {
   if (any(dupe)) {
     dupe_names <- unique(x$name[dupe])
     dupe_msg <- err_name_string(dupe_names)
-    error_msg <- paste0(context, ' definition contained duplicate names for variables: ', dupe_msg, '.')
+    error_msg <- glue("{context} definition contained duplicate names for variables: {dupe_msg}.")
   }
   
   # Check that variable names are valid

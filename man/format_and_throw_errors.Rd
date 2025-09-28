@@ -2,7 +2,7 @@
 % Please edit documentation in R/error.R
 \name{format_and_throw_errors}
 \alias{format_and_throw_errors}
-\title{Format and throw collected errors (INTERNAL HELPER - Unchanged Logic).}
+\title{Format and throw collected errors (INTERNAL HELPER).}
 \usage{
 format_and_throw_errors(error_list)
 }

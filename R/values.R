@@ -18,8 +18,6 @@ parse_values <- function(x, states, extra_vars) {
       formula = list(), # Formulas are parsed to heRoFormula objects, so list() for empty case
       type = character(0),
       max_st = numeric(0),
-      # Add other columns that `sort_variables` might consistently produce on an empty input
-      # or that as.values expects. For now, these are the main ones.
       .rows = 0
     )
     return(as.values(empty_parsed_values)) # Assuming as.values can handle this structure
@@ -38,7 +36,7 @@ parse_values <- function(x, states, extra_vars) {
     dup_values <- duplicates %>%
       select(name, state, destination) %>%
       distinct() %>%
-      mutate(combined = paste0("name: ", name, ", state: ", state, ", destination: ", destination))
+      mutate(combined = glue("name: {name}, state: {state}, destination: {destination}"))
     
     stop("Duplicate values found. Values must be unique by name, state, and destination combination:\n",
          paste(dup_values$combined, collapse = "\n"))
@@ -110,7 +108,7 @@ format_ranges_for_eval_values <- function(numbers) {
       if (current_block_start == unique_sorted_numbers[i]) {
         range_strings <- c(range_strings, as.character(current_block_start))
       } else {
-        range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+        range_strings <- c(range_strings, glue("{current_block_start}-{unique_sorted_numbers[i]}"))
       }
       if (!is_last_element && is_discontinuity) {
         current_block_start <- unique_sorted_numbers[i+1]
@@ -155,7 +153,7 @@ format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_p
   # The prompt did not specify truncation for NA value errors, unlike transition errors.
   # We'll not truncate for now, but this could be added if needed.
 
-  paste0(message_prefix, "\n\n", table_string)
+  glue("{message_prefix}\n\n{table_string}")
 }
 
 #' @export
@@ -193,7 +191,6 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       state_ns <- eval_variables(x_group, clone_namespace(ns), FALSE)
       state_res <- state_ns$df # This contains cycle, state_cycle, and evaluated variable columns
       
-      # Add group's state to state_res for reference in NA reporting if needed (though x_group has it)
 
       # Determine which of the model's value_names are present as columns in state_res
       # These are the names of the values defined in this x_group
@@ -225,7 +222,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       na_report_for_this_group <- dplyr::bind_rows(current_group_na_details_list)
 
       # --- Resume original logic for processing state_res ---
-      state_res$state <- x_group$state[1] # Add the group's state to state_res
+      state_res$state <- x_group$state[1]
       
       value_names_in_df <- intersect(colnames(state_res), value_names) # Re-calc based on state_res with 'state'
       value_names_in_env <- intersect(names(state_ns$env), value_names)

@@ -1,20 +1,17 @@
-#' @import dplyr
-#' @import furrr
-#' @import future
-#' @import tidyr
-#' @import purrr tidygraph ggraph ggplot2
-#' @importFrom stringr str_split_fixed
-#' @importFrom openxlsx readWorkbook getSheetNames
-#' @importFrom jsonlite fromJSON toJSON asJSON
-#' @importFrom tibble tibble as_tibble
-#' @importFrom glue glue
-#' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env new_quosure enexpr expr is_call call2 env global_env empty_env
-#' @importFrom rlang .data sym
-#' @importFrom readr read_csv
-#' @importFrom utils capture.output
-#' @importFrom tidyr separate_rows pivot_longer
+
+#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env
+#' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
+#' @import purrr tidygraph ggraph ggplot2 future dplyr furrr tidyr
 #' @importFrom dplyr select mutate group_by summarize left_join
+#' @importFrom openxlsx readWorkbook getSheetNames
+#' @importFrom tidyr separate_rows pivot_longer
+#' @importFrom jsonlite fromJSON toJSON asJSON
 #' @importFrom tibble rownames_to_column
+#' @importFrom stringr str_split_fixed
+#' @importFrom tibble tibble as_tibble
+#' @importFrom utils capture.output
+#' @importFrom readr read_csv
+#' @importFrom glue glue
 NULL
 
 ## usethis namespace: start

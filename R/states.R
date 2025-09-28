@@ -27,7 +27,7 @@ parse_states <- function(states, cycle_length_days, days_per_year) {
       max_state_time = ceiling(
         ceiling(days_per_unit(state_cycle_limit_unit, cycle_length_days, days_per_year) * state_cycle_limit / cycle_length_days)
       ),
-      state_group = ifelse(is.na(state_group), paste0('.', name), state_group),
+      state_group = ifelse(is.na(state_group), glue(".{name}"), state_group),
       share_state_time = ifelse(is.na(share_state_time), F, share_state_time)
     ) %>%
     select(
@@ -110,5 +110,5 @@ as.states.data.frame <- function(x) {
 }
 
 expand_state_name <- function(name, index) {
-  paste0(name, '.', index)
+  glue("{name}.{index}")
 }

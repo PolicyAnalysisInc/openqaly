@@ -6,7 +6,7 @@ parse_psm <- function(model) {
     required_cols <- c("endpoint", "time_unit", "formula")
     missing_cols <- setdiff(required_cols, colnames(model$transitions))
     if (length(missing_cols) > 0) {
-      stop(paste0("PSM transitions missing required columns: ", paste(missing_cols, collapse = ", ")))
+      stop(glue("PSM transitions missing required columns: {paste(missing_cols, collapse = ', ')}"))
     }
   }
   

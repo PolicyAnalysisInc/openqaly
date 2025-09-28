@@ -127,7 +127,6 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
     }) %>%
     bind_rows()
   
-  # Return the sampled variables by segment & simulation
   seg_samples
 }
 

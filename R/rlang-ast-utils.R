@@ -1,7 +1,7 @@
-#' AST Rewriting Utilities for rlang Migration
+#' AST Rewriting Utilities
 #'
 #' This file contains utilities for rewriting abstract syntax trees (AST)
-#' as part of the migration from lazyeval to rlang.
+#' to transform expressions for evaluation.
 #'
 #' @keywords internal
 

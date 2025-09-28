@@ -74,14 +74,14 @@ convert_settings_from_df <- function(settings_df) {
             settings[["reduce_state_cycle"]] <- FALSE
         } else {
             # Handle unexpected string values, maybe default to FALSE or raise warning/error
-            warning(paste("Unexpected string value for reduce_state_cycle:", val, "- defaulting to FALSE"))
+            warning(glue("Unexpected string value for reduce_state_cycle: {val} - defaulting to FALSE"))
             settings[["reduce_state_cycle"]] <- FALSE 
         }
     } else if (is.numeric(val)) {
         settings[["reduce_state_cycle"]] <- as.logical(val)
     } else if (!is.logical(val)) {
         # Handle other non-logical types if necessary, default to FALSE
-         warning(paste("Unexpected type for reduce_state_cycle:", class(val), "- defaulting to FALSE"))
+         warning(glue("Unexpected type for reduce_state_cycle: {class(val)} - defaulting to FALSE"))
         settings[["reduce_state_cycle"]] <- FALSE
     }
     # If it's already logical, it remains unchanged.
@@ -95,11 +95,11 @@ convert_settings_from_df <- function(settings_df) {
       if (val_lower %in% c("start", "end", "life-table")) {
         settings[["half_cycle_method"]] <- val_lower
       } else {
-        warning(paste("Invalid half_cycle_method:", val, "- must be 'start', 'end', or 'life-table'. Defaulting to 'start'"))
+        warning(glue("Invalid half_cycle_method: {val} - must be 'start', 'end', or 'life-table'. Defaulting to 'start'"))
         settings[["half_cycle_method"]] <- "start"
       }
     } else {
-      warning(paste("half_cycle_method must be a string, got:", class(val), "- defaulting to 'start'"))
+      warning(glue("half_cycle_method must be a string, got: {class(val)} - defaulting to 'start'"))
       settings[["half_cycle_method"]] <- "start"
     }
   } else {
@@ -471,7 +471,7 @@ check_tbl <- function(df, spec, context) {
 }
 
 convert_to_type <- function(x, type) {
-  func <- eval(parse(text = paste0('as.', type)))
+  func <- eval(parse(text = glue('as.{type}')))
   func(x)
 }
 
@@ -629,7 +629,7 @@ read_model_json <- function(json_string) {
       model$transitions <- as.data.frame(model$transitions, stringsAsFactors = FALSE)
     }
 
-    # Now rename the columns
+    # Rename columns for R compatibility
     if ("from_state" %in% colnames(model$transitions)) {
       colnames(model$transitions)[colnames(model$transitions) == "from_state"] <- "from"
     }
@@ -931,7 +931,7 @@ write_model_json <- function(model) {
         })
         json_model[[df_name]] <- df_copy
       } else {
-        warning(paste0("Skipping ", df_name, " - not a data frame"))
+        warning(glue("Skipping {df_name} - not a data frame"))
       }
     }
   }

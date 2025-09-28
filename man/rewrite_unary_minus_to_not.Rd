@@ -2,7 +2,7 @@
 % Please edit documentation in R/rlang-ast-utils.R
 \name{rewrite_unary_minus_to_not}
 \alias{rewrite_unary_minus_to_not}
-\title{AST Rewriting Utilities for rlang Migration}
+\title{AST Rewriting Utilities}
 \usage{
 rewrite_unary_minus_to_not(expr)
 }
@@ -14,7 +14,7 @@ The rewritten expression with unary minus replaced by not()
 }
 \description{
 This file contains utilities for rewriting abstract syntax trees (AST)
-as part of the migration from lazyeval to rlang.
+to transform expressions for evaluation.
 }
 \examples{
 \dontrun{

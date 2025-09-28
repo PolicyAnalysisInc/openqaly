@@ -112,9 +112,7 @@ aggregate_segments <- function(segments, parsed_model) {
     na_weights <- is.na(strat_segments$weight)
     if (any(na_weights)) {
       groups_with_na <- unique(strat_segments$group[na_weights])
-      warning(paste0("Groups with invalid weights in strategy '", strat, "': ", 
-                     paste(groups_with_na, collapse = ", "), 
-                     ". Using equal weights for all groups."))
+      warning(glue("Groups with invalid weights in strategy '{strat}': {paste(groups_with_na, collapse = ', ')}. Using equal weights for all groups."))
       # If any weight is NA, use equal weights for all groups in this strategy
       strat_segments$weight <- 1
     }
@@ -123,7 +121,7 @@ aggregate_segments <- function(segments, parsed_model) {
     total_weight <- sum(strat_segments$weight)
     
     if (total_weight == 0) {
-      warning(paste0("Total weight for strategy '", strat, "' is 0. Using equal weights."))
+      warning(glue("Total weight for strategy '{strat}' is 0. Using equal weights."))
       total_weight <- nrow(strat_segments)
       strat_segments$weight <- 1
     }
@@ -147,7 +145,7 @@ aggregate_segments <- function(segments, parsed_model) {
       group = "_aggregated",  # Special marker for aggregated results
       weight = total_weight,  # Total weight for the strategy
       collapsed_trace = list(aggregated_trace),
-      trace_and_values = list(aggregated_values),  # Now contains both values and values_discounted
+      trace_and_values = list(aggregated_values),  # Contains both values and values_discounted
       summaries = list(aggregated_summaries$summaries),
       summaries_discounted = list(aggregated_summaries$summaries_discounted)
     )
@@ -311,7 +309,6 @@ aggregate_summaries <- function(segments) {
         return(tibble::tibble(summary = character(), value = character(), amount = numeric(), weight = numeric()))
       }
 
-      # Add weight to each row
       summary_df %>%
         mutate(weight = weight)
     })

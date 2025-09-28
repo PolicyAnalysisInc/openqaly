@@ -3,7 +3,6 @@ context("Error Checkpoints")
 library(testthat)
 library(tibble)
 library(dplyr)
-library(glue)
 library(heRomod2) # Ensure package functions are loaded
 
 # Define a minimal segment for namespace creation

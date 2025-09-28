@@ -342,7 +342,6 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
 calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map, half_cycle_method = "start") {
 
-  # --- Helper Function Definition ---
   format_ranges <- function(numbers) {
     if (is.null(numbers) || length(numbers) == 0) {
       return("N/A")
@@ -368,7 +367,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
         if (current_block_start == unique_sorted_numbers[i]) {
           range_strings <- c(range_strings, as.character(current_block_start))
         } else {
-          range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+          range_strings <- c(range_strings, glue("{current_block_start}-{unique_sorted_numbers[i]}"))
         }
         if (!is_last_element && is_discontinuity) {
           current_block_start <- unique_sorted_numbers[i+1]
@@ -377,7 +376,6 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     }
     return(paste(range_strings, collapse = ", "))
   }
-  # --- End Helper Function Definition ---
 
   # Determine number of cycles
   n_cycles <- max(transitions[,1])
@@ -407,14 +405,14 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
   if (!is.null(errors_df) && nrow(errors_df) > 0 && ncol(errors_df) > 0 && 
       !is.null(transitions) && nrow(transitions) == nrow(errors_df)) { 
 
-    # Add 'cycle', 'from' (expanded state index), and 'to' (expanded state index) from the input C++ transitions matrix
+    # Include 'cycle', 'from' (expanded state index), and 'to' (expanded state index) from the input C++ transitions matrix
     # The 'transitions' variable here is the input to this R function, which was expanded_trans_matrix
     # It should have columns named "cycle", "from", "to" (1-based index)
     errors_df <- dplyr::bind_cols(
       dplyr::tibble(
         cycle = transitions[, "cycle"], 
         from_idx = transitions[, "from"], # Renamed to from_idx to avoid clash with 'from' function
-        to_idx = transitions[, "to"]      # Added to_idx
+        to_idx = transitions[, "to"]
       ),
       errors_df
     )
@@ -428,11 +426,11 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     if (all(expected_error_cols %in% colnames(errors_df))) {
 
       # --- 1. Process Raw Errors ---
-      # Add expanded names using indices
+      # Map indices to expanded state names
       errors_df <- errors_df %>%
         dplyr::mutate(
           expanded_from_state_name = state_names[from_idx],
-          expanded_to_state_name = state_names[to_idx] # Added expanded_to_state_name
+          expanded_to_state_name = state_names[to_idx]
         )
 
       # Parse collapsed name and state time for FROM state
@@ -479,7 +477,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
             error_raw == "probGreaterThanOne" ~ "Transition probability greater than 1",
             error_raw == "sumNotEqualOne" ~ "Transition probabilities for state do not sum to 1",
             error_raw == "NaOrNaN" ~ "NA or NaN value found in transition probabilities",
-            TRUE ~ paste("Unknown Error Type:", error_raw)
+            TRUE ~ glue("Unknown Error Type: {error_raw}")
           ),
           # Determine final "To State" based on error type
           # For state-level errors (complement, sumNotEqualOne), "To State" is not applicable
@@ -496,7 +494,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
             cycle, 
             collapsed_from_state_name, 
             from_state_time, 
-            final_to_state, # Added
+            final_to_state,
             error_type, 
             is_expanded
         ) %>%
@@ -518,7 +516,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
           dplyr::mutate(
             from_state_time_range = ifelse(is_expanded, sapply(all_from_state_times, format_ranges), "N/A")
           ) %>%
-          dplyr::select(-all_from_state_times) # Remove the temporary list column
+          dplyr::select(-all_from_state_times)
 
         # --- 3. Consolidate Cycle Ranges ---
         final_consolidated_errors <- cycle_st_errors %>%
@@ -540,7 +538,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
           dplyr::select(
             `From State` = collapsed_from_state_name,
             `State Time` = from_state_time_range, # Renamed
-            `To State` = final_to_state,                 # Added
+            `To State` = final_to_state,
             `Cycles` = cycle_range,
             `Error Message` = error_type,
             is_expanded # Keep for 'State Time' column inclusion logic
@@ -557,7 +555,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
 
           if (total_errors > 40) {
             table_data_processed <- utils::head(table_data_processed, 40)
-            trunc_msg <- paste0("\n... (showing top 40 of ", total_errors, " errors)")
+            trunc_msg <- glue("\n... (showing top 40 of {total_errors} errors)")
           }
 
           # Check if 'State Time' Column is Needed (based on the FROM state's expansion)
@@ -583,7 +581,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
           })
 
           table_string <- paste(c(header, separator, rows), collapse = "\n")
-          console_message <- paste0("Transition probability errors detected:\n\n", table_string, trunc_msg)
+          console_message <- glue("Transition probability errors detected:\n\n{table_string}{trunc_msg}")
           
           error_mode <- getOption("heRomod2.error_mode", default = "warning")
           if (error_mode == "checkpoint") {
@@ -748,7 +746,7 @@ parse_trans_markov <- function(x, states, vars) {
   
   # Construct the transitions object
   x$formula <- map(x$formula, as.heRoFormula)
-  x$name <- paste0(x$from, '→', x$to)
+  x$name <- glue("{x$from}→{x$to}")
 
   res <- sort_variables(x, vars) %>%
     select(name, from, to, formula) %>%
@@ -804,7 +802,7 @@ check_trans_markov <- function(x, state_names) {
   }
   
   # Check that no transitions are duplicated
-  trans_names <- paste0(x$from, '→', x$to)
+  trans_names <- glue("{x$from}→{x$to}")
   dupe <- duplicated(trans_names)
   if (any(dupe)) {
     dupe_names <- unique(trans_names[dupe])
@@ -818,7 +816,7 @@ check_trans_markov <- function(x, state_names) {
   blank_index <- which(any(x$formula == '' | is.na(x$formula)))
   if (length(blank_index) > 0) {
     plural <- if (length(blank_index) > 1) 's' else ''
-    blank_names <- paste0(x$from[blank_index], '→', x$to[blank_index])
+    blank_names <- glue("{x$from[blank_index]}→{x$to[blank_index]}")
     blank_msg <- paste(blank_names, collapse = ', ')
     error_msg <- glue('Transitions definition contained blank formula for transitions{plural}: {blank_msg}.')
     stop(error_msg, call. = F)
@@ -855,7 +853,7 @@ format_ranges <- function(numbers) {
       if (current_block_start == unique_sorted_numbers[i]) {
         range_strings <- c(range_strings, as.character(current_block_start))
       } else {
-        range_strings <- c(range_strings, paste0(current_block_start, "-", unique_sorted_numbers[i]))
+        range_strings <- c(range_strings, glue("{current_block_start}-{unique_sorted_numbers[i]}"))
       }
       if (!is_last_element && is_discontinuity) {
         current_block_start <- unique_sorted_numbers[i+1]
@@ -868,7 +866,7 @@ format_ranges <- function(numbers) {
 limit_state_time <- function(df, state_time_limits) {
   # Join data with state time limit
   left_join(df, state_time_limits, by = "state") %>%
-    # Remove any entries that exceed limit
+    # Filter to state cycle limit
     filter(state_cycle <= st_limit)
 }
 
@@ -1013,7 +1011,7 @@ calc_compl_probs <- function(mat) {
       min_cycle <- min(problem_cycles)
       max_cycle <- max(problem_cycles)
       if (all(problem_cycles == min_cycle:max_cycle)) {
-        problem_cycles = paste0(min_cycle, '-', max_cycle)
+        problem_cycles = glue("{min_cycle}-{max_cycle}")
       }
       data.frame(
         state = colnames(problem_states)[i],
@@ -1103,7 +1101,6 @@ calculate_summaries <- function(parsed_summaries, values_df) {
 
   # Check if values_df has columns to pivot (besides a potential 'cycle' column)
   if (ncol(values_df) > 0) {
-    # Add rownames as 'cycle' column if it doesn't exist and there are rows
     # cppMarkovTransitionsAndTrace already adds rownames "0" to nCycles for trace,
     # and "1" to nCycles for value matrices.
     # For safety, ensure 'cycle' exists if we expect it or handle its absence.
@@ -1158,7 +1155,7 @@ parse_summaries <- function(summaries, model_values) {
   required_cols <- c("name", "display_name", "description", "values")
   missing_cols <- setdiff(required_cols, colnames(summaries))
   if (length(missing_cols) > 0) {
-    stop(paste0("Summaries table is missing required columns: ", paste(missing_cols, collapse = ", ")))
+    stop(glue("Summaries table is missing required columns: {paste(missing_cols, collapse = ', ')}"))
   }
   
   # Parse the comma-separated values in the 'values' column
@@ -1184,7 +1181,7 @@ parse_summaries <- function(summaries, model_values) {
                       paste(unknown_values, collapse = ", ")))
       }
     } else {
-      warning(paste0("Summaries reference values (e.g., '", all_referenced_values_in_summaries[1] ,"'), but no values are defined in the model."))
+      warning(glue("Summaries reference values (e.g., '{all_referenced_values_in_summaries[1]}'), but no values are defined in the model."))
     }
   }
   

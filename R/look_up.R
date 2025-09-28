@@ -53,7 +53,7 @@
 #' @export
 look_up <- function(data, ..., bin = FALSE, value = "value") {
 
-  # --- Argument Pre-checks (Before Evaluation) ---
+  # Argument validation
   call <- match.call(expand.dots = FALSE)
   dots <- call$...
 
@@ -84,15 +84,13 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
       }
     }
   }
-  # --- End Argument Pre-checks ---
 
-  # Handle case where this may be a vector by using first el
   value <- value[1]
 
   if (!inherits(data, "data.frame"))
     stop("'data' must be a data.frame")
 
-  # Now evaluate the ... arguments safely
+  # Evaluate the ... arguments
   list_specs <- list(...)
   
   data <- clean_factors(data)
@@ -104,9 +102,8 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
     clean_factors
 
   if (any(pb <- !c(names(df_vars), value) %in% names(data))) {
-    stop(sprintf(
-      "Names passed to 'look_up()' not found in 'data': %s.",
-      paste(c(names(df_vars), value)[pb], collapse = ", ")
+    stop(glue(
+      "Names passed to 'look_up()' not found in 'data': {paste(c(names(df_vars), value)[pb], collapse = ', ')}."
     ))
   }
 
@@ -117,16 +114,14 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   } else if (is.character(bin)) {
     if (any(pb <- !bin %in% names(df_vars))) {
-      stop(sprintf(
-        "Names in 'bin' not found in source data: %s.",
-        paste(bin[pb], collapse = ", ")
+      stop(glue(
+        "Names in 'bin' not found in source data: {paste(bin[pb], collapse = ', ')}."
       ))
     }
 
     if (any(pb <- !bin %in% num_vars)) {
-      stop(sprintf(
-        "Some variables in 'bin' are not numeric in the selection data: %s.",
-        paste(bin[pb], collapse = ", ")
+      stop(glue(
+        "Some variables in 'bin' are not numeric in the selection data: {paste(bin[pb], collapse = ', ')}."
       ))
     }
   } else {
@@ -137,9 +132,8 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
     pb_bin_src <- bin[unlist(Map(
       function(x) !is.numeric(x), data[bin]))]
     if (length(pb_bin_src)) {
-      stop(sprintf(
-        "Some variables in 'bin' are not numeric in the source data: %s.",
-        paste(pb_bin_src, collapse = ", ")
+      stop(glue(
+        "Some variables in 'bin' are not numeric in the source data: {paste(pb_bin_src, collapse = ', ')}."
       ))
     }
     with_infinite <- bin[sapply(data[bin], function(x){any(is.infinite(x))})]
@@ -162,9 +156,8 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   # do this test after binning
   if (any(pb <- duplicated(data[names(df_vars)]))) {
-    stop(sprintf(
-      "Some rows in 'data' are duplicates: %s.",
-      paste(which(pb), collapse = ", ")
+    stop(glue(
+      "Some rows in 'data' are duplicates: {paste(which(pb), collapse = ', ')}."
     ))
   }
   res <- suppressMessages(
