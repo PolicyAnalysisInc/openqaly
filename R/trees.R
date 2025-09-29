@@ -1,9 +1,10 @@
 #' Define Decision Trees
 parse_tree_vars <- function(trees) {
-  
+
   # Make and return a variables list containing the decision trees
-  if (!is.null(trees)) {
-    
+  # Check for NULL or empty dataframe
+  if (!is.null(trees) && nrow(trees) > 0) {
+
     # Check that tree specification is valid
     check_trees_df(trees)
     

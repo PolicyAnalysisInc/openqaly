@@ -3,9 +3,40 @@ read_model <- function(path) {
 
   model <- read_workbook(file.path(path, 'model.xlsx'))
 
-  # Load the values spec
-  values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
-    readr::read_csv(col_types = 'clccc', progress = FALSE)
+  # Load all specs
+  model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
+    list.files() %>%
+    purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
+    purrr::map(function(x) {
+      suppressWarnings(readr::read_csv(
+        system.file('model_input_specs', x, package = 'heRomod2'),
+        col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
+        progress = FALSE
+      ))
+    })
+
+  states_spec <- model_input_specs$states
+  strategies_spec <- model_input_specs$strategies
+  groups_spec <- model_input_specs$groups
+  values_spec <- model_input_specs$values
+
+  # Ensure model$strategies has correct structure AND types
+  if (!is.null(model$strategies) && nrow(model$strategies) > 0) {
+    model$strategies <- tibble::as_tibble(model$strategies)
+    model$strategies <- check_tbl(model$strategies, strategies_spec, 'Strategies')
+  }
+
+  # Ensure model$groups has correct structure AND types
+  if (!is.null(model$groups) && nrow(model$groups) > 0) {
+    model$groups <- tibble::as_tibble(model$groups)
+    model$groups <- check_tbl(model$groups, groups_spec, 'Groups')
+  }
+
+  # Ensure model$states has correct structure AND types
+  if (!is.null(model$states) && nrow(model$states) > 0) {
+    model$states <- tibble::as_tibble(model$states)
+    model$states <- check_tbl(model$states, states_spec, 'States')
+  }
 
   # Ensure model$values has correct structure AND types
   if (is.null(model$values) || nrow(model$values) == 0) {
@@ -174,7 +205,7 @@ run_scripts <- function(scripts, env) {
 
 
 get_segments <- function(model) {
-  
+
   if (nrow(model$groups) == 0) {
     model$groups <- tibble::tibble(
       name = 'all',
@@ -184,10 +215,25 @@ get_segments <- function(model) {
       enabled = 1
     )
   }
-  
+
+  # Filter to only enabled strategies and groups
+  # Treat missing enabled column as enabled=1 (for backward compatibility)
+  enabled_strategies <- model$strategies
+  if ("enabled" %in% colnames(model$strategies)) {
+    enabled_strategies <- enabled_strategies %>%
+      filter(is.na(enabled) | enabled == 1 | enabled == TRUE | enabled != 0)
+  }
+
+  enabled_groups <- model$groups
+  if ("enabled" %in% colnames(model$groups)) {
+    enabled_groups <- enabled_groups %>%
+      filter(is.na(enabled) | enabled == 1 | enabled == TRUE | enabled != 0)
+  }
+
+  # Create segments only from enabled strategy × group combinations
   expand.grid(
-    group = model$groups$name,
-    strategy =  model$strategies$name,
+    group = enabled_groups$name,
+    strategy = enabled_strategies$name,
     stringsAsFactors = FALSE
   )
 }
@@ -445,6 +491,7 @@ check_tbl <- function(df, spec, context) {
     required <- spec$required[i]
     default <- spec$default[i]
     fallback <- spec$fallback[i]
+    type <- spec$type[i]
     values <- df[[col_name]]
 
     # Check for missing data
@@ -463,6 +510,9 @@ check_tbl <- function(df, spec, context) {
         # If a default is specified, use it
         df[[col_name]][miss_data] <- default
       }
+
+      # Re-apply type conversion after defaults to ensure correct type
+      df[[col_name]] <- convert_to_type(df[[col_name]], type)
     }
   }
   
@@ -641,9 +691,19 @@ read_model_json <- function(json_string) {
   # Validate model structure and data types
   model <- validate_model_data(model)
 
-  # Load the values spec
-  values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
-    readr::read_csv(col_types = 'clccc', progress = FALSE)
+  # Load all specs
+  model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
+    list.files() %>%
+    purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
+    purrr::map(function(x) {
+      suppressWarnings(readr::read_csv(
+        system.file('model_input_specs', x, package = 'heRomod2'),
+        col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
+        progress = FALSE
+      ))
+    })
+
+  values_spec <- model_input_specs$values
 
   # Process tables - convert to named list of data frames
   if (is.null(model$tables) ||
@@ -708,6 +768,20 @@ read_model_json <- function(json_string) {
 #' @param model The model list parsed from JSON
 #' @return The model with properly formatted data frames
 convert_json_dataframes <- function(model, values_spec = NULL) {
+  # Load all specs if not provided
+  if (is.null(values_spec)) {
+    model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
+      list.files() %>%
+      purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
+      purrr::map(function(x) {
+        suppressWarnings(readr::read_csv(
+          system.file('model_input_specs', x, package = 'heRomod2'),
+          col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
+          progress = FALSE
+        ))
+      })
+  }
+
   expected_dfs <- c("strategies", "groups", "states", "transitions",
                     "values", "summaries", "variables")
 
@@ -743,27 +817,35 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
       }
       model[[df_name]] <- tibble::as_tibble(current_input)
 
-      # Use spec-based validation for values, otherwise use ensure_tibble_columns
-      if (df_name == "values" && !is.null(values_spec)) {
-        # Always apply spec, even for empty dataframes (to get correct types)
-        model[[df_name]] <- check_tbl(model[[df_name]], values_spec, 'Values')
-        # Convert empty strings to NA for state and destination columns in values
-        if (nrow(model[[df_name]]) > 0) {
+      # Use spec-based validation if spec exists for this component
+      spec_name <- df_name
+      if (df_name == "transitions" && !is_psm) {
+        # For Markov transitions, use the transitions spec
+        spec_name <- "transitions"
+      }
+
+      if (!is.null(model_input_specs) && spec_name %in% names(model_input_specs)) {
+        # Apply spec validation
+        spec <- model_input_specs[[spec_name]]
+        context_name <- paste0(toupper(substring(df_name, 1, 1)), substring(df_name, 2))
+        model[[df_name]] <- check_tbl(model[[df_name]], spec, context_name)
+
+        # Special handling for values columns
+        if (df_name == "values" && nrow(model[[df_name]]) > 0) {
           if ("state" %in% names(model[[df_name]])) {
-            # Use direct assignment to preserve character type
             model[[df_name]]$state[!is.na(model[[df_name]]$state) & model[[df_name]]$state == ""] <- NA_character_
           }
           if ("destination" %in% names(model[[df_name]])) {
-            # Use direct assignment to preserve character type
             model[[df_name]]$destination[!is.na(model[[df_name]]$destination) & model[[df_name]]$destination == ""] <- NA_character_
           }
         }
       } else {
+        # No spec available, use stub-based approach
         if (!is.null(stub_to_use)) {
           model[[df_name]] <- ensure_tibble_columns(model[[df_name]], stub_to_use)
         }
 
-        # Apply empty string to NA conversion for non-values dataframes
+        # Apply empty string to NA conversion for non-spec dataframes
         if (nrow(model[[df_name]]) > 0) {
           model[[df_name]] <- model[[df_name]] %>%
             dplyr::mutate(dplyr::across(everything(), ~ifelse(. == "", NA, .)))

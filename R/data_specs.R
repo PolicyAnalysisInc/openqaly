@@ -11,7 +11,7 @@ model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
   purrr::map(function(x) {
     suppressWarnings(readr::read_csv(
       system.file('model_input_specs', x, package = 'heRomod2'),
-      col_types = c('name' = 'c', 'required' = 'l', 'types' = 'c', 'default' = 'c', 'fallback' = 'c'),
+      col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
       progress = FALSE
     ))
   })

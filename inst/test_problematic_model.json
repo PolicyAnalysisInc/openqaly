@@ -1,0 +1,100 @@
+{
+  "settings": [{
+    "model_type": "markov",
+    "cycles": "10",
+    "cycle_length": "1",
+    "cost_discounting": "0.03",
+    "effect_discounting": "0.03"
+  }],
+  "strategies": [
+    {
+      "name": "standard",
+      "display_name": "Standard Care"
+    },
+    {
+      "name": "new",
+      "display_name": "New Treatment",
+      "abbreviation": "NT"
+    }
+  ],
+  "groups": [
+    {
+      "name": "young",
+      "display_name": "Young Adults",
+      "weight": "0.6"
+    },
+    {
+      "name": "old",
+      "display_name": "Older Adults",
+      "weight": "0.4"
+    }
+  ],
+  "states": [
+    {
+      "name": "healthy",
+      "initial_probability": "1",
+      "display_name": "Healthy"
+    },
+    {
+      "name": "sick",
+      "initial_probability": "0",
+      "display_name": "Sick",
+      "state_group": "disease"
+    },
+    {
+      "name": "dead",
+      "initial_probability": "0",
+      "display_name": "Dead"
+    }
+  ],
+  "variables": [
+    {
+      "name": "age",
+      "formula": "50 + state_cycle",
+      "display_name": "Age"
+    },
+    {
+      "name": "treatment_effect",
+      "formula": "ifelse(strategy == 'new', 0.8, 1)",
+      "strategy": "new"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "healthy",
+      "to": "sick",
+      "formula": "0.1 * treatment_effect"
+    },
+    {
+      "from": "healthy",
+      "to": "dead",
+      "formula": "0.01"
+    },
+    {
+      "from": "sick",
+      "to": "dead",
+      "formula": "0.2"
+    }
+  ],
+  "values": [
+    {
+      "name": "cost",
+      "formula": "ifelse(state == 'sick', 1000, 0)",
+      "state": "sick"
+    },
+    {
+      "name": "qaly",
+      "formula": "ifelse(state == 'healthy', 1, ifelse(state == 'sick', 0.7, 0))"
+    }
+  ],
+  "summaries": [
+    {
+      "name": "total_cost",
+      "values": "cost"
+    },
+    {
+      "name": "total_qaly",
+      "values": "qaly"
+    }
+  ]
+}

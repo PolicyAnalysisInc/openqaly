@@ -7,18 +7,34 @@ parse_states <- function(states, cycle_length_days, days_per_year) {
   check_states(states)
 
   # If state time limit is unspecified, assume infinite
-  states$state_cycle_limit <- ifelse(
-    is.na(states$state_cycle_limit),
-    Inf,
-    states$state_cycle_limit
-  )
-  
+  if ("state_cycle_limit" %in% names(states)) {
+    states$state_cycle_limit <- ifelse(
+      is.na(states$state_cycle_limit),
+      Inf,
+      states$state_cycle_limit
+    )
+  } else {
+    states$state_cycle_limit <- Inf
+  }
+
   # If state time limit unit is undefined, use cycles
-  states$state_cycle_limit_unit <- ifelse(
-    is.na(states$state_cycle_limit_unit),
-    'cycles',
-    states$state_cycle_limit_unit
-  )
+  if ("state_cycle_limit_unit" %in% names(states)) {
+    states$state_cycle_limit_unit <- ifelse(
+      is.na(states$state_cycle_limit_unit),
+      'cycles',
+      states$state_cycle_limit_unit
+    )
+  } else {
+    states$state_cycle_limit_unit <- 'cycles'
+  }
+
+  # Ensure optional columns exist
+  if (!"state_group" %in% names(states)) {
+    states$state_group <- NA_character_
+  }
+  if (!"share_state_time" %in% names(states)) {
+    states$share_state_time <- FALSE
+  }
 
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
