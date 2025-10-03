@@ -28,10 +28,10 @@ test_that("Discounting produces mathematically exact results", {
     {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],
   "transitions": [
-    {"from": "Alive", "to": "Alive", "formula": "0.9"},
-    {"from": "Alive", "to": "Dead", "formula": "0.1"},
-    {"from": "Dead", "to": "Dead", "formula": "1"},
-    {"from": "Dead", "to": "Alive", "formula": "0"}
+    {"from_state": "Alive", "to_state": "Alive", "formula": "0.9"},
+    {"from_state": "Alive", "to_state": "Dead", "formula": "0.1"},
+    {"from_state": "Dead", "to_state": "Dead", "formula": "1"},
+    {"from_state": "Dead", "to_state": "Alive", "formula": "0"}
   ],
   "values": [
     {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
@@ -107,10 +107,10 @@ test_that("Zero discount rate produces identical values", {
     {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],
   "transitions": [
-    {"from": "Alive", "to": "Alive", "formula": "0.9"},
-    {"from": "Alive", "to": "Dead", "formula": "0.1"},
-    {"from": "Dead", "to": "Dead", "formula": "1"},
-    {"from": "Dead", "to": "Alive", "formula": "0"}
+    {"from_state": "Alive", "to_state": "Alive", "formula": "0.9"},
+    {"from_state": "Alive", "to_state": "Dead", "formula": "0.1"},
+    {"from_state": "Dead", "to_state": "Dead", "formula": "1"},
+    {"from_state": "Dead", "to_state": "Alive", "formula": "0"}
   ],
   "values": [
     {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
@@ -166,7 +166,7 @@ test_that("Different discount rates for costs vs outcomes work correctly", {
     {"name": "Healthy", "display_name": "Healthy", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],
   "transitions": [
-    {"from": "Healthy", "to": "Healthy", "formula": "1"}
+    {"from_state": "Healthy", "to_state": "Healthy", "formula": "1"}
   ],
   "values": [
     {"name": "cost", "display_name": "Cost", "description": "", "state": "Healthy", "destination": "", "formula": "1000", "type": "cost"},
@@ -234,7 +234,7 @@ test_that("High discount rate (50%) works correctly", {
     {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],
   "transitions": [
-    {"from": "Alive", "to": "Alive", "formula": "1"}
+    {"from_state": "Alive", "to_state": "Alive", "formula": "1"}
   ],
   "values": [
     {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},

@@ -195,8 +195,8 @@ test_that("read_model enforces values type safety", {
 
   openxlsx::addWorksheet(wb, "transitions")
   transitions_data <- data.frame(
-    from = c("healthy", "healthy", "sick"),
-    to = c("healthy", "sick", "sick"),
+    from_state = c("healthy", "healthy", "sick"),
+    to_state = c("healthy", "sick", "sick"),
     formula = c("0.9", "0.1", "1")
   )
   openxlsx::writeData(wb, "transitions", transitions_data)
@@ -259,8 +259,8 @@ test_that("read_model_json enforces values type safety", {
       formula = c("100", "50")
     ),
     transitions = data.frame(
-      from = c("healthy", "healthy", "sick"),
-      to = c("healthy", "sick", "sick"),
+      from_state = c("healthy", "healthy", "sick"),
+      to_state = c("healthy", "sick", "sick"),
       formula = c("0.9", "0.1", "1")
     ),
     tables = list(),

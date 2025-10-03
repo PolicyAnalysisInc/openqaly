@@ -1,90 +1,33 @@
 #' @export
 read_model <- function(path) {
 
+  # Read raw Excel data
   model <- read_workbook(file.path(path, 'model.xlsx'))
 
-  # Load all specs
-  model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
-    list.files() %>%
-    purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
-    purrr::map(function(x) {
-      suppressWarnings(readr::read_csv(
-        system.file('model_input_specs', x, package = 'heRomod2'),
-        col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
-        progress = FALSE
-      ))
-    })
-
-  states_spec <- model_input_specs$states
-  strategies_spec <- model_input_specs$strategies
-  groups_spec <- model_input_specs$groups
-  values_spec <- model_input_specs$values
-
-  # Ensure model$strategies has correct structure AND types
-  if (!is.null(model$strategies) && nrow(model$strategies) > 0) {
-    model$strategies <- tibble::as_tibble(model$strategies)
-    model$strategies <- check_tbl(model$strategies, strategies_spec, 'Strategies')
-  }
-
-  # Ensure model$groups has correct structure AND types
-  if (!is.null(model$groups) && nrow(model$groups) > 0) {
-    model$groups <- tibble::as_tibble(model$groups)
-    model$groups <- check_tbl(model$groups, groups_spec, 'Groups')
-  }
-
-  # Ensure model$states has correct structure AND types
-  if (!is.null(model$states) && nrow(model$states) > 0) {
-    model$states <- tibble::as_tibble(model$states)
-    model$states <- check_tbl(model$states, states_spec, 'States')
-  }
-
-  # Ensure model$values has correct structure AND types
-  if (is.null(model$values) || nrow(model$values) == 0) {
-    model$values <- create_empty_values_stubs()
+  # Read tables from CSV files
+  data_path <- file.path(path, 'data')
+  if (dir.exists(data_path)) {
+    model$tables <- list.files(data_path) %>%
+      purrr::set_names(., gsub('.csv$', '', .)) %>%
+      purrr::map(~read.csv(file.path(data_path, .), stringsAsFactor = FALSE, check.names = FALSE))
   } else {
-    # Convert to tibble and apply spec to enforce types
-    model$values <- tibble::as_tibble(model$values)
-    model$values <- check_tbl(model$values, values_spec, 'Values')
+    model$tables <- list()
   }
 
-  # Ensure model$summaries has a defined structure
-  if (is.null(model$summaries)) {
-    model$summaries <- create_empty_summaries_stubs()
+  # Read scripts from R files
+  scripts_path <- file.path(path, 'scripts')
+  if (dir.exists(scripts_path)) {
+    model$scripts <- list.files(scripts_path) %>%
+      purrr::set_names(., gsub('.R$', '', ., fixed = TRUE)) %>%
+      purrr::map(~readr::read_file(file.path(scripts_path, .)))
   } else {
-    model$summaries <- tibble::as_tibble(model$summaries)
-    model$summaries <- ensure_tibble_columns(model$summaries, create_empty_summaries_stubs())
+    model$scripts <- list()
   }
 
-  model$tables <- list.files(file.path(path, 'data')) %>%
-    purrr::set_names(., gsub('.csv$', '', .)) %>%
-    purrr::map(~read.csv(file.path(path, 'data', .), stringsAsFactor = F, check.names = F))
+  # UNIFIED VALIDATION - applies type-specific specs
+  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
 
-  model$scripts <- list.files(file.path(path, 'scripts')) %>%
-    purrr::set_names(., gsub('.R$', '', ., fixed = T)) %>%
-    purrr::map(~readr::read_file(file.path(path,'scripts', .)))
-
-  model$settings <- convert_settings_from_df(model$settings)
-  
-  # Handle PSM-specific transitions structure
-  if (!is.null(model$settings$model_type) && tolower(model$settings$model_type) == "psm") {
-    if (!is.null(model$transitions)) {
-      # Ensure PSM transitions have required columns
-      psm_required <- c("endpoint", "time_unit", "formula")
-      for (col in psm_required) {
-        if (!(col %in% colnames(model$transitions))) {
-          if (nrow(model$transitions) > 0) {
-            model$transitions[[col]] <- NA_character_
-          } else {
-            model$transitions <- create_empty_psm_transitions_stubs()
-          }
-        }
-      }
-    } else {
-      model$transitions <- create_empty_psm_transitions_stubs()
-    }
-  }
-  
-  define_object_(model, 'heRomodel')
+  return(model)
 }
 
 convert_settings_from_df <- function(settings_df) {
@@ -192,7 +135,7 @@ load_tables <- function(tables, env) {
 }
 
 load_trees <- function(trees, env) {
-  if ((!is.null(trees)) && nrow(trees) > 0) {
+  if ((!is.null(trees)) && is.data.frame(trees) && nrow(trees) > 0) {
     env$.trees <- trees
   }
 }
@@ -389,8 +332,8 @@ check_state_time <- function(vars, states, transitions, values) {
 
   # Combine values & transitions, group by state, and identify
   # references to state time or variables referencing state time
-  st_df <- select(transitions, from, formula) %>%
-    rename(state = from) %>%
+  st_df <- select(transitions, from_state, formula) %>%
+    rename(state = from_state) %>%
     rbind(
       select(values, state, formula)
     ) %>%
@@ -628,13 +571,33 @@ validate_model_data <- function(model) {
   # Validate transitions - just check structure, not state references (those are expanded later)
   if (!is.null(model$transitions) && is.data.frame(model$transitions)) {
     if (nrow(model$transitions) > 0) {
-      # Ensure from and to fields exist (they should already be renamed from from_state/to_state)
-      if (!all(c("from", "to") %in% names(model$transitions))) {
-        # Check if the JavaScript field names are present (shouldn't happen after renaming)
-        if (all(c("from_state", "to_state") %in% names(model$transitions))) {
-          stop("Transitions have 'from_state' and 'to_state' but should have been renamed to 'from' and 'to'")
-        } else {
-          stop("Transitions must have 'from' and 'to' fields")
+      # PSM models have different transition structure
+      # Settings might be a list or a dataframe (setting/value columns)
+      is_psm <- FALSE
+      if (!is.null(model$settings)) {
+        if (is.list(model$settings) && !is.data.frame(model$settings)) {
+          # Settings is a list
+          is_psm <- !is.null(model$settings$model_type) && tolower(model$settings$model_type) == "psm"
+        } else if (is.data.frame(model$settings)) {
+          # Settings is a dataframe (from JSON)
+          model_type_row <- model$settings[model$settings$setting == "model_type", ]
+          if (nrow(model_type_row) > 0) {
+            is_psm <- tolower(model_type_row$value[1]) == "psm"
+          }
+        }
+      }
+
+      if (is_psm) {
+        # PSM transitions must have endpoint, time_unit, formula
+        required_cols <- c("endpoint", "time_unit", "formula")
+        if (!all(required_cols %in% names(model$transitions))) {
+          missing <- setdiff(required_cols, names(model$transitions))
+          stop(paste("PSM transitions missing required fields:", paste(missing, collapse = ", ")))
+        }
+      } else {
+        # Markov transitions must have from_state and to_state fields
+        if (!all(c("from_state", "to_state") %in% names(model$transitions))) {
+          stop("Transitions must have 'from_state' and 'to_state' fields")
         }
       }
     }
@@ -655,6 +618,174 @@ validate_model_data <- function(model) {
   return(model)
 }
 
+#' Normalize and Validate Model Structure
+#'
+#' Applies type-specific CSV specs to enforce correct model structure.
+#' Used by all three input paths (Excel, JSON, R Builder) to ensure consistency.
+#'
+#' @param model Raw model list
+#' @param preserve_builder If TRUE, keeps heRomodel_builder class; if FALSE, returns heRomodel
+#'
+#' @return Validated model with correct structure
+#' @export
+normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
+
+  # Extract model_type (handle both dataframe and list formats)
+  if (is.list(model$settings) && !is.data.frame(model$settings)) {
+    model_type <- model$settings$model_type
+  } else if (is.data.frame(model$settings)) {
+    type_row <- model$settings[model$settings$setting == "model_type", ]
+    model_type <- if (nrow(type_row) > 0) type_row$value[1] else NULL
+  } else {
+    model_type <- NULL
+  }
+
+  # Normalize model_type to standard strings
+  model_type <- model_type %||% "markov"
+
+  # Handle case-insensitive matching and normalize to canonical form (lowercase)
+  model_type_lower <- tolower(model_type)
+  model_type <- if (model_type_lower == "markov") {
+    "markov"
+  } else if (model_type_lower == "psm") {
+    "psm"
+  } else if (model_type_lower %in% c("custom psm", "custompsm", "psm_custom")) {
+    "custom_psm"
+  } else {
+    # Try to match partial strings
+    if (model_type_lower %in% c("markov")) {
+      "markov"
+    } else if (model_type_lower %in% c("psm")) {
+      "psm"
+    } else if (model_type_lower %in% c("custom psm", "custompsm", "psm_custom")) {
+      "custom_psm"
+    } else {
+      warning("Invalid model_type '", model_type, "'. Defaulting to 'markov'.")
+      "markov"
+    }
+  }
+
+  # Update model_type in settings to canonical form
+  if (is.list(model$settings) && !is.data.frame(model$settings)) {
+    model$settings$model_type <- model_type
+  }
+
+  # Load type-specific specs
+  spec_path <- system.file('model_input_specs', package = 'heRomod2')
+
+  states_spec_file <- if (model_type %in% c("psm", "custom_psm")) {
+    "psm_states.csv"
+  } else {
+    "states.csv"
+  }
+
+  trans_spec_file <- if (model_type == "psm") {
+    "psm_transitions.csv"
+  } else if (model_type == "custom_psm") {
+    "psm_custom_transitions.csv"
+  } else {
+    "transitions.csv"
+  }
+
+  specs <- list(
+    states = readr::read_csv(file.path(spec_path, states_spec_file),
+                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                         'default' = 'c', 'fallback' = 'c'),
+                            progress = FALSE, show_col_types = FALSE),
+    transitions = readr::read_csv(file.path(spec_path, trans_spec_file),
+                                  col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                               'default' = 'c', 'fallback' = 'c'),
+                                  progress = FALSE, show_col_types = FALSE),
+    values = readr::read_csv(file.path(spec_path, "values.csv"),
+                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                         'default' = 'c', 'fallback' = 'c'),
+                            progress = FALSE, show_col_types = FALSE),
+    strategies = readr::read_csv(file.path(spec_path, "strategies.csv"),
+                                 col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                              'default' = 'c', 'fallback' = 'c'),
+                                 progress = FALSE, show_col_types = FALSE),
+    groups = readr::read_csv(file.path(spec_path, "groups.csv"),
+                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                         'default' = 'c', 'fallback' = 'c'),
+                            progress = FALSE, show_col_types = FALSE),
+    variables = readr::read_csv(file.path(spec_path, "variables.csv"),
+                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                             'default' = 'c', 'fallback' = 'c'),
+                                progress = FALSE, show_col_types = FALSE),
+    summaries = readr::read_csv(file.path(spec_path, "summaries.csv"),
+                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
+                                             'default' = 'c', 'fallback' = 'c'),
+                                progress = FALSE, show_col_types = FALSE)
+  )
+
+  # Convert settings to list if needed
+  if (is.data.frame(model$settings)) {
+    model$settings <- convert_settings_from_df(model$settings)
+  }
+
+  # Apply specs to each component
+  if (!is.null(model$states) && nrow(model$states) > 0) {
+    model$states <- check_tbl(model$states, specs$states, "States")
+  }
+
+  if (!is.null(model$transitions) && nrow(model$transitions) > 0) {
+    model$transitions <- check_tbl(model$transitions, specs$transitions, "Transitions")
+  }
+
+  if (!is.null(model$values) && nrow(model$values) > 0) {
+    model$values <- check_tbl(model$values, specs$values, "Values")
+  }
+
+  if (!is.null(model$strategies) && nrow(model$strategies) > 0) {
+    model$strategies <- check_tbl(model$strategies, specs$strategies, "Strategies")
+  }
+
+  if (!is.null(model$groups) && nrow(model$groups) > 0) {
+    model$groups <- check_tbl(model$groups, specs$groups, "Groups")
+  }
+
+  if (!is.null(model$variables) && nrow(model$variables) > 0) {
+    model$variables <- check_tbl(model$variables, specs$variables, "Variables")
+  }
+
+  if (!is.null(model$summaries) && is.data.frame(model$summaries) && nrow(model$summaries) > 0) {
+    model$summaries <- check_tbl(model$summaries, specs$summaries, "Summaries")
+  }
+
+  # Ensure empty components have correct structure
+  if (is.null(model$values) || !is.data.frame(model$values) || nrow(model$values) == 0) {
+    model$values <- create_empty_values_stubs()
+  }
+  if (is.null(model$summaries) || !is.data.frame(model$summaries) || nrow(model$summaries) == 0) {
+    model$summaries <- create_empty_summaries_stubs()
+  }
+  if (is.null(model$variables) || !is.data.frame(model$variables) || nrow(model$variables) == 0) {
+    model$variables <- create_empty_variables_stubs()
+  }
+  if (is.null(model$transitions) || !is.data.frame(model$transitions) || nrow(model$transitions) == 0) {
+    model$transitions <- if (model_type == "psm") {
+      create_empty_psm_transitions_stubs()
+    } else if (model_type == "custom_psm") {
+      tibble::tibble(state = character(0), formula = character(0))
+    } else {
+      tibble::tibble(from_state = character(0), to_state = character(0), formula = character(0))
+    }
+  }
+
+  # Ensure tables and scripts are named lists
+  if (is.null(model$tables)) model$tables <- list()
+  if (is.null(model$scripts)) model$scripts <- list()
+
+  # Set class
+  if (preserve_builder && "heRomodel_builder" %in% class(model)) {
+    class(model) <- c("heRomodel_builder", "heRomodel")
+  } else {
+    class(model) <- "heRomodel"
+  }
+
+  return(model)
+}
+
 #'
 #' Takes a JSON string and parses it into a heRomodel object.
 #'
@@ -664,76 +795,29 @@ validate_model_data <- function(model) {
 #'
 #' @export
 read_model_json <- function(json_string) {
-  # Parse JSON string into a list
+  # Parse JSON to list
   model <- fromJSON(json_string, simplifyVector = TRUE)
 
-  # Normalize NULLs and empty strings to NA immediately after reading
+  # Normalize NULLs
   model <- normalize_model_nulls(model)
 
-  # Rename transition fields from JavaScript-safe names to R names
-  # This must happen before validation
-  # Handle both data.frame and list cases (fromJSON may return either)
-  if (!is.null(model$transitions)) {
-    # Ensure it's a data frame
-    if (!is.data.frame(model$transitions)) {
-      model$transitions <- as.data.frame(model$transitions, stringsAsFactors = FALSE)
-    }
-
-    # Rename columns for R compatibility
-    if ("from_state" %in% colnames(model$transitions)) {
-      colnames(model$transitions)[colnames(model$transitions) == "from_state"] <- "from"
-    }
-    if ("to_state" %in% colnames(model$transitions)) {
-      colnames(model$transitions)[colnames(model$transitions) == "to_state"] <- "to"
-    }
-  }
-
-  # Validate model structure and data types
-  model <- validate_model_data(model)
-
-  # Load all specs
-  model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
-    list.files() %>%
-    purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
-    purrr::map(function(x) {
-      suppressWarnings(readr::read_csv(
-        system.file('model_input_specs', x, package = 'heRomod2'),
-        col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
-        progress = FALSE
-      ))
-    })
-
-  values_spec <- model_input_specs$values
-
-  # Process tables - convert to named list of data frames
-  if (is.null(model$tables) ||
-      (is.data.frame(model$tables) && nrow(model$tables) == 0) ||
-      (is.list(model$tables) && length(model$tables) == 0)) {
-    model$tables <- list()
-  } else if (!is.data.frame(model$tables) || !all(c("name", "data") %in% colnames(model$tables))) {
-    stop("Tables must be provided as an array of objects with 'name' and 'data' fields")
-  } else {
-    # Convert array of objects to named list of tables
+  # Convert tables array-of-objects to named list
+  if (!is.null(model$tables) && is.data.frame(model$tables) &&
+      all(c("name", "data") %in% colnames(model$tables))) {
     table_list <- list()
     for (i in 1:nrow(model$tables)) {
       table_name <- model$tables$name[i]
       table_data <- model$tables$data$rows[[i]]
-
-      # Convert to tibble for consistency
       table_list[[table_name]] <- as_tibble(table_data)
     }
     model$tables <- table_list
-  }
-  
-  # Process scripts - convert from array of objects to named list
-  if (is.null(model$scripts) || 
-      (is.data.frame(model$scripts) && nrow(model$scripts) == 0) ||
-      (is.list(model$scripts) && length(model$scripts) == 0)) {
-    model$scripts <- list()
-  } else if (!is.data.frame(model$scripts) || !all(c("name", "code") %in% colnames(model$scripts))) {
-    stop("Scripts must be provided as an array of objects with 'name' and 'code' fields")
   } else {
-    # Convert array of objects to named list of scripts
+    model$tables <- list()
+  }
+
+  # Convert scripts array-of-objects to named list
+  if (!is.null(model$scripts) && is.data.frame(model$scripts) &&
+      all(c("name", "code") %in% colnames(model$scripts))) {
     script_list <- list()
     for (i in 1:nrow(model$scripts)) {
       script_name <- model$scripts$name[i]
@@ -741,24 +825,14 @@ read_model_json <- function(json_string) {
       script_list[[script_name]] <- script_code
     }
     model$scripts <- script_list
-  }
-  
-  # Convert settings if they exist
-  if (!is.null(model$settings) && is.data.frame(model$settings)) {
-    model$settings <- convert_settings_from_df(model$settings)
   } else {
-    stop('Settings must be a data frame')
+    model$scripts <- list()
   }
 
-  if (class(model$trees) == 'list') {
-    model$trees <- NULL
-  }
-  
-  # Convert data frames that might have been simplified too much
-  model <- convert_json_dataframes(model, values_spec)
+  # UNIFIED VALIDATION - applies type-specific specs
+  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
 
-  # Define as heRomodel object
-  define_object_(model, 'heRomodel')
+  return(model)
 }
 
 #' Convert JSON data frames
@@ -785,14 +859,26 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
   expected_dfs <- c("strategies", "groups", "states", "transitions",
                     "values", "summaries", "variables")
 
-  # Determine if this is a PSM model
-  is_psm <- !is.null(model$settings) && !is.null(model$settings$model_type) &&
-            tolower(model$settings$model_type) == "psm"
+  # Determine model type
+  model_type_lower <- if (!is.null(model$settings) && !is.null(model$settings$model_type)) {
+    tolower(model$settings$model_type)
+  } else {
+    "markov"
+  }
+
+  is_psm <- model_type_lower == "psm"
+  is_custom_psm <- model_type_lower %in% c("custom psm", "custompsm", "psm_custom")
 
   df_stubs <- list(
     values = create_empty_values_stubs(),
     summaries = create_empty_summaries_stubs(),
-    transitions = if (is_psm) create_empty_psm_transitions_stubs() else NULL,
+    transitions = if (is_psm) {
+      create_empty_psm_transitions_stubs()
+    } else if (is_custom_psm) {
+      tibble::tibble(state = character(0), formula = character(0))
+    } else {
+      NULL
+    },
     variables = create_empty_variables_stubs()
   )
 
@@ -818,13 +904,15 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
       model[[df_name]] <- tibble::as_tibble(current_input)
 
       # Use spec-based validation if spec exists for this component
-      spec_name <- df_name
-      if (df_name == "transitions" && !is_psm) {
-        # For Markov transitions, use the transitions spec
-        spec_name <- "transitions"
+      # Skip spec validation for PSM transitions (they have different structure)
+      should_validate <- TRUE
+      if (df_name == "transitions" && (is_psm || is_custom_psm)) {
+        should_validate <- FALSE
       }
 
-      if (!is.null(model_input_specs) && spec_name %in% names(model_input_specs)) {
+      spec_name <- df_name
+
+      if (should_validate && !is.null(model_input_specs) && spec_name %in% names(model_input_specs)) {
         # Apply spec validation
         spec <- model_input_specs[[spec_name]]
         context_name <- paste0(toupper(substring(df_name, 1, 1)), substring(df_name, 2))
@@ -853,7 +941,7 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
       }
 
       if (df_name == "transitions") {
-        # Handle transitions differently for PSM vs Markov models
+        # Handle transitions differently for PSM vs Custom PSM vs Markov models
         if (is_psm) {
           # PSM transitions have different structure
           # Ensure required columns exist
@@ -863,14 +951,14 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
               model[[df_name]][[col]] <- NA_character_
             }
           }
-        } else {
-          # Markov transitions - handle column renaming (as fallback, should already be done)
-          # This is kept as a safety measure in case the earlier renaming was skipped
-          if ("from_state" %in% colnames(model[[df_name]])) {
-            model[[df_name]] <- dplyr::rename(model[[df_name]], from = from_state)
-          }
-          if ("to_state" %in% colnames(model[[df_name]])) {
-            model[[df_name]] <- dplyr::rename(model[[df_name]], to = to_state)
+        } else if (is_custom_psm) {
+          # Custom PSM transitions have state + formula structure
+          # Ensure required columns exist
+          custom_psm_required <- c("state", "formula")
+          for (col in custom_psm_required) {
+            if (!(col %in% colnames(model[[df_name]]))) {
+              model[[df_name]][[col]] <- NA_character_
+            }
           }
         }
       }

@@ -113,6 +113,85 @@ test_that("PSM transitions work correctly", {
   expect_equal(model$transitions$formula[1], "exp(-0.1 * time)")
 })
 
+test_that("Complete PSM model can be built and executed", {
+  # Build a complete PSM model programmatically
+  model <- define_model("psm") |>
+    set_settings(n_cycles = 24, cycle_length = 1, cycle_length_unit = "months") |>
+    add_state("pfs") |>
+    add_state("progressed") |>
+    add_state("dead") |>
+    add_strategy("standard") |>
+    add_strategy("intervention") |>
+    add_variable("pfs_dist", define_surv_param("exp", rate = 0.1),
+                strategy = "standard") |>
+    add_variable("pfs_dist", apply_hr(define_surv_param("exp", rate = 0.1), 0.7),
+                strategy = "intervention") |>
+    add_variable("os_dist", define_surv_param("exp", rate = 0.05),
+                strategy = "standard") |>
+    add_variable("os_dist", apply_hr(define_surv_param("exp", rate = 0.05), 0.8),
+                strategy = "intervention") |>
+    add_variable("u_pfs", 0.8) |>
+    add_variable("u_prog", 0.6) |>
+    add_variable("c_drug", 1000, strategy = "standard") |>
+    add_variable("c_drug", 3000, strategy = "intervention") |>
+    add_psm_transition("PFS", "months", pfs_dist) |>
+    add_psm_transition("OS", "months", os_dist) |>
+    add_value("qalys", u_pfs, type = "outcome", state = "pfs") |>
+    add_value("qalys", u_prog, type = "outcome", state = "progressed") |>
+    add_value("cost", c_drug, type = "cost")
+
+  # Verify model structure
+  expect_s3_class(model, "heRomodel")
+  expect_equal(tolower(model$settings$model_type), "psm")
+  expect_equal(nrow(model$states), 3)
+  expect_equal(nrow(model$strategies), 2)
+
+  # Run the model
+  results <- run_model(model)
+
+  # Verify results
+  expect_equal(nrow(results$aggregated), 2)
+  expect_setequal(results$aggregated$strategy, c("standard", "intervention"))
+
+  # Verify traces exist and are valid
+  # Use robust tolerance following R best practices
+  tol <- 10 * sqrt(.Machine$double.eps)
+
+  for (i in 1:2) {
+    trace <- results$aggregated$collapsed_trace[[i]]
+    state_trace <- get_state_columns(trace)
+
+    expect_equal(nrow(trace), 25)  # n_cycles + 1
+    expect_equal(ncol(state_trace), 3)   # 3 states
+
+    # Verify probabilities sum to 1
+    row_sums <- rowSums(state_trace)
+    expect_true(all(abs(row_sums - 1.0) < tol))
+
+    # Verify initial state (these work with or without time columns)
+    expect_equal(trace[1, "pfs"], 1.0)
+    expect_equal(trace[1, "progressed"], 0.0)
+    expect_equal(trace[1, "dead"], 0.0)
+  }
+
+  # Verify intervention has better outcomes (lower death probability at end)
+  standard_trace <- results$aggregated$collapsed_trace[[which(results$aggregated$strategy == "standard")]]
+  intervention_trace <- results$aggregated$collapsed_trace[[which(results$aggregated$strategy == "intervention")]]
+
+  expect_true(intervention_trace[25, "dead"] < standard_trace[25, "dead"],
+              info = "Intervention should have lower death probability")
+
+  # Verify intervention is more expensive
+  standard_values <- results$aggregated$trace_and_values[[which(results$aggregated$strategy == "standard")]]$values
+  intervention_values <- results$aggregated$trace_and_values[[which(results$aggregated$strategy == "intervention")]]$values
+
+  standard_cost <- sum(standard_values[, "cost"])
+  intervention_cost <- sum(intervention_values[, "cost"])
+
+  expect_true(intervention_cost > standard_cost,
+              info = "Intervention should be more expensive")
+})
+
 test_that("Path validation works correctly", {
   model <- define_model("markov")
 

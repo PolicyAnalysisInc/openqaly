@@ -1,4 +1,4 @@
 name,required,type,default,fallback
-from,TRUE,character,,
-to,TRUE,character,,
+from_state,TRUE,character,,
+to_state,TRUE,character,,
 formula,TRUE,character,,

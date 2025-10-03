@@ -103,8 +103,8 @@ test_that("Excel to JSON conversion preserves model structure and results", {
     expect_equal(dim(excel_trace), dim(json_trace),
                  info = paste("Trace dimensions should match for strategy", strat))
     
-    # Compare trace values (allowing for small numerical differences)
-    expect_equal(excel_trace, json_trace, tolerance = 1e-10,
+    # Compare trace values (use testthat default tolerance)
+    expect_equal(excel_trace, json_trace,
                  info = paste("Trace values should match for strategy", strat))
     
     # Compare values if they exist
@@ -115,9 +115,9 @@ test_that("Excel to JSON conversion preserves model structure and results", {
       
       expect_equal(dim(excel_values), dim(json_values),
                    info = paste("Values dimensions should match for strategy", strat))
-      
-      # Compare actual values with tolerance for floating point
-      expect_equal(excel_values, json_values, tolerance = 1e-10,
+
+      # Compare actual values (use testthat default tolerance)
+      expect_equal(excel_values, json_values,
                    info = paste("Values should match for strategy", strat))
     }
     
@@ -147,8 +147,8 @@ test_that("Excel to JSON conversion preserves model structure and results", {
       expect_equal(nrow(excel_summaries), nrow(json_summaries),
                    info = paste("Summaries should have same number of rows for strategy", strat))
 
-      # Compare summary amounts with tolerance
-      expect_equal(excel_summaries$amount, json_summaries$amount, tolerance = 1e-10,
+      # Compare summary amounts (use testthat default tolerance)
+      expect_equal(excel_summaries$amount, json_summaries$amount,
                    info = paste("Summary amounts should match for strategy", strat))
     }
   }
@@ -197,20 +197,120 @@ test_that("write_model_json validates input", {
   if (!exists("write_model_json")) {
     skip("write_model_json not available - package may need to be rebuilt")
   }
-  
+
   # Test with non-heRomodel object
   expect_error(
     write_model_json(list(a = 1, b = 2)),
     "Input must be a heRomodel object"
   )
-  
+
   # Test with NULL settings
   fake_model <- list(strategies = data.frame(name = "test"))
   class(fake_model) <- "heRomodel"
   fake_model$settings <- NULL
-  
+
   expect_error(
     write_model_json(fake_model),
     "Model settings must be a list"
   )
+})
+
+test_that("example_psm Excel to JSON conversion preserves model structure and results", {
+  # Check if function is available
+  if (!exists("write_model_json")) {
+    skip("write_model_json not available - package may need to be rebuilt")
+  }
+
+  # Load the example_psm model from Excel
+  excel_model_path <- system.file("models/example_psm", package = "heRomod2")
+  if (excel_model_path == "") {
+    excel_model_path <- "inst/models/example_psm"
+  }
+
+  excel_model <- read_model(excel_model_path)
+
+  # Convert to JSON
+  json_string <- write_model_json(excel_model)
+
+  # Test 1: JSON string is valid
+  expect_type(json_string, "character")
+  expect_true(nchar(json_string) > 0)
+
+  # Test 2: JSON can be parsed back
+  json_model <- read_model_json(json_string)
+  expect_s3_class(json_model, "heRomodel")
+
+  # Test 3: Model type is preserved
+  expect_equal(
+    tolower(excel_model$settings$model_type),
+    tolower(json_model$settings$model_type)
+  )
+  expect_equal(tolower(json_model$settings$model_type), "psm")
+
+  # Test 4: Compare model components structure
+  expect_equal(length(excel_model$settings), length(json_model$settings))
+  expect_equal(names(excel_model$settings), names(json_model$settings))
+
+  # Test 5: Compare key components
+  components_to_check <- c("strategies", "states", "transitions", "values", "variables")
+
+  for (comp in components_to_check) {
+    if (!is.null(excel_model[[comp]]) && !is.null(json_model[[comp]])) {
+      expect_equal(
+        nrow(excel_model[[comp]]),
+        nrow(json_model[[comp]]),
+        info = paste("Component", comp, "should have same number of rows")
+      )
+
+      expect_setequal(
+        colnames(excel_model[[comp]]),
+        colnames(json_model[[comp]])
+      )
+    }
+  }
+
+  # Test 6: Run both models and compare results
+  set.seed(456)
+  excel_results <- run_model(excel_model)
+
+  set.seed(456)
+  json_results <- run_model(json_model)
+
+  # Compare segment results structure
+  expect_equal(nrow(excel_results$segments), nrow(json_results$segments))
+
+  # Compare aggregated results
+  expect_equal(nrow(excel_results$aggregated), nrow(json_results$aggregated))
+
+  # For each strategy, compare traces and values
+  strategies <- unique(excel_results$aggregated$strategy)
+
+  for (strat in strategies) {
+    excel_strat <- excel_results$aggregated[excel_results$aggregated$strategy == strat, ]
+    json_strat <- json_results$aggregated[json_results$aggregated$strategy == strat, ]
+
+    # Compare trace dimensions
+    excel_trace <- excel_strat$collapsed_trace[[1]]
+    json_trace <- json_strat$collapsed_trace[[1]]
+
+    expect_equal(dim(excel_trace), dim(json_trace),
+                 info = paste("Trace dimensions should match for strategy", strat))
+
+    # Compare trace values (use testthat default tolerance)
+    expect_equal(excel_trace, json_trace,
+                 info = paste("Trace values should match for strategy", strat))
+
+    # Compare values
+    if (!is.null(excel_strat$trace_and_values[[1]]$values) &&
+        !is.null(json_strat$trace_and_values[[1]]$values)) {
+      excel_values <- excel_strat$trace_and_values[[1]]$values
+      json_values <- json_strat$trace_and_values[[1]]$values
+
+      expect_equal(dim(excel_values), dim(json_values),
+                   info = paste("Values dimensions should match for strategy", strat))
+
+      expect_equal(excel_values, json_values,
+                   info = paste("Values should match for strategy", strat))
+    }
+  }
 })

@@ -61,18 +61,18 @@
   ],
   "transitions": [
     {
-      "from": "healthy",
-      "to": "sick",
+      "from_state": "healthy",
+      "to_state": "sick",
       "formula": "0.1 * treatment_effect"
     },
     {
-      "from": "healthy",
-      "to": "dead",
+      "from_state": "healthy",
+      "to_state": "dead",
       "formula": "0.01"
     },
     {
-      "from": "sick",
-      "to": "dead",
+      "from_state": "sick",
+      "to_state": "dead",
       "formula": "0.2"
     }
   ],

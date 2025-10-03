@@ -1,11 +1,22 @@
 
 
 
-parse_states <- function(states, cycle_length_days, days_per_year) {
-  
+parse_states <- function(states, cycle_length_days, days_per_year, model_type = "markov") {
+
   # Check that variables definition is valid
   check_states(states)
 
+  if (tolower(model_type) %in% c("psm", "psm_custom")) {
+    # PSM: Already has correct minimal structure from spec
+    # No initial_probability, no tunnel states
+    # Just pass through as states object (no sorting needed - no formulas)
+    parsed_states <- states %>%
+      select(name, display_name, description)
+
+    return(as.states(parsed_states))
+  }
+
+  # Markov: Full processing with tunnel states
   # If state time limit is unspecified, assume infinite
   if ("state_cycle_limit" %in% names(states)) {
     states$state_cycle_limit <- ifelse(
@@ -56,7 +67,7 @@ parse_states <- function(states, cycle_length_days, days_per_year) {
       max_state_time
     ) %>%
     sort_variables()
-  
+
   # Construct Object & Return
   as.states(parsed_states)
 }
@@ -79,6 +90,15 @@ eval_states <- function(x, ns) {
     } else {
       stop("eval_states: Cannot determine column names for initial state probabilities")
     }
+  }
+
+  # Validate that initial probabilities sum to 1
+  prob_sum <- sum(result[1, ])
+  tol <- sqrt(.Machine$double.eps)  # Standard tolerance for floating point comparison
+  if (abs(prob_sum - 1.0) > tol) {
+    error_msg <- glue("Initial state probabilities must sum to 1 (got {prob_sum})")
+    accumulate_hero_error(define_error(error_msg), context_msg = "Initial state validation")
+    hero_error_checkpoint()
   }
 
   return(result)

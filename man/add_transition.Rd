@@ -4,14 +4,14 @@
 \alias{add_transition}
 \title{Add Transitions to Model}
 \usage{
-add_transition(model, from, to, formula)
+add_transition(model, from_state, to_state, formula)
 }
 \arguments{
 \item{model}{A heRomodel_builder object}
 
-\item{from}{Character string specifying the source state}
+\item{from_state}{Character string specifying the source state}
 
-\item{to}{Character string specifying the destination state}
+\item{to_state}{Character string specifying the destination state}
 
 \item{formula}{An unquoted R expression for the transition probability}
 }

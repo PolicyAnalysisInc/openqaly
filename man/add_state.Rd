@@ -7,13 +7,13 @@
 add_state(
   model,
   name,
-  initial_prob = 0,
   display_name = NULL,
   description = NULL,
   state_group = NULL,
   share_state_time = FALSE,
   state_cycle_limit = NULL,
-  state_cycle_limit_unit = "cycles"
+  state_cycle_limit_unit = "cycles",
+  initial_prob = NULL
 )
 }
 \arguments{

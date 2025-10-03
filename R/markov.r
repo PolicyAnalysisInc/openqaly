@@ -145,7 +145,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   # values, & summaries.
   eval_vars <- eval_variables(uneval_vars, ns)
   eval_states <- eval_states(uneval_states, eval_vars)
-  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, model$settings$reduce_state_cycle)
+  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, isTRUE(model$settings$reduce_state_cycle))
 
   # Determine value_names safely for evaluate_values and cppMarkovTransitionsAndTrace
   value_names <- character(0)
@@ -208,14 +208,62 @@ run_segment.markov <- function(segment, model, env, ...) {
   segment$eval_vars <- list(eval_vars)
   segment$inital_state <- list(eval_states)
   segment$trace_and_values <- list(calculated_trace_and_values)
-  
+
+  # Extract the expanded trace matrix
+  expanded_trace_matrix <- calculated_trace_and_values[[1]]
+
   # Calculate the collapsed trace using the expanded_state_map from handle_state_expansion
   collapsed_trace <- calculate_collapsed_trace(
     calculated_trace_and_values, # This is the list from cppMarkovTransitionsAndTrace
     expanded$expanded_state_map
   )
-  segment$collapsed_trace <- list(collapsed_trace)
-  
+
+  # Add time variables to both traces
+  # Generate time columns based on the actual cycle numbers from row names
+  n_trace_rows <- nrow(collapsed_trace)
+
+  # The row names indicate the actual cycle numbers (0, 1, 2, ...)
+  # Add 1 to convert from 0-based to 1-based cycle numbering for user display
+  cycle_numbers <- as.numeric(rownames(collapsed_trace)) + 1
+
+  # Get cycle length info from model settings
+  cycle_length_days <- model$settings$cycle_length_days
+  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
+
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    # Generate time columns based on cycle numbers and cycle length
+    time_vars_df <- data.frame(
+      cycle = cycle_numbers,
+      day = cycle_numbers * cycle_length_days,
+      week = cycle_numbers * cycle_length_days / 7,
+      month = cycle_numbers * cycle_length_days / 30.4375,
+      year = cycle_numbers * cycle_length_days / days_per_year
+    )
+
+    # Ensure row names match before cbind
+    rownames(time_vars_df) <- rownames(collapsed_trace)
+
+    # Convert collapsed_trace matrix to data frame and add time columns
+    collapsed_trace_with_time <- cbind(time_vars_df, collapsed_trace)
+  } else {
+    # No cycle length info, just add cycle numbers
+    time_vars_df <- data.frame(cycle = cycle_numbers)
+    rownames(time_vars_df) <- rownames(collapsed_trace)
+    collapsed_trace_with_time <- cbind(time_vars_df, collapsed_trace)
+  }
+
+  # Also create expanded trace with time variables
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    # Reuse the same time_vars_df that was created above
+    expanded_trace_with_time <- cbind(time_vars_df, expanded_trace_matrix)
+  } else {
+    # Reuse the simple time_vars_df with just cycle
+    expanded_trace_with_time <- cbind(time_vars_df, expanded_trace_matrix)
+  }
+
+  segment$collapsed_trace <- list(collapsed_trace_with_time)
+  segment$expanded_trace <- list(expanded_trace_with_time)
+
   # Calculate summaries: parsed_summaries is now guaranteed to be a tibble (possibly 0-row)
   # calculate_summaries should be robust to a 0-row parsed_summaries or 0-col/0-row trace values.
   if (!is.null(parsed_summaries)) { # This check might be redundant if parsed_summaries is always a tibble
@@ -271,37 +319,37 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
   # Filter transition probabilities to only include required tunnel states
   eval_trans_limited <- select(transitions, -max_st) %>%
-    left_join(st_maxes, by = c('from' = 'state')) %>%
+    left_join(st_maxes, by = c('from_state' = 'state')) %>%
     filter(state_cycle <= max_st)
 
   expanded_transitions <- eval_trans_limited %>%
-    group_by(from) %>%
+    group_by(from_state) %>%
     mutate(.max_st = max(state_cycle)) %>%
     ungroup() %>%
     mutate(
       .end = state_cycle == .max_st,
-      .from_e = expand_state_name(from, state_cycle)
+      .from_e = expand_state_name(from_state, state_cycle)
     )
     lv_sg_i <- (!expanded_transitions$share_state_time) | (expanded_transitions$from_state_group != expanded_transitions$to_state_group)
-    lv_i <- expanded_transitions$from != expanded_transitions$to & lv_sg_i
+    lv_i <- expanded_transitions$from_state != expanded_transitions$to_state & lv_sg_i
     ls_i <- expanded_transitions$.end & !lv_i
     nx_i <- !(lv_i | ls_i)
     expanded_transitions$.to_e <- NA
-    expanded_transitions$.to_e[lv_i] <- expand_state_name(expanded_transitions$to[lv_i], 1)
-    expanded_transitions$.to_e[ls_i] <- expand_state_name(expanded_transitions$to[ls_i], expanded_transitions$.max_st[ls_i])
-    expanded_transitions$.to_e[nx_i] <- expand_state_name(expanded_transitions$to[nx_i], expanded_transitions$state_cycle[nx_i] + 1)
+    expanded_transitions$.to_e[lv_i] <- expand_state_name(expanded_transitions$to_state[lv_i], 1)
+    expanded_transitions$.to_e[ls_i] <- expand_state_name(expanded_transitions$to_state[ls_i], expanded_transitions$.max_st[ls_i])
+    expanded_transitions$.to_e[nx_i] <- expand_state_name(expanded_transitions$to_state[nx_i], expanded_transitions$state_cycle[nx_i] + 1)
 
   # Generate data structure of transition probabilities to pass to rcpp function
   expanded_trans_matrix <- lf_to_lf_mat(expanded_transitions, state_names)
 
   # Create the mapping of original state names to their actual expanded names used
   expanded_state_map <- expanded_transitions %>%
-    select(from, .from_e) %>%
+    select(from_state, .from_e) %>%
     distinct()
 
   expand_trans_first_cycle <- select(
     filter(expanded_transitions, cycle == 1),
-    from, to, .to_e, state_cycle
+    from_state, to_state, .to_e, state_cycle
   )
 
   model_start_values <- filter(values, is.na(state), is.na(destination), state_cycle == 1)
@@ -319,8 +367,8 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
     left_join(
       expand_trans_first_cycle,
       by = c(
-        "state" = "from",
-        "destination" = "to", 
+        "state" = "from_state",
+        "destination" = "to_state",
         "state_cycle" = "state_cycle"
       )
     ) %>%
@@ -630,10 +678,10 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
         from_expanded = state_names[from], # 'from' is 1-based index
         to_expanded = state_names[to]      # 'to' is 1-based index
       ) %>%
-      # expanded_state_map has 'from' (original/collapsed) and '.from_e' (expanded)
-      left_join(expanded_state_map %>% select(from_coll = from, from_exp_key = .from_e),
+      # expanded_state_map has 'from_state' (original/collapsed) and '.from_e' (expanded)
+      left_join(expanded_state_map %>% select(from_coll = from_state, from_exp_key = .from_e),
                 by = c("from_expanded" = "from_exp_key")) %>%
-      left_join(expanded_state_map %>% select(to_coll = from, to_exp_key = .from_e),
+      left_join(expanded_state_map %>% select(to_coll = from_state, to_exp_key = .from_e),
                 by = c("to_expanded" = "to_exp_key")) %>%
       select(
         cycle,
@@ -670,7 +718,7 @@ calculate_collapsed_trace <- function(expanded_results, expanded_state_map) {
   
   # Get unique original state names from the mapping
   # These will be the columns in our collapsed trace
-  original_state_names <- unique(expanded_state_map$from)
+  original_state_names <- unique(expanded_state_map$from_state)
   
   # Initialize the collapsed trace matrix
   num_cycles <- nrow(expanded_trace_matrix)
@@ -686,7 +734,7 @@ calculate_collapsed_trace <- function(expanded_results, expanded_state_map) {
   # Iterate over each original state name
   for (original_name in original_state_names) {
     # Get the list of expanded names corresponding to this original_name from the map
-    child_expanded_names_from_map <- expanded_state_map$.from_e[expanded_state_map$from == original_name]
+    child_expanded_names_from_map <- expanded_state_map$.from_e[expanded_state_map$from_state == original_name]
     
     # Filter this list to include only those expanded names that actually exist as columns in the trace matrix
     # This is a safeguard, as ideally, .from_e names used in transitions should match trace columns.
@@ -710,7 +758,7 @@ get_st_max <- function(trans, values, n_cycles) {
 
   # Combine transitions and values into a single data frame
   combined_transitions_and_values <- rbind(
-    rename(trans[ , c('from', 'max_st')], state = from),
+    rename(trans[ , c('from_state', 'max_st')], state = from_state),
     filter(values, !is.na(state))[ , c('state', 'max_st')]
   )
   
@@ -743,13 +791,13 @@ parse_trans_markov <- function(x, states, vars) {
   
   # Check transitions definition
   check_trans_markov(x, state_names)
-  
+
   # Construct the transitions object
   x$formula <- map(x$formula, as.heRoFormula)
-  x$name <- glue("{x$from}→{x$to}")
+  x$name <- glue("{x$from_state}→{x$to_state}")
 
   res <- sort_variables(x, vars) %>%
-    select(name, from, to, formula) %>%
+    select(name, from_state, to_state, formula) %>%
     left_join(
       transmute(
         states, name = name,
@@ -757,7 +805,7 @@ parse_trans_markov <- function(x, states, vars) {
         share_state_time = share_state_time,
         max_st = ifelse(max_state_time == 0, Inf, max_state_time)
       ),
-      by = c('from' = 'name')
+      by = c('from_state' = 'name')
     ) %>%
     left_join(
       transmute(
@@ -765,7 +813,7 @@ parse_trans_markov <- function(x, states, vars) {
         name = name,
         to_state_group = state_group
       ),
-      by = c('to' = 'name')
+      by = c('to_state' = 'name')
     )
   
   # Return result
@@ -792,7 +840,7 @@ check_trans_markov <- function(x, state_names) {
   }
   
   # Check that all from states are represented
-  missing_states <- which(!(state_names %in% x$from))
+  missing_states <- which(!(state_names %in% x$from_state))
   if (length(missing_states) > 0) {
     missing_state_names <- state_names[missing_states]
     plural <- if (length(missing_state_names) > 1) 's' else ''
@@ -800,9 +848,9 @@ check_trans_markov <- function(x, state_names) {
     error_msg <- glue('Transitions definition missing state{plural}: {missing_state_msg}.')
     stop(error_msg, call. = F)
   }
-  
+
   # Check that no transitions are duplicated
-  trans_names <- glue("{x$from}→{x$to}")
+  trans_names <- glue("{x$from_state}→{x$to_state}")
   dupe <- duplicated(trans_names)
   if (any(dupe)) {
     dupe_names <- unique(trans_names[dupe])
@@ -816,7 +864,7 @@ check_trans_markov <- function(x, state_names) {
   blank_index <- which(any(x$formula == '' | is.na(x$formula)))
   if (length(blank_index) > 0) {
     plural <- if (length(blank_index) > 1) 's' else ''
-    blank_names <- glue("{x$from[blank_index]}→{x$to[blank_index]}")
+    blank_names <- glue("{x$from_state[blank_index]}→{x$to_state[blank_index]}")
     blank_msg <- paste(blank_names, collapse = ', ')
     error_msg <- glue('Transitions definition contained blank formula for transitions{plural}: {blank_msg}.')
     stop(error_msg, call. = F)
@@ -877,11 +925,11 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
   # combine results into a single dataframe
   res <- rowwise(df) %>%
     group_split() %>%
-    map(function(row, ns, simplify = F) {
-      # Populate at dataframe with time, from, to
+    map(function(row, ns, simplify) {
+      # Populate at dataframe with time, from_state, to_state
       time_df <- ns$df[ ,c('cycle', 'state_cycle')]
-      time_df$from <- row$from
-      time_df$to <- row$to
+      time_df$from_state <- row$from_state
+      time_df$to_state <- row$to_state
       time_df$from_state_group <- row$from_state_group
       time_df$to_state_group <- row$to_state_group
       time_df$share_state_time <- row$share_state_time
@@ -925,7 +973,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
         # If it IS a hero_error, it was handled by the previous if block
       }
 
-      if (simplify && !is_error) {
+      if (isTRUE(simplify) && !is_error) {
         # Transform to matrix to check st-dependency
         val_mat <- lf_to_arr(time_df, c('state_cycle', 'cycle'), 'value')
         time_df$max_st <- min(row$max_st, arr_last_unique(val_mat, 1), na.rm = TRUE)
@@ -935,7 +983,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       
       # Return
       time_df
-    }, ns, simplify = simplify) %>%
+    }, ns, simplify = isTRUE(simplify)) %>%
     bind_rows()
 
   hero_error_checkpoint()
@@ -967,26 +1015,26 @@ lf_to_lf_mat <- function(df, state_names) {
 #' Convert Lonform Transitions Table to Matrix
 lf_to_tmat <- function(df) {
   df <- df %>%
-    group_by(from) %>%
+    group_by(from_state) %>%
     mutate(.max_st = max(state_cycle)) %>%
     ungroup() %>%
     mutate(
       .end = state_cycle == .max_st,
-      .from_e = expand_state_name(from, state_cycle)
+      .from_e = expand_state_name(from_state, state_cycle)
     )
   lv_sg_i <- (!df$share_state_time) | (df$from_state_group != df$to_state_group)
-  lv_i <- df$from != df$to & lv_sg_i
+  lv_i <- df$from_state != df$to_state & lv_sg_i
   ls_i <- df$.end & !lv_i
   nx_i <- !(lv_i | ls_i)
   df$.to_e <- NA
-  df$.to_e[lv_i] <- expand_state_name(df$to[lv_i], 1)
-  df$.to_e[ls_i] <- expand_state_name(df$to[ls_i], df$.max_st[ls_i])
-  df$.to_e[nx_i] <- expand_state_name(df$to[nx_i], df$state_cycle[nx_i] + 1)
+  df$.to_e[lv_i] <- expand_state_name(df$to_state[lv_i], 1)
+  df$.to_e[ls_i] <- expand_state_name(df$to_state[ls_i], df$.max_st[ls_i])
+  df$.to_e[nx_i] <- expand_state_name(df$to_state[nx_i], df$state_cycle[nx_i] + 1)
   e_state_names <- unique(df$.from_e)
-  df$to <- factor(df$.to_e, levels = e_state_names)
-  df$from <- factor(df$.from_e, levels  = e_state_names)
-  df <- df[, c('cycle', 'state_cycle', 'from', 'to', 'value')]
-  mat <- lf_to_arr(df, c('cycle', 'from', 'to'), 'value')
+  df$to_state <- factor(df$.to_e, levels = e_state_names)
+  df$from_state <- factor(df$.from_e, levels  = e_state_names)
+  df <- df[, c('cycle', 'state_cycle', 'from_state', 'to_state', 'value')]
+  mat <- lf_to_arr(df, c('cycle', 'from_state', 'to_state'), 'value')
   dimnames(mat) <- list(
     unique(df$cycle),
     e_state_names,

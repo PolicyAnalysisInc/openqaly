@@ -24,15 +24,90 @@ NULL
 define_model <- function(type = "markov") {
   type <- match.arg(tolower(type), c("markov", "psm"))
 
+  # Type-specific state initialization
+  states_init <- if (type == "psm") {
+    tibble::tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0)
+    )
+  } else {
+    tibble::tibble(
+      name = character(0),
+      initial_probability = character(0),
+      display_name = character(0),
+      description = character(0),
+      state_group = character(0),
+      share_state_time = logical(0),
+      state_cycle_limit = numeric(0),
+      state_cycle_limit_unit = character(0)
+    )
+  }
+
+  # Type-specific transitions initialization
+  transitions_init <- if (type == "psm") {
+    tibble::tibble(
+      endpoint = character(0),
+      time_unit = character(0),
+      formula = character(0)
+    )
+  } else {
+    tibble::tibble(
+      from_state = character(0),
+      to_state = character(0),
+      formula = character(0)
+    )
+  }
+
   model <- list(
-    settings = list(model_type = type),
-    states = tibble::tibble(),
-    transitions = tibble::tibble(),
-    values = tibble::tibble(),
-    variables = tibble::tibble(),
-    strategies = tibble::tibble(),
-    groups = tibble::tibble(),
-    summaries = tibble::tibble(),
+    settings = list(
+      model_type = type,
+      days_per_year = 365,
+      half_cycle_method = "start",
+      discount_cost = 0,
+      discount_outcomes = 0
+    ),
+    states = states_init,
+    transitions = transitions_init,
+    values = tibble::tibble(
+      name = character(0),
+      formula = character(0),
+      state = character(0),
+      destination = character(0),
+      display_name = character(0),
+      description = character(0),
+      type = character(0)
+    ),
+    variables = tibble::tibble(
+      name = character(0),
+      formula = character(0),
+      display_name = character(0),
+      description = character(0),
+      strategy = character(0),
+      group = character(0),
+      source = character(0),
+      sampling = character(0)
+    ),
+    strategies = tibble::tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      abbreviation = character(0),
+      enabled = numeric(0)
+    ),
+    groups = tibble::tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      weight = character(0),
+      enabled = numeric(0)
+    ),
+    summaries = tibble::tibble(
+      name = character(0),
+      values = character(0),
+      display_name = character(0),
+      description = character(0)
+    ),
     tables = list(),
     scripts = list(),
     trees = NULL
@@ -58,10 +133,17 @@ define_model <- function(type = "markov") {
 set_settings <- function(model, ...) {
   dots <- list(...)
 
+  # PREVENT model_type changes
+  if ("model_type" %in% names(dots)) {
+    stop("model_type cannot be changed after model creation. It was set to '",
+         model$settings$model_type, "' in define_model().")
+  }
+
   # Convert setting names to match expected format
   setting_map <- c(
     n_cycles = "timeframe",
     timeframe = "timeframe",
+    timeframe_unit = "timeframe_unit",
     cycle_length_unit = "cycle_length_unit",
     cycle_length = "cycle_length",
     discount_cost = "discount_cost",
@@ -75,6 +157,25 @@ set_settings <- function(model, ...) {
   for (name in names(dots)) {
     setting_name <- if (name %in% names(setting_map)) setting_map[name] else name
     model$settings[[setting_name]] <- dots[[name]]
+  }
+
+  # If n_cycles was used and timeframe_unit is not set, default to "cycles"
+  if ("n_cycles" %in% names(dots) && is.null(model$settings$timeframe_unit)) {
+    model$settings$timeframe_unit <- "cycles"
+  }
+
+  # Apply defaults for settings not explicitly provided
+  if (is.null(model$settings$days_per_year)) {
+    model$settings$days_per_year <- 365
+  }
+  if (is.null(model$settings$half_cycle_method)) {
+    model$settings$half_cycle_method <- "start"
+  }
+  if (is.null(model$settings$discount_cost)) {
+    model$settings$discount_cost <- 0
+  }
+  if (is.null(model$settings$discount_outcomes)) {
+    model$settings$discount_outcomes <- 0
   }
 
   model
@@ -94,24 +195,60 @@ set_settings <- function(model, ...) {
 #' model <- define_model("markov") |>
 #'   add_state("healthy", initial_prob = 1) |>
 #'   add_state("sick", initial_prob = 0)
-add_state <- function(model, name, initial_prob = 0, display_name = NULL,
+add_state <- function(model, name, display_name = NULL,
                      description = NULL, state_group = NULL,
                      share_state_time = FALSE, state_cycle_limit = NULL,
-                     state_cycle_limit_unit = "cycles") {
+                     state_cycle_limit_unit = "cycles", initial_prob = NULL) {
 
-  new_state <- tibble::tibble(
-    name = name,
-    initial_probability = as.character(initial_prob),
-    display_name = display_name %||% name,
-    description = description %||% display_name %||% name,
-    state_group = state_group,
-    share_state_time = share_state_time,
-    state_cycle_limit = state_cycle_limit %||% Inf,
-    state_cycle_limit_unit = state_cycle_limit_unit
-  )
+  # Get immutable model type
+  model_type <- tolower(model$settings$model_type)
+
+  if (model_type == "psm") {
+    # PSM: Reject Markov-specific parameters
+    if (!is.null(initial_prob)) {
+      stop("PSM models don't use initial_prob parameter. Remove it from add_state() call.")
+    }
+    if (!is.null(state_group)) {
+      stop("PSM models don't use state_group parameter. Remove it from add_state() call.")
+    }
+    if (share_state_time != FALSE) {
+      stop("PSM models don't use share_state_time parameter. Remove it from add_state() call.")
+    }
+    if (!is.null(state_cycle_limit)) {
+      stop("PSM models don't use state_cycle_limit parameter. Remove it from add_state() call.")
+    }
+
+    # Create PSM state (3 columns only)
+    new_state <- tibble::tibble(
+      name = name,
+      display_name = display_name %||% name,
+      description = description %||% display_name %||% name
+    )
+  } else {
+    # Markov: Require initial_prob
+    if (is.null(initial_prob)) {
+      stop("initial_prob is required for Markov models. Specify it in add_state() call.")
+    }
+
+    # Create Markov state (8 columns)
+    new_state <- tibble::tibble(
+      name = name,
+      initial_probability = as.character(initial_prob),
+      display_name = display_name %||% name,
+      description = description %||% display_name %||% name,
+      state_group = state_group,
+      share_state_time = share_state_time,
+      state_cycle_limit = state_cycle_limit %||% Inf,
+      state_cycle_limit_unit = state_cycle_limit_unit
+    )
+  }
 
   model$states <- bind_rows(model$states, new_state)
-  model
+
+  # Incremental validation
+  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+
+  return(model)
 }
 
 #' Add Transitions to Model
@@ -119,8 +256,8 @@ add_state <- function(model, name, initial_prob = 0, display_name = NULL,
 #' Add one or more transitions to the model. Uses NSE to capture formula expressions.
 #'
 #' @param model A heRomodel_builder object
-#' @param from Character string specifying the source state
-#' @param to Character string specifying the destination state
+#' @param from_state Character string specifying the source state
+#' @param to_state Character string specifying the destination state
 #' @param formula An unquoted R expression for the transition probability
 #'
 #' @return The modified model object
@@ -130,7 +267,7 @@ add_state <- function(model, name, initial_prob = 0, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_transition("healthy", "sick", p_disease * 0.1) |>
 #'   add_transition("sick", "dead", 0.2)
-add_transition <- function(model, from, to, formula) {
+add_transition <- function(model, from_state, to_state, formula) {
   # Check model type for appropriate structure
   is_psm <- !is.null(model$settings$model_type) &&
             tolower(model$settings$model_type) == "psm"
@@ -146,13 +283,17 @@ add_transition <- function(model, from, to, formula) {
   formula_str <- rlang::expr_text(formula_expr)
 
   new_trans <- tibble::tibble(
-    from = from,
-    to = to,
+    from_state = from_state,
+    to_state = to_state,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-  model
+
+  # Incremental validation
+  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+
+  return(model)
 }
 
 #' Add PSM Transitions to Model
@@ -181,7 +322,11 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-  model
+
+  # Incremental validation
+  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+
+  return(model)
 }
 
 #' Add Values to Model
@@ -224,7 +369,11 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
   )
 
   model$values <- bind_rows(model$values, new_value)
-  model
+
+  # Incremental validation
+  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+
+  return(model)
 }
 
 #' Add Variables to Model

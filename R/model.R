@@ -9,10 +9,15 @@
 #' 
 #' @export
 run_model <- function(model, ...) {
-  
+
+  # Finalize builders (convert to heRomodel)
+  if ("heRomodel_builder" %in% class(model)) {
+    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  }
+
   # Capture the extra arguments
   dots <- list(...)
-  
+
   # Create a results object
   res <- list()
 
@@ -34,7 +39,10 @@ run_model <- function(model, ...) {
   
   # Aggregate results by strategy
   res$aggregated <- aggregate_segments(res$segments, parsed_model)
-  
+
+  # Store metadata for flexible display options
+  res$metadata <- parsed_model$metadata
+
   # Return
   res
 }
@@ -59,18 +67,29 @@ parse_model <- function(model, ...) {
   }
 
   model$names <- list(
-    states = unique(model$states$name),
-    strategies = unique(model$strategies$name),
-    values = unique(model$values$name)
+    states = if (nrow(model$states) > 0) unique(model$states$name) else character(0),
+    strategies = if (nrow(model$strategies) > 0) unique(model$strategies$name) else character(0),
+    values = if (nrow(model$values) > 0) unique(model$values$name) else character(0)
+  )
+
+  # Store complete metadata for flexible display options
+  model$metadata <- list(
+    states = if (nrow(model$states) > 0) model$states %>%
+      select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
+    strategies = if (nrow(model$strategies) > 0) model$strategies %>%
+      select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble()
   )
 
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
   model$settings$n_cycles <- get_n_cycles(model$settings)
 
   # Set the class of the object based on model type
+  # Note: model_type should already be normalized to canonical form by normalize_and_validate_model
   model_type <- tolower(model$settings$model_type)
   if (model_type == "psm") {
     model <- parse_psm(model)
+  } else if (model_type %in% c("custom_psm", "custom psm", "psm_custom")) {
+    model <- parse_psm_custom(model)
   } else if (model_type == "markov") {
     model <- parse_markov(model)
   } else {
@@ -132,7 +151,10 @@ aggregate_segments <- function(segments, parsed_model) {
     
     # Aggregate collapsed trace
     aggregated_trace <- aggregate_trace(strat_segments)
-    
+
+    # Aggregate expanded trace (if available)
+    aggregated_expanded_trace <- aggregate_expanded_trace(strat_segments)
+
     # Aggregate values
     aggregated_values <- aggregate_values(strat_segments)
 
@@ -140,7 +162,7 @@ aggregate_segments <- function(segments, parsed_model) {
     aggregated_summaries <- aggregate_summaries(strat_segments)
 
     # Return aggregated results for this strategy as a single-row tibble
-    tibble(
+    result_tibble <- tibble(
       strategy = strat,
       group = "_aggregated",  # Special marker for aggregated results
       weight = total_weight,  # Total weight for the strategy
@@ -149,6 +171,13 @@ aggregate_segments <- function(segments, parsed_model) {
       summaries = list(aggregated_summaries$summaries),
       summaries_discounted = list(aggregated_summaries$summaries_discounted)
     )
+
+    # Add expanded_trace if it exists
+    if (!is.null(aggregated_expanded_trace)) {
+      result_tibble$expanded_trace <- list(aggregated_expanded_trace)
+    }
+
+    result_tibble
   })
   
   # Return the aggregated results dataframe
@@ -167,12 +196,15 @@ aggregate_trace <- function(segments) {
   # Extract traces and weights
   if ("collapsed_trace" %in% colnames(segments)) {
     traces <- segments$collapsed_trace
-    # If traces is already a list of matrices, use it directly
-    # Otherwise extract the first element of each list
+    # Ensure each trace is properly extracted
     if (is.list(traces) && length(traces) > 0) {
-      if (is.list(traces[[1]])) {
-        traces <- map(traces, ~ .[[1]])
-      }
+      traces <- lapply(traces, function(x) {
+        # If it's a list containing a single element, extract it
+        while (is.list(x) && !is.data.frame(x) && length(x) == 1) {
+          x <- x[[1]]
+        }
+        x
+      })
     }
   } else {
     return(NULL)
@@ -180,19 +212,136 @@ aggregate_trace <- function(segments) {
   weights <- segments$normalized_weight
   
   if (length(traces) == 0) return(NULL)
-  
+
   # Initialize aggregated trace with same dimensions as first trace
   first_trace <- traces[[1]]
-  aggregated <- matrix(0, nrow = nrow(first_trace), ncol = ncol(first_trace))
-  rownames(aggregated) <- rownames(first_trace)
-  colnames(aggregated) <- colnames(first_trace)
-  
-  # Weight and sum traces
-  for (i in seq_along(traces)) {
-    aggregated <- aggregated + traces[[i]] * weights[i]
+
+  # If first_trace is still a list, extract it
+  if (is.list(first_trace) && !is.data.frame(first_trace)) {
+    first_trace <- first_trace[[1]]
+  }
+
+  # Check if trace is a data frame with time columns (new format) or matrix (old format)
+  if (is.data.frame(first_trace)) {
+    # New format with time columns
+    time_cols <- intersect(c("cycle", "day", "week", "month", "year"), colnames(first_trace))
+    state_cols <- setdiff(colnames(first_trace), time_cols)
+
+    if (length(time_cols) > 0) {
+      # Initialize with time columns from first trace
+      aggregated <- first_trace[, time_cols, drop = FALSE]
+
+      # Initialize state columns with zeros
+      for (col in state_cols) {
+        aggregated[[col]] <- 0
+      }
+
+      # Weight and sum state columns only
+      for (i in seq_along(traces)) {
+        trace_i <- traces[[i]]
+        for (col in state_cols) {
+          aggregated[[col]] <- aggregated[[col]] + trace_i[[col]] * weights[i]
+        }
+      }
+    } else {
+      # Data frame but no time columns
+      aggregated <- first_trace
+      for (col in colnames(aggregated)) {
+        aggregated[[col]] <- 0
+      }
+      for (i in seq_along(traces)) {
+        for (col in colnames(aggregated)) {
+          aggregated[[col]] <- aggregated[[col]] + traces[[i]][[col]] * weights[i]
+        }
+      }
+    }
+  } else {
+    # Old format - matrix
+    aggregated <- matrix(0, nrow = nrow(first_trace), ncol = ncol(first_trace))
+    rownames(aggregated) <- rownames(first_trace)
+    colnames(aggregated) <- colnames(first_trace)
+
+    # Weight and sum traces
+    for (i in seq_along(traces)) {
+      aggregated <- aggregated + traces[[i]] * weights[i]
+    }
   }
   
   aggregated
+}
+
+#' Aggregate Expanded Trace Results
+#'
+#' Aggregates expanded traces across segments, handling the case where
+#' different strategies may have different expanded state structures.
+#'
+#' @param segments Data frame with segments containing expanded_trace column
+#' @return Aggregated expanded trace data frame
+#' @keywords internal
+aggregate_expanded_trace <- function(segments) {
+  # Extract traces and weights
+  if (!("expanded_trace" %in% colnames(segments))) {
+    return(NULL)
+  }
+
+  traces <- segments$expanded_trace
+  # Ensure each trace is properly extracted
+  if (is.list(traces) && length(traces) > 0) {
+    traces <- lapply(traces, function(x) {
+      # If it's a list containing a single element, extract it
+      while (is.list(x) && !is.data.frame(x) && length(x) == 1) {
+        x <- x[[1]]
+      }
+      x
+    })
+  }
+
+  weights <- segments$normalized_weight
+
+  if (length(traces) == 0) return(NULL)
+
+  # Get unique expanded state names across all segments
+  all_expanded_states <- character()
+  for (i in seq_along(traces)) {
+    trace <- traces[[i]]
+    if (!is.null(trace)) {
+      state_cols <- setdiff(colnames(trace), c("cycle", "day", "week", "month", "year"))
+      all_expanded_states <- union(all_expanded_states, state_cols)
+    }
+  }
+
+  # Get time columns from first trace
+  first_trace <- traces[[1]]
+  if (is.list(first_trace) && !is.data.frame(first_trace)) {
+    first_trace <- first_trace[[1]]
+  }
+
+  time_cols <- intersect(c("cycle", "day", "week", "month", "year"), colnames(first_trace))
+
+  # Initialize aggregated trace with time columns
+  aggregated <- first_trace[, time_cols, drop = FALSE]
+
+  # Initialize all expanded state columns with zeros
+  for (state in all_expanded_states) {
+    aggregated[[state]] <- 0
+  }
+
+  # Weight and sum traces
+  for (i in seq_along(traces)) {
+    trace_i <- traces[[i]]
+    if (!is.null(trace_i)) {
+      state_cols_i <- setdiff(colnames(trace_i), time_cols)
+
+      # Add weighted values for states that exist in this trace
+      for (col in state_cols_i) {
+        if (col %in% colnames(aggregated)) {
+          aggregated[[col]] <- aggregated[[col]] + trace_i[[col]] * weights[i]
+        }
+      }
+    }
+  }
+
+  return(aggregated)
 }
 
 #' Aggregate Values Results

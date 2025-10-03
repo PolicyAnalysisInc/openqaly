@@ -51,9 +51,18 @@ parse_values <- function(x, states, extra_vars) {
         mutate(formula = map(formula, as.heRoFormula)) %>%
         sort_variables(extra_vars)
     }) %>%
-    ungroup() %>%
-    left_join(select(states, name, max_st_from_state = max_state_time), by = c('state' = 'name')) %>%
-    mutate(max_st = ifelse(is.na(max_st_from_state), 1, ifelse(max_st_from_state == 0, Inf, max_st_from_state)))
+    ungroup()
+
+  # For Markov models, join max_state_time for tunnel state expansion
+  # For PSM models, states don't have max_state_time, so set max_st = 1
+  if ("max_state_time" %in% names(states)) {
+    vars <- vars %>%
+      left_join(select(states, name, max_st_from_state = max_state_time), by = c('state' = 'name')) %>%
+      mutate(max_st = ifelse(is.na(max_st_from_state), 1, ifelse(max_st_from_state == 0, Inf, max_st_from_state)))
+  } else {
+    vars <- vars %>%
+      mutate(max_st = 1)
+  }
   
   # Construct Object & Return
   as.values(vars)

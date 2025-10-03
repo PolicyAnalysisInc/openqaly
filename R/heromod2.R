@@ -67,6 +67,6 @@ vars_def_columns <- c('name', 'display_name',	'description')
 # Columns that are required in trees definition
 tree_def_columns <- c('name', 'node', 'tags', 'parent', 'formula')
 
-trans_markov_cols <- c('from', 'to', 'formula')
+trans_markov_cols <- c('from_state', 'to_state', 'formula')
 
 . <- NULL

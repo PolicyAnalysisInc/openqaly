@@ -216,7 +216,7 @@ generate_transitions_code <- function(transitions, is_psm = FALSE) {
       t <- transitions[i, ]
       # For transitions, formula should be unquoted expression
       code <- c(code,
-        glue('  add_transition("{t$from}", "{t$to}", {t$formula}) |>')
+        glue('  add_transition("{t$from_state}", "{t$to_state}", {t$formula}) |>')
       )
     }
   }

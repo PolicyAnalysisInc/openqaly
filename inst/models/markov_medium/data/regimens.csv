@@ -1,4 +1,4 @@
-﻿Medication,Type,Dosing Unit,Dose,Doses per Cycle,Cycle Length (days),Max Cycles,Cost per mg
+Medication,Type,Dosing Unit,Dose,Doses per Cycle,Cycle Length (days),Max Cycles,Cost per mg
 Checkimab,Initial Tx,mg per patient,200,28,28,0,3.78
 Chemoplatin,Initial Tx,mg per m^2,40,1,7,0,6.5
 Lenrastim,Initial Tx,mg per kg,10,1,7,0,0.17
