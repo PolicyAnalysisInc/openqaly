@@ -160,6 +160,13 @@ format_trace_flextable <- function(results,
     trace_data[[time_label]] <- rounded_values
   }
 
+  # Round probability columns BEFORE creating flextable to prevent negative zeros
+  # This ensures all rounding happens in R, not in flextable's sprintf formatting
+  prob_cols <- setdiff(colnames(trace_data), c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE)))
+  for (col in prob_cols) {
+    trace_data[[col]] <- round(trace_data[[col]], decimals)
+  }
+
   # Create flextable
   ft <- flextable::flextable(trace_data)
 
