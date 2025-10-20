@@ -11,7 +11,7 @@
 #'
 #' @export
 normal <- function(mean, sd) {
-  function(x) stats::qnorm(p = x, mean = mean, sd = sd)
+  function(x) qnorm(p = x, mean = mean, sd = sd)
 }
 
 #' Lognormal distribution
@@ -33,8 +33,8 @@ normal <- function(mean, sd) {
 lognormal <- function(mean, sd, meanlog, sdlog) {
   if (missing(sdlog)) sdlog <- sqrt(log(1 + sd^2/mean^2))
   if (missing(meanlog)) meanlog <- log(mean) - sdlog^2/2
-  
-  function(x) stats::qlnorm(p = x, meanlog = meanlog, sdlog = sdlog)
+
+  function(x) qlnorm(p = x, meanlog = meanlog, sdlog = sdlog)
 }
 
 #' Bootstrap sampling of a data frame

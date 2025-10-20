@@ -232,11 +232,13 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   if (!is.na(cycle_length_days) && cycle_length_days > 0) {
     # Generate time columns based on cycle numbers and cycle length
+    # Use consistent conversion factors with time.R
+    days_per_month <- days_per_year / 12
     time_vars_df <- data.frame(
       cycle = cycle_numbers,
       day = cycle_numbers * cycle_length_days,
       week = cycle_numbers * cycle_length_days / 7,
-      month = cycle_numbers * cycle_length_days / 30.4375,
+      month = cycle_numbers * cycle_length_days / days_per_month,
       year = cycle_numbers * cycle_length_days / days_per_year
     )
 

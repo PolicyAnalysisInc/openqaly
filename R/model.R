@@ -77,7 +77,13 @@ parse_model <- function(model, ...) {
     states = if (nrow(model$states) > 0) model$states %>%
       select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
     strategies = if (nrow(model$strategies) > 0) model$strategies %>%
-      select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble()
+      select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
+    groups = if (nrow(model$groups) > 0) model$groups %>%
+      select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
+    summaries = if (nrow(model$summaries) > 0) model$summaries %>%
+      select(any_of(c("name", "display_name", "description"))) else tibble(),
+    values = if (nrow(model$values) > 0) model$values %>%
+      select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) else tibble()
   )
 
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
@@ -441,7 +447,7 @@ aggregate_summaries <- function(segments) {
   # Helper function to aggregate summaries from a list
   aggregate_summary_list <- function(summaries_list, weights) {
     if (length(summaries_list) == 0) {
-      return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+      return(tibble(summary = character(), value = character(), amount = numeric()))
     }
 
     # Extract summaries from each segment
@@ -455,7 +461,7 @@ aggregate_summaries <- function(segments) {
 
       # Skip if summary_df is NULL or not a data frame
       if (is.null(summary_df) || !is.data.frame(summary_df)) {
-        return(tibble::tibble(summary = character(), value = character(), amount = numeric(), weight = numeric()))
+        return(tibble(summary = character(), value = character(), amount = numeric(), weight = numeric()))
       }
 
       summary_df %>%
@@ -464,7 +470,7 @@ aggregate_summaries <- function(segments) {
 
     # If no valid summaries were found, return empty result
     if (nrow(combined_summaries) == 0) {
-      return(tibble::tibble(summary = character(), value = character(), amount = numeric()))
+      return(tibble(summary = character(), value = character(), amount = numeric()))
     }
 
     # Calculate weighted average by grouping by summary and value
@@ -487,14 +493,14 @@ aggregate_summaries <- function(segments) {
   undiscounted_summaries <- if ("summaries" %in% colnames(segments)) {
     aggregate_summary_list(segments$summaries, weights)
   } else {
-    tibble::tibble(summary = character(), value = character(), amount = numeric())
+    tibble(summary = character(), value = character(), amount = numeric())
   }
 
   # Aggregate discounted summaries
   discounted_summaries <- if ("summaries_discounted" %in% colnames(segments)) {
     aggregate_summary_list(segments$summaries_discounted, weights)
   } else {
-    tibble::tibble(summary = character(), value = character(), amount = numeric())
+    tibble(summary = character(), value = character(), amount = numeric())
   }
 
   # Return both as separate fields (not nested)

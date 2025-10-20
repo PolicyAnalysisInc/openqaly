@@ -4,7 +4,14 @@
 \alias{add_summary}
 \title{Add Summaries to Model}
 \usage{
-add_summary(model, name, values, display_name = NULL, description = NULL)
+add_summary(
+  model,
+  name,
+  values,
+  display_name = NULL,
+  description = NULL,
+  wtp = NULL
+)
 }
 \arguments{
 \item{model}{A heRomodel_builder object}
@@ -16,6 +23,9 @@ add_summary(model, name, values, display_name = NULL, description = NULL)
 \item{display_name}{Optional display name}
 
 \item{description}{Optional description}
+
+\item{wtp}{Optional willingness-to-pay value (numeric). Only used for outcome summaries
+in net monetary benefit calculations. Leave NULL for cost summaries.}
 }
 \value{
 The modified model object
@@ -25,5 +35,6 @@ Add one or more summaries to the model.
 }
 \examples{
 model <- define_model("markov") |>
-  add_summary("total_cost", "cost1,cost2,cost3")
+  add_summary("total_cost", "cost1,cost2,cost3") |>
+  add_summary("total_qalys", "qaly1,qaly2", wtp = 50000)
 }

@@ -8,8 +8,8 @@ read_model <- function(path) {
   data_path <- file.path(path, 'data')
   if (dir.exists(data_path)) {
     model$tables <- list.files(data_path) %>%
-      purrr::set_names(., gsub('.csv$', '', .)) %>%
-      purrr::map(~read.csv(file.path(data_path, .), stringsAsFactor = FALSE, check.names = FALSE))
+      set_names(., gsub('.csv$', '', .)) %>%
+      map(~read.csv(file.path(data_path, .), stringsAsFactor = FALSE, check.names = FALSE))
   } else {
     model$tables <- list()
   }
@@ -18,8 +18,8 @@ read_model <- function(path) {
   scripts_path <- file.path(path, 'scripts')
   if (dir.exists(scripts_path)) {
     model$scripts <- list.files(scripts_path) %>%
-      purrr::set_names(., gsub('.R$', '', ., fixed = TRUE)) %>%
-      purrr::map(~readr::read_file(file.path(scripts_path, .)))
+      set_names(., gsub('.R$', '', ., fixed = TRUE)) %>%
+      map(~read_file(file.path(scripts_path, .)))
   } else {
     model$scripts <- list()
   }
@@ -150,7 +150,7 @@ run_scripts <- function(scripts, env) {
 get_segments <- function(model) {
 
   if (nrow(model$groups) == 0) {
-    model$groups <- tibble::tibble(
+    model$groups <- tibble(
       name = 'all',
       display_name = 'All Patients',
       description = 'All Patients',
@@ -688,31 +688,31 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   }
 
   specs <- list(
-    states = readr::read_csv(file.path(spec_path, states_spec_file),
+    states = read_csv(file.path(spec_path, states_spec_file),
                             col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                          'default' = 'c', 'fallback' = 'c'),
                             progress = FALSE, show_col_types = FALSE),
-    transitions = readr::read_csv(file.path(spec_path, trans_spec_file),
+    transitions = read_csv(file.path(spec_path, trans_spec_file),
                                   col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                                'default' = 'c', 'fallback' = 'c'),
                                   progress = FALSE, show_col_types = FALSE),
-    values = readr::read_csv(file.path(spec_path, "values.csv"),
+    values = read_csv(file.path(spec_path, "values.csv"),
                             col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                          'default' = 'c', 'fallback' = 'c'),
                             progress = FALSE, show_col_types = FALSE),
-    strategies = readr::read_csv(file.path(spec_path, "strategies.csv"),
+    strategies = read_csv(file.path(spec_path, "strategies.csv"),
                                  col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                               'default' = 'c', 'fallback' = 'c'),
                                  progress = FALSE, show_col_types = FALSE),
-    groups = readr::read_csv(file.path(spec_path, "groups.csv"),
+    groups = read_csv(file.path(spec_path, "groups.csv"),
                             col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                          'default' = 'c', 'fallback' = 'c'),
                             progress = FALSE, show_col_types = FALSE),
-    variables = readr::read_csv(file.path(spec_path, "variables.csv"),
+    variables = read_csv(file.path(spec_path, "variables.csv"),
                                 col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                              'default' = 'c', 'fallback' = 'c'),
                                 progress = FALSE, show_col_types = FALSE),
-    summaries = readr::read_csv(file.path(spec_path, "summaries.csv"),
+    summaries = read_csv(file.path(spec_path, "summaries.csv"),
                                 col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
                                              'default' = 'c', 'fallback' = 'c'),
                                 progress = FALSE, show_col_types = FALSE)
@@ -724,27 +724,27 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   }
 
   # Apply specs to each component
-  if (!is.null(model$states) && nrow(model$states) > 0) {
+  if (!is.null(model$states) && is.data.frame(model$states) && nrow(model$states) > 0) {
     model$states <- check_tbl(model$states, specs$states, "States")
   }
 
-  if (!is.null(model$transitions) && nrow(model$transitions) > 0) {
+  if (!is.null(model$transitions) && is.data.frame(model$transitions) && nrow(model$transitions) > 0) {
     model$transitions <- check_tbl(model$transitions, specs$transitions, "Transitions")
   }
 
-  if (!is.null(model$values) && nrow(model$values) > 0) {
+  if (!is.null(model$values) && is.data.frame(model$values) && nrow(model$values) > 0) {
     model$values <- check_tbl(model$values, specs$values, "Values")
   }
 
-  if (!is.null(model$strategies) && nrow(model$strategies) > 0) {
+  if (!is.null(model$strategies) && is.data.frame(model$strategies) && nrow(model$strategies) > 0) {
     model$strategies <- check_tbl(model$strategies, specs$strategies, "Strategies")
   }
 
-  if (!is.null(model$groups) && nrow(model$groups) > 0) {
+  if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
     model$groups <- check_tbl(model$groups, specs$groups, "Groups")
   }
 
-  if (!is.null(model$variables) && nrow(model$variables) > 0) {
+  if (!is.null(model$variables) && is.data.frame(model$variables) && nrow(model$variables) > 0) {
     model$variables <- check_tbl(model$variables, specs$variables, "Variables")
   }
 
@@ -766,10 +766,19 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     model$transitions <- if (model_type == "psm") {
       create_empty_psm_transitions_stubs()
     } else if (model_type == "custom_psm") {
-      tibble::tibble(state = character(0), formula = character(0))
+      tibble(state = character(0), formula = character(0))
     } else {
-      tibble::tibble(from_state = character(0), to_state = character(0), formula = character(0))
+      tibble(from_state = character(0), to_state = character(0), formula = character(0))
     }
+  }
+  if (is.null(model$strategies) || !is.data.frame(model$strategies)) {
+    model$strategies <- tibble()
+  }
+  if (is.null(model$groups) || !is.data.frame(model$groups)) {
+    model$groups <- tibble()
+  }
+  if (is.null(model$states) || !is.data.frame(model$states)) {
+    model$states <- tibble()
   }
 
   # Ensure tables and scripts are named lists
@@ -846,9 +855,9 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
   if (is.null(values_spec)) {
     model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
       list.files() %>%
-      purrr::set_names(stringr::str_split_fixed(., '\\.', Inf)[,1]) %>%
-      purrr::map(function(x) {
-        suppressWarnings(readr::read_csv(
+      set_names(str_split_fixed(., '\\.', Inf)[,1]) %>%
+      map(function(x) {
+        suppressWarnings(read_csv(
           system.file('model_input_specs', x, package = 'heRomod2'),
           col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
           progress = FALSE
@@ -875,7 +884,7 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
     transitions = if (is_psm) {
       create_empty_psm_transitions_stubs()
     } else if (is_custom_psm) {
-      tibble::tibble(state = character(0), formula = character(0))
+      tibble(state = character(0), formula = character(0))
     } else {
       NULL
     },
@@ -886,7 +895,7 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
     stub_to_use <- df_stubs[[df_name]]
 
     if (is.null(model[[df_name]])) {
-      model[[df_name]] <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
+      model[[df_name]] <- if (!is.null(stub_to_use)) stub_to_use else tibble()
     } else {
       current_input <- model[[df_name]]
       if (!is.data.frame(current_input)) {
@@ -895,13 +904,13 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
           if (!is.null(attempt_df) && is.data.frame(attempt_df)) {
             current_input <- attempt_df
           } else {
-            current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
+            current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble()
           }
         } else {
-          current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble::tibble()
+          current_input <- if (!is.null(stub_to_use)) stub_to_use else tibble()
         }
       }
-      model[[df_name]] <- tibble::as_tibble(current_input)
+      model[[df_name]] <- as_tibble(current_input)
 
       # Use spec-based validation if spec exists for this component
       # Skip spec validation for PSM transitions (they have different structure)
@@ -936,7 +945,7 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
         # Apply empty string to NA conversion for non-spec dataframes
         if (nrow(model[[df_name]]) > 0) {
           model[[df_name]] <- model[[df_name]] %>%
-            dplyr::mutate(dplyr::across(everything(), ~ifelse(. == "", NA, .)))
+            mutate(across(everything(), ~ifelse(. == "", NA, .)))
         }
       }
 
@@ -969,7 +978,7 @@ convert_json_dataframes <- function(model, values_spec = NULL) {
 }
 
 create_empty_values_stubs <- function() {
-  tibble::tibble(
+  tibble(
     name = character(0),
     display_name = character(0),
     description = character(0),
@@ -981,7 +990,7 @@ create_empty_values_stubs <- function() {
 }
 
 create_empty_summaries_stubs <- function() {
-  tibble::tibble(
+  tibble(
     name = character(0),
     display_name = character(0),
     description = character(0),
@@ -990,7 +999,7 @@ create_empty_summaries_stubs <- function() {
 }
 
 create_empty_psm_transitions_stubs <- function() {
-  tibble::tibble(
+  tibble(
     endpoint = character(0),
     time_unit = character(0),
     formula = character(0)
@@ -998,7 +1007,7 @@ create_empty_psm_transitions_stubs <- function() {
 }
 
 create_empty_variables_stubs <- function() {
-  tibble::tibble(
+  tibble(
     name = character(0),
     display_name = character(0),
     description = character(0),
@@ -1017,7 +1026,7 @@ ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
     return(required_cols_spec_tibble) 
   }
   if (!inherits(tbl, "tbl_df")) {
-    tbl <- tibble::as_tibble(tbl)
+    tbl <- as_tibble(tbl)
   }
 
   for (col_name in colnames(required_cols_spec_tibble)) {
@@ -1078,7 +1087,7 @@ write_model_json <- function(model) {
 
   # Convert settings from list to dataframe format expected by JSON
   if (!is.null(model$settings) && is.list(model$settings)) {
-    settings_df <- tibble::tibble(
+    settings_df <- tibble(
       setting = names(model$settings),
       value = as.character(unlist(model$settings))
     )
@@ -1159,7 +1168,7 @@ write_model_json <- function(model) {
   }
 
   # Convert to JSON using jsonlite
-  json_string <- jsonlite::toJSON(
+  json_string <- toJSON(
     json_model,
     auto_unbox = TRUE,
     pretty = TRUE,

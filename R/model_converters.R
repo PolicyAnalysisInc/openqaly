@@ -38,7 +38,7 @@ write_model <- function(model, path, format = c("excel", "json", "r")) {
 
   if (format == "excel") {
     # Excel format requires a folder path
-    if (tools::file_ext(path) != "") {
+    if (file_ext(path) != "") {
       stop("For Excel format, path must be a folder, not a file. Got: ", path)
     }
 
@@ -50,7 +50,7 @@ write_model <- function(model, path, format = c("excel", "json", "r")) {
 
   } else if (format %in% c("json", "r")) {
     # JSON and R formats require a file path
-    if (tools::file_ext(path) == "") {
+    if (file_ext(path) == "") {
       stop("For ", format, " format, path must include a filename. Got: ", path)
     }
 
@@ -82,7 +82,7 @@ write_model <- function(model, path, format = c("excel", "json", "r")) {
 write_model_excel <- function(model, path) {
   # Prepare settings dataframe
   if (!is.null(model$settings) && is.list(model$settings)) {
-    settings_df <- tibble::tibble(
+    settings_df <- tibble(
       setting = names(model$settings),
       value = as.character(unlist(model$settings))
     )
@@ -93,13 +93,13 @@ write_model_excel <- function(model, path) {
   # Create workbook with all sheets
   wb_list <- list(
     settings = settings_df,
-    strategies = model$strategies %||% tibble::tibble(),
-    groups = model$groups %||% tibble::tibble(),
-    states = model$states %||% tibble::tibble(),
-    transitions = model$transitions %||% tibble::tibble(),
-    values = model$values %||% tibble::tibble(),
-    variables = model$variables %||% tibble::tibble(),
-    summaries = model$summaries %||% tibble::tibble()
+    strategies = model$strategies %||% tibble(),
+    groups = model$groups %||% tibble(),
+    states = model$states %||% tibble(),
+    transitions = model$transitions %||% tibble(),
+    values = model$values %||% tibble(),
+    variables = model$variables %||% tibble(),
+    summaries = model$summaries %||% tibble()
   )
 
   # Handle trees if present
@@ -109,7 +109,7 @@ write_model_excel <- function(model, path) {
 
   # Write the Excel file
   excel_path <- file.path(path, "model.xlsx")
-  openxlsx::write.xlsx(wb_list, excel_path)
+  write.xlsx(wb_list, excel_path)
 
   # Write tables as CSV files
   if (!is.null(model$tables) && length(model$tables) > 0) {
@@ -178,7 +178,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
         }
       } else if (file.exists(input)) {
         # It's a file - check extension
-        ext <- tools::file_ext(input)
+        ext <- file_ext(input)
         if (ext == "json") {
           json_str <- paste(readLines(input), collapse = "\n")
           model <- read_model_json(json_str)
@@ -201,7 +201,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
         }
       } else {
         # Try to parse as JSON string
-        if (jsonlite::validate(input)) {
+        if (validate(input)) {
           model <- read_model_json(input)
         } else {
           stop("Input not recognized as file, folder, or valid JSON: ", input)
@@ -236,7 +236,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
 
   # Auto-detect output format from path extension
   if (to == "auto") {
-    ext <- tools::file_ext(output)
+    ext <- file_ext(output)
     if (ext == "json") {
       to <- "json"
     } else if (ext == "R") {
@@ -273,11 +273,11 @@ detect_model_format <- function(input) {
         return("excel")
       }
     } else if (file.exists(input)) {
-      ext <- tools::file_ext(input)
+      ext <- file_ext(input)
       if (ext == "xlsx") return("excel")
       if (ext == "json") return("json")
       if (ext == "R") return("r")
-    } else if (jsonlite::validate(input)) {
+    } else if (validate(input)) {
       return("json_string")
     }
   }

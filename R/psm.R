@@ -63,7 +63,7 @@ run_segment.psm <- function(segment, model, env, ...) {
   if (!is.null(model$summaries) && nrow(model$summaries) > 0) {
     parsed_summaries <- parse_summaries(model$summaries, model_value_names) 
   } else {
-    parsed_summaries <- tibble::tibble(
+    parsed_summaries <- tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
@@ -144,11 +144,13 @@ run_segment.psm <- function(segment, model, env, ...) {
 
   if (!is.na(cycle_length_days) && cycle_length_days > 0) {
     # Generate time columns based on cycle numbers and cycle length
+    # Use consistent conversion factors with time.R
+    days_per_month <- days_per_year / 12
     time_vars_df <- data.frame(
       cycle = cycle_numbers,
       day = cycle_numbers * cycle_length_days,
       week = cycle_numbers * cycle_length_days / 7,
-      month = cycle_numbers * cycle_length_days / 30.4375,
+      month = cycle_numbers * cycle_length_days / days_per_month,
       year = cycle_numbers * cycle_length_days / days_per_year
     )
 
@@ -181,7 +183,7 @@ run_segment.psm <- function(segment, model, env, ...) {
     segment$summaries <- list(summaries_undiscounted)
     segment$summaries_discounted <- list(summaries_discounted)
   } else {
-    empty_summary <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
@@ -697,7 +699,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   if (!is.null(model$summaries) && nrow(model$summaries) > 0) {
     parsed_summaries <- parse_summaries(model$summaries, model_value_names)
   } else {
-    parsed_summaries <- tibble::tibble(
+    parsed_summaries <- tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
@@ -777,11 +779,13 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 
   if (!is.na(cycle_length_days) && cycle_length_days > 0) {
     # Generate time columns based on cycle numbers and cycle length
+    # Use consistent conversion factors with time.R
+    days_per_month <- days_per_year / 12
     time_vars_df <- data.frame(
       cycle = cycle_numbers,
       day = cycle_numbers * cycle_length_days,
       week = cycle_numbers * cycle_length_days / 7,
-      month = cycle_numbers * cycle_length_days / 30.4375,
+      month = cycle_numbers * cycle_length_days / days_per_month,
       year = cycle_numbers * cycle_length_days / days_per_year
     )
 
@@ -814,7 +818,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     segment$summaries <- list(summaries_undiscounted)
     segment$summaries_discounted <- list(summaries_discounted)
   } else {
-    empty_summary <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }

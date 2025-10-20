@@ -9,7 +9,7 @@ parse_values <- function(x, states, extra_vars) {
     # plus max_st (added later).
     # `sort_variables` might add `depends`, `depend_on_past`, `is_cycle_dep` etc.
     # For simplicity, we ensure the columns that would be selected and added.
-    empty_parsed_values <- tibble::tibble(
+    empty_parsed_values <- tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
@@ -98,7 +98,7 @@ format_ranges_for_eval_values <- function(numbers) {
   if (is.null(numbers) || length(numbers) == 0 || all(is.na(numbers))) {
     return("N/A")
   }
-  unique_sorted_numbers <- sort(unique(as.integer(stats::na.omit(numbers))))
+  unique_sorted_numbers <- sort(unique(as.integer(na.omit(numbers))))
   if (length(unique_sorted_numbers) == 0) {
     return("N/A")
   }
@@ -135,7 +135,7 @@ format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_p
 
   # Ensure 'Destination' is character for consistent formatting if it contains actual NAs
   if ("Destination" %in% colnames(table_data_df)) {
-    table_data_df <- dplyr::mutate(table_data_df, Destination = as.character(Destination))
+    table_data_df <- mutate(table_data_df, Destination = as.character(Destination))
   }
   
   # Format NA values as "N/A" for display purposes
@@ -174,7 +174,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   # Handle 0-row input df (e.g., from a model with no values defined)
   if (nrow(df) == 0) {
     # Return empty tibble with expected columns
-    empty_evaluated_values <- tibble::tibble(
+    empty_evaluated_values <- tibble(
       state = character(0),
       destination = character(0),
       max_st = numeric(0),
@@ -185,18 +185,18 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
 
     # The arrange step on a 0-row tibble with a 'state' column is valid.
     # factor(character(0), levels=state_names) results in factor(0 levels=...)
-    return(dplyr::arrange(empty_evaluated_values, factor(state, levels = state_names)))
+    return(arrange(empty_evaluated_values, factor(state, levels = state_names)))
   }
 
   # Existing logic for when df has rows:
   
   # The list of tibbles, one for each group of (state, destination)
   grouped_df_list <- df %>%
-    dplyr::group_by(state, destination) %>% # destination can be NA
-    dplyr::group_split()
+    group_by(state, destination) %>% # destination can be NA
+    group_split()
 
   # Process each group and collect NA information
-  processed_groups_and_na_info <- purrr::map(grouped_df_list, function(x_group) {
+  processed_groups_and_na_info <- map(grouped_df_list, function(x_group) {
       state_ns <- eval_variables(x_group, clone_namespace(ns), FALSE)
       state_res <- state_ns$df # This contains cycle, state_cycle, and evaluated variable columns
       
@@ -215,7 +215,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
                       na_indices <- which(is.na(state_res[[v_col_name]]))
                       if (length(na_indices) > 0) {
                           current_group_na_details_list[[length(current_group_na_details_list) + 1]] <-
-                              tibble::tibble(
+                              tibble(
                                   value_name = v_col_name,
                                   state = x_group$state[1],
                                   # Handle destination being NA_character_ if x_group$destination[1] is NA
@@ -228,7 +228,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
               }
           }
       }
-      na_report_for_this_group <- dplyr::bind_rows(current_group_na_details_list)
+      na_report_for_this_group <- bind_rows(current_group_na_details_list)
 
       # --- Resume original logic for processing state_res ---
       state_res$state <- x_group$state[1]
@@ -247,7 +247,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
             simplified_state_res <- state_res[ ,cols_for_pivot, drop = FALSE]
             if (nrow(simplified_state_res) > 0 && length(value_names_in_df) > 0) {
                 val_mat <- simplified_state_res %>%
-                    tidyr::pivot_longer(names_to = "variable", values_to = "value", dplyr::all_of(value_names_in_df)) %>%
+                    pivot_longer(names_to = "variable", values_to = "value", all_of(value_names_in_df)) %>%
                     lf_to_arr(c('cycle', 'state_cycle','variable'), 'value')
                 current_max_st <- min(current_max_st, arr_last_unique(val_mat, 2), na.rm = TRUE)
             }
@@ -255,16 +255,16 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       }
       
       expanded_state_res_list <- state_res %>%
-        dplyr::group_by(state_cycle) %>%
-        dplyr::group_split()
+        group_by(state_cycle) %>%
+        group_split()
       
-      inner_mapped_rows <- purrr::map(expanded_state_res_list, function(state_cycle_df) {
+      inner_mapped_rows <- map(expanded_state_res_list, function(state_cycle_df) {
           expanded_state_values_list <- append(
             as.list(state_cycle_df[ ,value_names_in_df, drop = FALSE]),
             as.list(state_ns$env)[value_names_in_env]
           )
           
-          tibble::tibble(
+          tibble(
             state = x_group$state[1],
             destination = x_group$destination[1], # This can be NA
             max_st = current_max_st,
@@ -274,29 +274,29 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       })
       
       list(
-          data_output = dplyr::bind_rows(inner_mapped_rows),
+          data_output = bind_rows(inner_mapped_rows),
           na_report = na_report_for_this_group
       )
   })
   
   # Extract the main data results and the NA reports
-  mapped_results_list <- purrr::map(processed_groups_and_na_info, "data_output")
-  all_na_reports_list <- purrr::map(processed_groups_and_na_info, "na_report")
+  mapped_results_list <- map(processed_groups_and_na_info, "data_output")
+  all_na_reports_list <- map(processed_groups_and_na_info, "na_report")
   
   # Combine all NA reports into one tibble
-  all_na_df <- dplyr::bind_rows(all_na_reports_list)
+  all_na_df <- bind_rows(all_na_reports_list)
 
   # If NA values were found, process and potentially throw error
   if (nrow(all_na_df) > 0) {
     # Consolidate NA report
     consolidated_na_summary <- all_na_df %>%
-      dplyr::group_by(value_name, state, destination) %>%
-      dplyr::summarise(
+      group_by(value_name, state, destination) %>%
+      summarise(
         Cycles = format_ranges_for_eval_values(cycle),
         State_Cycles = format_ranges_for_eval_values(state_cycle),
         .groups = 'drop'
       ) %>%
-      dplyr::select(
+      select(
         `Value Name` = value_name,
         State = state,
         Destination = destination, # This column might contain NA_character_
@@ -314,9 +314,9 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
 
   
   # Combine results from all groups (original logic)
-  final_evaluated_values <- dplyr::bind_rows(mapped_results_list)
+  final_evaluated_values <- bind_rows(mapped_results_list)
   
-  dplyr::arrange(final_evaluated_values, factor(state, levels = state_names))
+  arrange(final_evaluated_values, factor(state, levels = state_names))
 }
 
 values_to_vmat <- function(df, state_names) {

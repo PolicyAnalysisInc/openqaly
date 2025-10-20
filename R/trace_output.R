@@ -79,7 +79,10 @@ get_trace <- function(results,
                       groups = NULL,
                       states = NULL,
                       cycles = NULL,
-                      time_unit = c("cycle", "day", "week", "month", "year")) {
+                      time_unit = c("cycle", "day", "week", "month", "year"),
+                      strategy_name_field = "display_name",
+                      group_name_field = "display_name",
+                      state_name_field = "display_name") {
 
   format <- match.arg(format)
   time_unit <- match.arg(time_unit)
@@ -110,18 +113,22 @@ get_trace <- function(results,
 
   # Extract traces based on format
   if (format == "matrix") {
-    return(extract_trace_matrix(source_data, states, cycles, time_unit, trace_column))
+    return(extract_trace_matrix(source_data, states, cycles, time_unit, trace_column,
+                                results$metadata, strategy_name_field, group_name_field, state_name_field))
   } else if (format == "wide") {
-    return(extract_trace_wide(source_data, states, cycles, time_unit, trace_column))
+    return(extract_trace_wide(source_data, states, cycles, time_unit, trace_column,
+                              results$metadata, strategy_name_field, group_name_field, state_name_field))
   } else {
-    return(extract_trace_long(source_data, states, cycles, time_unit, trace_column))
+    return(extract_trace_long(source_data, states, cycles, time_unit, trace_column,
+                              results$metadata, strategy_name_field, group_name_field, state_name_field))
   }
 }
 
 
 #' Extract Trace as Matrix
 #' @keywords internal
-extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace") {
+extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
+                                 metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
   traces <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -146,13 +153,25 @@ extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time
   })
 
   names(traces) <- paste0(source_data$strategy, "_", source_data$group)
+
+  # Map state column names if metadata available
+  if (!is.null(metadata) && !is.null(metadata$states) && state_name_field != "name") {
+    traces <- lapply(traces, function(trace) {
+      old_colnames <- colnames(trace)
+      new_colnames <- map_names(old_colnames, metadata$states, state_name_field)
+      colnames(trace) <- new_colnames
+      trace
+    })
+  }
+
   traces
 }
 
 
 #' Extract Trace as Wide Format
 #' @keywords internal
-extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace") {
+extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
+                               metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -184,13 +203,33 @@ extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_u
     df
   })
 
-  do.call(rbind, dfs)
+  result <- do.call(rbind, dfs)
+
+  # Map names for display
+  if (!is.null(metadata)) {
+    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    }
+    if (!is.null(metadata$groups) && group_name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    }
+    # Map state column names
+    if (!is.null(metadata$states) && state_name_field != "name") {
+      time_cols <- c("strategy", "group", "cycle", "day", "week", "month", "year")
+      state_cols <- setdiff(colnames(result), time_cols)
+      colnames(result)[colnames(result) %in% state_cols] <-
+        map_names(state_cols, metadata$states, state_name_field)
+    }
+  }
+
+  result
 }
 
 
 #' Extract Trace as Long Format
 #' @keywords internal
-extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace") {
+extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
+                               metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -248,7 +287,7 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
     df_states$group <- source_data$group[i]
 
     # Reshape to long
-    df_long <- tidyr::pivot_longer(
+    df_long <- pivot_longer(
       df_states,
       cols = -c(strategy, group, time),
       names_to = "state",
@@ -284,7 +323,23 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
     df_long
   })
 
-  do.call(rbind, dfs)
+  result <- do.call(rbind, dfs)
+
+  # Map names for display
+  if (!is.null(metadata)) {
+    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    }
+    if (!is.null(metadata$groups) && group_name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    }
+    # For long format, map state column
+    if (!is.null(metadata$states) && state_name_field != "name") {
+      result$state <- map_names(result$state, metadata$states, state_name_field)
+    }
+  }
+
+  result
 }
 
 
@@ -320,17 +375,17 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #' results <- run_model(model)
 #'
 #' # Basic stacked area plot (auto-facets by strategy if >1)
-#' plot_trace(results)
+#' trace_plot_area(results)
 #'
 #' # Explicitly facet by strategy
-#' plot_trace(results, facet_by = "strategy")
+#' trace_plot_area(results, facet_by = "strategy")
 #'
 #' # Show as percentages
-#' plot_trace(results, proportional = TRUE)
+#' trace_plot_area(results, proportional = TRUE)
 #' }
 #'
 #' @export
-plot_trace <- function(results,
+trace_plot_area <- function(results,
                        facet_by = NULL,
                        proportional = FALSE,
                        states = NULL,
@@ -341,36 +396,27 @@ plot_trace <- function(results,
                        state_name_field = "name",
                        time_unit = "cycle") {
 
-  # Get trace data in long format
+  # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
-                          time_unit = time_unit)
+                          time_unit = time_unit,
+                          strategy_name_field = strategy_name_field,
+                          state_name_field = state_name_field)
 
-  # Map names for display if metadata is available
-  if (!is.null(results$metadata)) {
-    if (!is.null(results$metadata$strategies) && strategy_name_field != "name") {
-      trace_data$strategy <- map_names(trace_data$strategy,
-                                       results$metadata$strategies,
-                                       strategy_name_field)
-    }
-    if (!is.null(results$metadata$states) && state_name_field != "name") {
-      trace_data$state <- map_names(trace_data$state,
-                                    results$metadata$states,
-                                    state_name_field)
-      # Also update color palette keys if provided
-      if (!is.null(color_palette) && !is.null(names(color_palette))) {
-        old_names <- names(color_palette)
-        new_names <- map_names(old_names, results$metadata$states, state_name_field)
-        names(color_palette) <- new_names
-      }
+  # Update color palette keys if provided (plot-specific mapping)
+  if (!is.null(color_palette) && !is.null(names(color_palette))) {
+    if (!is.null(results$metadata) && !is.null(results$metadata$states) && state_name_field != "name") {
+      old_names <- names(color_palette)
+      new_names <- map_names(old_names, results$metadata$states, state_name_field)
+      names(color_palette) <- new_names
     }
   }
 
   # Convert to percentage if requested
   if (proportional) {
     trace_data <- trace_data %>%
-      dplyr::group_by(strategy, group, cycle) %>%
-      dplyr::mutate(probability = probability * 100) %>%
-      dplyr::ungroup()
+      group_by(strategy, group, cycle) %>%
+      mutate(probability = probability * 100) %>%
+      ungroup()
   }
 
   # Determine faceting - auto-facet if multiple series and no faceting specified
@@ -414,10 +460,12 @@ plot_trace <- function(results,
   }
 
   # Create base plot using the appropriate time column
-  p <- ggplot2::ggplot(trace_data, ggplot2::aes(x = .data[[time_col_name]], y = probability, fill = state)) +
-    ggplot2::geom_area(position = "stack") +
-    ggplot2::theme_minimal() +
-    ggplot2::labs(
+  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = probability, fill = state)) +
+    geom_area(position = "stack") +
+    scale_x_continuous(expand = c(0, 0, 0, 0)) +
+    scale_y_continuous(expand = c(0, 0, 0, 0)) +
+    theme_bw() +
+    labs(
       x = time_label,
       y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
       fill = "State"
@@ -425,23 +473,28 @@ plot_trace <- function(results,
 
   # Apply color palette if provided
   if (!is.null(color_palette)) {
-    p <- p + ggplot2::scale_fill_manual(values = color_palette)
+    p <- p + scale_fill_manual(values = color_palette)
   }
 
   # Add faceting
   if (!is.null(facet_by)) {
     if (facet_by == "strategy") {
-      p <- p + ggplot2::facet_wrap(~ strategy)
+      p <- p + facet_wrap(~ strategy)
     } else if (facet_by == "group") {
-      p <- p + ggplot2::facet_wrap(~ group)
+      p <- p + facet_wrap(~ group)
     } else if (facet_by == "both") {
-      p <- p + ggplot2::facet_wrap(~ strategy + group)
+      p <- p + facet_wrap(~ strategy + group)
     }
   }
 
-  # Hide legend if requested
+  # Position legend at bottom with horizontal layout (or hide if requested)
   if (!show_legend) {
-    p <- p + ggplot2::theme(legend.position = "none")
+    p <- p + theme(legend.position = "none")
+  } else {
+    p <- p + theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal"
+    )
   }
 
   p
@@ -453,7 +506,7 @@ plot_trace <- function(results,
 #' Creates line plots showing individual state trajectories over time.
 #' Alternative to stacked area charts for easier comparison of individual states.
 #'
-#' @inheritParams plot_trace
+#' @inheritParams trace_plot_area
 #' @param strategy_name_field Which strategy name field to use for facet labels:
 #'   "name", "display_name", or "abbreviation". Default is "name".
 #' @param state_name_field Which state name field to use for legend labels:
@@ -467,14 +520,14 @@ plot_trace <- function(results,
 #' results <- run_model(model)
 #'
 #' # Line plot showing each state's trajectory
-#' plot_trace_lines(results)
+#' trace_plot_line(results)
 #'
 #' # Compare strategies
-#' plot_trace_lines(results, facet_by = "strategy")
+#' trace_plot_line(results, facet_by = "strategy")
 #' }
 #'
 #' @export
-plot_trace_lines <- function(results,
+trace_plot_line <- function(results,
                               facet_by = NULL,
                               proportional = FALSE,
                               states = NULL,
@@ -485,36 +538,27 @@ plot_trace_lines <- function(results,
                               state_name_field = "name",
                               time_unit = "cycle") {
 
-  # Get trace data in long format
+  # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
-                          time_unit = time_unit)
+                          time_unit = time_unit,
+                          strategy_name_field = strategy_name_field,
+                          state_name_field = state_name_field)
 
-  # Map names for display if metadata is available
-  if (!is.null(results$metadata)) {
-    if (!is.null(results$metadata$strategies) && strategy_name_field != "name") {
-      trace_data$strategy <- map_names(trace_data$strategy,
-                                       results$metadata$strategies,
-                                       strategy_name_field)
-    }
-    if (!is.null(results$metadata$states) && state_name_field != "name") {
-      trace_data$state <- map_names(trace_data$state,
-                                    results$metadata$states,
-                                    state_name_field)
-      # Also update color palette keys if provided
-      if (!is.null(color_palette) && !is.null(names(color_palette))) {
-        old_names <- names(color_palette)
-        new_names <- map_names(old_names, results$metadata$states, state_name_field)
-        names(color_palette) <- new_names
-      }
+  # Update color palette keys if provided (plot-specific mapping)
+  if (!is.null(color_palette) && !is.null(names(color_palette))) {
+    if (!is.null(results$metadata) && !is.null(results$metadata$states) && state_name_field != "name") {
+      old_names <- names(color_palette)
+      new_names <- map_names(old_names, results$metadata$states, state_name_field)
+      names(color_palette) <- new_names
     }
   }
 
   # Convert to percentage if requested
   if (proportional) {
     trace_data <- trace_data %>%
-      dplyr::group_by(strategy, group, cycle) %>%
-      dplyr::mutate(probability = probability * 100) %>%
-      dplyr::ungroup()
+      group_by(strategy, group, cycle) %>%
+      mutate(probability = probability * 100) %>%
+      ungroup()
   }
 
   # Determine faceting - auto-facet if multiple series and no faceting specified
@@ -558,10 +602,10 @@ plot_trace_lines <- function(results,
   }
 
   # Create base plot using the appropriate time column
-  p <- ggplot2::ggplot(trace_data, ggplot2::aes(x = .data[[time_col_name]], y = probability, color = state)) +
-    ggplot2::geom_line(linewidth = 1) +
-    ggplot2::theme_minimal() +
-    ggplot2::labs(
+  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = probability, color = state)) +
+    geom_line(linewidth = 1) +
+    theme_bw() +
+    labs(
       x = time_label,
       y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
       color = "State"
@@ -569,23 +613,23 @@ plot_trace_lines <- function(results,
 
   # Apply color palette if provided
   if (!is.null(color_palette)) {
-    p <- p + ggplot2::scale_color_manual(values = color_palette)
+    p <- p + scale_color_manual(values = color_palette)
   }
 
   # Add faceting
   if (!is.null(facet_by)) {
     if (facet_by == "strategy") {
-      p <- p + ggplot2::facet_wrap(~ strategy)
+      p <- p + facet_wrap(~ strategy)
     } else if (facet_by == "group") {
-      p <- p + ggplot2::facet_wrap(~ group)
+      p <- p + facet_wrap(~ group)
     } else if (facet_by == "both") {
-      p <- p + ggplot2::facet_wrap(~ strategy + group)
+      p <- p + facet_wrap(~ strategy + group)
     }
   }
 
-  # Hide legend if requested
+  # Position legend at bottom with horizontal layout (or hide if requested)
   if (!show_legend) {
-    p <- p + ggplot2::theme(legend.position = "none")
+    p <- p + theme(legend.position = "none")
   }
 
   p
@@ -632,7 +676,7 @@ export_trace <- function(results,
 
   # Infer format from file extension if not provided
   if (is.null(format)) {
-    ext <- tolower(tools::file_ext(file))
+    ext <- tolower(file_ext(file))
     format <- switch(ext,
       csv = "csv",
       xlsx = "excel",
@@ -647,17 +691,17 @@ export_trace <- function(results,
   # Export based on format
   if (format == "csv") {
     trace_data <- get_trace(results, format = "wide", collapsed = collapsed)
-    utils::write.csv(trace_data, file, row.names = FALSE, ...)
+    write.csv(trace_data, file, row.names = FALSE, ...)
   } else if (format == "excel") {
     export_trace_excel(results, file, collapsed, separate_sheets, ...)
   } else if (format == "html") {
     trace_data <- get_trace(results, format = "wide", collapsed = collapsed)
     # Simple HTML table
-    html_content <- knitr::kable(trace_data, format = "html", ...)
+    html_content <- kable(trace_data, format = "html", ...)
     writeLines(as.character(html_content), file)
   } else if (format == "json") {
     trace_data <- get_trace(results, format = "long", collapsed = collapsed)
-    jsonlite::write_json(trace_data, file, pretty = TRUE, ...)
+    write_json(trace_data, file, pretty = TRUE, ...)
   } else if (format == "rds") {
     trace_data <- get_trace(results, format = "matrix", collapsed = collapsed)
     saveRDS(trace_data, file, ...)
@@ -677,7 +721,7 @@ export_trace_excel <- function(results, file, collapsed, separate_sheets, ...) {
     stop("Package 'openxlsx' is required for Excel export. Please install it.")
   }
 
-  wb <- openxlsx::createWorkbook()
+  wb <- createWorkbook()
 
   if (separate_sheets) {
     # Get trace data
@@ -692,14 +736,14 @@ export_trace_excel <- function(results, file, collapsed, separate_sheets, ...) {
       }
 
       sheet_name <- substr(strat, 1, 31)  # Excel sheet name limit
-      openxlsx::addWorksheet(wb, sheet_name)
-      openxlsx::writeData(wb, sheet_name, trace_data)
+      addWorksheet(wb, sheet_name)
+      writeData(wb, sheet_name, trace_data)
     }
   } else {
     trace_data <- get_trace(results, format = "wide", collapsed = collapsed)
-    openxlsx::addWorksheet(wb, "Trace")
-    openxlsx::writeData(wb, "Trace", trace_data)
+    addWorksheet(wb, "Trace")
+    writeData(wb, "Trace", trace_data)
   }
 
-  openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+  saveWorkbook(wb, file, overwrite = TRUE)
 }

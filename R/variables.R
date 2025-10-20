@@ -44,7 +44,7 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
 
   # Handle empty variables case
   if (nrow(x) == 0 && (is.null(extras) || nrow(extras) == 0)) {
-    empty_vars <- tibble::tibble(
+    empty_vars <- tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
@@ -103,7 +103,7 @@ sort_variables <- function(x, extra_vars = NULL) {
   
   # Extract the variable names referenced in each variable's
   # formula
-  var_list <-  purrr::map(x$formula, function(y) {
+  var_list <-  map(x$formula, function(y) {
       vars <- c(y$depends, y$after)
       vars[vars %in% par_names]
     }) %>%

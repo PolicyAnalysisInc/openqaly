@@ -96,7 +96,7 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
   data <- clean_factors(data)
 
   df_vars <- do.call(
-    tibble::tibble,
+    tibble,
     list_specs
   ) %>%
     clean_factors
@@ -161,7 +161,7 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
     ))
   }
   res <- suppressMessages(
-    dplyr::left_join(
+    left_join(
       df_vars,
       data,
       by = names(df_vars)

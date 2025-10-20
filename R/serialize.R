@@ -94,11 +94,11 @@ export_model_json <- function(model_results, file, pretty = TRUE, auto_unbox = T
   serializable <- prepare_model_results_for_json(model_results)
   
   # Convert to JSON and write to file
-  json_output <- jsonlite::toJSON(serializable, 
-                                   pretty = pretty, 
-                                   auto_unbox = auto_unbox,
-                                   null = "null",
-                                   na = "null")
+  json_output <- toJSON(serializable,
+                        pretty = pretty,
+                        auto_unbox = auto_unbox,
+                        null = "null",
+                        na = "null")
   
   writeLines(json_output, file)
   

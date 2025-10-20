@@ -26,13 +26,13 @@ define_model <- function(type = "markov") {
 
   # Type-specific state initialization
   states_init <- if (type == "psm") {
-    tibble::tibble(
+    tibble(
       name = character(0),
       display_name = character(0),
       description = character(0)
     )
   } else {
-    tibble::tibble(
+    tibble(
       name = character(0),
       initial_probability = character(0),
       display_name = character(0),
@@ -46,13 +46,13 @@ define_model <- function(type = "markov") {
 
   # Type-specific transitions initialization
   transitions_init <- if (type == "psm") {
-    tibble::tibble(
+    tibble(
       endpoint = character(0),
       time_unit = character(0),
       formula = character(0)
     )
   } else {
-    tibble::tibble(
+    tibble(
       from_state = character(0),
       to_state = character(0),
       formula = character(0)
@@ -69,7 +69,7 @@ define_model <- function(type = "markov") {
     ),
     states = states_init,
     transitions = transitions_init,
-    values = tibble::tibble(
+    values = tibble(
       name = character(0),
       formula = character(0),
       state = character(0),
@@ -78,7 +78,7 @@ define_model <- function(type = "markov") {
       description = character(0),
       type = character(0)
     ),
-    variables = tibble::tibble(
+    variables = tibble(
       name = character(0),
       formula = character(0),
       display_name = character(0),
@@ -88,25 +88,26 @@ define_model <- function(type = "markov") {
       source = character(0),
       sampling = character(0)
     ),
-    strategies = tibble::tibble(
+    strategies = tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       abbreviation = character(0),
       enabled = numeric(0)
     ),
-    groups = tibble::tibble(
+    groups = tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       weight = character(0),
       enabled = numeric(0)
     ),
-    summaries = tibble::tibble(
+    summaries = tibble(
       name = character(0),
       values = character(0),
       display_name = character(0),
-      description = character(0)
+      description = character(0),
+      wtp = numeric(0)
     ),
     tables = list(),
     scripts = list(),
@@ -219,7 +220,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create PSM state (3 columns only)
-    new_state <- tibble::tibble(
+    new_state <- tibble(
       name = name,
       display_name = display_name %||% name,
       description = description %||% display_name %||% name
@@ -231,7 +232,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create Markov state (8 columns)
-    new_state <- tibble::tibble(
+    new_state <- tibble(
       name = name,
       initial_probability = as.character(initial_prob),
       display_name = display_name %||% name,
@@ -277,12 +278,12 @@ add_transition <- function(model, from_state, to_state, formula) {
   }
 
   # Capture the formula expression using NSE
-  formula_quo <- rlang::enquo(formula)
+  formula_quo <- enquo(formula)
   # Remove the ~ if it exists (enquo adds it)
-  formula_expr <- rlang::quo_get_expr(formula_quo)
-  formula_str <- rlang::expr_text(formula_expr)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
 
-  new_trans <- tibble::tibble(
+  new_trans <- tibble(
     from_state = from_state,
     to_state = to_state,
     formula = formula_str
@@ -310,12 +311,12 @@ add_transition <- function(model, from_state, to_state, formula) {
 #' @export
 add_psm_transition <- function(model, endpoint, time_unit, formula) {
   # Capture the formula expression using NSE
-  formula_quo <- rlang::enquo(formula)
+  formula_quo <- enquo(formula)
   # Remove the ~ if it exists (enquo adds it)
-  formula_expr <- rlang::quo_get_expr(formula_quo)
-  formula_str <- rlang::expr_text(formula_expr)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
 
-  new_trans <- tibble::tibble(
+  new_trans <- tibble(
     endpoint = endpoint,
     time_unit = time_unit,
     formula = formula_str
@@ -353,12 +354,12 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
                      type = "outcome") {
 
   # Capture the formula expression using NSE
-  formula_quo <- rlang::enquo(formula)
+  formula_quo <- enquo(formula)
   # Remove the ~ if it exists (enquo adds it)
-  formula_expr <- rlang::quo_get_expr(formula_quo)
-  formula_str <- rlang::expr_text(formula_expr)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
 
-  new_value <- tibble::tibble(
+  new_value <- tibble(
     name = name,
     formula = formula_str,
     state = as.character(state),
@@ -401,12 +402,12 @@ add_variable <- function(model, name, formula, display_name = NULL,
                         source = "", sampling = "") {
 
   # Capture the formula expression using NSE
-  formula_quo <- rlang::enquo(formula)
+  formula_quo <- enquo(formula)
   # Remove the ~ if it exists (enquo adds it)
-  formula_expr <- rlang::quo_get_expr(formula_quo)
-  formula_str <- rlang::expr_text(formula_expr)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
 
-  new_var <- tibble::tibble(
+  new_var <- tibble(
     name = name,
     formula = formula_str,
     display_name = display_name %||% name,
@@ -440,7 +441,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
 add_strategy <- function(model, name, display_name = NULL,
                         description = NULL, abbreviation = NULL, enabled = 1) {
 
-  new_strat <- tibble::tibble(
+  new_strat <- tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -472,7 +473,7 @@ add_strategy <- function(model, name, display_name = NULL,
 add_group <- function(model, name, display_name = NULL,
                      description = NULL, weight = "1", enabled = 1) {
 
-  new_group <- tibble::tibble(
+  new_group <- tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -493,21 +494,25 @@ add_group <- function(model, name, display_name = NULL,
 #' @param values Comma-separated string of value names to include
 #' @param display_name Optional display name
 #' @param description Optional description
+#' @param wtp Optional willingness-to-pay value (numeric). Only used for outcome summaries
+#'   in net monetary benefit calculations. Leave NULL for cost summaries.
 #'
 #' @return The modified model object
 #'
 #' @export
 #' @examples
 #' model <- define_model("markov") |>
-#'   add_summary("total_cost", "cost1,cost2,cost3")
+#'   add_summary("total_cost", "cost1,cost2,cost3") |>
+#'   add_summary("total_qalys", "qaly1,qaly2", wtp = 50000)
 add_summary <- function(model, name, values, display_name = NULL,
-                       description = NULL) {
+                       description = NULL, wtp = NULL) {
 
-  new_summary <- tibble::tibble(
+  new_summary <- tibble(
     name = name,
     values = values,
     display_name = display_name %||% name,
-    description = description %||% display_name %||% name
+    description = description %||% display_name %||% name,
+    wtp = wtp %||% NA_real_
   )
 
   model$summaries <- bind_rows(model$summaries, new_summary)

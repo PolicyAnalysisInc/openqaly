@@ -1,17 +1,24 @@
 
-#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env
+#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone
 #' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
-#' @import purrr tidygraph ggraph ggplot2 future dplyr furrr tidyr
+#' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr
+#' @importFrom purrr map map_chr map_lgl map_dfr map2_dfr set_names flatten_chr flatten keep discard iwalk walk2 reduce
 #' @importFrom dplyr select mutate group_by summarize left_join
-#' @importFrom openxlsx readWorkbook getSheetNames
-#' @importFrom tidyr separate_rows pivot_longer
-#' @importFrom jsonlite fromJSON toJSON asJSON
-#' @importFrom tibble rownames_to_column
+#' @importFrom openxlsx readWorkbook getSheetNames createWorkbook addWorksheet writeData saveWorkbook write.xlsx
+#' @importFrom tidyr separate_rows pivot_longer pivot_wider
+#' @importFrom jsonlite fromJSON toJSON asJSON write_json validate
+#' @importFrom tibble rownames_to_column tibble as_tibble
 #' @importFrom stringr str_split_fixed
-#' @importFrom tibble tibble as_tibble
-#' @importFrom utils capture.output
-#' @importFrom readr read_csv
+#' @importFrom utils capture.output write.csv
+#' @importFrom readr read_csv read_file
 #' @importFrom glue glue
+#' @importFrom stats qnorm qlnorm pnorm
+#' @importFrom tools file_ext
+#' @importFrom mvnfast rmvn
+#' @importFrom scales comma dollar dollar_format
+#' @importFrom flextable flextable colformat_double add_header_row merge_at compose as_paragraph bg bold align border_remove hline hline_top hline_bottom width void border autofit
+#' @importFrom officer fp_border
+#' @importFrom knitr kable
 NULL
 
 ## usethis namespace: start

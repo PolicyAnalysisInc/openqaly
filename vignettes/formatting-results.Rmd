@@ -1,0 +1,932 @@
+---
+title: "Formatting and Presenting Base Case Results"
+author: "heRomod2"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Formatting and Presenting Base Case Results}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+## Introduction
+
+After running a health economic model, the next critical step is presenting the results in clear, publication-quality formats. heRomod2 provides a comprehensive suite of functions for visualizing and tabulating model results, including:
+
+- **Trace outputs**: State occupancy over time
+- **Outcome summaries**: QALYs, life years, and other health outcomes
+- **Cost summaries**: Treatment costs, disease costs, and total costs
+- **Net Monetary Benefit**: Economic value of interventions
+
+This vignette demonstrates these capabilities using the **Checkimab** model, an oncology cost-effectiveness model comparing immunotherapy strategies across different patient risk groups.
+
+### Loading the Model and Running Base Case
+
+Let's start by loading the Checkimab model and running the base case analysis:
+
+```{r load-model}
+library(heRomod2)
+library(ggplot2)
+library(dplyr)
+
+# Load the Checkimab model
+model_path <- system.file("models/checkimab", package = "heRomod2")
+model <- read_model(model_path)
+
+# Run the base case
+results <- run_model(model)
+
+# View available strategies
+unique(results$aggregated$strategy)
+```
+
+The Checkimab model compares three strategies:
+- **chemo** (Chemotherapy - standard of care)
+- **target** (Targeted therapy)
+- **check** (Checkimab - immunotherapy)
+
+Results are available both at the **population-aggregated** level and for individual risk **groups**.
+
+## Trace Visualizations
+
+Markov trace plots show how the patient cohort moves through different health states over time. These are essential for understanding model dynamics.
+
+### Basic Stacked Area Plot
+
+The most common trace visualization is a stacked area chart showing state occupancy:
+
+```{r trace-area-basic}
+# Basic stacked area plot
+trace_plot_area(results)
+```
+
+By default, this shows:
+- All strategies in separate facets
+- Probability scale (0-1)
+- All health states with default colors
+
+### Showing as Percentages
+
+For easier interpretation, you can display occupancy as percentages:
+
+```{r trace-area-percent}
+trace_plot_area(results, proportional = TRUE)
+```
+
+### Customizing Colors
+
+Define custom colors for specific states:
+
+```{r trace-area-colors}
+# Define color palette (using state technical names)
+state_colors <- c(
+  "relapse_free_on_tx" = "#2E7D32",
+  "relapse_free_off_tx" = "#81C784",
+  "relapse" = "#FFA726",
+  "dead" = "#424242"
+)
+
+trace_plot_area(
+  results,
+  color_palette = state_colors,
+  proportional = TRUE
+)
+```
+
+### Controlling Faceting
+
+You can explicitly control how strategies are displayed:
+
+```{r trace-area-facet}
+# Explicit faceting by strategy
+trace_plot_area(
+  results,
+  facet_by = "strategy",
+  proportional = TRUE
+)
+
+# To show a single strategy, filter the results first using get_trace
+trace_data_chemo <- get_trace(results, format = "long", strategies = "chemo")
+# Then create custom plot as needed
+```
+
+### Line Plots for Individual States
+
+Line plots make it easier to compare individual state trajectories:
+
+```{r trace-line}
+trace_plot_line(results, proportional = TRUE)
+```
+
+Line plots are particularly useful when:
+- Comparing specific states across strategies
+- States have similar occupancies (hard to see in stacked areas)
+- You want to emphasize trends rather than composition
+
+### Using Different Time Units
+
+If your model defines time conversions, you can plot in different units:
+
+```{r trace-time-units, eval=FALSE}
+# Plot by years instead of cycles
+trace_plot_area(
+  results,
+  time_unit = "year",
+  proportional = TRUE
+)
+```
+
+### Customizing Display Names
+
+Control how strategies and states are labeled using name fields:
+
+```{r trace-names}
+# Use abbreviations for compact display
+trace_plot_area(
+  results,
+  strategy_name_field = "abbreviation",
+  state_name_field = "abbreviation",
+  proportional = TRUE
+)
+
+# Use display names (default)
+trace_plot_area(
+  results,
+  strategy_name_field = "display_name",
+  state_name_field = "display_name"
+)
+```
+
+The three name field options are:
+- **"name"**: Technical identifier (e.g., "relapse_free_on_tx")
+- **"display_name"**: User-friendly label (e.g., "Relapse-Free (On Treatment)")
+- **"abbreviation"**: Short form (e.g., "RF-On")
+
+## Trace Tables
+
+For publications and reports, you'll often need tabular presentations of trace data.
+
+### Publication-Quality Tables
+
+The `trace_table()` function creates professional tables with hierarchical headers:
+
+```{r trace-table}
+library(flextable)
+
+# Create trace table
+ft <- trace_table(
+  results,
+  cycles = 0:10,  # Show first 10 cycles only
+  decimals = 3
+)
+
+ft
+```
+
+Key features of trace tables:
+- **Hierarchical headers**: Strategy names span their state columns
+- **Visual separation**: Spacer columns between strategies
+- **Clean borders**: Black and white styling suitable for publications
+- **Flexible precision**: Control decimal places
+
+### Controlling Display
+
+```{r trace-table-options}
+# Specific strategies and states
+trace_table(
+  results,
+  strategies = c("chemo", "check"),
+  states = c("relapse_free_on_tx", "relapse_free_off_tx"),
+  cycles = 0:5,
+  decimals = 4
+)
+```
+
+### Exporting to Word or PowerPoint
+
+```{r trace-export, eval=FALSE}
+library(officer)
+
+# Save to Word
+ft <- trace_table(results, cycles = 0:20)
+save_as_docx(ft, path = "trace_table.docx")
+
+# Save to PowerPoint
+save_as_pptx(ft, path = "trace_table.pptx")
+```
+
+## Outcome Visualizations
+
+Outcome plots show the accumulation of health benefits (QALYs, life years, etc.) and help understand which strategies provide better health outcomes.
+
+### Bar Charts for Outcome Summaries
+
+Bar charts show total outcomes broken down by component:
+
+```{r outcomes-bar, eval=FALSE}
+# Show total QALYs by component (requires model with defined summaries)
+outcomes_plot_bar(results, outcome = "total_qalys")
+```
+
+**Note**: The Checkimab model uses individual values rather than defined summaries. The outcome plot functions work best with models that define summaries (aggregations of multiple values). For this model, we can examine individual value components using the values output functions or define summaries programmatically.
+
+When summaries are defined, this shows:
+- Each strategy's total outcomes
+- Breakdown by value component
+- A "Total" bar showing the sum
+
+### Comparing Strategies: Differences
+
+Often we want to see **differences** between strategies rather than absolute values. heRomod2 supports two perspectives:
+
+#### Comparator Perspective
+
+Show how interventions compare to a reference (typically standard of care):
+
+```{r outcomes-bar-comparator, eval=FALSE}
+# Show differences relative to chemo (standard of care)
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  comparator = "chemo"
+)
+```
+
+This creates N-1 comparisons: "target vs. chemo" and "check vs. chemo"
+
+#### Referent/Intervention Perspective
+
+Show how a new intervention compares to alternatives:
+
+```{r outcomes-bar-referent, eval=FALSE}
+# Show how check (immunotherapy) compares to alternatives
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  referent = "check"
+)
+```
+
+This creates N-1 comparisons: "check vs. chemo" and "check vs. target"
+
+### Line Charts Over Time
+
+See how outcomes accumulate over the model time horizon:
+
+```{r outcomes-line, eval=FALSE}
+# Cumulative QALYs over time
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  cumulative = TRUE
+)
+```
+
+#### Per-Cycle Outcomes
+
+Switch to per-cycle view to see the rate of outcome accrual:
+
+```{r outcomes-line-per-cycle, eval=FALSE}
+# Per-cycle QALY accrual
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  cumulative = FALSE
+)
+```
+
+#### Differences Over Time
+
+Combine time-series with comparisons:
+
+```{r outcomes-line-diff, eval=FALSE}
+# Cumulative QALY difference vs. chemo over time
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  comparator = "chemo",
+  cumulative = TRUE
+)
+```
+
+### Using Different Time Units
+
+```{r outcomes-time-units, eval=FALSE}
+# Plot outcomes by year
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  time_unit = "year",
+  cumulative = TRUE
+)
+```
+
+## Outcome Tables
+
+Tabular outcome presentations are essential for manuscripts and reports.
+
+### Summary Tables
+
+Show total outcomes broken down by component:
+
+```{r outcomes-table, eval=FALSE}
+# Total QALYs by component
+outcomes_table(
+  results,
+  summary_name = "total_qalys",
+  decimals = 2
+)
+```
+
+### Cycle-by-Cycle Tables
+
+Show outcome accumulation over time:
+
+```{r outcomes-cycle-table, eval=FALSE}
+# Cumulative QALYs by cycle
+format_outcomes_cycle_table(
+  results,
+  values = c("qaly_pf", "qaly_prog"),  # Specific outcome components
+  cycles = 0:10,
+  cumulative = TRUE,
+  decimals = 3
+)
+```
+
+### Per-Cycle Tables
+
+Show the rate of outcome accrual:
+
+```{r outcomes-per-cycle-table, eval=FALSE}
+format_outcomes_cycle_table(
+  results,
+  values = c("qaly_pf", "qaly_prog"),
+  cycles = 0:10,
+  cumulative = FALSE,
+  decimals = 4
+)
+```
+
+## Net Monetary Benefit
+
+Net Monetary Benefit (NMB) combines costs and outcomes into a single economic metric:
+
+**NMB = (Outcomes × WTP) - Costs**
+
+Where WTP is the willingness-to-pay threshold per unit outcome (e.g., $100,000 per QALY).
+
+### NMB Bar Charts
+
+Show NMB broken down by component:
+
+```{r nmb-bar, eval=FALSE}
+# NMB comparing to chemo at WTP = $100,000/QALY
+nmb_plot_bar(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000
+)
+```
+
+The plot shows:
+- **Outcome components** (multiplied by WTP): positive contribution to NMB
+- **Cost components** (negated): negative contribution to NMB
+- **Total NMB**: net economic benefit
+
+**Interpretation**: Positive NMB means the intervention is cost-effective at the given WTP threshold.
+
+### Auto-Extracting WTP
+
+If WTP is defined in the model metadata, you can omit it:
+
+```{r nmb-bar-auto-wtp, eval=FALSE}
+# WTP extracted from outcome summary metadata
+nmb_plot_bar(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo"
+  # wtp parameter omitted - extracted automatically
+)
+```
+
+### NMB Over Time
+
+See how economic value accumulates:
+
+```{r nmb-line, eval=FALSE}
+# Cumulative NMB over time
+nmb_plot_line(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000,
+  cumulative = TRUE
+)
+```
+
+### Per-Cycle NMB
+
+See the rate of economic value generation:
+
+```{r nmb-line-per-cycle, eval=FALSE}
+# Per-cycle NMB
+nmb_plot_line(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000,
+  cumulative = FALSE
+)
+```
+
+### NMB Tables
+
+#### Summary Table
+
+```{r nmb-table, eval=FALSE}
+# NMB summary by component
+nmb_table(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000,
+  decimals = 0
+)
+```
+
+#### Cycle-by-Cycle NMB Table
+
+```{r nmb-cycle-table, eval=FALSE}
+# NMB accumulation over time
+format_nmb_cycle_table(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000,
+  cycles = 0:10,
+  cumulative = TRUE,
+  decimals = 0
+)
+```
+
+## Working with Groups
+
+Many models stratify results by patient subgroups (e.g., risk levels, age groups). heRomod2 provides flexible group handling.
+
+### Understanding Group Parameters
+
+The `group` parameter appears in most output functions and accepts three types of values:
+
+1. **`group = "aggregated"`** (default): Population-weighted average across all groups
+2. **`group = "specific_group"`**: Results for a single group (e.g., "high_risk")
+3. **`group = NULL`**: All groups plus aggregated
+
+### Aggregated Results (Default)
+
+By default, all output functions show aggregated (population-weighted) results:
+
+```{r group-aggregated, eval=FALSE}
+# These are equivalent
+outcomes_plot_bar(results, outcome = "total_qalys")
+outcomes_plot_bar(results, outcome = "total_qalys", group = "aggregated")
+```
+
+Aggregated results represent the **average** patient in the population, weighted by group proportions defined in the model.
+
+### Single Group Results
+
+Analyze a specific subgroup:
+
+```{r group-specific, eval=FALSE}
+# Results for high-risk patients only
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  group = "high_risk"
+)
+
+# Compare costs across strategies for moderate-risk patients
+outcomes_plot_bar(
+  results,
+  outcome = "total_cost",
+  group = "moderate_risk",
+  comparator = "chemo"
+)
+```
+
+### Multi-Group Comparisons
+
+Show all groups simultaneously:
+
+```{r group-all, eval=FALSE}
+# All groups + aggregated
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  group = NULL
+)
+```
+
+When `group = NULL`:
+- Plots create additional facets for each group
+- Tables add group columns with hierarchical headers
+- Aggregated results appear alongside individual groups
+
+### Group-Specific Tables
+
+```{r group-table, eval=FALSE}
+# Summary table showing all groups
+outcomes_table(
+  results,
+  summary_name = "total_qalys",
+  group = NULL,
+  decimals = 2
+)
+```
+
+This creates a table with hierarchical headers:
+- **Level 1**: Strategy names
+- **Level 2**: Group names (including "Aggregated")
+- **Rows**: Outcome components
+
+### Interpreting Aggregated vs. Disaggregated
+
+**When to use aggregated results:**
+- Reporting population-level cost-effectiveness
+- Making overall policy recommendations
+- Comparing to other published analyses
+
+**When to use group-specific results:**
+- Identifying subgroups that benefit most
+- Supporting stratified treatment recommendations
+- Understanding heterogeneity in treatment effects
+
+**When to use multi-group displays:**
+- Showing robustness across subgroups
+- Highlighting differential effects
+- Supporting equity considerations
+
+### Group-Specific Traces
+
+Trace visualizations also support group filtering:
+
+```{r group-trace, eval=FALSE}
+# Trace for high-risk group only
+trace_plot_area(
+  results,
+  collapsed = FALSE,  # Use group-specific traces
+  groups = "high_risk",
+  proportional = TRUE
+)
+```
+
+**Note**: The `collapsed` parameter determines trace source:
+- `collapsed = TRUE` (default): Uses aggregated traces
+- `collapsed = FALSE`: Uses group-specific traces (allows `groups` parameter)
+
+## Customization & Styling
+
+### Name Field Parameters
+
+Almost all output functions support three name field parameters:
+
+```{r name-fields, eval=FALSE}
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  strategy_name_field = "display_name",  # "name", "display_name", "abbreviation"
+  group_name_field = "display_name",
+  value_name_field = "display_name"
+)
+```
+
+For trace functions, there's also `state_name_field`:
+
+```{r trace-name-fields, eval=FALSE}
+trace_plot_area(
+  results,
+  strategy_name_field = "abbreviation",
+  state_name_field = "display_name"
+)
+```
+
+And for outcome/NMB functions, there's `summary_name_field`:
+
+```{r outcome-name-fields, eval=FALSE}
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  summary_name_field = "display_name"
+)
+```
+
+**Use cases:**
+- **"name"**: Technical documentation, debugging
+- **"display_name"**: Publications, presentations (most common)
+- **"abbreviation"**: Compact displays, figures with limited space
+
+### Color Palettes
+
+Customize plot colors:
+
+```{r color-palettes}
+# Custom colors for states (using display names)
+my_colors <- c(
+  "Relapse-Free (On Treatment)" = "#4CAF50",
+  "Relapse-Free (Off Treatment)" = "#81C784",
+  "Relapse" = "#FF9800",
+  "Dead" = "#757575"
+)
+
+trace_plot_area(
+  results,
+  color_palette = my_colors,
+  state_name_field = "display_name"
+)
+```
+
+**Important**: Color palette names must match the state/value names **after** applying the name field transformation.
+
+### Decimal Precision
+
+Control decimal places in tables:
+
+```{r decimals}
+# High precision for probabilities
+trace_table(results, cycles = 0:5, decimals = 5)
+```
+
+```{r decimals-costs, eval=FALSE}
+# Low precision for large cost values (requires model with summaries)
+outcomes_table(
+  results,
+  summary_name = "total_cost",
+  decimals = 0
+)
+```
+
+### Time Units
+
+Most functions support multiple time units:
+
+```{r time-units, eval=FALSE}
+# Available time units: "cycle", "day", "week", "month", "year"
+
+outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  time_unit = "year"
+)
+
+trace_table(
+  results,
+  time_unit = "month",
+  cycles = 0:60  # First 60 cycles (converted to months in display)
+)
+```
+
+**Note**: Time unit conversion requires the model to define time mappings.
+
+### Discounting
+
+Toggle between discounted and undiscounted values:
+
+```{r discounting, eval=FALSE}
+# Undiscounted values (default)
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  discounted = FALSE
+)
+
+# Discounted values
+outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  discounted = TRUE
+)
+```
+
+### Legend Control
+
+```{r legend}
+# Hide legend
+trace_plot_area(
+  results,
+  show_legend = FALSE
+)
+
+# Show legend (default)
+trace_plot_line(
+  results,
+  show_legend = TRUE
+)
+```
+
+### Further ggplot2 Customization
+
+All plot functions return ggplot2 objects, so you can customize further:
+
+```{r ggplot-custom, eval=FALSE}
+p <- outcomes_plot_line(
+  results,
+  outcome = "total_qalys",
+  cumulative = TRUE
+)
+
+# Add custom theme and labels
+p +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(size = 16, face = "bold")
+  ) +
+  labs(
+    title = "QALY Accumulation Over Time",
+    subtitle = "Immunotherapy vs. Standard of Care",
+    caption = "Source: Checkimab Model"
+  )
+```
+
+## Complete Workflow Example
+
+Here's a complete workflow for creating a comprehensive results report:
+
+```{r complete-workflow, eval=FALSE}
+# 1. Load and run model
+model <- read_model(system.file("models/checkimab", package = "heRomod2"))
+results <- run_model(model)
+
+# 2. Trace visualization - understand model dynamics
+p_trace <- trace_plot_area(
+  results,
+  proportional = TRUE,
+  strategy_name_field = "display_name",
+  state_name_field = "display_name"
+) +
+  labs(title = "State Occupancy Over Time")
+
+print(p_trace)
+
+# 3. Outcome comparison - identify which strategy provides more QALYs
+p_qalys <- outcomes_plot_bar(
+  results,
+  outcome = "total_qalys",
+  comparator = "chemo",
+  strategy_name_field = "display_name"
+) +
+  labs(title = "Incremental QALYs vs. Standard of Care")
+
+print(p_qalys)
+
+# 4. Cost comparison - understand cost implications
+p_costs <- outcomes_plot_bar(
+  results,
+  outcome = "total_cost",
+  comparator = "chemo",
+  strategy_name_field = "display_name"
+) +
+  labs(title = "Incremental Costs vs. Standard of Care")
+
+print(p_costs)
+
+# 5. Economic evaluation - assess cost-effectiveness
+p_nmb <- nmb_plot_bar(
+  results,
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost",
+  comparator = "chemo",
+  wtp = 100000,
+  strategy_name_field = "display_name"
+) +
+  labs(title = "Net Monetary Benefit at $100,000/QALY")
+
+print(p_nmb)
+
+# 6. Create summary tables for manuscript
+tab_qalys <- outcomes_table(
+  results,
+  summary_name = "total_qalys",
+  strategy_name_field = "display_name",
+  decimals = 2
+)
+
+tab_costs <- outcomes_table(
+  results,
+  summary_name = "total_cost",
+  strategy_name_field = "display_name",
+  decimals = 0
+)
+
+# Display tables
+print(tab_qalys)
+print(tab_costs)
+```
+
+### Exporting Results
+
+```{r export, eval=FALSE}
+# Save plots
+ggsave("trace.png", p_trace, width = 10, height = 6, dpi = 300)
+ggsave("qalys.png", p_qalys, width = 8, height = 6, dpi = 300)
+ggsave("costs.png", p_costs, width = 8, height = 6, dpi = 300)
+ggsave("nmb.png", p_nmb, width = 8, height = 6, dpi = 300)
+
+# Save tables to Word
+library(officer)
+save_as_docx(tab_qalys, path = "qalys_table.docx")
+save_as_docx(tab_costs, path = "costs_table.docx")
+
+# Or combine multiple tables in one document
+doc <- read_docx()
+doc <- doc %>%
+  body_add_par("Table 1. Total QALYs by Strategy", style = "heading 2") %>%
+  body_add_flextable(tab_qalys) %>%
+  body_add_par("") %>%
+  body_add_par("Table 2. Total Costs by Strategy", style = "heading 2") %>%
+  body_add_flextable(tab_costs)
+print(doc, target = "results_tables.docx")
+```
+
+## Best Practices
+
+### For Publications
+
+1. **Use display names**: `strategy_name_field = "display_name"` for reader-friendly labels
+2. **Control precision**: Match journal requirements (typically 2-3 decimals)
+3. **Clear comparisons**: Always specify comparator or referent for difference plots
+4. **Include uncertainty**: Combine base case results with PSA results (see PSA vignette)
+5. **Export high-resolution**: Use `dpi = 300` or higher for publication-quality figures
+
+### For Reports
+
+1. **Multi-group displays**: Use `group = NULL` to show robustness
+2. **Time-series plots**: Show accumulation patterns with `outcomes_plot_line()`
+3. **Component breakdowns**: Use bar charts to show where outcomes/costs come from
+4. **Consistent styling**: Use the same color palettes and name fields throughout
+
+### For Presentations
+
+1. **Use abbreviations**: `strategy_name_field = "abbreviation"` for compact slides
+2. **Proportional scales**: `proportional = TRUE` for easier interpretation
+3. **Focus on key comparisons**: Filter to 2-3 strategies for clarity
+4. **Large fonts**: Customize ggplot2 themes with larger text
+
+### For Decision-Makers
+
+1. **NMB plots**: Focus on economic value, not separate costs and outcomes
+2. **Group-specific results**: Show differential effects across populations
+3. **Clear thresholds**: Visualize decision criteria (e.g., WTP thresholds)
+4. **Cumulative plots**: Show long-term value accumulation
+
+## Summary
+
+heRomod2 provides a comprehensive toolkit for presenting model results:
+
+**Traces**: Understand model dynamics through state occupancy
+- `trace_plot_area()` and `trace_plot_line()` for visualizations
+- `trace_table()` for publication-quality tables
+
+**Outcomes**: Evaluate health benefits
+- `outcomes_plot_bar()` and `outcomes_plot_line()` for comparisons
+- `outcomes_table()` for summary tables
+- Support for both absolute values and differences
+
+**Net Monetary Benefit**: Assess economic value
+- `nmb_plot_bar()` and `nmb_plot_line()` for visualizations
+- `nmb_table()` for summaries
+- Automatic WTP extraction from metadata
+
+**Groups**: Analyze heterogeneity
+- `group = "aggregated"` for population-level results
+- `group = "specific"` for subgroup analyses
+- `group = NULL` for comprehensive comparisons
+
+**Customization**: Control presentation
+- Name fields for display preferences
+- Color palettes for brand consistency
+- Time units for appropriate scales
+- Export formats for different audiences
+
+All functions follow a consistent API, making it easy to create comprehensive reports that tell the complete story of your cost-effectiveness analysis.

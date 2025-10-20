@@ -26,8 +26,8 @@ resample <- function(model, n, segments, corr = NULL, seed = NULL) {
   }
   
   set.seed(seed)
-  r_norm <- mvnfast::rmvn(n = n, mu = rep(0, n_var), sigma = corr)
-  mat_p <- stats::pnorm(r_norm)
+  r_norm <- rmvn(n = n, mu = rep(0, n_var), sigma = corr)
+  mat_p <- pnorm(r_norm)
   
   # Prepopulate a list to store simulations
   cols <- vector(mode = "list", length = n_var + 1)

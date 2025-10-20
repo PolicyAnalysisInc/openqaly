@@ -12,7 +12,10 @@ get_trace(
   groups = NULL,
   states = NULL,
   cycles = NULL,
-  time_unit = c("cycle", "day", "week", "month", "year")
+  time_unit = c("cycle", "day", "week", "month", "year"),
+  strategy_name_field = "display_name",
+  group_name_field = "display_name",
+  state_name_field = "display_name"
 )
 }
 \arguments{

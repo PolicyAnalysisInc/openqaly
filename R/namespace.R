@@ -53,7 +53,7 @@ define_namespace <- function(env, df, additional = NULL, ...) {
     additional <- NULL
   }
   
-  ns <- list(df = df, env = rlang::env_clone(env))
+  ns <- list(df = df, env = env_clone(env))
   if (!is.null(additional)) {
     for (nm in names(additional)) {
       assign(nm, additional[[nm]], envir = ns$env)
@@ -94,7 +94,7 @@ get_names <- function(ns, type = "all", keywords = T) {
 #' @keywords internal
 clone_namespace <- function(x) {
   new <- x
-  new$env <- rlang::env_clone(x$env)
+  new$env <- env_clone(x$env)
   new
 }
 
@@ -106,13 +106,13 @@ summary.namespace <- function(object, ...) {
   df_names <- get_names(object, "df", keywords = F)
   
   if (length(df_names) > 0) {
-    res_df <- tidyr::pivot_longer(
+    res_df <- pivot_longer(
         object$df,
         names_to = 'name',
         values_to = 'value',
         all_of(df_names)
       ) %>%
-      dplyr::mutate(
+      mutate(
         print = NA,
         summary = NA
       ) %>%
@@ -207,11 +207,11 @@ update_segment_ns <- function(x, newdata) {
   new_ns <- clone_namespace(x)
   
   # Clear overlapping column names from dataframe
-  names_to_clear <- dplyr::intersect(colnames(newdata), colnames(new_ns$df))
-  new_ns$df <- dplyr::select(new_ns$df, !all_of(names_to_clear))
+  names_to_clear <- intersect(colnames(newdata), colnames(new_ns$df))
+  new_ns$df <- select(new_ns$df, !all_of(names_to_clear))
   
   # Store new data in environment
-  purrr::iwalk(newdata, function(x, n) {
+  iwalk(newdata, function(x, n) {
     assign(n, x[[1]], envir = new_ns$env)
   })
   

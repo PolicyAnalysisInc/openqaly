@@ -26,11 +26,19 @@ test_that("get_trace extracts data in long format", {
   expect_true(all(trace_long$probability >= 0))
   expect_true(all(trace_long$probability <= 1))
 
-  # Check that we have data for both strategies
-  expect_setequal(unique(trace_long$strategy), c("standard", "new_drug"))
+  # Check that we have data for both strategies (default uses display names)
+  expect_setequal(unique(trace_long$strategy), c("Standard of Care", "New Drug"))
 
-  # Check that we have all three states
+  # Check that we have all three states (default uses display names)
   expect_equal(length(unique(trace_long$state)), 3)
+  expect_true(all(c("Progression Free", "Progressed", "Dead") %in% unique(trace_long$state)))
+
+  # Verify technical names work when explicitly requested
+  trace_long_technical <- get_trace(results, format = "long",
+                                     strategy_name_field = "name",
+                                     state_name_field = "name")
+  expect_setequal(unique(trace_long_technical$strategy), c("standard", "new_drug"))
+  expect_setequal(unique(trace_long_technical$state), c("progression_free", "progressed", "dead"))
 })
 
 
@@ -91,11 +99,17 @@ test_that("get_trace filters by strategy", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  # Filter to one strategy
+  # Filter to one strategy (filtering uses technical names)
+  # Result defaults to display names
   trace_filtered <- get_trace(results, format = "long", strategies = "standard")
 
-  # Check that only standard strategy is present
-  expect_equal(unique(trace_filtered$strategy), "standard")
+  # Check that only standard strategy is present (returns display name)
+  expect_equal(unique(trace_filtered$strategy), "Standard of Care")
+
+  # Test filtering with explicit technical name output
+  trace_filtered_tech <- get_trace(results, format = "long", strategies = "standard",
+                                   strategy_name_field = "name")
+  expect_equal(unique(trace_filtered_tech$strategy), "standard")
 })
 
 
@@ -108,11 +122,21 @@ test_that("get_trace filters by states", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  # Filter to specific states
+  # Filter to specific states (filtering uses technical names)
+  # Result defaults to display names
   trace_filtered <- get_trace(results, format = "long", states = c("progression_free", "dead"))
 
-  # Check that only specified states are present
-  expect_setequal(unique(trace_filtered$state), c("progression_free", "dead"))
+  # Check that only specified states are present (returns display names)
+  expect_setequal(unique(trace_filtered$state), c("Progression Free", "Dead"))
+
+  # Test filtering with explicit technical name output
+  trace_filtered_tech <- get_trace(results, format = "long",
+                                   states = c("progression_free", "dead"),
+                                   state_name_field = "name")
+  expect_setequal(unique(trace_filtered_tech$state), c("progression_free", "dead"))
+
+  # Verify filtering works
+  expect_equal(length(unique(trace_filtered_tech$state)), 2)
 })
 
 
