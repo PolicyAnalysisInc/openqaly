@@ -14,7 +14,8 @@ outcomes_table(
   discounted = FALSE,
   value_name_field = "display_name",
   strategy_name_field = "display_name",
-  group_name_field = "display_name"
+  group_name_field = "display_name",
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -22,7 +23,7 @@ outcomes_table(
 
 \item{summary_name}{Name of summary to display (e.g., "total_qalys")}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL (all groups + aggregated)}
+\item{group}{Group selection: "aggregated" (default), specific group, or NULL (all groups + aggregated)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -37,12 +38,15 @@ outcomes_table(
 \item{strategy_name_field}{Which strategy name field to use}
 
 \item{group_name_field}{Which group name field to use}
+
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
 \value{
-A flextable object
+A table object (flextable or kable depending on table_format)
 }
 \description{
-Creates a flextable showing outcome summary totals broken down by component values.
+Creates a table showing outcome summary totals broken down by component values.
+Supports both flextable and kableExtra backends for flexible output formatting.
 }
 \examples{
 \dontrun{

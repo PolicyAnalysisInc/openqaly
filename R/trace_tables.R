@@ -1,65 +1,41 @@
-#' Format Trace as flextable
+#' Prepare Trace Table Data
 #'
-#' Creates a publication-quality table using flextable with clean black and white
-#' styling. Strategies appear as column groups with hierarchical headers separated
-#' by spacer columns for easy visual comparison. Ideal for export to Word, PowerPoint,
-#' or HTML documents.
+#' Internal helper function that prepares trace data for rendering.
+#' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A heRomod2 model results object
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
 #' @param decimals Number of decimal places for probabilities (default: 4)
-#' @param strategy_name_field Which strategy name field to use: "name" (technical name),
-#'   "display_name", or "abbreviation". Default is "display_name" if available.
-#' @param state_name_field Which state name field to use: "name" (technical name),
-#'   "display_name", or "abbreviation". Default is "display_name" if available.
-#' @param time_unit Which time unit to display: "cycle" (default), "day", "week",
-#'   "month", or "year".
+#' @param strategy_name_field Which strategy name field to use
+#' @param state_name_field Which state name field to use
+#' @param time_unit Which time unit to display
 #'
-#' @return A flextable object with hierarchical column headers and clean borders
-#'
-#' @examples
-#' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
-#' results <- run_model(model)
-#'
-#' # Create flextable with hierarchical headers
-#' ft <- trace_table(results)
-#'
-#' # Save to Word
-#' save_as_docx(ft, path = "trace.docx")
-#'
-#' # Save to PowerPoint
-#' save_as_pptx(ft, path = "trace.pptx")
-#'
-#' # Show specific strategies and cycles
-#' trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)
-#' }
-#'
-#' @export
-trace_table <- function(results,
-                                    strategies = NULL,
-                                    states = NULL,
-                                    cycles = NULL,
-                                    decimals = 4,
-                                    strategy_name_field = "display_name",
-                                    state_name_field = "display_name",
-                                    time_unit = "cycle") {
-
-  if (!requireNamespace("flextable", quietly = TRUE)) {
-    stop("Package 'flextable' is required. Please install it with: install.packages('flextable')")
-  }
-  if (!requireNamespace("officer", quietly = TRUE)) {
-    stop("Package 'officer' is required. Please install it with: install.packages('officer')")
-  }
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_trace_table_data <- function(results,
+                                     strategies = NULL,
+                                     states = NULL,
+                                     cycles = NULL,
+                                     decimals = 4,
+                                     strategy_name_field = "display_name",
+                                     state_name_field = "display_name",
+                                     time_unit = "cycle",
+                                     font_size = 11) {
 
   # Get long format trace data (names already mapped by get_trace)
-  trace_long <- get_trace(results, format = "long", collapsed = TRUE,
-                          strategies = strategies, states = states, cycles = cycles,
-                          time_unit = time_unit,
-                          strategy_name_field = strategy_name_field,
-                          state_name_field = state_name_field)
+  trace_long <- get_trace(
+    results,
+    format = "long",
+    collapsed = TRUE,
+    strategies = strategies,
+    states = states,
+    cycles = cycles,
+    time_unit = time_unit,
+    strategy_name_field = strategy_name_field,
+    state_name_field = state_name_field
+  )
 
   # Get unique strategies and states (already have display names)
   strategies_display <- unique(trace_long$strategy)
@@ -78,7 +54,6 @@ trace_table <- function(results,
   )
 
   # Select only the relevant columns before pivoting
-  # Keep only: strategy, state, probability, and the selected time column
   trace_for_pivot <- trace_long %>%
     select(all_of(c(time_col_name, "strategy", "state", "probability")))
 
@@ -101,9 +76,10 @@ trace_table <- function(results,
     "Cycle"  # default
   )
 
-  # Add dummy spacer columns between strategy groups (and before first group)
+  # Add spacer columns between strategy groups
+  spacer_indices <- integer()
   if (n_strategies >= 1) {
-    # Get the time column (could be cycle, day, week, month, or year)
+    # Get the time column
     if (time_col_name %in% colnames(trace_data)) {
       time_col <- trace_data[, time_col_name, drop = FALSE]
     } else {
@@ -117,180 +93,198 @@ trace_table <- function(results,
     names(time_col) <- time_label
     result_cols <- time_col
 
+    col_counter <- 1  # Time column is column 1
     for (i in seq_along(strategies_display)) {
+      col_counter <- col_counter + 1  # Next position is spacer
+
       # Add spacer column BEFORE each strategy group
       spacer_col <- data.frame(rep("", nrow(trace_data)), stringsAsFactors = FALSE)
       names(spacer_col) <- paste0("spacer_", i)
       result_cols <- cbind(result_cols, spacer_col)
+      spacer_indices <- c(spacer_indices, col_counter)
+
+      col_counter <- col_counter + 1  # Move past spacer
 
       # Get columns for this strategy
       strat <- strategies_display[i]
       strat_cols <- trace_data[, grepl(paste0("^", strat, "_"), names(trace_data)), drop = FALSE]
       result_cols <- cbind(result_cols, strat_cols)
+
+      col_counter <- col_counter + ncol(strat_cols) - 1
     }
 
     trace_data <- result_cols
+
+    # Keep original column names (Strategy_State format) to avoid duplicates
+    # The hierarchical headers will be handled by the renderer using compose()
   }
 
-  # Rename time column to proper label BEFORE creating flextable
-  names(trace_data)[names(trace_data) == time_col_name] <- time_label
-
   # Intelligent rounding for time column
-  # Round to tenths place, but if all values are effectively integers, show as integers
   time_values <- trace_data[[time_label]]
-  rounded_values <- round(time_values, 1)  # Round to tenths
+  rounded_values <- round(time_values, 1)
 
-  # Check if all rounded values are effectively integers (diff from nearest int < 0.01)
   if (all(abs(rounded_values - round(rounded_values)) < 0.01)) {
-    # All values are effectively integers, so display as integers
     trace_data[[time_label]] <- as.integer(round(rounded_values))
   } else {
-    # Some values have decimals, so keep the tenths place
     trace_data[[time_label]] <- rounded_values
   }
 
-  # Round probability columns BEFORE creating flextable to prevent negative zeros
-  # This ensures all rounding happens in R, not in flextable's sprintf formatting
-  prob_cols <- setdiff(colnames(trace_data), c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE)))
+  # Round probability columns BEFORE creating table to prevent negative zeros
+  prob_cols <- setdiff(
+    colnames(trace_data),
+    c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE))
+  )
   for (col in prob_cols) {
     trace_data[[col]] <- round(trace_data[[col]], decimals)
   }
 
-  # Create flextable
-  ft <- flextable(trace_data)
-
-  # Format probability columns (exclude time column and spacers)
-  prob_cols <- setdiff(colnames(trace_data), c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE)))
-  for (col in prob_cols) {
-    ft <- colformat_double(ft, j = col, digits = decimals)
-  }
-
-  # Get column indices BEFORE using them
+  # Get column indices
   all_cols <- colnames(trace_data)
-  cycle_col_idx <- which(all_cols == time_label)
-  spacer_col_indices <- which(grepl("^spacer_", all_cols))
-  non_spacer_col_indices <- setdiff(seq_along(all_cols), spacer_col_indices)
+  non_spacer_indices <- which(!grepl("^spacer_", all_cols))
 
-  # Build header row for strategies with spacers
-  # Row 1 (top): empty cell over time column | empty over spacers | Strategy names spanning states
-  header_row1_values <- c(time_label)  # Put time label in the first cell so it appears correctly
+  # Build header structure for flextable
+  header_row1_values <- c(" ")  # Empty for merged cell
   header_row1_widths <- c(1)
 
+  # Build level 2 values (state names) for proper display
+  header_row2_values <- c(time_label)  # Show actual time unit (Cycle/Day/Week/etc.)
+  header_row2_widths <- c(1)
+
   for (i in seq_along(strategies_display)) {
-    # Add empty cell over spacer BEFORE each strategy
     header_row1_values <- c(header_row1_values, "")
     header_row1_widths <- c(header_row1_widths, 1)
-
-    # Add strategy name spanning states (use display name)
     header_row1_values <- c(header_row1_values, strategies_display[i])
     header_row1_widths <- c(header_row1_widths, n_states)
+
+    # Add spacer and state names to level 2
+    header_row2_values <- c(header_row2_values, "")
+    header_row2_widths <- c(header_row2_widths, 1)
+    for (j in seq_along(states_display)) {
+      header_row2_values <- c(header_row2_values, states_display[j])
+      header_row2_widths <- c(header_row2_widths, 1)
+    }
   }
 
-  # Add the top header row
-  ft <- ft %>%
-    add_header_row(
-      values = header_row1_values,
-      colwidths = header_row1_widths,
-      top = TRUE
-    )
-
-  # Now we need to merge "Cycle" vertically to span both header rows
-  ft <- merge_at(
-    ft,
-    i = 1:2,  # Merge both header rows
-    j = 1,    # Column 1 (Cycle)
-    part = "header"
+  header_structure <- list(
+    level1 = list(values = header_row1_values, widths = header_row1_widths),
+    level2 = list(values = header_row2_values, widths = header_row2_widths),
+    level3 = list(values = NA, widths = NA)
   )
 
-  # Set the proper state names in row 2 header (without strategy prefix)
-  current_col <- 2  # Start after Cycle column
+  # Create header vector for kableExtra (add_header_above format)
+  # Note: Named vector where empty strings are spacer columns
+  level1_vector <- c(" " = 1)  # Empty for merged cell appearance
   for (i in seq_along(strategies_display)) {
-    # Skip spacer column - set it to empty
-    ft <- compose(ft,
-                              i = 2,  # Row 2 of header
-                              j = current_col,
-                              value = as_paragraph(""),
-                              part = "header")
-    current_col <- current_col + 1
+    # Add spacer with special marker (kableExtra will handle empty string names)
+    spacer_name <- paste0("spacer_", i)
+    level1_vector <- c(level1_vector, setNames(1, spacer_name), setNames(n_states, strategies_display[i]))
+  }
+  header_structure$level1$header_vector <- level1_vector
 
-    # Set state names for this strategy (use display names)
+  # Build column_names vector for kable (time label, then spacers and states)
+  column_names_vec <- c(time_label)  # Start with time label
+  for (i in seq_along(strategies_display)) {
+    column_names_vec <- c(column_names_vec, "")  # Spacer column
     for (j in seq_along(states_display)) {
-      ft <- compose(ft,
-                                i = 2,  # Row 2 of header
-                                j = current_col,
-                                value = as_paragraph(states_display[j]),
-                                part = "header")
-      current_col <- current_col + 1
+      column_names_vec <- c(column_names_vec, states_display[j])
     }
   }
 
-  # Now we have:
-  # Header row 1: "" | Strategy1 | "" | Strategy2 | ...
-  # Header row 2: "Cycle" | state1 | state2 | ... | "" | state1 | state2 | ...
+  # Create metadata list
+  create_table_metadata(
+    data = trace_data,
+    mode = "two_level",
+    n_strategies = n_strategies,
+    n_groups = NULL,
+    n_values = NULL,
+    n_states = n_states,
+    strategy_names = strategies_display,
+    group_names = NULL,
+    value_names = NULL,
+    state_names = states_display,
+    spacer_indices = spacer_indices,
+    first_col_name = time_label,
+    first_col_type = "time",
+    header_levels = 1,
+    header_structure = header_structure,
+    first_col_merge = TRUE,
+    column_names = column_names_vec,
+    replace_column_names = TRUE,
+    first_column_content = "",
+    special_rows = list(total_row_index = NULL, bold_rows = integer()),
+    decimals = decimals,
+    font_size = font_size,
+    value_range = "probability"
+  )
+}
 
-  # Set white background first
-  ft <- ft %>%
-    bg(bg = "white", part = "all")
 
-  # Bold the header text
-  ft <- ft %>%
-    bold(part = "header")
+#' Format Trace as Table
+#'
+#' Creates a publication-quality table with clean black and white styling showing
+#' state probabilities over time. Strategies appear as column groups with hierarchical
+#' headers separated by spacer columns for easy visual comparison.
+#'
+#' Supports both flextable and kableExtra backends for flexible output to Word,
+#' PowerPoint, HTML, and PDF documents.
+#'
+#' @param results A heRomod2 model results object
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param states Character vector of states to include (NULL for all)
+#' @param cycles Integer vector or range of cycles to display (NULL for all)
+#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param strategy_name_field Which strategy name field to use: "name" (technical name),
+#'   "display_name", or "abbreviation". Default is "display_name" if available.
+#' @param state_name_field Which state name field to use: "name" (technical name),
+#'   "display_name", or "abbreviation". Default is "display_name" if available.
+#' @param time_unit Which time unit to display: "cycle" (default), "day", "week",
+#'   "month", or "year".
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' results <- run_model(model)
+#'
+#' # Create table using flextable (default)
+#' ft <- trace_table(results)
+#'
+#' # Create table using kableExtra
+#' kt <- trace_table(results, table_format = "kable")
+#'
+#' # Show specific strategies and cycles
+#' trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)
+#' }
+#'
+#' @export
+trace_table <- function(results,
+                        strategies = NULL,
+                        states = NULL,
+                        cycles = NULL,
+                        decimals = 4,
+                        strategy_name_field = "display_name",
+                        state_name_field = "display_name",
+                        time_unit = "cycle",
+                        font_size = 11,
+                        table_format = c("flextable", "kable")) {
 
-  # Center-align all column headers
-  ft <- ft %>%
-    align(align = "center", part = "header")
+  table_format <- match.arg(table_format)
 
-  # Remove ALL borders to start with a clean slate
-  ft <- border_remove(ft)
+  # Prepare data
+  prepared <- prepare_trace_table_data(
+    results = results,
+    strategies = strategies,
+    states = states,
+    cycles = cycles,
+    decimals = decimals,
+    strategy_name_field = strategy_name_field,
+    state_name_field = state_name_field,
+    time_unit = time_unit,
+    font_size = font_size
+  )
 
-  # Define borders
-  black_border <- fp_border(color = "black", width = 1)
-  no_border <- fp_border(width = 0)
-
-
-  # Apply borders ONLY to non-spacer columns, one by one to ensure precision
-  for (col_idx in non_spacer_col_indices) {
-    # 1. Top border of header (top of row 1)
-    ft <- hline_top(ft, j = col_idx, border = black_border, part = "header")
-
-    # 2. Border between header row 1 and header row 2 (bottom of row 1)
-    ft <- hline(ft, i = 1, j = col_idx, border = black_border, part = "header")
-
-    # 3. Border between header and body (bottom of header row 2)
-    ft <- hline_bottom(ft, j = col_idx, border = black_border, part = "header")
-
-    # 4. Bottom border of table
-    ft <- hline_bottom(ft, j = col_idx, border = black_border, part = "body")
-  }
-
-  # Style spacer columns AFTER applying other borders
-  if (length(spacer_col_indices) > 0) {
-    # Set width first
-    ft <- width(ft, j = spacer_col_indices, width = 0.01)
-
-    # Use delete() to completely remove spacer columns, then add them back empty
-    # Actually, let's use a different approach - set them to empty and remove all formatting
-
-    # First void the columns to remove content
-    ft <- void(ft, j = spacer_col_indices, part = "all")
-
-    # Now explicitly set borders to none using border_remove on specific columns
-    # We need to use the border() function with all borders set to no_border
-    for (spacer_idx in spacer_col_indices) {
-      ft <- border(ft,
-                              i = NULL,  # All rows
-                              j = spacer_idx,
-                              border = no_border,
-                              part = "all")
-    }
-  }
-
-  # Auto-fit NON-SPACER columns only
-  non_spacer_col_names <- all_cols[non_spacer_col_indices]
-  for (col_name in non_spacer_col_names) {
-    ft <- autofit(ft, add_w = 0, add_h = 0)  # Autofit but don't add extra width
-    break  # Only need to call autofit once
-  }
-
-  ft
+  # Render using specified backend
+  render_table(prepared, format = table_format)
 }

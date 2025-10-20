@@ -305,15 +305,244 @@ format_outcomes_cycle_table <- function(results,
 }
 
 
+#' Prepare Outcomes Summary Table Data
+#'
+#' Internal helper function that prepares outcomes summary data for rendering.
+#' Extracts data preparation logic to enable multi-backend support.
+#'
+#' @param results A heRomod2 model results object
+#' @param summary_name Name of summary to display (e.g., "total_qalys")
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param show_total Logical. Show TOTAL row?
+#' @param decimals Number of decimal places
+#' @param discounted Logical. Use discounted values?
+#' @param value_name_field Which value name field to use
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_outcomes_table_data <- function(results,
+                                        summary_name,
+                                        group = "aggregated",
+                                        strategies = NULL,
+                                        show_total = TRUE,
+                                        decimals = 2,
+                                        discounted = FALSE,
+                                        value_name_field = "display_name",
+                                        strategy_name_field = "display_name",
+                                        group_name_field = "display_name") {
+
+  # Get summary data (names already mapped by get_summaries)
+  summary_data <- get_summaries(
+    results,
+    group = group,
+    strategies = strategies,
+    summaries = summary_name,
+    value_type = "outcome",
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    value_name_field = value_name_field
+  )
+
+  # Get unique strategies, groups, values (already have display names)
+  strategies_display <- unique(summary_data$strategy)
+  groups_display <- unique(summary_data$group)
+  values_display <- unique(summary_data$value)
+  n_strategies <- length(strategies_display)
+  n_groups <- length(groups_display)
+
+  # Value column is already mapped, just rename for consistency
+  summary_data$value_display <- summary_data$value
+
+  # Determine mode and pivoting strategy
+  mode <- if (n_groups > 1 || is.null(group)) "three_level" else "single"
+
+  # Pivot to table format
+  if (n_groups > 1 || is.null(group)) {
+    # Mode 3: Strategy > Group columns
+    pivot_data <- summary_data %>%
+      pivot_wider(
+        names_from = c(strategy, group),
+        values_from = amount,
+        names_sep = "_",
+        id_cols = value_display
+      )
+  } else {
+    # Mode 1 or 2: Strategy columns only
+    pivot_data <- summary_data %>%
+      pivot_wider(
+        names_from = strategy,
+        values_from = amount,
+        id_cols = value_display
+      )
+  }
+
+  # Round values
+  value_cols <- setdiff(colnames(pivot_data), "value_display")
+  for (col in value_cols) {
+    pivot_data[[col]] <- round(pivot_data[[col]], decimals)
+  }
+
+  # Track total row index if requested
+  total_row_index <- NULL
+  if (show_total) {
+    total_row <- pivot_data %>%
+      summarize(across(all_of(value_cols), ~sum(., na.rm = TRUE))) %>%
+      mutate(value_display = "Total")
+    pivot_data <- bind_rows(pivot_data, total_row)
+    total_row_index <- nrow(pivot_data)
+  }
+
+  # Rename value_display column to space (blank header)
+  names(pivot_data)[names(pivot_data) == "value_display"] <- " "
+
+  # Add spacer columns and build result_cols based on mode
+  spacer_indices <- integer()
+  if (mode == "three_level") {
+    result_cols <- pivot_data[, " ", drop = FALSE]
+    col_counter <- 1
+
+    for (i in seq_along(strategies_display)) {
+      col_counter <- col_counter + 1  # Next position is spacer
+
+      spacer_col <- data.frame(rep("", nrow(pivot_data)), stringsAsFactors = FALSE)
+      names(spacer_col) <- paste0("spacer_", i)
+      result_cols <- cbind(result_cols, spacer_col)
+      spacer_indices <- c(spacer_indices, col_counter)
+
+      col_counter <- col_counter + 1
+
+      # Strategy columns
+      strat <- strategies_display[i]
+      strat_cols <- pivot_data[, grepl(paste0("^", strat, "_"), names(pivot_data)), drop = FALSE]
+      result_cols <- cbind(result_cols, strat_cols)
+      col_counter <- col_counter + ncol(strat_cols) - 1
+    }
+  } else {
+    # Mode 1/2: No spacer columns
+    result_cols <- pivot_data
+  }
+
+  # Keep original column names (Strategy_Group format) to avoid duplicates
+  # The hierarchical headers will be handled by the renderer using compose()
+
+  # Get all column names and indices
+  all_cols <- colnames(result_cols)
+  non_spacer_indices <- which(!grepl("^spacer_", all_cols))
+
+  # Build column_names vector for kable in three-level mode
+  column_names_vec <- NULL
+  if (mode == "three_level") {
+    column_names_vec <- c(" ")  # First column
+    for (i in seq_along(strategies_display)) {
+      column_names_vec <- c(column_names_vec, "")  # Spacer column
+
+      # For each strategy's columns, extract just the group names
+      for (grp in groups_display) {
+        column_names_vec <- c(column_names_vec, grp)
+      }
+    }
+  }
+
+  # Build header structure
+  if (mode == "three_level") {
+    header_row1_values <- c("")
+    header_row1_widths <- c(1)
+
+    # Build level 2 values (group names) for proper display
+    header_row2_values <- c(" ")
+    header_row2_widths <- c(1)
+
+    for (i in seq_along(strategies_display)) {
+      header_row1_values <- c(header_row1_values, "")
+      header_row1_widths <- c(header_row1_widths, 1)
+      header_row1_values <- c(header_row1_values, strategies_display[i])
+      header_row1_widths <- c(header_row1_widths, n_groups)
+
+      # Add spacer and group names to level 2
+      header_row2_values <- c(header_row2_values, "")
+      header_row2_widths <- c(header_row2_widths, 1)
+      for (j in seq_along(groups_display)) {
+        header_row2_values <- c(header_row2_values, groups_display[j])
+        header_row2_widths <- c(header_row2_widths, 1)
+      }
+    }
+
+    # Create header vector for kableExtra
+    hdr_vec <- c(" " = 1)
+    for (i in seq_along(strategies_display)) {
+      hdr_vec <- c(hdr_vec, setNames(1, paste0("spacer_", i)), setNames(n_groups, strategies_display[i]))
+    }
+
+    header_structure <- list(
+      level1 = list(values = header_row1_values, widths = header_row1_widths, header_vector = hdr_vec),
+      level2 = list(values = header_row2_values, widths = header_row2_widths),
+      level3 = list(values = NA, widths = NA)
+    )
+  } else {
+    # Single header level for Mode 1/2
+    header_row1_values <- c("", strategies_display)
+    header_row1_widths <- rep(1, length(header_row1_values))
+
+    # Create header vector for kableExtra
+    hdr_vec <- setNames(c(1, rep(1, n_strategies)), c("", strategies_display))
+
+    header_structure <- list(
+      level1 = list(values = header_row1_values, widths = header_row1_widths, header_vector = hdr_vec),
+      level2 = list(values = NA, widths = NA),
+      level3 = list(values = NA, widths = NA)
+    )
+  }
+
+  # Create metadata list
+  create_table_metadata(
+    data = result_cols,
+    mode = mode,
+    n_strategies = n_strategies,
+    n_groups = n_groups,
+    n_values = length(values_display),
+    n_states = NULL,
+    strategy_names = strategies_display,
+    group_names = groups_display,
+    value_names = values_display,
+    state_names = NULL,
+    spacer_indices = spacer_indices,
+    first_col_name = " ",
+    first_col_type = "label",
+    header_levels = if (mode == "three_level") 1 else 0,
+    header_structure = header_structure,
+    first_col_merge = if (mode == "three_level") TRUE else FALSE,
+    column_names = column_names_vec,  # Use display names for kable
+    replace_column_names = (mode == "three_level"),
+    first_column_content = "",
+    special_rows = list(total_row_index = total_row_index, bold_rows = integer()),
+    decimals = decimals,
+    value_range = "currency"
+  )
+}
+
+
 #' Format Outcomes as Summary Breakdown Table
 #'
-#' Creates a flextable showing outcome summary totals broken down by component values.
+#' Creates a table showing outcome summary totals broken down by component values.
+#' Supports both flextable and kableExtra backends for flexible output formatting.
 #'
-#' @inheritParams format_outcomes_cycle_table
+#' @param results A heRomod2 model results object
 #' @param summary_name Name of summary to display (e.g., "total_qalys")
+#' @param group Group selection: "aggregated" (default), specific group, or NULL (all groups + aggregated)
+#' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
+#' @param decimals Number of decimal places (default: 2)
+#' @param discounted Logical. Use discounted values?
+#' @param value_name_field Which value name field to use
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
-#' @return A flextable object
+#' @return A table object (flextable or kable depending on table_format)
 #'
 #' @examples
 #' \dontrun{
@@ -329,6 +558,42 @@ format_outcomes_cycle_table <- function(results,
 #'
 #' @export
 outcomes_table <- function(results,
+                           summary_name,
+                           group = "aggregated",
+                           strategies = NULL,
+                           show_total = TRUE,
+                           decimals = 2,
+                           discounted = FALSE,
+                           value_name_field = "display_name",
+                           strategy_name_field = "display_name",
+                           group_name_field = "display_name",
+                           table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_outcomes_table_data(
+    results = results,
+    summary_name = summary_name,
+    group = group,
+    strategies = strategies,
+    show_total = show_total,
+    decimals = decimals,
+    discounted = discounted,
+    value_name_field = value_name_field,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' OLD FLEXTABLE IMPLEMENTATION - KEPT FOR REFERENCE, DELETE AFTER TESTING
+#'
+#' @keywords internal
+outcomes_table_flextable_old <- function(results,
                                          summary_name,
                                          group = "aggregated",
                                          strategies = NULL,
@@ -403,11 +668,11 @@ outcomes_table <- function(results,
     pivot_data <- bind_rows(pivot_data, total_row)
   }
 
-  # Rename value_display column to temporary name (will be blanked via header)
-  names(pivot_data)[names(pivot_data) == "value_display"] <- "_value"
+  # Rename value_display column to space (blank header)
+  names(pivot_data)[names(pivot_data) == "value_display"] <- " "
 
   # Add spacer columns between strategy groups (only in multi-group mode)
-  result_cols <- pivot_data[, "_value", drop = FALSE]
+  result_cols <- pivot_data[, " ", drop = FALSE]
 
   for (i in seq_along(strategies_display)) {
     # Spacer - only in multi-group mode
@@ -432,7 +697,7 @@ outcomes_table <- function(results,
 
   # Format value columns
   value_col_names <- setdiff(colnames(result_cols),
-                             c("_value", grep("^spacer_", colnames(result_cols), value = TRUE)))
+                             c(" ", grep("^spacer_", colnames(result_cols), value = TRUE)))
   for (col in value_col_names) {
     ft <- colformat_double(ft, j = col, digits = decimals)
   }
@@ -716,9 +981,10 @@ format_nmb_cycle_table <- function(results,
 }
 
 
-#' Format Net Monetary Benefit as Summary Table
+#' Prepare Net Monetary Benefit Table Data
 #'
-#' Creates a flextable showing NMB breakdown by component values.
+#' Internal helper function that prepares NMB data for rendering.
+#' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
@@ -736,40 +1002,23 @@ format_nmb_cycle_table <- function(results,
 #' @param group_name_field Which group name field to use
 #' @param summary_name_field Which summary name field to use
 #'
-#' @return A flextable object
-#'
-#' @examples
-#' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
-#' results <- run_model(model)
-#'
-#' ft <- nmb_table(results, "total_qalys", "total_cost",
-#'                 comparator = "control")
-#' }
-#'
-#' @export
-nmb_table <- function(results,
-                                     outcome_summary,
-                                     cost_summary,
-                                     group = "aggregated",
-                                     wtp = NULL,
-                                     referent = NULL,
-                                     comparator = NULL,
-                                     strategies = NULL,
-                                     show_total = TRUE,
-                                     decimals = 2,
-                                     discounted = FALSE,
-                                     value_name_field = "display_name",
-                                     strategy_name_field = "display_name",
-                                     group_name_field = "display_name",
-                                     summary_name_field = "display_name") {
-
-  if (!requireNamespace("flextable", quietly = TRUE)) {
-    stop("Package 'flextable' required. Install with: install.packages('flextable')")
-  }
-  if (!requireNamespace("officer", quietly = TRUE)) {
-    stop("Package 'officer' required. Install with: install.packages('officer')")
-  }
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_nmb_table_data <- function(results,
+                                  outcome_summary,
+                                  cost_summary,
+                                  group = "aggregated",
+                                  wtp = NULL,
+                                  referent = NULL,
+                                  comparator = NULL,
+                                  strategies = NULL,
+                                  show_total = TRUE,
+                                  decimals = 2,
+                                  discounted = FALSE,
+                                  value_name_field = "display_name",
+                                  strategy_name_field = "display_name",
+                                  group_name_field = "display_name",
+                                  summary_name_field = "display_name") {
 
   # Validate referent/comparator
   if (is.null(referent) && is.null(comparator)) {
@@ -837,9 +1086,14 @@ nmb_table <- function(results,
   strategies_display <- unique(combined_data$strategy)
   groups_display <- unique(combined_data$group)
   values_display <- unique(combined_data$value)
+  n_strategies <- length(strategies_display)
+  n_groups <- length(groups_display)
+
+  # Determine mode
+  mode <- if (n_groups > 1 || is.null(group)) "three_level" else "single"
 
   # Pivot to table format
-  if (length(groups_display) > 1 || is.null(group)) {
+  if (mode == "three_level") {
     # Mode 3: Strategy > Group columns
     pivot_data <- combined_data %>%
       pivot_wider(
@@ -864,193 +1118,220 @@ nmb_table <- function(results,
     pivot_data[[col]] <- round(pivot_data[[col]], decimals)
   }
 
-  # Add total row if requested
+  # Track total row index if requested
+  total_row_index <- NULL
   if (show_total) {
     total_row <- pivot_data %>%
       summarize(across(all_of(value_cols), ~sum(., na.rm = TRUE))) %>%
       mutate(value = "Total")
     pivot_data <- bind_rows(pivot_data, total_row)
+    total_row_index <- nrow(pivot_data)
   }
 
-  # Build result columns based on mode
-  result_cols <- pivot_data[, "value", drop = FALSE]
+  # Rename value column to space (blank header) for NMB tables
+  names(pivot_data)[names(pivot_data) == "value"] <- " "
 
-  if (length(groups_display) > 1 || is.null(group)) {
-    # Mode 3: Multi-group with spacers
+  # Build result columns based on mode
+  spacer_indices <- integer()
+  if (mode == "three_level") {
+    result_cols <- pivot_data[, " ", drop = FALSE]
+    col_counter <- 1
+
     for (i in seq_along(strategies_display)) {
+      col_counter <- col_counter + 1  # Next position is spacer
+
       # Add spacer before each strategy
-      spacer_col <- data.frame(rep("", nrow(pivot_data)),
-                               stringsAsFactors = FALSE)
+      spacer_col <- data.frame(rep("", nrow(pivot_data)), stringsAsFactors = FALSE)
       names(spacer_col) <- paste0("spacer_", i)
       result_cols <- cbind(result_cols, spacer_col)
+      spacer_indices <- c(spacer_indices, col_counter)
+
+      col_counter <- col_counter + 1
 
       # Get columns for this strategy
       strat <- strategies_display[i]
-      strat_cols <- pivot_data[, grepl(paste0("^", strat, "_"),
-                                       names(pivot_data)),
-                               drop = FALSE]
+      strat_cols <- pivot_data[, grepl(paste0("^", strat, "_"), names(pivot_data)), drop = FALSE]
       result_cols <- cbind(result_cols, strat_cols)
+      col_counter <- col_counter + ncol(strat_cols) - 1
     }
   } else {
-    # Mode 1/2: Single group, no spacers
+    # Mode 1/2: No spacer columns, just rename columns to strategy names
+    result_cols <- pivot_data
+  }
+
+  # Get all column names and indices
+  all_cols <- colnames(result_cols)
+  non_spacer_indices <- which(!grepl("^spacer_", all_cols))
+
+  # Build column_names vector for kable in three-level mode
+  column_names_vec <- NULL
+  if (mode == "three_level") {
+    column_names_vec <- c(" ")  # First column
     for (i in seq_along(strategies_display)) {
-      strat <- strategies_display[i]
-      strat_cols <- pivot_data[, names(pivot_data) == strat,
-                               drop = FALSE]
-      result_cols <- cbind(result_cols, strat_cols)
+      column_names_vec <- c(column_names_vec, "")  # Spacer column
+
+      # For each strategy's columns, extract just the group names
+      for (grp in groups_display) {
+        column_names_vec <- c(column_names_vec, grp)
+      }
     }
   }
 
-  # Build headers and prepare data based on mode BEFORE creating flextable
-  if (length(groups_display) > 1 || is.null(group)) {
-    # Mode 3: Two-level header (Strategy > Group)
-    # Keep original column names for flextable creation
-    ft <- flextable(result_cols)
-
-    # Format numeric columns (all except first and spacer columns)
-    value_col_names <- setdiff(colnames(result_cols),
-                               c("value",
-                                 grep("^spacer_",
-                                      colnames(result_cols),
-                                      value = TRUE)))
-    for (col in value_col_names) {
-      ft <- colformat_double(ft, j = col, digits = decimals)
-    }
-
-    # Add strategy header row
-    header_row1_values <- c("Component")
+  # Build header structure
+  if (mode == "three_level") {
+    header_row1_values <- c("")
     header_row1_widths <- c(1)
 
+    # Build level 2 values (group names) for proper display
+    header_row2_values <- c(" ")
+    header_row2_widths <- c(1)
+
     for (i in seq_along(strategies_display)) {
-      # Spacer in row 1
       header_row1_values <- c(header_row1_values, "")
       header_row1_widths <- c(header_row1_widths, 1)
-      # Strategy name spanning all groups
-      header_row1_values <- c(header_row1_values,
-                              strategies_display[i])
-      header_row1_widths <- c(header_row1_widths, length(groups_display))
-    }
+      header_row1_values <- c(header_row1_values, strategies_display[i])
+      header_row1_widths <- c(header_row1_widths, n_groups)
 
-    ft <- ft %>%
-      add_header_row(values = header_row1_values,
-                     colwidths = header_row1_widths, top = TRUE)
-
-    # Merge Component column across both header rows
-    ft <- merge_at(ft, i = 1:2, j = 1, part = "header")
-
-    # Set group names in row 2
-    current_col <- 2
-    for (i in seq_along(strategies_display)) {
-      ft <- compose(ft, i = 2, j = current_col,
-                    value = as_paragraph(""),
-                    part = "header")
-      current_col <- current_col + 1
+      # Add spacer and group names to level 2
+      header_row2_values <- c(header_row2_values, "")
+      header_row2_widths <- c(header_row2_widths, 1)
       for (j in seq_along(groups_display)) {
-        ft <- compose(ft, i = 2, j = current_col,
-                      value = as_paragraph(groups_display[j]),
-                      part = "header")
-        current_col <- current_col + 1
+        header_row2_values <- c(header_row2_values, groups_display[j])
+        header_row2_widths <- c(header_row2_widths, 1)
       }
     }
-  } else {
-    # Mode 1/2: Blank headers (value names appear in body, not header)
-    # Use internal temporary names, then set all headers to blank
-    new_names <- c("_value")
+
+    # Create header vector for kableExtra
+    hdr_vec <- c(" " = 1)
     for (i in seq_along(strategies_display)) {
-      new_names <- c(new_names, paste0("_strat_", i))
+      hdr_vec <- c(hdr_vec, setNames(1, paste0("spacer_", i)), setNames(n_groups, strategies_display[i]))
     }
-    names(result_cols) <- new_names
-    ft <- flextable(result_cols)
 
-    # Set first column header to empty, show strategy names in others
-    ft <- flextable::compose(ft, i = 1, j = 1,
-                             value = flextable::as_paragraph(""),
-                             part = "header")
-
-    # Set strategy comparison names as headers for remaining columns
-    for (j in 2:length(new_names)) {
-      ft <- flextable::compose(
-        ft, i = 1, j = j,
-        value = flextable::as_paragraph(strategies_display[j - 1]),
-        part = "header"
-      )
-    }
-  }
-
-  # Get column indices for styling (after mode-specific setup)
-  all_cols <- colnames(ft$body$content$data)
-  spacer_col_indices <- which(grepl("^spacer_", all_cols))
-  non_spacer_col_indices <- setdiff(seq_along(all_cols),
-                                    spacer_col_indices)
-
-  # Format numeric columns (now that column indices are established)
-  # Only format if not in simple mode (single group mode)
-  if (length(groups_display) > 1 || is.null(group)) {
-    for (col_idx in non_spacer_col_indices[-1]) {  # Skip first column
-      if (col_idx > 1) {  # Safety check
-        ft <- colformat_double(ft, j = col_idx, digits = decimals)
-      }
-    }
+    header_structure <- list(
+      level1 = list(values = header_row1_values, widths = header_row1_widths, header_vector = hdr_vec),
+      level2 = list(values = header_row2_values, widths = header_row2_widths),
+      level3 = list(values = NA, widths = NA)
+    )
   } else {
-    # For simple mode, skip colformat_double to avoid empty column issues
-    # Format will be applied by base flextable defaults
+    # Single header level for Mode 1/2 - just strategy names
+    header_row1_values <- c("", strategies_display)
+    header_row1_widths <- rep(1, length(header_row1_values))
+
+    # Create header vector for kableExtra
+    hdr_vec <- setNames(rep(1, length(header_row1_values)), header_row1_values)
+
+    header_structure <- list(
+      level1 = list(values = header_row1_values, widths = header_row1_widths, header_vector = hdr_vec),
+      level2 = list(values = NA, widths = NA),
+      level3 = list(values = NA, widths = NA)
+    )
   }
 
-  # Apply styling only if not in simple mode (empty column name causes issues)
-  if (!(length(groups_display) == 1 && !is.null(group))) {
-    ft <- ft %>%
-      bg(bg = "white", part = "all") %>%
-      bold(part = "header") %>%
-      align(align = "center", part = "header")
-  }
+  # Create metadata list
+  create_table_metadata(
+    data = result_cols,
+    mode = mode,
+    n_strategies = n_strategies,
+    n_groups = n_groups,
+    n_values = length(values_display),
+    n_states = NULL,
+    strategy_names = strategies_display,
+    group_names = groups_display,
+    value_names = values_display,
+    state_names = NULL,
+    spacer_indices = spacer_indices,
+    first_col_name = " ",
+    first_col_type = "label",
+    header_levels = if (mode == "three_level") 1 else 0,
+    header_structure = header_structure,
+    first_col_merge = if (mode == "three_level") TRUE else FALSE,
+    column_names = column_names_vec,  # Use display names for kable
+    replace_column_names = (mode == "three_level"),
+    first_column_content = "",
+    special_rows = list(total_row_index = total_row_index, bold_rows = integer()),
+    decimals = decimals,
+    value_range = "currency"
+  )
+}
 
-  # Apply borders to non-spacer columns only (skip in simple mode)
-  if (!(length(groups_display) == 1 && !is.null(group))) {
-    black_border <- fp_border(color = "black", width = 1)
-    no_border <- fp_border(width = 0)
 
-    ft <- border_remove(ft)
+#' Format Net Monetary Benefit as Summary Table
+#'
+#' Creates a table showing NMB breakdown by component values.
+#' Supports both flextable and kableExtra backends for flexible output formatting.
+#'
+#' @param results A heRomod2 model results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param wtp Optional override for willingness-to-pay
+#' @param referent Single reference strategy for intervention perspective.
+#' @param comparator Single reference strategy for comparator perspective.
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param show_total Logical. Show TOTAL row? (default: TRUE)
+#' @param decimals Number of decimal places (default: 2)
+#' @param discounted Logical. Use discounted values?
+#' @param value_name_field Which value name field to use
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param summary_name_field Which summary name field to use
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' results <- run_model(model)
+#'
+#' # Create table using flextable (default)
+#' ft <- nmb_table(results, "total_qalys", "total_cost",
+#'                 comparator = "control")
+#'
+#' # Create table using kableExtra
+#' kt <- nmb_table(results, "total_qalys", "total_cost",
+#'                 comparator = "control", table_format = "kable")
+#' }
+#'
+#' @export
+nmb_table <- function(results,
+                     outcome_summary,
+                     cost_summary,
+                     group = "aggregated",
+                     wtp = NULL,
+                     referent = NULL,
+                     comparator = NULL,
+                     strategies = NULL,
+                     show_total = TRUE,
+                     decimals = 2,
+                     discounted = FALSE,
+                     value_name_field = "display_name",
+                     strategy_name_field = "display_name",
+                     group_name_field = "display_name",
+                     summary_name_field = "display_name",
+                     table_format = c("flextable", "kable")) {
 
-    for (col_idx in non_spacer_col_indices) {
-      ft <- hline_top(ft, j = col_idx, border = black_border,
-                      part = "header")
-      ft <- hline_bottom(ft, j = col_idx, border = black_border,
-                         part = "header")
-      ft <- hline_bottom(ft, j = col_idx, border = black_border,
-                         part = "body")
-    }
+  table_format <- match.arg(table_format)
 
-    # Style spacer columns
-    if (length(spacer_col_indices) > 0) {
-      ft <- width(ft, j = spacer_col_indices, width = 0.01)
-      ft <- void(ft, j = spacer_col_indices, part = "all")
-      for (spacer_idx in spacer_col_indices) {
-        ft <- border(ft, i = NULL, j = spacer_idx, border = no_border,
-                     part = "all")
-      }
-    }
-  }
+  # Prepare data
+  prepared <- prepare_nmb_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    group = group,
+    wtp = wtp,
+    referent = referent,
+    comparator = comparator,
+    strategies = strategies,
+    show_total = show_total,
+    decimals = decimals,
+    discounted = discounted,
+    value_name_field = value_name_field,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    summary_name_field = summary_name_field
+  )
 
-  # Add border and bold to Total row if present (applies to both modes)
-  if (show_total) {
-    # Get border color for simple mode (not defined in that block)
-    if (length(groups_display) == 1 && !is.null(group)) {
-      black_border <- fp_border(color = "black", width = 1)
-      # In simple mode, apply border to all columns except spacers
-      all_cols_simple <- colnames(ft$body$content$data)
-      non_spacer_simple <- which(!grepl("^spacer_", all_cols_simple))
-      ft <- hline(ft, i = nrow(result_cols) - 1, j = non_spacer_simple,
-                  border = black_border, part = "body")
-    } else {
-      # In multi-group mode, border already applied above
-      # but we ensure it's applied here too for consistency
-      ft <- hline(ft, i = nrow(result_cols) - 1, j = non_spacer_col_indices,
-                  border = black_border, part = "body")
-    }
-    ft <- bold(ft, i = nrow(result_cols), part = "body")
-  }
-
-  # Autofit to fit value names column in both modes
-  ft <- autofit(ft, add_w = 0, add_h = 0)
-  ft
+  # Render using specified backend
+  render_table(prepared, format = table_format)
 }

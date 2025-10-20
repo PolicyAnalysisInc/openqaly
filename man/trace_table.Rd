@@ -2,7 +2,7 @@
 % Please edit documentation in R/trace_tables.R
 \name{trace_table}
 \alias{trace_table}
-\title{Format Trace as flextable}
+\title{Format Trace as Table}
 \usage{
 trace_table(
   results,
@@ -12,7 +12,9 @@ trace_table(
   decimals = 4,
   strategy_name_field = "display_name",
   state_name_field = "display_name",
-  time_unit = "cycle"
+  time_unit = "cycle",
+  font_size = 11,
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -34,29 +36,31 @@ trace_table(
 
 \item{time_unit}{Which time unit to display: "cycle" (default), "day", "week",
 "month", or "year".}
+
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
 \value{
-A flextable object with hierarchical column headers and clean borders
+A table object (flextable or kable depending on table_format)
 }
 \description{
-Creates a publication-quality table using flextable with clean black and white
-styling. Strategies appear as column groups with hierarchical headers separated
-by spacer columns for easy visual comparison. Ideal for export to Word, PowerPoint,
-or HTML documents.
+Creates a publication-quality table with clean black and white styling showing
+state probabilities over time. Strategies appear as column groups with hierarchical
+headers separated by spacer columns for easy visual comparison.
+}
+\details{
+Supports both flextable and kableExtra backends for flexible output to Word,
+PowerPoint, HTML, and PDF documents.
 }
 \examples{
 \dontrun{
 model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 results <- run_model(model)
 
-# Create flextable with hierarchical headers
+# Create table using flextable (default)
 ft <- trace_table(results)
 
-# Save to Word
-save_as_docx(ft, path = "trace.docx")
-
-# Save to PowerPoint
-save_as_pptx(ft, path = "trace.pptx")
+# Create table using kableExtra
+kt <- trace_table(results, table_format = "kable")
 
 # Show specific strategies and cycles
 trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)

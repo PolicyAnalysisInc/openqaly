@@ -61,7 +61,14 @@ outcomes_plot_bar <- function(res, outcome,
     value_name_field = value_name_field,
     referent = referent,
     comparator = comparator
-  ) %>%
+  )
+
+  # Check if summaries is valid
+  if (is.null(summaries) || nrow(summaries) == 0) {
+    stop("No summary data available for outcome '", outcome, "' with specified parameters")
+  }
+
+  summaries <- summaries %>%
     mutate(
       strategy = factor(strategy, levels = unique(strategy)),
       group = factor(group, levels = unique(group))
