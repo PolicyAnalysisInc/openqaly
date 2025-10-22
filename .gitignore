@@ -3,3 +3,4 @@ env.Rdata
 env.RDataTmp*
 ~$*.xlsx
 launch.json 
+.claude

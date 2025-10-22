@@ -7,10 +7,12 @@
 prepare_trace_table_data(
   results,
   strategies = NULL,
+  group = "aggregated",
   states = NULL,
   cycles = NULL,
   decimals = 4,
   strategy_name_field = "display_name",
+  group_name_field = "display_name",
   state_name_field = "display_name",
   time_unit = "cycle",
   font_size = 11

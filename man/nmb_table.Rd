@@ -20,7 +20,8 @@ nmb_table(
   strategy_name_field = "display_name",
   group_name_field = "display_name",
   summary_name_field = "display_name",
-  table_format = c("flextable", "kable")
+  font_size = 11,
+  table_format = c("kable", "flextable")
 )
 }
 \arguments{

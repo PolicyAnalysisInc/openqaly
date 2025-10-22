@@ -9,12 +9,15 @@ prepare_outcomes_table_data(
   summary_name,
   group = "aggregated",
   strategies = NULL,
+  referent = NULL,
+  comparator = NULL,
   show_total = TRUE,
   decimals = 2,
   discounted = FALSE,
   value_name_field = "display_name",
   strategy_name_field = "display_name",
-  group_name_field = "display_name"
+  group_name_field = "display_name",
+  font_size = 11
 )
 }
 \arguments{

@@ -19,7 +19,8 @@ prepare_nmb_table_data(
   value_name_field = "display_name",
   strategy_name_field = "display_name",
   group_name_field = "display_name",
-  summary_name_field = "display_name"
+  summary_name_field = "display_name",
+  font_size = 11
 )
 }
 \arguments{

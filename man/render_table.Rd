@@ -7,9 +7,7 @@
 render_table(prepared_data, format = c("flextable", "kable"))
 }
 \arguments{
-\item{prepared_data}{List with structure from prepare_*_table_data() functions.
-Must contain: data, table_type, mode, header_levels, spacer_indices,
-non_spacer_indices, decimals, and header_structure.}
+\item{prepared_data}{Simple table specification with headers, data, alignments, widths}
 
 \item{format}{Character. One of "flextable" or "kable".}
 }

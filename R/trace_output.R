@@ -87,8 +87,35 @@ get_trace <- function(results,
   format <- match.arg(format)
   time_unit <- match.arg(time_unit)
 
-  # Always use aggregated data - collapsed parameter determines which trace column to use
-  source_data <- results$aggregated
+  # Determine source data based on groups parameter (like get_values does)
+  if (is.null(groups)) {
+    # Default: aggregated only
+    source_data <- results$aggregated %>% mutate(group = "Aggregated")
+  } else if (groups == "all") {
+    # Explicit request for all groups - combine aggregated and segments
+    if (!is.null(results$segments) && nrow(results$segments) > 0) {
+      source_data <- bind_rows(
+        results$aggregated %>% mutate(group = "Aggregated"),
+        results$segments
+      )
+    } else {
+      # No segments available, use aggregated only
+      source_data <- results$aggregated %>% mutate(group = "Aggregated")
+    }
+  } else {
+    # Specific group(s)
+    if (!is.null(results$segments) && nrow(results$segments) > 0) {
+      source_data <- results$segments %>% filter(group %in% groups)
+      if (nrow(source_data) == 0) {
+        # Fall back to aggregated if group not found
+        warning(sprintf("Group '%s' not found, using aggregated data", groups))
+        source_data <- results$aggregated %>% mutate(group = "Aggregated")
+      }
+    } else {
+      # No segments available
+      source_data <- results$aggregated %>% mutate(group = "Aggregated")
+    }
+  }
 
   # Determine which trace column to use
   trace_column <- if (collapsed) "collapsed_trace" else "expanded_trace"
@@ -103,9 +130,6 @@ get_trace <- function(results,
   if (!is.null(strategies)) {
     source_data <- source_data[source_data$strategy %in% strategies, ]
   }
-
-  # Note: groups parameter is ignored when using aggregated data
-  # since aggregated data already combines all groups
 
   if (nrow(source_data) == 0) {
     stop("No data remaining after filtering")

@@ -17,7 +17,39 @@ model <- system.file("models", model_name, package = "heRomod2") %>%
 # model <- read_model_json("/Users/jrdnmdhl/downloads/model_68e48d6e9ff29813a41997b6_2025-10-07.json")
 print(model$summaries)
 res <- run_model(model)
+trace_table(res,group=NULL)
+trace_table(res,group=NULL,table_format='kable')
+
+
+trace_table(res)
+trace_table(res, table_format='kable')
+
 outcomes_table(res, 'qalys', group=NULL)
+outcomes_table(res, 'qalys', group=NULL, table_format='kable')
+
+
+outcomes_table(res, 'qalys')
+outcomes_table(res, 'qalys', table_format='kable')
+
+outcomes_table(res, 'qalys', group=NULL, referent = 'checkimab')
+outcomes_table(res, 'qalys', group=NULL, table_format='kable', referent = 'checkimab')
+
+
+outcomes_table(res, 'qalys', referent = 'checkimab')
+outcomes_table(res, 'qalys', table_format='kable', referent = 'checkimab')
+
+nmb_table(res, 'qalys', 'costs', group=NULL, referent = 'checkimab', wtp = 30000)
+nmb_table(res, 'qalys', 'costs', group=NULL, table_format='kable', referent = 'checkimab', wtp = 30000)
+
+
+nmb_table(res, 'qalys', 'costs', referent = 'checkimab', wtp = 30000)
+nmb_table(res, 'qalys', 'costs', table_format='kable', referent = 'checkimab', wtp = 30000)
+
+# nmb_table(res, 'qalys', 'costs', referent = 'checkimab', wtp = 30000)
+# outcomes_table(res, 'qalys', group=NULL)
+
+# outcomes_table(res, 'qalys', group=NULL, table_format='kable')
+# outcomes_plot_bar(res, 'qalys', group=NULL)
 # outcomes_plot_line(res, 'costs')
 # trace_plot_line(res)
 # nmb_plot_bar# outcomes_plot_bar(res, 'costs', referent = 'checkimab')
@@ -117,3 +149,25 @@ outcomes_table(res, 'qalys', group=NULL)
 #   group_by(group,strategy,summary) %>%
 #   summarize(value=sum(amount), .groups = 'drop') %>%
 #   pivot_wider(names_from = summary, values_from = value)
+
+
+
+# library(kable)
+# library(kableExtra)
+# library(flextable)
+# library(knitr)
+
+# kable(head(mtcars), format = "pipe") %>%
+# add_header_above(c("a" = 2, "Car Attributes" = 10))
+
+# headers <- list(
+#     list(
+#         list(span = 2, text = " ", borders = c(0,0,1,0)),
+#         list(span = 10, text = "Car Attributes", borders = c(0,0,1,0))),
+#     ),
+#     list(
+#         list(span = 1, text = "MPG", borders = c(0,0,1,0)),
+#         list(span = 1, text = "Cylinders", borders = c(0,0,1,0))),
+#         etc...
+#     )
+# )

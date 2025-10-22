@@ -7,20 +7,25 @@
 trace_table(
   results,
   strategies = NULL,
+  group = "aggregated",
   states = NULL,
   cycles = NULL,
   decimals = 4,
   strategy_name_field = "display_name",
+  group_name_field = "display_name",
   state_name_field = "display_name",
   time_unit = "cycle",
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("kable", "flextable")
 )
 }
 \arguments{
 \item{results}{A heRomod2 model results object}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
+
+\item{group}{Character. Either NULL (show all groups), "aggregated" (show aggregated
+data only), or a specific group name to display.}
 
 \item{states}{Character vector of states to include (NULL for all)}
 
@@ -31,11 +36,16 @@ trace_table(
 \item{strategy_name_field}{Which strategy name field to use: "name" (technical name),
 "display_name", or "abbreviation". Default is "display_name" if available.}
 
+\item{group_name_field}{Which group name field to use: "name" (technical name),
+"display_name", or "abbreviation". Default is "display_name" if available.}
+
 \item{state_name_field}{Which state name field to use: "name" (technical name),
 "display_name", or "abbreviation". Default is "display_name" if available.}
 
 \item{time_unit}{Which time unit to display: "cycle" (default), "day", "week",
 "month", or "year".}
+
+\item{font_size}{Font size for the table (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
@@ -44,8 +54,9 @@ A table object (flextable or kable depending on table_format)
 }
 \description{
 Creates a publication-quality table with clean black and white styling showing
-state probabilities over time. Strategies appear as column groups with hierarchical
-headers separated by spacer columns for easy visual comparison.
+state probabilities over time. When groups are present, they appear as the top-level
+hierarchy above strategies, which are above states. Hierarchical headers are
+separated by spacer columns for easy visual comparison.
 }
 \details{
 Supports both flextable and kableExtra backends for flexible output to Word,
@@ -61,6 +72,9 @@ ft <- trace_table(results)
 
 # Create table using kableExtra
 kt <- trace_table(results, table_format = "kable")
+
+# Show all groups
+trace_table(results, group = NULL)
 
 # Show specific strategies and cycles
 trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)
