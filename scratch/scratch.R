@@ -17,33 +17,33 @@ model <- system.file("models", model_name, package = "heRomod2") %>%
 # model <- read_model_json("/Users/jrdnmdhl/downloads/model_68e48d6e9ff29813a41997b6_2025-10-07.json")
 print(model$summaries)
 res <- run_model(model)
-trace_table(res,group=NULL)
-trace_table(res,group=NULL,table_format='kable')
+# trace_table(res,group=NULL)
+# trace_table(res,group=NULL,table_format='kable')
 
 
-trace_table(res)
-trace_table(res, table_format='kable')
+# trace_table(res)
+# trace_table(res, table_format='kable')
 
-outcomes_table(res, 'qalys', group=NULL)
-outcomes_table(res, 'qalys', group=NULL, table_format='kable')
-
-
-outcomes_table(res, 'qalys')
-outcomes_table(res, 'qalys', table_format='kable')
-
-outcomes_table(res, 'qalys', group=NULL, referent = 'checkimab')
-outcomes_table(res, 'qalys', group=NULL, table_format='kable', referent = 'checkimab')
+# outcomes_table(res, 'qalys', group=NULL)
+# outcomes_table(res, 'qalys', group=NULL, table_format='kable')
 
 
-outcomes_table(res, 'qalys', referent = 'checkimab')
-outcomes_table(res, 'qalys', table_format='kable', referent = 'checkimab')
+# outcomes_table(res, 'qalys')
+# outcomes_table(res, 'qalys', table_format='kable')
 
-nmb_table(res, 'qalys', 'costs', group=NULL, referent = 'checkimab', wtp = 30000)
-nmb_table(res, 'qalys', 'costs', group=NULL, table_format='kable', referent = 'checkimab', wtp = 30000)
+# outcomes_table(res, 'qalys', group=NULL, referent = 'checkimab')
+# outcomes_table(res, 'qalys', group=NULL, table_format='kable', referent = 'checkimab')
 
 
-nmb_table(res, 'qalys', 'costs', referent = 'checkimab', wtp = 30000)
-nmb_table(res, 'qalys', 'costs', table_format='kable', referent = 'checkimab', wtp = 30000)
+# outcomes_table(res, 'qalys', referent = 'checkimab')
+# outcomes_table(res, 'qalys', table_format='kable', referent = 'checkimab')
+
+# nmb_table(res, 'qalys', 'costs', group=NULL, referent = 'checkimab', wtp = 30000)
+# nmb_table(res, 'qalys', 'costs', group=NULL, table_format='kable', referent = 'checkimab', wtp = 30000)
+
+
+# nmb_table(res, 'qalys', 'costs', referent = 'checkimab', wtp = 30000)
+# nmb_table(res, 'qalys', 'costs', table_format='kable', referent = 'checkimab', wtp = 30000)
 
 # nmb_table(res, 'qalys', 'costs', referent = 'checkimab', wtp = 30000)
 # outcomes_table(res, 'qalys', group=NULL)
