@@ -7,7 +7,7 @@ status](https://circleci.com/gh/jrdnmdhl/heRomod2.svg?style=svg)](https://circle
 coverage](https://codecov.io/gh/jrdnmdhl/heRomod2/branch/master/graph/badge.svg)](https://app.codecov.io/gh/jrdnmdhl/heRomod2?branch=master)
 <!-- badges: end -->
 
-# OpenHECON
+# heRomod2
 
 A package for creating and running cost-effectiveness models.
 

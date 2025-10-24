@@ -16,7 +16,14 @@ model <- system.file("models", model_name, package = "heRomod2") %>%
 
 # model <- read_model_json("/Users/jrdnmdhl/downloads/model_68e48d6e9ff29813a41997b6_2025-10-07.json")
 print(model$summaries)
+# model$variables$formula[35]<-'2000000'
 res <- run_model(model)
+# incremental_ce_table(res,"qalys", "costs")
+
+calculate_pairwise_ce(res, "qalys", "costs", referent = "checkimab")
+pairwise_ce_table(res, 'qalys', 'costs', referent = 'checkimab')
+pairwise_ce_plot(res, 'qalys', 'costs', referent = 'checkimab')
+pairwise_ce_plot(res, 'qalys', 'costs', comparator = 'chemoplatin')
 # trace_table(res,group=NULL)
 # trace_table(res,group=NULL,table_format='kable')
 

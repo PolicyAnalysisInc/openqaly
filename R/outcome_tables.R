@@ -792,3 +792,570 @@ nmb_table <- function(results,
   # Render using specified backend
   render_table(prepared, format = table_format)
 }
+
+
+#' Prepare Incremental Cost-Effectiveness Table Data
+#'
+#' Internal helper function that prepares incremental CE data for rendering.
+#' Extracts data preparation logic to enable multi-backend support.
+#'
+#' @param results A heRomod2 model results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param decimals Number of decimal places
+#' @param discounted Logical. Use discounted values?
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param summary_name_field Which summary name field to use
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_incremental_ce_table_data <- function(results,
+                                              outcome_summary,
+                                              cost_summary,
+                                              group = "aggregated",
+                                              strategies = NULL,
+                                              decimals = 2,
+                                              discounted = FALSE,
+                                              strategy_name_field = "display_name",
+                                              group_name_field = "display_name",
+                                              summary_name_field = "display_name",
+                                              font_size = 11) {
+
+  # Calculate incremental CE
+  ce_data <- calculate_incremental_ce(
+    results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    group = group,
+    strategies = strategies,
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    summary_name_field = summary_name_field
+  )
+
+  # Format ICER column using print.icer() logic
+  format_icer <- function(icer_values, digits = decimals) {
+    fmt_num <- function(v) {
+      prettyNum(round(v, digits = digits),
+                big.mark = ",",
+                preserve.width = "none",
+                scientific = FALSE)
+    }
+
+    out <- character(length(icer_values))
+    out[is.na(icer_values)] <- ""  # Blank for NA (reference strategy)
+    out[is.nan(icer_values)] <- "Equivalent"  # Changed from "—" to match print.icer
+    out[is.infinite(icer_values)] <- "Dominated"
+    out[!is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values == 0] <- "Dominant"
+
+    pos <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values > 0
+    out[pos] <- fmt_num(icer_values[pos])
+
+    neg <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values < 0
+    out[neg] <- paste0(fmt_num(-icer_values[neg]), "*")
+
+    out
+  }
+
+  # Get unique strategies and groups
+  strategies_display <- unique(ce_data$strategy)
+  groups_display <- unique(ce_data$group)
+  n_strategies <- length(strategies_display)
+  n_groups <- length(groups_display)
+
+  # Determine mode
+  mode <- if (n_groups > 1 || is.null(group)) "multi_group" else "single_group"
+
+  # Create data for table - each strategy is already a row (no pivot needed!)
+  table_data <- ce_data %>%
+    arrange(group, cost) %>%
+    select(strategy, group, cost, outcome, dcost, doutcome, icer, comparator)
+
+  # Format columns to character
+  # Format numeric columns with proper handling for NA
+  format_numeric_col <- function(values, digits) {
+    sapply(values, function(v) {
+      if (is.na(v)) {
+        ""
+      } else {
+        format(round(v, digits), nsmall = digits, scientific = FALSE, trim = TRUE)
+      }
+    })
+  }
+
+  # Format the ICER column using the format_icer helper (vectorized)
+  formatted_data <- table_data %>%
+    mutate(
+      cost = format_numeric_col(cost, decimals),
+      outcome = format_numeric_col(outcome, decimals),
+      dcost = format_numeric_col(dcost, decimals),
+      doutcome = format_numeric_col(doutcome, decimals),
+      icer = format_icer(icer, decimals),
+      comparator = ifelse(is.na(comparator), "", comparator)
+    )
+
+  # Prepare final table structure based on mode
+  if (mode == "single_group") {
+    # Single group: simple table with strategy column + metric columns
+    result_cols <- formatted_data %>%
+      select(strategy, comparator, cost, outcome, dcost, doutcome, icer)
+
+    # Rename columns (use HTML entity &#916; for Delta symbol)
+    names(result_cols) <- c("Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
+
+    # Build header structure - simple single row
+    headers <- list()
+    row1 <- list()
+    for (i in seq_along(names(result_cols))) {
+      row1[[i]] <- list(
+        span = 1,
+        text = names(result_cols)[i],
+        borders = c(1, 0, 1, 0)
+      )
+    }
+    headers[[1]] <- row1
+
+    # Column alignments: left for strategy and comparator, right for metrics
+    column_alignments <- c("left", "left", rep("right", 5))
+    column_widths <- rep(NA, 7)
+
+  } else {
+    # Multi-group mode: add group column and potentially use group headers
+    result_cols <- formatted_data %>%
+      select(group, strategy, comparator, cost, outcome, dcost, doutcome, icer)
+
+    # Rename columns (use HTML entity &#916; for Delta symbol)
+    names(result_cols) <- c("Group", "Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
+
+    # Build header structure - simple single row
+    headers <- list()
+    row1 <- list()
+    for (i in seq_along(names(result_cols))) {
+      row1[[i]] <- list(
+        span = 1,
+        text = names(result_cols)[i],
+        borders = c(1, 0, 1, 0)
+      )
+    }
+    headers[[1]] <- row1
+
+    # Column alignments: left for group/strategy/comparator, right for metrics
+    column_alignments <- c("left", "left", "left", rep("right", 5))
+    column_widths <- rep(NA, 8)
+  }
+
+  # Return clean spec
+  create_simple_table_spec(
+    headers = headers,
+    data = result_cols,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = list(),
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' Format Incremental Cost-Effectiveness as Summary Table
+#'
+#' Creates a table showing incremental cost-effectiveness analysis with strategies
+#' sorted by cost, including incremental costs, outcomes, and ICERs.
+#'
+#' @param results A heRomod2 model results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param decimals Number of decimal places (default: 2)
+#' @param discounted Logical. Use discounted values?
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param summary_name_field Which summary name field to use
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' results <- run_model(model)
+#'
+#' # Create incremental CE table
+#' incremental_ce_table(results, "total_qalys", "total_cost")
+#'
+#' # For all groups
+#' incremental_ce_table(results, "total_qalys", "total_cost", group = NULL)
+#' }
+#'
+#' @export
+incremental_ce_table <- function(results,
+                                outcome_summary,
+                                cost_summary,
+                                group = "aggregated",
+                                strategies = NULL,
+                                decimals = 2,
+                                discounted = FALSE,
+                                strategy_name_field = "display_name",
+                                group_name_field = "display_name",
+                                summary_name_field = "display_name",
+                                font_size = 11,
+                                table_format = c("kable", "flextable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_incremental_ce_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    group = group,
+    strategies = strategies,
+    decimals = decimals,
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    summary_name_field = summary_name_field,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Prepare Pairwise Cost-Effectiveness Table Data
+#'
+#' Internal helper function that prepares pairwise CE data for rendering.
+#' Extracts data preparation logic to enable multi-backend support.
+#'
+#' @param results A heRomod2 model results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param referent Single reference strategy for intervention perspective
+#' @param comparator Single reference strategy for comparator perspective
+#' @param decimals Number of decimal places
+#' @param discounted Logical. Use discounted values?
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param summary_name_field Which summary name field to use
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_pairwise_ce_table_data <- function(results,
+                                          outcome_summary,
+                                          cost_summary,
+                                          group = "aggregated",
+                                          strategies = NULL,
+                                          referent = NULL,
+                                          comparator = NULL,
+                                          decimals = 2,
+                                          discounted = FALSE,
+                                          strategy_name_field = "display_name",
+                                          group_name_field = "display_name",
+                                          summary_name_field = "display_name",
+                                          font_size = 11) {
+
+  # Calculate pairwise CE
+  ce_data <- calculate_pairwise_ce(
+    results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    group = group,
+    strategies = strategies,
+    referent = referent,
+    comparator = comparator,
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    summary_name_field = summary_name_field
+  )
+
+  # Get absolute values for all strategies
+  cost_data <- get_summaries(
+    results,
+    group = group,
+    strategies = strategies,
+    summaries = cost_summary,
+    value_type = "cost",
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    value_name_field = "name"
+  ) %>%
+    group_by(strategy, group) %>%
+    summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
+
+  outcome_data <- get_summaries(
+    results,
+    group = group,
+    strategies = strategies,
+    summaries = outcome_summary,
+    value_type = "outcome",
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    value_name_field = "name"
+  ) %>%
+    group_by(strategy, group) %>%
+    summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")
+
+  absolute_data <- cost_data %>%
+    inner_join(outcome_data, by = c("strategy", "group"))
+
+  # Format ICER column using print.icer() logic
+  format_icer <- function(icer_values, digits = decimals) {
+    fmt_num <- function(v) {
+      prettyNum(round(v, digits = digits),
+                big.mark = ",",
+                preserve.width = "none",
+                scientific = FALSE)
+    }
+
+    out <- character(length(icer_values))
+    out[is.na(icer_values)] <- ""  # Blank for NA
+    out[is.nan(icer_values)] <- "Equivalent"
+    out[is.infinite(icer_values)] <- "Dominated"
+    out[!is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values == 0] <- "Dominant"
+
+    pos <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values > 0
+    out[pos] <- fmt_num(icer_values[pos])
+
+    neg <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values < 0
+    out[neg] <- paste0(fmt_num(-icer_values[neg]), "*")
+
+    out
+  }
+
+  # Format numeric columns
+  format_numeric_col <- function(values, digits) {
+    sapply(values, function(v) {
+      if (is.na(v)) {
+        ""
+      } else {
+        format(round(v, digits), nsmall = digits, scientific = FALSE, trim = TRUE)
+      }
+    })
+  }
+
+  # Check if footnote is needed (any negative ICER)
+  needs_footnote <- any(!is.na(ce_data$icer) & !is.nan(ce_data$icer) &
+                        !is.infinite(ce_data$icer) & ce_data$icer < 0)
+
+  # Get unique groups
+  groups_display <- unique(absolute_data$group)
+  n_groups <- length(groups_display)
+
+  # Determine mode
+  mode <- if (n_groups > 1 || is.null(group)) "multi_group" else "single_group"
+
+  # Build table data
+  if (mode == "single_group") {
+    # Single group: simple table
+    # Strategy rows
+    strategy_rows <- absolute_data %>%
+      arrange(cost) %>%
+      mutate(
+        row_label = strategy,
+        cost_fmt = format_numeric_col(cost, decimals),
+        outcome_fmt = format_numeric_col(outcome, decimals),
+        icer_fmt = ""
+      ) %>%
+      select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+
+    # Comparison rows
+    comparison_rows <- ce_data %>%
+      mutate(
+        row_label = paste(strategy, "vs.", comparator),
+        cost_fmt = format_numeric_col(dcost, decimals),
+        outcome_fmt = format_numeric_col(doutcome, decimals),
+        icer_fmt = format_icer(icer, decimals)
+      ) %>%
+      select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+
+    # Combine
+    result_data <- bind_rows(strategy_rows, comparison_rows)
+    colnames(result_data) <- c(" ", "Cost", "Outcome", "ICER")
+
+    # Build header
+    headers <- list()
+    row1 <- list(
+      list(span = 1, text = "", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Cost", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Outcome", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "ICER", borders = c(1, 0, 1, 0))
+    )
+    headers[[1]] <- row1
+
+    column_alignments <- c("left", "right", "right", "right")
+    column_widths <- rep(NA, 4)
+    special_rows <- list()
+
+  } else {
+    # Multi-group mode: group headers + indented rows
+    result_data <- tibble()
+    group_header_rows <- integer()
+    current_row <- 0
+
+    for (grp in groups_display) {
+      # Group header row
+      current_row <- current_row + 1
+      group_header_rows <- c(group_header_rows, current_row)
+      result_data <- bind_rows(
+        result_data,
+        tibble(
+          row_label = grp,
+          cost_fmt = "",
+          outcome_fmt = "",
+          icer_fmt = ""
+        )
+      )
+
+      # Strategy rows for this group
+      grp_strategies <- absolute_data %>%
+        filter(group == grp) %>%
+        arrange(cost) %>%
+        mutate(
+          row_label = paste0("  ", strategy),
+          cost_fmt = format_numeric_col(cost, decimals),
+          outcome_fmt = format_numeric_col(outcome, decimals),
+          icer_fmt = ""
+        ) %>%
+        select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+
+      result_data <- bind_rows(result_data, grp_strategies)
+      current_row <- current_row + nrow(grp_strategies)
+
+      # Comparison rows for this group
+      grp_comparisons <- ce_data %>%
+        filter(group == grp) %>%
+        mutate(
+          row_label = paste0("  ", strategy, " vs. ", comparator),
+          cost_fmt = format_numeric_col(dcost, decimals),
+          outcome_fmt = format_numeric_col(doutcome, decimals),
+          icer_fmt = format_icer(icer, decimals)
+        ) %>%
+        select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+
+      result_data <- bind_rows(result_data, grp_comparisons)
+      current_row <- current_row + nrow(grp_comparisons)
+    }
+
+    colnames(result_data) <- c(" ", "Cost", "Outcome", "ICER")
+
+    # Build header
+    headers <- list()
+    row1 <- list(
+      list(span = 1, text = "", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Cost", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Outcome", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "ICER", borders = c(1, 0, 1, 0))
+    )
+    headers[[1]] <- row1
+
+    column_alignments <- c("left", "right", "right", "right")
+    column_widths <- rep(NA, 4)
+    special_rows <- list(group_header_rows = group_header_rows)
+  }
+
+  # Add footnote if needed
+  if (needs_footnote) {
+    special_rows$footnote <- "* Referent is less effective and less costly than comparator. ICER reflects cost-effectiveness of comparator vs. referent"
+  }
+
+  # Return clean spec
+  create_simple_table_spec(
+    headers = headers,
+    data = result_data,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = special_rows,
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' Format Pairwise Cost-Effectiveness as Summary Table
+#'
+#' Creates a table showing pairwise cost-effectiveness comparisons against a single
+#' reference strategy. Shows absolute values for all strategies plus incremental
+#' comparisons.
+#'
+#' @param results A heRomod2 model results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param referent Single reference strategy for intervention perspective
+#' @param comparator Single reference strategy for comparator perspective
+#' @param decimals Number of decimal places (default: 2)
+#' @param discounted Logical. Use discounted values?
+#' @param strategy_name_field Which strategy name field to use
+#' @param group_name_field Which group name field to use
+#' @param summary_name_field Which summary name field to use
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' results <- run_model(model)
+#'
+#' # Pairwise CE table vs control
+#' pairwise_ce_table(results, "total_qalys", "total_cost", comparator = "control")
+#'
+#' # For all groups
+#' pairwise_ce_table(results, "total_qalys", "total_cost", group = NULL,
+#'                   comparator = "control")
+#' }
+#'
+#' @export
+pairwise_ce_table <- function(results,
+                             outcome_summary,
+                             cost_summary,
+                             group = "aggregated",
+                             strategies = NULL,
+                             referent = NULL,
+                             comparator = NULL,
+                             decimals = 2,
+                             discounted = FALSE,
+                             strategy_name_field = "display_name",
+                             group_name_field = "display_name",
+                             summary_name_field = "display_name",
+                             font_size = 11,
+                             table_format = c("kable", "flextable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_pairwise_ce_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    group = group,
+    strategies = strategies,
+    referent = referent,
+    comparator = comparator,
+    decimals = decimals,
+    discounted = discounted,
+    strategy_name_field = strategy_name_field,
+    group_name_field = group_name_field,
+    summary_name_field = summary_name_field,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}

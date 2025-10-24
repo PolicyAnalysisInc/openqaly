@@ -55,14 +55,31 @@ render_flextable_simple <- function(spec) {
   ft <- flextable::fontsize(ft, size = spec$font_size, part = "all")
   ft <- flextable::bg(ft, bg = "white", part = "all")
 
+  # Helper to decode common HTML entities for flextable
+  decode_html_entities <- function(text) {
+    # Decode numeric entities like &#916; (Delta)
+    # Find all numeric entities
+    matches <- gregexpr("&#(\\d+);", text, perl = TRUE)
+    if (matches[[1]][1] != -1) {
+      # Extract the numeric codes
+      match_data <- regmatches(text, matches)[[1]]
+      for (entity in match_data) {
+        code <- as.integer(sub("&#(\\d+);", "\\1", entity, perl = TRUE))
+        char <- intToUtf8(code)
+        text <- sub(entity, char, text, fixed = TRUE)
+      }
+    }
+    text
+  }
+
   # Add header rows if specified
   if (length(spec$headers) > 0) {
     # Process headers from bottom to top for add_header_row
     for (i in rev(seq_along(spec$headers))) {
       header_row <- spec$headers[[i]]
 
-      # Extract values and spans
-      values <- sapply(header_row, function(cell) cell$text)
+      # Extract values and spans, decode HTML entities
+      values <- sapply(header_row, function(cell) decode_html_entities(cell$text))
       spans <- sapply(header_row, function(cell) cell$span)
 
       ft <- flextable::add_header_row(ft, values = values, colwidths = spans, top = TRUE)
@@ -163,6 +180,22 @@ render_flextable_simple <- function(spec) {
     for (row_idx in spec$special_rows$bold_rows) {
       ft <- flextable::bold(ft, i = row_idx, part = "body")
     }
+  }
+
+  # Group header rows
+  if (!is.null(spec$special_rows$group_header_rows)) {
+    for (row_idx in spec$special_rows$group_header_rows) {
+      ft <- flextable::bold(ft, i = row_idx, part = "body")
+      ft <- flextable::italic(ft, i = row_idx, part = "body")
+    }
+  }
+
+  # Footnote
+  if (!is.null(spec$special_rows$footnote)) {
+    # Add footnote below the table
+    ft <- flextable::add_footer_lines(ft, values = spec$special_rows$footnote)
+    ft <- flextable::align(ft, align = "left", part = "footer")
+    ft <- flextable::fontsize(ft, size = spec$font_size - 1, part = "footer")
   }
 
   # Ensure spacer columns have no borders
@@ -354,6 +387,20 @@ render_kable_simple <- function(spec) {
         "  border-bottom: 1px solid #000000 !important;",
         "}")
     }
+  }
+
+  # Group header rows
+  if (!is.null(spec$special_rows$group_header_rows)) {
+    for (row_idx in spec$special_rows$group_header_rows) {
+      kt <- kableExtra::row_spec(kt, row = row_idx, bold = TRUE, italic = TRUE)
+    }
+  }
+
+  # Footnote
+  if (!is.null(spec$special_rows$footnote)) {
+    kt <- kableExtra::footnote(kt, general = spec$special_rows$footnote,
+                               general_title = "",
+                               footnote_as_chunk = FALSE)
   }
 
   # Apply column widths
