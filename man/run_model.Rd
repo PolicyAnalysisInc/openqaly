@@ -4,10 +4,16 @@
 \alias{run_model}
 \title{Run a Model}
 \usage{
-run_model(model, ...)
+run_model(model, psa = FALSE, n_sim = NULL, seed = NULL, ...)
 }
 \arguments{
 \item{model}{A heRo_model object.}
+
+\item{psa}{Logical. If TRUE, run probabilistic sensitivity analysis.}
+
+\item{n_sim}{Number of PSA simulations (required if psa = TRUE).}
+
+\item{seed}{Random seed for reproducibility in PSA.}
 
 \item{...}{additional arguments.}
 }

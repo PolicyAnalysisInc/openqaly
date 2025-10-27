@@ -22,6 +22,8 @@ A package for creating and running cost-effectiveness models.
 -   Sampling of tables & arbitrary object parameters (bootstrap, custom
     sampling, etc…)
 -   Custom model checks
+-   Embarassingly parallel archictecture
+-   Modular structure allowing models to be combined
 -   Comprehensive logging of model evaluation
 -   Decision-tree functionality
 -   Cleaner code

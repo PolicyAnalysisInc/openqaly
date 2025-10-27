@@ -50,13 +50,18 @@ define_formula <- function(string) {
 }
 
 # Evaluate Formula
-eval_formula <- function(x, ns) {
+eval_formula <- function(x, ns, max_st = NULL) {
 
   # Update quosure environment (no suppressWarnings needed)
   x$quo <- quo_set_env(x$quo, ns$env)
 
+  df <- ns$df
+  if (!is.null(max_st)) {
+    df <- filter(df, state_cycle <= max_st)
+  }
+
   # Evaluate with data masking
-  res <- safe_eval(eval_tidy(x$quo, data = ns$df))
+  res <- safe_eval(eval_tidy(x$quo, data = df))
 
   # If the initial evaluation did not result in a heRo_error, return it
   # Otherwise, check if it was caused by a dependency error

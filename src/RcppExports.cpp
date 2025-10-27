@@ -47,10 +47,150 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cppCalculateTraceAndValues
+List cppCalculateTraceAndValues(NumericVector init, NumericMatrix transitions, DataFrame values, CharacterVector value_names, CharacterVector state_names, DataFrame expanded_state_map, std::string half_cycle_method);
+RcppExport SEXP _heRomod2_cppCalculateTraceAndValues(SEXP initSEXP, SEXP transitionsSEXP, SEXP valuesSEXP, SEXP value_namesSEXP, SEXP state_namesSEXP, SEXP expanded_state_mapSEXP, SEXP half_cycle_methodSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type init(initSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type transitions(transitionsSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type values(valuesSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names(value_namesSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type state_names(state_namesSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type expanded_state_map(expanded_state_mapSEXP);
+    Rcpp::traits::input_parameter< std::string >::type half_cycle_method(half_cycle_methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(cppCalculateTraceAndValues(init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_pivot_to_long
+List cpp_pivot_to_long(DataFrame df, CharacterVector value_names);
+RcppExport SEXP _heRomod2_cpp_pivot_to_long(SEXP dfSEXP, SEXP value_namesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type df(dfSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names(value_namesSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_pivot_to_long(df, value_names));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_lf_to_array
+NumericVector cpp_lf_to_array(List lf_data, IntegerVector dims);
+RcppExport SEXP _heRomod2_cpp_lf_to_array(SEXP lf_dataSEXP, SEXP dimsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type lf_data(lf_dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type dims(dimsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_lf_to_array(lf_data, dims));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_arr_last_unique
+int cpp_arr_last_unique(NumericVector arr, int dim_index);
+RcppExport SEXP _heRomod2_cpp_arr_last_unique(SEXP arrSEXP, SEXP dim_indexSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type arr(arrSEXP);
+    Rcpp::traits::input_parameter< int >::type dim_index(dim_indexSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_arr_last_unique(arr, dim_index));
+    return rcpp_result_gen;
+END_RCPP
+}
+// process_evaluated_values_cpp
+List process_evaluated_values_cpp(List evaluated_groups, CharacterVector value_names, CharacterVector state_names, bool simplify);
+RcppExport SEXP _heRomod2_process_evaluated_values_cpp(SEXP evaluated_groupsSEXP, SEXP value_namesSEXP, SEXP state_namesSEXP, SEXP simplifySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type evaluated_groups(evaluated_groupsSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names(value_namesSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type state_names(state_namesSEXP);
+    Rcpp::traits::input_parameter< bool >::type simplify(simplifySEXP);
+    rcpp_result_gen = Rcpp::wrap(process_evaluated_values_cpp(evaluated_groups, value_names, state_names, simplify));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_process_state_cycles_ultrafast
+DataFrame cpp_process_state_cycles_ultrafast(DataFrame state_res, CharacterVector value_names_in_df, List state_ns_env, CharacterVector value_names_in_env, std::string state, SEXP destination, double max_st);
+RcppExport SEXP _heRomod2_cpp_process_state_cycles_ultrafast(SEXP state_resSEXP, SEXP value_names_in_dfSEXP, SEXP state_ns_envSEXP, SEXP value_names_in_envSEXP, SEXP stateSEXP, SEXP destinationSEXP, SEXP max_stSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type state_res(state_resSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_df(value_names_in_dfSEXP);
+    Rcpp::traits::input_parameter< List >::type state_ns_env(state_ns_envSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_env(value_names_in_envSEXP);
+    Rcpp::traits::input_parameter< std::string >::type state(stateSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type destination(destinationSEXP);
+    Rcpp::traits::input_parameter< double >::type max_st(max_stSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_process_state_cycles_ultrafast(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_process_state_cycles_fast
+DataFrame cpp_process_state_cycles_fast(DataFrame state_res, CharacterVector value_names_in_df, List state_ns_env, CharacterVector value_names_in_env, std::string state, SEXP destination, double max_st);
+RcppExport SEXP _heRomod2_cpp_process_state_cycles_fast(SEXP state_resSEXP, SEXP value_names_in_dfSEXP, SEXP state_ns_envSEXP, SEXP value_names_in_envSEXP, SEXP stateSEXP, SEXP destinationSEXP, SEXP max_stSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type state_res(state_resSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_df(value_names_in_dfSEXP);
+    Rcpp::traits::input_parameter< List >::type state_ns_env(state_ns_envSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_env(value_names_in_envSEXP);
+    Rcpp::traits::input_parameter< std::string >::type state(stateSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type destination(destinationSEXP);
+    Rcpp::traits::input_parameter< double >::type max_st(max_stSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_process_state_cycles_fast(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_process_state_cycles
+List cpp_process_state_cycles(DataFrame state_res, CharacterVector value_names_in_df, List state_ns_env, CharacterVector value_names_in_env, std::string state, SEXP destination, double max_st);
+RcppExport SEXP _heRomod2_cpp_process_state_cycles(SEXP state_resSEXP, SEXP value_names_in_dfSEXP, SEXP state_ns_envSEXP, SEXP value_names_in_envSEXP, SEXP stateSEXP, SEXP destinationSEXP, SEXP max_stSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type state_res(state_resSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_df(value_names_in_dfSEXP);
+    Rcpp::traits::input_parameter< List >::type state_ns_env(state_ns_envSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type value_names_in_env(value_names_in_envSEXP);
+    Rcpp::traits::input_parameter< std::string >::type state(stateSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type destination(destinationSEXP);
+    Rcpp::traits::input_parameter< double >::type max_st(max_stSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_process_state_cycles(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_lf_to_array_direct
+NumericVector cpp_lf_to_array_direct(DataFrame df, CharacterVector dimcols, std::string value_col);
+RcppExport SEXP _heRomod2_cpp_lf_to_array_direct(SEXP dfSEXP, SEXP dimcolsSEXP, SEXP value_colSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type df(dfSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type dimcols(dimcolsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type value_col(value_colSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_lf_to_array_direct(df, dimcols, value_col));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_heRomod2_MarkovTraceAndValues", (DL_FUNC) &_heRomod2_MarkovTraceAndValues, 7},
     {"_heRomod2_cppMarkovTransitionsAndTrace", (DL_FUNC) &_heRomod2_cppMarkovTransitionsAndTrace, 10},
+    {"_heRomod2_cppCalculateTraceAndValues", (DL_FUNC) &_heRomod2_cppCalculateTraceAndValues, 7},
+    {"_heRomod2_cpp_pivot_to_long", (DL_FUNC) &_heRomod2_cpp_pivot_to_long, 2},
+    {"_heRomod2_cpp_lf_to_array", (DL_FUNC) &_heRomod2_cpp_lf_to_array, 2},
+    {"_heRomod2_cpp_arr_last_unique", (DL_FUNC) &_heRomod2_cpp_arr_last_unique, 2},
+    {"_heRomod2_process_evaluated_values_cpp", (DL_FUNC) &_heRomod2_process_evaluated_values_cpp, 4},
+    {"_heRomod2_cpp_process_state_cycles_ultrafast", (DL_FUNC) &_heRomod2_cpp_process_state_cycles_ultrafast, 7},
+    {"_heRomod2_cpp_process_state_cycles_fast", (DL_FUNC) &_heRomod2_cpp_process_state_cycles_fast, 7},
+    {"_heRomod2_cpp_process_state_cycles", (DL_FUNC) &_heRomod2_cpp_process_state_cycles, 7},
+    {"_heRomod2_cpp_lf_to_array_direct", (DL_FUNC) &_heRomod2_cpp_lf_to_array_direct, 3},
     {NULL, NULL, 0}
 };
 

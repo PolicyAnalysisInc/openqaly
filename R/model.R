@@ -1,15 +1,82 @@
+#' Run Model with PSA
+#'
+#' Runs probabilistic sensitivity analysis by sampling from distributions
+#' and running the model for each set of sampled parameters.
+#'
+#' @param model Model object
+#' @param n_sim Number of simulations
+#' @param seed Random seed for reproducibility
+#' @param ... Additional arguments passed to run_segment
+#' @return Results list with segments and aggregated results (includes simulation dimension)
+#' @keywords internal
+run_model_psa <- function(model, n_sim, seed = NULL, ...) {
+  # Finalize builders (convert to heRomodel)
+  if ("heRomodel_builder" %in% class(model)) {
+    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  }
+
+  # Parse model
+  parsed_model <- parse_model(model, ...)
+
+  # Validate sampling specifications
+  validate_sampling_spec(parsed_model)
+
+  # Get simple segments (strategy × group)
+  segments <- get_segments(parsed_model)
+
+  # Enrich segments with evaluated variables
+  # This is needed so distribution formulas can reference variable values
+  enriched_segments <- segments %>%
+    rowwise() %>%
+    do({
+      seg <- as.list(.)
+      prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+    }) %>%
+    ungroup()
+
+  # Resample to get sampled variable values for each simulation
+  sampled_vars <- resample(parsed_model, n = n_sim, segments = enriched_segments, seed = seed)
+
+  # Run segments with sampled values
+  # sampled_vars has columns: strategy, group, simulation, var1, var2, ...
+  res <- list()
+  res$segments <- sampled_vars %>%
+    rowwise() %>%
+    group_split() %>%
+    future_map(function(segment) run_segment(segment, parsed_model, ...), .progress = TRUE, .options = furrr_options(seed=1)) %>%
+    bind_rows()
+
+  # Aggregate by simulation + strategy
+  res$aggregated <- aggregate_segments(res$segments, parsed_model)
+
+  # Store metadata
+  res$metadata <- parsed_model$metadata
+
+  return(res)
+}
+
 #' Run a Model
 #'
 #' Takes a model specification object and runs the model.
 #'
 #' @param model A heRo_model object.
+#' @param psa Logical. If TRUE, run probabilistic sensitivity analysis.
+#' @param n_sim Number of PSA simulations (required if psa = TRUE).
+#' @param seed Random seed for reproducibility in PSA.
 #' @param ... additional arguments.
-#' 
+#'
 #' @return A list containing the results of the model.
-#' 
+#'
 #' @export
-run_model <- function(model, ...) {
+run_model <- function(model, psa = FALSE, n_sim = NULL, seed = NULL, ...) {
 
+  # Route to PSA-specific function
+  if (psa) {
+    if (is.null(n_sim)) stop("n_sim required when psa = TRUE")
+    return(run_model_psa(model, n_sim = n_sim, seed = seed, ...))
+  }
+
+  # Base case: existing logic
   # Finalize builders (convert to heRomodel)
   if ("heRomodel_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
@@ -23,20 +90,20 @@ run_model <- function(model, ...) {
 
   # Parse the model
   parsed_model <- parse_model(model, ...)
-  
+
   # Get model segments
   if (is.null(dots$newdata)) segments <- get_segments(parsed_model)
   else segments <- dots$newdata
-  
+
   # Split by segment, evaluate each segment in parallel, combine results
   res$segments <- segments %>%
     rowwise() %>%
     group_split() %>%
-    map(function(segment) run_segment(segment, parsed_model, ...)) %>%
+    future_map(function(segment) run_segment(segment, parsed_model, ...), .options = furrr_options(seed=1)) %>%
     bind_rows()
-  
+
   # Process the results
-  
+
   # Aggregate results by strategy
   res$aggregated <- aggregate_segments(res$segments, parsed_model)
 
@@ -118,76 +185,123 @@ parse_model <- function(model, ...) {
 #' @return A data frame with one row per strategy containing aggregated results
 #' @keywords internal
 aggregate_segments <- function(segments, parsed_model) {
+  # Check if this is PSA (has simulation column)
+  if ("simulation" %in% names(segments)) {
+    # PSA mode: group by simulation first, then aggregate within each simulation
+    simulations <- unique(segments$simulation)
+
+    # Process each simulation
+    aggregated_results <- map_dfr(simulations, function(sim) {
+      # Get segments for this simulation
+      sim_segments <- segments %>%
+        filter(simulation == sim)
+
+      # Get unique strategies for this simulation
+      strategies <- unique(sim_segments$strategy)
+
+      # Process each strategy within this simulation
+      map_dfr(strategies, function(strat) {
+        # Get segments for this strategy
+        strat_segments <- sim_segments %>%
+          filter(strategy == strat)
+
+        # Perform standard aggregation
+        result <- aggregate_strategy_segments(strat_segments, parsed_model)
+
+        # Add simulation column
+        result %>%
+          mutate(simulation = sim, .before = 1)
+      })
+    })
+
+    return(aggregated_results)
+  }
+
+  # Base case: no simulation dimension
   # Get unique strategies
   strategies <- unique(segments$strategy)
-  
+
   # Process each strategy
   aggregated_results <- map_dfr(strategies, function(strat) {
     # Get segments for this strategy
     strat_segments <- segments %>%
       filter(strategy == strat)
-    
-    # Check if weight exists
-    if (!("weight" %in% colnames(strat_segments))) {
-      warning("No weight column found in segments. Using equal weights.")
-      strat_segments$weight <- 1
-    }
-    
-    # Check for NA weights
-    na_weights <- is.na(strat_segments$weight)
-    if (any(na_weights)) {
-      groups_with_na <- unique(strat_segments$group[na_weights])
-      warning(glue("Groups with invalid weights in strategy '{strat}': {paste(groups_with_na, collapse = ', ')}. Using equal weights for all groups."))
-      # If any weight is NA, use equal weights for all groups in this strategy
-      strat_segments$weight <- 1
-    }
-    
-    # Calculate total weight for normalization
-    total_weight <- sum(strat_segments$weight)
-    
-    if (total_weight == 0) {
-      warning(glue("Total weight for strategy '{strat}' is 0. Using equal weights."))
-      total_weight <- nrow(strat_segments)
-      strat_segments$weight <- 1
-    }
-    
-    # Normalize weights
-    strat_segments <- strat_segments %>%
-      mutate(normalized_weight = weight / total_weight)
-    
-    # Aggregate collapsed trace
-    aggregated_trace <- aggregate_trace(strat_segments)
 
-    # Aggregate expanded trace (if available)
-    aggregated_expanded_trace <- aggregate_expanded_trace(strat_segments)
-
-    # Aggregate values
-    aggregated_values <- aggregate_values(strat_segments)
-
-    # Aggregate summaries
-    aggregated_summaries <- aggregate_summaries(strat_segments)
-
-    # Return aggregated results for this strategy as a single-row tibble
-    result_tibble <- tibble(
-      strategy = strat,
-      group = "_aggregated",  # Special marker for aggregated results
-      weight = total_weight,  # Total weight for the strategy
-      collapsed_trace = list(aggregated_trace),
-      trace_and_values = list(aggregated_values),  # Contains both values and values_discounted
-      summaries = list(aggregated_summaries$summaries),
-      summaries_discounted = list(aggregated_summaries$summaries_discounted)
-    )
-
-    # Add expanded_trace if it exists
-    if (!is.null(aggregated_expanded_trace)) {
-      result_tibble$expanded_trace <- list(aggregated_expanded_trace)
-    }
-
-    result_tibble
+    aggregate_strategy_segments(strat_segments, parsed_model)
   })
-  
-  # Return the aggregated results dataframe
-  aggregated_results
+
+  return(aggregated_results)
+}
+
+#' Aggregate Strategy Segments
+#'
+#' Helper function to aggregate segments for a single strategy.
+#' Extracted to avoid code duplication between base case and PSA.
+#'
+#' @param strat_segments Segments for a single strategy
+#' @param parsed_model Parsed model object
+#' @return Aggregated results for this strategy
+#' @keywords internal
+aggregate_strategy_segments <- function(strat_segments, parsed_model) {
+  strat <- unique(strat_segments$strategy)[1]
+
+  # Check if weight exists
+  if (!("weight" %in% colnames(strat_segments))) {
+    warning("No weight column found in segments. Using equal weights.")
+    strat_segments$weight <- 1
+  }
+
+  # Check for NA weights
+  na_weights <- is.na(strat_segments$weight)
+  if (any(na_weights)) {
+    groups_with_na <- unique(strat_segments$group[na_weights])
+    warning(glue("Groups with invalid weights in strategy '{strat}': {paste(groups_with_na, collapse = ', ')}. Using equal weights for all groups."))
+    # If any weight is NA, use equal weights for all groups in this strategy
+    strat_segments$weight <- 1
+  }
+
+  # Calculate total weight for normalization
+  total_weight <- sum(strat_segments$weight)
+
+  if (total_weight == 0) {
+    warning(glue("Total weight for strategy '{strat}' is 0. Using equal weights."))
+    total_weight <- nrow(strat_segments)
+    strat_segments$weight <- 1
+  }
+
+  # Normalize weights
+  strat_segments <- strat_segments %>%
+    mutate(normalized_weight = weight / total_weight)
+
+  # Aggregate collapsed trace
+  aggregated_trace <- aggregate_trace(strat_segments)
+
+  # Aggregate expanded trace (if available)
+  aggregated_expanded_trace <- aggregate_expanded_trace(strat_segments)
+
+  # Aggregate values
+  aggregated_values <- aggregate_values(strat_segments)
+
+  # Aggregate summaries
+  aggregated_summaries <- aggregate_summaries(strat_segments)
+
+  # Return aggregated results for this strategy as a single-row tibble
+  result_tibble <- tibble(
+    strategy = strat,
+    group = "_aggregated",  # Special marker for aggregated results
+    weight = total_weight,  # Total weight for the strategy
+    collapsed_trace = list(aggregated_trace),
+    trace_and_values = list(aggregated_values),  # Contains both values and values_discounted
+    summaries = list(aggregated_summaries$summaries),
+    summaries_discounted = list(aggregated_summaries$summaries_discounted)
+  )
+
+  # Add expanded_trace if it exists
+  if (!is.null(aggregated_expanded_trace)) {
+    result_tibble$expanded_trace <- list(aggregated_expanded_trace)
+  }
+
+  result_tibble
 }
 
 #' Aggregate Trace Results

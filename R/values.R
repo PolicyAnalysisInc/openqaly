@@ -257,14 +257,14 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       expanded_state_res_list <- state_res %>%
         group_by(state_cycle) %>%
         group_split()
-      
+
       inner_mapped_rows <- map(expanded_state_res_list, function(state_cycle_df) {
           expanded_state_values_list <- append(
             as.list(state_cycle_df[ ,value_names_in_df, drop = FALSE]),
             as.list(state_ns$env)[value_names_in_env]
           )
           
-          tibble(
+          list(
             state = x_group$state[1],
             destination = x_group$destination[1], # This can be NA
             max_st = current_max_st,

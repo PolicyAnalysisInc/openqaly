@@ -4,6 +4,36 @@ read_model <- function(path) {
   # Read raw Excel data
   model <- read_workbook(file.path(path, 'model.xlsx'))
 
+  # Convert multivariate sampling tables from Excel format to internal list structure
+  if ("multivariate_sampling" %in% names(model) &&
+      "multivariate_sampling_variables" %in% names(model)) {
+
+    mv_sampling <- model$multivariate_sampling
+    mv_variables <- model$multivariate_sampling_variables
+
+    # Join and convert to list structure
+    model$multivariate_sampling <- mv_variables %>%
+      left_join(mv_sampling, by = c("sampling_name" = "name")) %>%
+      group_by(sampling_name) %>%
+      group_map(function(vars, key) {
+        list(
+          name = key$sampling_name,
+          distribution = vars$distribution[1],
+          description = if ("description" %in% names(vars) && !is.na(vars$description[1])) {
+            vars$description[1]
+          } else {
+            ""
+          },
+          variables = vars %>%
+            select(variable, strategy, group) %>%
+            as_tibble()
+        )
+      })
+
+    # Remove the raw tables
+    model$multivariate_sampling_variables <- NULL
+  }
+
   # Read tables from CSV files
   data_path <- file.path(path, 'data')
   if (dir.exists(data_path)) {
@@ -838,6 +868,55 @@ read_model_json <- function(json_string) {
     model$scripts <- list()
   }
 
+  # Convert multivariate_sampling from JSON nested structure to internal list structure
+  # JSON format is an array of objects with: name, distribution, description, variables
+  # where variables is itself an array of objects with: variable, strategy, group
+  if (!is.null(model$multivariate_sampling)) {
+    if (is.data.frame(model$multivariate_sampling)) {
+      # Convert from dataframe format
+      mv_list <- list()
+      for (i in 1:nrow(model$multivariate_sampling)) {
+        mv_spec <- model$multivariate_sampling[i, ]
+
+        # Extract variables (could be a nested dataframe or list)
+        variables_df <- if ("variables" %in% names(mv_spec)) {
+          vars_data <- mv_spec$variables[[1]]
+          if (is.data.frame(vars_data)) {
+            as_tibble(vars_data)
+          } else if (is.list(vars_data)) {
+            as_tibble(do.call(rbind, lapply(vars_data, as.data.frame, stringsAsFactors = FALSE)))
+          } else {
+            tibble(variable = character(0), strategy = character(0), group = character(0))
+          }
+        } else {
+          tibble(variable = character(0), strategy = character(0), group = character(0))
+        }
+
+        mv_list[[i]] <- list(
+          name = mv_spec$name,
+          distribution = mv_spec$distribution,
+          description = if ("description" %in% names(mv_spec) && !is.na(mv_spec$description)) {
+            mv_spec$description
+          } else {
+            ""
+          },
+          variables = variables_df
+        )
+      }
+      model$multivariate_sampling <- mv_list
+    } else if (is.list(model$multivariate_sampling) && !is.data.frame(model$multivariate_sampling)) {
+      # Already in list format, just ensure variables are tibbles
+      for (i in seq_along(model$multivariate_sampling)) {
+        if ("variables" %in% names(model$multivariate_sampling[[i]])) {
+          vars_data <- model$multivariate_sampling[[i]]$variables
+          if (!is.data.frame(vars_data)) {
+            model$multivariate_sampling[[i]]$variables <- as_tibble(vars_data)
+          }
+        }
+      }
+    }
+  }
+
   # UNIFIED VALIDATION - applies type-specific specs
   model <- normalize_and_validate_model(model, preserve_builder = FALSE)
 
@@ -1165,6 +1244,33 @@ write_model_json <- function(model) {
     }
   } else {
     json_model$scripts <- list()
+  }
+
+  # Convert multivariate_sampling to array format expected by JSON
+  if (!is.null(model$multivariate_sampling) && is.list(model$multivariate_sampling)) {
+    if (length(model$multivariate_sampling) > 0) {
+      mv_array <- list()
+      for (i in seq_along(model$multivariate_sampling)) {
+        mv_spec <- model$multivariate_sampling[[i]]
+
+        # Ensure variables dataframe exists
+        vars_df <- if ("variables" %in% names(mv_spec) && is.data.frame(mv_spec$variables)) {
+          mv_spec$variables
+        } else {
+          tibble(variable = character(0), strategy = character(0), group = character(0))
+        }
+
+        mv_array[[i]] <- list(
+          name = mv_spec$name,
+          distribution = mv_spec$distribution,
+          description = if ("description" %in% names(mv_spec)) mv_spec$description else "",
+          variables = vars_df
+        )
+      }
+      json_model$multivariate_sampling <- mv_array
+    } else {
+      json_model$multivariate_sampling <- list()
+    }
   }
 
   # Convert to JSON using jsonlite

@@ -74,7 +74,23 @@ run_segment.psm <- function(segment, model, env, ...) {
   
   # Create a namespace which will contain evaluated variables
   ns <- create_namespace(model, segment)
-  
+
+  # Check if PSA mode (sampled values provided)
+  if ("simulation" %in% names(segment)) {
+    # Extract sampled variable names (exclude segment metadata columns)
+    sampled_vars <- setdiff(names(segment), c("strategy", "group", "simulation"))
+
+    # Inject sampled values into namespace
+    for (var_name in sampled_vars) {
+      ns[[var_name]] <- segment[[var_name]]
+    }
+
+    # Filter uneval_vars to exclude sampled variables
+    # (they already have values, skip formula evaluation)
+    uneval_vars <- uneval_vars %>%
+      filter(!(name %in% sampled_vars))
+  }
+
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
 
@@ -123,10 +139,21 @@ run_segment.psm <- function(segment, model, env, ...) {
   )
 
   # Create the object to return
-  segment$uneval_vars <- list(uneval_vars)
-  segment$eval_vars <- list(eval_vars)
-  segment$inital_state <- list(eval_states)
-  segment$trace_and_values <- list(calculated_trace_and_values)
+  # In PSA mode, store only sampled values instead of full eval_vars
+  if ("simulation" %in% names(segment)) {
+    # PSA mode: extract and store only sampled variable values
+    metadata_cols <- c("strategy", "group", "simulation")
+    sampled_cols <- setdiff(names(segment), metadata_cols)
+    sampled_values <- as.list(segment[sampled_cols])
+    segment$sampled_values <- list(sampled_values)
+    # Don't store heavy objects: eval_vars, uneval_vars, initial_state, trace_and_values
+  } else {
+    # Base case mode: keep current behavior
+    segment$uneval_vars <- list(uneval_vars)
+    segment$eval_vars <- list(eval_vars)
+    segment$inital_state <- list(eval_states)
+    segment$trace_and_values <- list(calculated_trace_and_values)
+  }
   # Add time variables to the trace
   # Generate time columns based on the actual cycle numbers from row names
   n_trace_rows <- nrow(calculated_trace_and_values$trace)
@@ -711,6 +738,22 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   # Create a namespace which will contain evaluated variables
   ns <- create_namespace(model, segment)
 
+  # Check if PSA mode (sampled values provided)
+  if ("simulation" %in% names(segment)) {
+    # Extract sampled variable names (exclude segment metadata columns)
+    sampled_vars <- setdiff(names(segment), c("strategy", "group", "simulation"))
+
+    # Inject sampled values into namespace
+    for (var_name in sampled_vars) {
+      ns[[var_name]] <- segment[[var_name]]
+    }
+
+    # Filter uneval_vars to exclude sampled variables
+    # (they already have values, skip formula evaluation)
+    uneval_vars <- uneval_vars %>%
+      filter(!(name %in% sampled_vars))
+  }
+
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
 
@@ -758,10 +801,21 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   )
 
   # Create the object to return
-  segment$uneval_vars <- list(uneval_vars)
-  segment$eval_vars <- list(eval_vars)
-  segment$inital_state <- list(eval_states)
-  segment$trace_and_values <- list(calculated_trace_and_values)
+  # In PSA mode, store only sampled values instead of full eval_vars
+  if ("simulation" %in% names(segment)) {
+    # PSA mode: extract and store only sampled variable values
+    metadata_cols <- c("strategy", "group", "simulation")
+    sampled_cols <- setdiff(names(segment), metadata_cols)
+    sampled_values <- as.list(segment[sampled_cols])
+    segment$sampled_values <- list(sampled_values)
+    # Don't store heavy objects: eval_vars, uneval_vars, initial_state, trace_and_values
+  } else {
+    # Base case mode: keep current behavior
+    segment$uneval_vars <- list(uneval_vars)
+    segment$eval_vars <- list(eval_vars)
+    segment$inital_state <- list(eval_states)
+    segment$trace_and_values <- list(calculated_trace_and_values)
+  }
   # Add time variables to the trace
   # Generate time columns based on the actual cycle numbers from row names
   n_trace_rows <- nrow(calculated_trace_and_values$trace)

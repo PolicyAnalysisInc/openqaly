@@ -111,7 +111,8 @@ define_model <- function(type = "markov") {
     ),
     tables = list(),
     scripts = list(),
-    trees = NULL
+    trees = NULL,
+    multivariate_sampling = list()
   )
 
   class(model) <- c("heRomodel_builder", "heRomodel")
@@ -585,4 +586,111 @@ as_json <- function(model) {
 as_r_code <- function(model) {
   # This will call the code generation function from model_codegen.R
   model_to_r_code(model)
+}
+
+#' Add Multivariate Sampling Specification to Model
+#'
+#' Define a multivariate distribution for sampling correlated parameters.
+#' This is used for Probabilistic Sensitivity Analysis (PSA) when multiple
+#' parameters need to be sampled together with a specified correlation structure.
+#'
+#' @param model A heRomodel_builder object
+#' @param name Character string naming this sampling specification
+#' @param distribution Formula or character string defining the distribution function.
+#'   The distribution should return a function(n) that generates n × k samples.
+#'   Can reference any evaluated variables including base case values of sampled variables.
+#' @param variables Character vector of variable names to be sampled together,
+#'   or a tibble with columns: variable, strategy, group (for segment-specific sampling)
+#' @param description Optional description of this sampling specification
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' # Dirichlet distribution for transition probabilities
+#' model <- define_model("markov") |>
+#'   add_multivariate_sampling(
+#'     name = "transition_probs",
+#'     distribution = "dirichlet(c(alpha_stable, alpha_progression, alpha_death))",
+#'     variables = c("p_stable", "p_progression", "p_death"),
+#'     description = "Transition probabilities from sick state"
+#'   )
+#'
+#' # Multivariate normal for correlated cost and effectiveness
+#' model <- model |>
+#'   add_multivariate_sampling(
+#'     name = "cost_qaly_correlation",
+#'     distribution = "mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6)",
+#'     variables = c("cost_treatment", "qaly_treatment")
+#'   )
+#'
+#' # Segment-specific sampling with tibble specification
+#' model <- model |>
+#'   add_multivariate_sampling(
+#'     name = "strategy_specific",
+#'     distribution = "mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5)",
+#'     variables = tibble(
+#'       variable = c("treatment_cost", "treatment_qaly"),
+#'       strategy = c("intervention", "intervention"),
+#'       group = c(NA, NA)
+#'     )
+#'   )
+#' }
+add_multivariate_sampling <- function(model, name, distribution, variables, description = NULL) {
+
+  # Convert distribution to character if it's a formula/expression
+  if (inherits(distribution, "formula")) {
+    distribution <- as.character(distribution)[2]
+  } else if (is.call(distribution) || is.expression(distribution)) {
+    distribution <- deparse(distribution, width.cutoff = 500L)
+  } else if (!is.character(distribution)) {
+    distribution <- as.character(distribution)
+  }
+
+  # Convert variables to tibble format
+  if (is.character(variables)) {
+    # Simple character vector -> tibble with just variable names
+    variables_df <- tibble(
+      variable = variables,
+      strategy = NA_character_,
+      group = NA_character_
+    )
+  } else if (is.data.frame(variables)) {
+    # Already a dataframe/tibble
+    variables_df <- as_tibble(variables)
+    # Ensure required columns exist
+    if (!"variable" %in% names(variables_df)) {
+      stop("variables tibble must have a 'variable' column")
+    }
+    # Add missing columns with NA
+    if (!"strategy" %in% names(variables_df)) {
+      variables_df$strategy <- NA_character_
+    }
+    if (!"group" %in% names(variables_df)) {
+      variables_df$group <- NA_character_
+    }
+    # Select only the required columns in the correct order
+    variables_df <- variables_df %>% select(variable, strategy, group)
+  } else {
+    stop("variables must be either a character vector or a tibble/data.frame")
+  }
+
+  # Initialize multivariate_sampling if it doesn't exist
+  if (is.null(model$multivariate_sampling)) {
+    model$multivariate_sampling <- list()
+  }
+
+  # Create the sampling specification
+  new_spec <- list(
+    name = name,
+    distribution = distribution,
+    description = description %||% "",
+    variables = variables_df
+  )
+
+  # Add to model
+  model$multivariate_sampling <- c(model$multivariate_sampling, list(new_spec))
+
+  model
 }

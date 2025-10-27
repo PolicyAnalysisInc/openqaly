@@ -8,6 +8,7 @@ library(heRomod2)
 
 library(jsonlite)
 library(dplyr)
+library(future)
 #library(bench)
 
 model_name <- "markov_medium"
@@ -17,13 +18,33 @@ model <- system.file("models", model_name, package = "heRomod2") %>%
 # model <- read_model_json("/Users/jrdnmdhl/downloads/model_68e48d6e9ff29813a41997b6_2025-10-07.json")
 print(model$summaries)
 # model$variables$formula[35]<-'2000000'
+
+
 res <- run_model(model)
 # incremental_ce_table(res,"qalys", "costs")
 
-calculate_pairwise_ce(res, "qalys", "costs", referent = "checkimab")
-pairwise_ce_table(res, 'qalys', 'costs', referent = 'checkimab')
-pairwise_ce_plot(res, 'qalys', 'costs', referent = 'checkimab')
-pairwise_ce_plot(res, 'qalys', 'costs', comparator = 'chemoplatin')
+# calculate_pairwise_ce(res, "qalys", "costs", referent = "checkimab")
+# pairwise_ce_table(res, 'qalys', 'costs', referent = 'checkimab')
+# pairwise_ce_plot(res, 'qalys', 'costs', referent = 'checkimab')
+# pairwise_ce_plot(res, 'qalys', 'costs', comparator = 'chemoplatin')
+
+plan(multisession)
+model <- model |>
+    add_variable(name = "p_stable_mean", formula = 0.7) |>
+    add_variable(name = "p_prog_mean", formula = 0.2) |>
+    add_variable(name = "p_death_mean", formula = 0.1) |>
+    add_variable(name = "alpha_stable", formula = 10) |>
+    add_variable(name = "alpha_prog", formula = 3) |>
+    add_variable(name = "alpha_death", formula = 2) |>
+    add_multivariate_sampling(
+        name = "transition_probs",
+        distribution = "dirichlet(c(alpha_stable, alpha_prog, alpha_death))",
+        variables = c("p_stable_mean", "p_prog_mean", "p_death_mean")
+    )
+
+psa_results <- run_model(model, psa = TRUE, n_sim = 1000, seed = 123)
+
+
 # trace_table(res,group=NULL)
 # trace_table(res,group=NULL,table_format='kable')
 

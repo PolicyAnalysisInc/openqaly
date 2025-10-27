@@ -1,137 +1,247 @@
+#' Prepare Segment for Sampling
+#'
+#' Evaluates variables for a segment without running the full model.
+#' This creates the evaluation environment needed for sampling distribution formulas.
+#' Distribution formulas can reference any evaluated variable (including variables
+#' being sampled for their base case values, and helper variables like SEs, alphas, correlations).
+#'
+#' @param model Parsed model object
+#' @param segment Simple segment (strategy × group tibble row)
+#' @return Segment enriched with eval_vars and uneval_vars list columns
+#' @keywords internal
+prepare_segment_for_sampling <- function(model, segment) {
+  # Parse variables for this segment
+  uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
+
+  # Create namespace
+  ns <- create_namespace(model, segment)
+
+  # Evaluate ALL variables (including those that will be sampled)
+  # This gives us base case values for distribution formulas to reference
+  eval_vars <- eval_variables(uneval_vars, ns)
+
+  # Add to segment
+  segment$uneval_vars <- list(uneval_vars)
+  segment$eval_vars <- list(eval_vars)
+
+  return(segment)
+}
+
 #' Resample Model Parameters
-#' 
+#'
 #' Resamples the parameters for a model based on the sampling specifications.
-#' 
+#' Handles both univariate distributions (from variables.sampling column) and
+#' multivariate distributions (from model$multivariate_sampling).
+#'
 #' @param model A heRomodel object
 #' @param n the number of simulations
-#' @param segments the segments for which resampling will be done
-#' @param corr an optional correlation matrix
-#' 
+#' @param segments the segments for which resampling will be done (must have eval_vars and uneval_vars columns)
+#' @param seed random seed for reproducibility
+#'
 #' @return a data.frame with resampled data by segment
-#' 
+#'
 #' @export
-resample <- function(model, n, segments, corr = NULL, seed = NULL) {
-  
-  check_sampling_spec(model$variables)
-  
-  sampled_vars <- model$variables %>%
-    filter(!is.na(sampling), sampling != '') %>%
-    mutate(.index = seq_len(n()))
-  n_var <- nrow(sampled_vars)
-  var_names <- unique(sampled_vars$name)
-  
-  # Assume independence if missing correlation matrix
-  if (is.null(corr)) {
-    corr <- diag(rep(1, n_var))
+resample <- function(model, n, segments, seed = NULL) {
+
+  # Segments must have eval_vars and uneval_vars columns
+  if (!("eval_vars" %in% names(segments))) {
+    stop("Segments must be enriched with eval_vars. Call prepare_segment_for_sampling() first.")
   }
-  
-  set.seed(seed)
-  r_norm <- rmvn(n = n, mu = rep(0, n_var), sigma = corr)
-  mat_p <- pnorm(r_norm)
-  
-  # Prepopulate a list to store simulations
-  cols <- vector(mode = "list", length = n_var + 1)
-  cols[[1]] <- seq_len(n)
-  
-  # Fill list with sampled values
-  for (i in seq_len(n_var)) {
-    
-    var_row <- sampled_vars[i, ]
-    var_name <- var_row$name
-    row_strat <- var_row$strategy
-    row_group <-  var_row$group
-    is_ss <- !is.na(row_strat) && row_strat != ''
-    is_gs <- !is.na(row_group) && row_group != ''
-    if (!is_ss) row_strat <- segments$strategy[1]
-    if (!is_gs) row_group <- segments$group[1]
-    
-    seg <- filter(segments, group == row_group, strategy == row_strat)
-    seg_ns <- clone_namespace(seg$eval_vars[[1]])
-    seg_vars <- seg$uneval_vars[[1]]
-    
-    # Warn about strategy or group dependence
-    deps <- seg_vars$formula[[which(seg_vars$name == var_name)]]$depends
-    fo_deps <- seg_vars$formula[[which(seg_vars$name == var_name)]]$fo_depends
-    if (('strategy' %in% deps) && !('strategy' %in% fo_deps )) {
-      msg <- paste0(
-        'Variable ',
-        err_name_string(var_name),
-        ' references a strategy-dependent variable but was assigned a sampling distribution.',
-        ' Sampling variables that reference strategy-dependent variables is not reccomended',
-        ' and will result in a loss of strategy-dependence in PSA.'
-      )
-      warning(msg, call. = F)
-    } else if (('group' %in% deps) && !('group' %in% fo_deps )) {
-      msg <- paste0(
-        'Variable ',
-        err_name_string(var_name),
-        ' references a group-dependent variable but was assigned a sampling distribution.',
-        ' Sampling variables that reference group-dependent variables is not reccomended',
-        ' and will result in a loss of group-dependence in PSA.'
-      )
-      warning(msg, call. = F)
-    }
-    
-    # Set up the parameter
-    formula <- as.heRoFormula(var_row$sampling)
-    seg_ns$env$bc <- seg_ns[var_name]
-    
-    # Evaluate distribution function
-    dist_func <- eval_formula(formula, seg_ns)
-    
-    # Check if value was an evaluation error
-    if (is_hero_error(dist_func)) {
-      msg <- paste0(
-        'Error in evaluation of sampling distribution for parameter ',
-        err_name_string(var_row$name),
-        ": ",
-        dist_func
-      )
-      warning(msg, call. = F)
-      res <- as.numeric(NA)
-    } else {
-      
-      # Try to draw from distribution function
-      res <- safe_eval(dist_func(mat_p[ ,i]))
-      
-      # Check whether drawing samples resulted in error
-      if (is_hero_error(res)) {
-        msg <- paste0(
-          'Error in evaluation of sampling distribution for parameter ',
-          err_name_string(var_row$name),
-          ":",
-          res
-        )
-        warning(msg, call. = F)
-        res <- as.numeric(NA)
+
+  if (!is.null(seed)) set.seed(seed)
+
+  results <- tibble()
+
+  for (seg_idx in 1:nrow(segments)) {
+    segment <- segments[seg_idx, ]
+
+    # Clone the evaluated namespace for this segment
+    # This contains ALL evaluated variables (including those being sampled)
+    seg_ns <- clone_namespace(segment$eval_vars[[1]])
+    seg_vars <- segment$uneval_vars[[1]]
+
+    sampled_values <- list()
+
+    # PART 1: Univariate sampling from variables.sampling
+    if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
+      univ_vars <- model$variables %>%
+        filter(!is.na(sampling) & sampling != "")
+
+      for (i in seq_len(nrow(univ_vars))) {
+        var_row <- univ_vars[i, ]
+
+        # Safely extract strategy and group from segment (as scalars)
+        seg_strategy <- segment$strategy[[1]]
+        seg_group <- segment$group[[1]]
+
+        # Check if this variable applies to this segment
+        # If variable has specific strategy/group, use it; otherwise use segment's
+        row_strat <- if (!is.na(var_row$strategy) && var_row$strategy != "") {
+          var_row$strategy
+        } else {
+          seg_strategy
+        }
+
+        row_group <- if (!is.na(var_row$group) && var_row$group != "") {
+          var_row$group
+        } else {
+          seg_group
+        }
+
+        # Skip if doesn't match this segment (NA-safe comparison)
+        if (!identical(row_strat, seg_strategy) || !identical(row_group, seg_group)) {
+          next
+        }
+
+        var_name <- var_row$name
+
+        # Set bc (base case) to this variable's evaluated value
+        seg_ns$env$bc <- seg_ns[[var_name]]
+
+        # Evaluate distribution formula in namespace
+        formula <- as.heRoFormula(var_row$sampling)
+        dist_fn <- eval_formula(formula, seg_ns)
+
+        if (is_hero_error(dist_fn)) {
+          warning(glue("Error evaluating sampling for {var_name}: {dist_fn}"), call. = FALSE)
+          next
+        }
+
+        # Sample using inverse CDF approach
+        u <- runif(n)
+        samples <- safe_eval(dist_fn(u))
+
+        if (is_hero_error(samples)) {
+          warning(glue("Error sampling {var_name}: {samples}"), call. = FALSE)
+          next
+        }
+
+        sampled_values[[var_name]] <- samples
       }
     }
-    
-    # Assign result to column
-    cols[[i + 1]] <- res
+
+    # PART 2: Multivariate sampling
+    if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
+      # Safely extract strategy and group from segment (as scalars)
+      seg_strategy <- segment$strategy[[1]]
+      seg_group <- segment$group[[1]]
+
+      for (mv_spec in model$multivariate_sampling) {
+        # Filter variables for this segment (NA-safe)
+        relevant_vars <- mv_spec$variables %>%
+          filter(
+            (is.na(strategy) | strategy == "" | strategy == "all" | strategy == seg_strategy) &
+            (is.na(group) | group == "" | group == "all" | group == seg_group)
+          )
+
+        if (nrow(relevant_vars) == 0) next
+
+        # Evaluate distribution formula
+        # The namespace contains ALL evaluated variables, including:
+        # - Variables being sampled (with their base case values)
+        # - Helper variables (alpha parameters, SE, correlations, etc.)
+        formula <- as.heRoFormula(mv_spec$distribution)
+        dist_fn <- eval_formula(formula, seg_ns)
+
+        if (is_hero_error(dist_fn)) {
+          warning(glue("Error evaluating multivariate distribution {mv_spec$name}: {dist_fn}"), call. = FALSE)
+          next
+        }
+
+        # Sample (returns n × k matrix)
+        samples_matrix <- safe_eval(dist_fn(n))
+
+        if (is_hero_error(samples_matrix)) {
+          warning(glue("Error sampling multivariate {mv_spec$name}: {samples_matrix}"), call. = FALSE)
+          next
+        }
+
+        # Validate dimensionality
+        if (ncol(samples_matrix) != nrow(relevant_vars)) {
+          warning(glue(
+            "Distribution {mv_spec$name} returned {ncol(samples_matrix)} columns ",
+            "but {nrow(relevant_vars)} variables specified"
+          ), call. = FALSE)
+          next
+        }
+
+        # Assign columns to variables (row order determines mapping)
+        for (i in 1:nrow(relevant_vars)) {
+          var_name <- relevant_vars$variable[i]
+          sampled_values[[var_name]] <- samples_matrix[, i]
+        }
+      }
+    }
+
+    # Build result for this segment
+    seg_result <- tibble(
+      strategy = segment$strategy,
+      group = segment$group,
+      simulation = 1:n
+    ) %>%
+      bind_cols(as_tibble(sampled_values))
+
+    results <- bind_rows(results, seg_result)
   }
-  
-  # Make a data.frame with sampled variables by segment
-  seg_samples <- segments %>%
-    rowwise() %>%
-    group_split() %>%
-    map(function(x) {
-      indices <- sampled_vars %>%
-        filter(is_in_segment(x, grp = group, strat = strategy)) %>%
-        .$.index
-      samp_list <- cols[c(1, indices + 1)] %>%
-        setNames(c('simulation', var_names)) %>%
-        append(list(strategy = x$strategy, group = x$group), after = 0)
-      vars_df <- do.call(tibble, samp_list)
-      vars_df
-    }) %>%
-    bind_rows()
-  
-  seg_samples
+
+  return(results)
+}
+
+#' Validate Sampling Specification
+#'
+#' Validates that sampling specifications are consistent and do not have conflicts.
+#' Checks that variables are not specified in both univariate (variables.sampling)
+#' and multivariate (multivariate_sampling) specifications.
+#'
+#' @param model Parsed model object
+#' @return TRUE if valid, stops with error if invalid
+#' @keywords internal
+validate_sampling_spec <- function(model) {
+  errors <- character()
+
+  # Get univariate sampled variables
+  univ_vars <- character()
+  if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
+    univ_vars <- model$variables %>%
+      filter(!is.na(sampling) & sampling != "") %>%
+      pull(name)
+  }
+
+  # Get multivariate sampled variables
+  multi_vars <- character()
+  if (!is.null(model$multivariate_sampling)) {
+    for (mv_spec in model$multivariate_sampling) {
+      multi_vars <- c(multi_vars, mv_spec$variables$variable)
+    }
+    multi_vars <- unique(multi_vars)
+
+    # Check for conflicts
+    conflicts <- intersect(univ_vars, multi_vars)
+    if (length(conflicts) > 0) {
+      errors <- c(errors, glue(
+        "Variables appear in both variables.sampling and multivariate_sampling: {paste(conflicts, collapse=', ')}"
+      ))
+    }
+
+    # Check variables exist
+    all_var_names <- model$variables$name
+    missing_vars <- setdiff(multi_vars, all_var_names)
+    if (length(missing_vars) > 0) {
+      errors <- c(errors, glue(
+        "Variables in multivariate_sampling not found in variables table: {paste(missing_vars, collapse=', ')}"
+      ))
+    }
+  }
+
+  if (length(errors) > 0) {
+    stop(paste(errors, collapse = "\n"), call. = FALSE)
+  }
+
+  return(TRUE)
 }
 
 check_sampling_spec <- function(x) {
-  
+
   # Check that it is a data.frame
   is_df <- 'data.frame' %in% class(x)
   if (!is_df) {
@@ -142,7 +252,7 @@ check_sampling_spec <- function(x) {
     )
     stop(msg, call. = F)
   }
-  
+
   # Check that sampling column is present
   missing_col <- check_missing_colnames(x, 'sampling')
   if (length(missing_col) > 0) {
@@ -151,7 +261,7 @@ check_sampling_spec <- function(x) {
       call. = F
     )
   }
-  
+
   # Check that at least one variable is sampled
   none_sampled <- all(is.empty(x$sampling))
   if (none_sampled) {
@@ -160,5 +270,5 @@ check_sampling_spec <- function(x) {
       call. = F
     )
   }
-  
+
 }

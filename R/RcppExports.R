@@ -9,3 +9,39 @@ cppMarkovTransitionsAndTrace <- function(transitions, valuesTransitional, values
     .Call('_heRomod2_cppMarkovTransitionsAndTrace', PACKAGE = 'heRomod2', transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod)
 }
 
+cppCalculateTraceAndValues <- function(init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method = "start") {
+    .Call('_heRomod2_cppCalculateTraceAndValues', PACKAGE = 'heRomod2', init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method)
+}
+
+cpp_pivot_to_long <- function(df, value_names) {
+    .Call('_heRomod2_cpp_pivot_to_long', PACKAGE = 'heRomod2', df, value_names)
+}
+
+cpp_lf_to_array <- function(lf_data, dims) {
+    .Call('_heRomod2_cpp_lf_to_array', PACKAGE = 'heRomod2', lf_data, dims)
+}
+
+cpp_arr_last_unique <- function(arr, dim_index) {
+    .Call('_heRomod2_cpp_arr_last_unique', PACKAGE = 'heRomod2', arr, dim_index)
+}
+
+process_evaluated_values_cpp <- function(evaluated_groups, value_names, state_names, simplify) {
+    .Call('_heRomod2_process_evaluated_values_cpp', PACKAGE = 'heRomod2', evaluated_groups, value_names, state_names, simplify)
+}
+
+cpp_process_state_cycles_ultrafast <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
+    .Call('_heRomod2_cpp_process_state_cycles_ultrafast', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+}
+
+cpp_process_state_cycles_fast <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
+    .Call('_heRomod2_cpp_process_state_cycles_fast', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+}
+
+cpp_process_state_cycles <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
+    .Call('_heRomod2_cpp_process_state_cycles', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+}
+
+cpp_lf_to_array_direct <- function(df, dimcols, value_col) {
+    .Call('_heRomod2_cpp_lf_to_array_direct', PACKAGE = 'heRomod2', df, dimcols, value_col)
+}
+

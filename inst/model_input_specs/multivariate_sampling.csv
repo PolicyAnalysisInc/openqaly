@@ -1,0 +1,4 @@
+name,required,type,default,fallback
+name,TRUE,character,,
+distribution,TRUE,character,,
+description,FALSE,character,,

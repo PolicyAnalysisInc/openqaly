@@ -1,5 +1,16 @@
 #' Convert a longform table to a multi-dimensional array
 lf_to_arr <- function(df, dimcols, value) {
+  # # Try to use C++ version if available
+  # cpp_available <- tryCatch({
+  #   exists("cpp_lf_to_array_direct", mode = "function")
+  # }, error = function(e) FALSE)
+
+  # if (cpp_available) {
+  #   # Use optimized C++ version
+  #   return(cpp_lf_to_array_direct(df, dimcols, value))
+  # }
+
+  # Original R implementation
   n_dims <- length(dimcols)
   index <- integer(nrow(df))
   lengths <- integer(n_dims)

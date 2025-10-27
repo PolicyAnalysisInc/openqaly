@@ -15,6 +15,8 @@
 #' @importFrom stats qnorm qlnorm pnorm
 #' @importFrom tools file_ext
 #' @importFrom mvnfast rmvn
+#' @importFrom furrr future_map
+#' @importFrom future plan multisession
 #' @importFrom scales comma dollar dollar_format
 #' @importFrom flextable flextable colformat_double add_header_row merge_at compose as_paragraph bg bold align border_remove hline hline_top hline_bottom width void border autofit
 #' @importFrom officer fp_border
