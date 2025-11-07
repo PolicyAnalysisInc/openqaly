@@ -158,7 +158,7 @@ test_that("get_trace filters by cycles", {
 })
 
 
-test_that("plot_trace creates a ggplot object", {
+test_that("trace_plot_area creates a ggplot object", {
   model_path <- system.file("models/example_psm", package = "heRomod2")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -168,7 +168,7 @@ test_that("plot_trace creates a ggplot object", {
   results <- run_model(model)
 
   # Create plot
-  p <- plot_trace(results)
+  p <- trace_plot_area(results)
 
   # Check that it's a ggplot
   expect_s3_class(p, "ggplot")
@@ -178,7 +178,7 @@ test_that("plot_trace creates a ggplot object", {
 })
 
 
-test_that("plot_trace with faceting creates faceted plot", {
+test_that("trace_plot_area with faceting creates faceted plot", {
   model_path <- system.file("models/example_psm", package = "heRomod2")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -188,7 +188,7 @@ test_that("plot_trace with faceting creates faceted plot", {
   results <- run_model(model)
 
   # Create faceted plot
-  p <- plot_trace(results, facet_by = "strategy")
+  p <- trace_plot_area(results, facet_by = "strategy")
 
   # Check that it's faceted
   expect_s3_class(p, "ggplot")
@@ -196,7 +196,7 @@ test_that("plot_trace with faceting creates faceted plot", {
 })
 
 
-test_that("plot_trace_lines creates a ggplot with lines", {
+test_that("trace_plot_line creates a ggplot with lines", {
   model_path <- system.file("models/example_psm", package = "heRomod2")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -206,7 +206,7 @@ test_that("plot_trace_lines creates a ggplot with lines", {
   results <- run_model(model)
 
   # Create line plot
-  p <- plot_trace_lines(results)
+  p <- trace_plot_line(results)
 
   # Check that it's a ggplot with line geom
   expect_s3_class(p, "ggplot")

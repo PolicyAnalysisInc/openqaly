@@ -7,13 +7,10 @@
 trace_table(
   results,
   strategies = NULL,
-  group = "aggregated",
+  groups = "overall",
   states = NULL,
   cycles = NULL,
   decimals = 4,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  state_name_field = "display_name",
   time_unit = "cycle",
   font_size = 11,
   table_format = c("kable", "flextable")
@@ -24,23 +21,13 @@ trace_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
-\item{group}{Character. Either NULL (show all groups), "aggregated" (show aggregated
-data only), or a specific group name to display.}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{states}{Character vector of states to include (NULL for all)}
 
 \item{cycles}{Integer vector or range of cycles to display (NULL for all)}
 
 \item{decimals}{Number of decimal places for probabilities (default: 4)}
-
-\item{strategy_name_field}{Which strategy name field to use: "name" (technical name),
-"display_name", or "abbreviation". Default is "display_name" if available.}
-
-\item{group_name_field}{Which group name field to use: "name" (technical name),
-"display_name", or "abbreviation". Default is "display_name" if available.}
-
-\item{state_name_field}{Which state name field to use: "name" (technical name),
-"display_name", or "abbreviation". Default is "display_name" if available.}
 
 \item{time_unit}{Which time unit to display: "cycle" (default), "day", "week",
 "month", or "year".}
@@ -74,7 +61,7 @@ ft <- trace_table(results)
 kt <- trace_table(results, table_format = "kable")
 
 # Show all groups
-trace_table(results, group = NULL)
+trace_table(results, groups = NULL)
 
 # Show specific strategies and cycles
 trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)

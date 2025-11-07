@@ -27,7 +27,8 @@ Imports:
     ggraph,
     tidygraph,
     Rcpp,
-    jsonlite
+    jsonlite,
+    scales
 Depends:
     herosurv
 License: AGPL-3
@@ -39,7 +40,8 @@ Suggests:
     knitr,
     rmarkdown,
     flextable,
-    officer
+    officer,
+    GGally
 VignetteBuilder: knitr
 RoxygenNote: 7.3.2
 LinkingTo: 

@@ -1,3 +1,15 @@
+#' Convert use_display_names to field name
+#'
+#' Internal helper to convert boolean use_display_names parameter to field name.
+#'
+#' @param use_display_names Logical. If TRUE, use "display_name", else use "name"
+#'
+#' @return Character string: "display_name" or "name"
+#' @keywords internal
+field_from_display_names <- function(use_display_names = TRUE) {
+  if (use_display_names) "display_name" else "name"
+}
+
 #' Filter Column Names by Value Type
 #'
 #' Internal helper to filter value column names based on their type (cost/outcome).
@@ -34,7 +46,7 @@ filter_by_value_type <- function(column_names, metadata, value_type = "all") {
 #'
 #' @param names Character vector of technical names to map
 #' @param metadata Results metadata containing values information
-#' @param field Which field to use: "name", "display_name", "abbreviation"
+#' @param field Which field to use: "name" or "display_name"
 #'
 #' @return Character vector of mapped names
 #' @keywords internal
@@ -76,8 +88,15 @@ map_value_names <- function(names, metadata, field = "name") {
 #' @param results A heRomod2 model results object (output from run_model)
 #' @param format Output format: "long" (one row per cycle×value×strategy×group) or
 #'   "wide" (one row per cycle, values as columns)
-#' @param group Group selection: "aggregated" (default, population-weighted average),
-#'   specific group name (e.g., "moderate"), or NULL (all groups plus aggregated)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param values Character vector of value names to include (NULL for all)
 #' @param value_type Filter by value type: "all" (default), "cost", or "outcome"
@@ -85,6 +104,8 @@ map_value_names <- function(names, metadata, field = "name") {
 #'   use undiscounted values
 #' @param cycles Integer vector of cycles to include (NULL for all)
 #' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
+#' @param use_display_names Logical. If TRUE (default), use display names for all entities
+#'   (strategies, groups, values). If FALSE, use technical names.
 #'
 #' @return A data frame in the requested format
 #'
@@ -93,68 +114,69 @@ map_value_names <- function(names, metadata, field = "name") {
 #' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 #' results <- run_model(model)
 #'
-#' # Get aggregated outcomes in long format
+#' # Get overall population outcomes in long format
 #' outcomes_long <- get_values(results, value_type = "outcome")
 #'
 #' # Get cost data for a specific group
-#' costs_group <- get_values(results, group = "moderate", value_type = "cost")
+#' costs_group <- get_values(results, groups = "moderate", value_type = "cost")
 #'
-#' # Get all groups plus aggregated for faceting
-#' all_data <- get_values(results, group = NULL)
+#' # Get all groups plus overall for faceting
+#' all_data <- get_values(results, groups = NULL)
+#'
+#' # Get multiple specific groups + overall
+#' selected_data <- get_values(results, groups = c("overall", "moderate", "severe"))
+#'
+#' # Use technical names instead of display names
+#' outcomes_tech <- get_values(results, use_display_names = FALSE)
 #' }
 #'
 #' @export
 get_values <- function(results,
                       format = c("long", "wide"),
-                      group = "aggregated",
+                      groups = "overall",
                       strategies = NULL,
                       values = NULL,
                       value_type = c("all", "cost", "outcome"),
                       discounted = FALSE,
                       cycles = NULL,
                       time_unit = c("cycle", "day", "week", "month", "year"),
-                      strategy_name_field = "display_name",
-                      group_name_field = "display_name",
-                      value_name_field = "display_name",
-                      referent = NULL,
-                      comparator = NULL) {
+                      use_display_names = TRUE,
+                      interventions = NULL,
+                      comparators = NULL) {
 
   format <- match.arg(format)
   value_type <- match.arg(value_type)
   time_unit <- match.arg(time_unit)
 
-  # Validate referent/comparator parameters (use technical names)
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
-  }
+  # Convert use_display_names to field names
+  name_field <- field_from_display_names(use_display_names)
 
-  if (!is.null(referent) || !is.null(comparator)) {
-    ref_strategy <- if (!is.null(referent)) referent else comparator
-
-    # Check against technical names in metadata
-    if (is.null(results$metadata$strategies) ||
-        !ref_strategy %in% results$metadata$strategies$name) {
-      stop(sprintf("Strategy '%s' not found in results", ref_strategy))
+  # Validate interventions/comparators parameters (use technical names)
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: explicit N×M comparisons
+    # Validate all strategies exist
+    all_strats <- c(interventions, comparators)
+    if (is.null(results$metadata$strategies)) {
+      stop("No strategy metadata available")
+    }
+    missing <- setdiff(all_strats, results$metadata$strategies$name)
+    if (length(missing) > 0) {
+      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
+    }
+  } else if (!is.null(interventions) || !is.null(comparators)) {
+    # Only one provided: validate those strategies
+    provided_strats <- if (!is.null(interventions)) interventions else comparators
+    if (is.null(results$metadata$strategies)) {
+      stop("No strategy metadata available")
+    }
+    missing <- setdiff(provided_strats, results$metadata$strategies$name)
+    if (length(missing) > 0) {
+      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
     }
   }
 
-  # Determine source data based on group parameter
-  if (is.null(group)) {
-    # Mode 3: Faceted - combine aggregated and all segments
-    source_data <- bind_rows(
-      results$aggregated %>% mutate(group = "Aggregated"),
-      results$segments
-    )
-  } else if (group == "aggregated") {
-    # Mode 1: Aggregated only
-    source_data <- results$aggregated %>% mutate(group = "Aggregated")
-  } else {
-    # Mode 2: Specific group
-    source_data <- results$segments %>% filter(group == !!group)
-    if (nrow(source_data) == 0) {
-      stop(sprintf("Group '%s' not found in results", group))
-    }
-  }
+  # Select source data based on groups parameter
+  source_data <- select_source_data(groups, results)
 
   # Filter by strategy if specified
   if (!is.null(strategies)) {
@@ -172,57 +194,97 @@ get_values <- function(results,
   if (format == "wide") {
     result <- extract_values_wide(source_data, values_field, values, value_type,
                                   cycles, time_unit, results$metadata,
-                                  strategy_name_field, group_name_field, value_name_field)
+                                  name_field)
   } else {
     result <- extract_values_long(source_data, values_field, values, value_type,
                                  cycles, time_unit, results$metadata,
-                                 strategy_name_field, group_name_field, value_name_field)
+                                 name_field)
   }
 
-  # Calculate differences if referent/comparator provided
+  # Calculate differences if interventions/comparators provided
   differences_created <- FALSE
-  if (!is.null(referent) || !is.null(comparator)) {
-    ref_strategy <- if (!is.null(referent)) referent else comparator
+  if (!is.null(interventions) || !is.null(comparators)) {
+    # Get all strategies from source data (technical names)
+    all_strategies <- unique(source_data$strategy)
+
+    # Determine comparison pairs based on DSA pattern
+    comparison_pairs <- list()
+
+    if (!is.null(interventions) && !is.null(comparators)) {
+      # Both provided: N×M explicit comparisons
+      for (int_strat in interventions) {
+        for (comp_strat in comparators) {
+          # Skip self-comparisons
+          if (int_strat != comp_strat) {
+            comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+              intervention = int_strat,
+              comparator = comp_strat
+            )
+          }
+        }
+      }
+      if (length(comparison_pairs) == 0) {
+        stop("No valid comparisons after excluding self-comparisons")
+      }
+    } else if (!is.null(interventions)) {
+      # Intervention only: each intervention vs all others
+      for (int_strat in interventions) {
+        other_strategies <- setdiff(all_strategies, int_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = other
+          )
+        }
+      }
+    } else {
+      # Comparator only: all others vs each comparator
+      for (comp_strat in comparators) {
+        other_strategies <- setdiff(all_strategies, comp_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = other,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
 
     if (format == "wide") {
-      # For wide format, strategies are already column names with mapped display names
-      # We need to identify them by technical names first, then create differences
-      # Get unmapped strategy names (technical names) from source_data
-      all_strategies <- unique(source_data$strategy)
-      other_strategies <- setdiff(all_strategies, ref_strategy)
+      # For wide format: calculate differences and create new columns
+      diff_results <- list()
 
-      # Map strategy names for comparison labels
-      ref_mapped <- map_names(ref_strategy, results$metadata$strategies, strategy_name_field)
-      other_mapped <- map_names(other_strategies, results$metadata$strategies, strategy_name_field)
+      for (pair_idx in seq_along(comparison_pairs)) {
+        pair <- comparison_pairs[[pair_idx]]
+        int_strat <- pair$intervention
+        comp_strat <- pair$comparator
 
-      # Create comparison labels with mapped names using "vs." separator
-      if (!is.null(referent)) {
-        # referent vs. others
-        comparison_cols <- paste0(ref_mapped, " vs. ", other_mapped)
-      } else {
-        # others vs. comparator
-        comparison_cols <- paste0(other_mapped, " vs. ", ref_mapped)
-      }
+        # Map names for comparison label
+        int_mapped <- map_names(int_strat, results$metadata$strategies, name_field)
+        comp_mapped <- map_names(comp_strat, results$metadata$strategies, name_field)
+        comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
-      # For wide format result, strategy columns may already be mapped
-      # We need to find and replace them
-      for (i in seq_along(other_strategies)) {
-        other <- other_strategies[i]
-        new_col <- comparison_cols[i]
-        other_mapped_col <- map_names(other, results$metadata$strategies, strategy_name_field)
+        # Calculate difference (intervention - comparator)
+        int_data <- result[result$strategy == int_mapped, ]
+        comp_data <- result[result$strategy == comp_mapped, ]
 
-        if (other_mapped_col %in% colnames(result) && ref_mapped %in% colnames(result)) {
-          result[[new_col]] <- result[[ref_mapped]] - result[[other_mapped_col]]
-          result[[other_mapped_col]] <- NULL
+        if (nrow(int_data) > 0 && nrow(comp_data) > 0) {
+          diff_data <- int_data
+          diff_data$strategy <- comp_label
+          # Calculate differences for value columns
+          value_cols <- setdiff(colnames(result), c("strategy", "group", "cycle", "day", "week", "month", "year"))
+          for (col in value_cols) {
+            diff_data[[col]] <- int_data[[col]] - comp_data[[col]]
+          }
+          diff_results[[pair_idx]] <- diff_data
         }
       }
 
-      result[[ref_mapped]] <- NULL
+      result <- bind_rows(diff_results)
       differences_created <- TRUE
 
     } else {
-      # For long format (value_name, amount, strategy columns)
-      # Pivot to wide format for each group/value_name combination
+      # For long format: pivot, calculate, pivot back
       result_wide <- result %>%
         pivot_wider(
           names_from = strategy,
@@ -230,46 +292,30 @@ get_values <- function(results,
           values_fill = NA
         )
 
-      # Get all strategies except reference (these are now column names, may be mapped)
-      # But we need to work with technical names, so reconstruct from source_data
-      all_strategies <- unique(source_data$strategy)
-      other_strategies <- setdiff(all_strategies, ref_strategy)
+      diff_data <- list()
+      for (pair_idx in seq_along(comparison_pairs)) {
+        pair <- comparison_pairs[[pair_idx]]
+        int_strat <- pair$intervention
+        comp_strat <- pair$comparator
 
-      # Map strategy names for comparison labels using technical names
-      ref_mapped <- map_names(ref_strategy, results$metadata$strategies, strategy_name_field)
-      other_mapped <- map_names(other_strategies, results$metadata$strategies, strategy_name_field)
+        # Map names for comparison label and column access
+        int_mapped <- map_names(int_strat, results$metadata$strategies, name_field)
+        comp_mapped <- map_names(comp_strat, results$metadata$strategies, name_field)
+        comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
-      # Create comparison labels
-      if (!is.null(referent)) {
-        # referent vs. others
-        comparison_cols <- paste0(ref_mapped, " vs. ", other_mapped)
-      } else {
-        # others vs. comparator
-        comparison_cols <- paste0(other_mapped, " vs. ", ref_mapped)
-      }
-
-      # Calculate differences using technical names, assign to mapped labels
-      for (i in seq_along(other_strategies)) {
-        other <- other_strategies[i]
-        new_col <- comparison_cols[i]
-        other_mapped_col <- map_names(other, results$metadata$strategies, strategy_name_field)
-
-        if (!is.null(referent)) {
-          result_wide[[new_col]] <- result_wide[[ref_mapped]] - result_wide[[other_mapped_col]]
-        } else {
-          result_wide[[new_col]] <- result_wide[[other_mapped_col]] - result_wide[[ref_mapped]]
-        }
+        # Calculate difference
+        result_wide[[comp_label]] <- result_wide[[int_mapped]] - result_wide[[comp_mapped]]
+        diff_data[[pair_idx]] <- comp_label
       }
 
       # Keep only difference columns and pivot back
-      # Identify time column
       time_cols <- c("cycle", "day", "week", "month", "year")
       time_col_present <- intersect(time_cols, colnames(result_wide))
 
       result <- result_wide %>%
-        select(group, all_of(time_col_present), value_name, all_of(comparison_cols)) %>%
+        select(group, all_of(time_col_present), value_name, all_of(unlist(diff_data))) %>%
         pivot_longer(
-          cols = all_of(comparison_cols),
+          cols = all_of(unlist(diff_data)),
           names_to = "strategy",
           values_to = "amount"
         )
@@ -297,9 +343,7 @@ get_values <- function(results,
 #' @keywords internal
 extract_values_wide <- function(source_data, values_field, values_filter,
                                 value_type, cycles, time_unit, metadata,
-                                strategy_name_field = "display_name",
-                                group_name_field = "display_name",
-                                value_name_field = "display_name") {
+                                name_field = "display_name") {
 
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     # Extract values from trace_and_values nested structure
@@ -356,17 +400,17 @@ extract_values_wide <- function(source_data, values_field, values_filter,
 
   # Map names for display
   if (!is.null(metadata)) {
-    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
-      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    if (!is.null(metadata$strategies) && name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, name_field)
     }
-    if (!is.null(metadata$groups) && group_name_field != "name") {
-      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    if (!is.null(metadata$groups) && name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, name_field)
     }
     # For wide format, map column names
-    if (!is.null(metadata$values) && value_name_field != "name") {
+    if (!is.null(metadata$values) && name_field != "name") {
       value_cols <- setdiff(colnames(result), c("strategy", "group", "cycle", "day", "week", "month", "year"))
       colnames(result)[colnames(result) %in% value_cols] <-
-        map_value_names(value_cols, metadata, value_name_field)
+        map_value_names(value_cols, metadata, name_field)
     }
   }
 
@@ -378,9 +422,7 @@ extract_values_wide <- function(source_data, values_field, values_filter,
 #' @keywords internal
 extract_values_long <- function(source_data, values_field, values_filter,
                                 value_type, cycles, time_unit, metadata,
-                                strategy_name_field = "display_name",
-                                group_name_field = "display_name",
-                                value_name_field = "display_name") {
+                                name_field = "display_name") {
 
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     # Extract values from trace_and_values nested structure
@@ -469,15 +511,15 @@ extract_values_long <- function(source_data, values_field, values_filter,
 
   # Map names for display
   if (!is.null(metadata)) {
-    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
-      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    if (!is.null(metadata$strategies) && name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, name_field)
     }
-    if (!is.null(metadata$groups) && group_name_field != "name") {
-      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    if (!is.null(metadata$groups) && name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, name_field)
     }
     # For long format, map value_name column
-    if (!is.null(metadata$values) && value_name_field != "name") {
-      result$value_name <- map_value_names(result$value_name, metadata, value_name_field)
+    if (!is.null(metadata$values) && name_field != "name") {
+      result$value_name <- map_value_names(result$value_name, metadata, name_field)
     }
   }
 
@@ -499,61 +541,55 @@ extract_values_long <- function(source_data, values_field, values_filter,
 #' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 #' results <- run_model(model)
 #'
-#' # Get all summaries (aggregated)
+#' # Get all summaries (overall population)
 #' summaries <- get_summaries(results)
 #'
-#' # Get cost summaries for all groups plus aggregated
-#' cost_summaries <- get_summaries(results, group = NULL, value_type = "cost")
+#' # Get cost summaries for all groups plus overall
+#' cost_summaries <- get_summaries(results, groups = NULL, value_type = "cost")
 #' }
 #'
 #' @export
 get_summaries <- function(results,
-                         group = "aggregated",
+                         groups = "overall",
                          strategies = NULL,
                          summaries = NULL,
                          values = NULL,
                          value_type = c("all", "cost", "outcome"),
                          discounted = FALSE,
-                         strategy_name_field = "display_name",
-                         group_name_field = "display_name",
-                         value_name_field = "display_name",
-                         referent = NULL,
-                         comparator = NULL) {
+                         use_display_names = TRUE,
+                         interventions = NULL,
+                         comparators = NULL) {
 
   value_type <- match.arg(value_type)
 
-  # Validate referent/comparator parameters (use technical names)
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
-  }
+  # Convert use_display_names to field names
+  name_field <- field_from_display_names(use_display_names)
 
-  if (!is.null(referent) || !is.null(comparator)) {
-    ref_strategy <- if (!is.null(referent)) referent else comparator
-
-    # Check against technical names in metadata
-    if (is.null(results$metadata$strategies) ||
-        !ref_strategy %in% results$metadata$strategies$name) {
-      stop(sprintf("Strategy '%s' not found in results", ref_strategy))
+  # Validate interventions/comparators parameters (use technical names)
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: explicit N×M comparisons
+    all_strats <- c(interventions, comparators)
+    if (is.null(results$metadata$strategies)) {
+      stop("No strategy metadata available")
+    }
+    missing <- setdiff(all_strats, results$metadata$strategies$name)
+    if (length(missing) > 0) {
+      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
+    }
+  } else if (!is.null(interventions) || !is.null(comparators)) {
+    # Only one provided: validate those strategies
+    provided_strats <- if (!is.null(interventions)) interventions else comparators
+    if (is.null(results$metadata$strategies)) {
+      stop("No strategy metadata available")
+    }
+    missing <- setdiff(provided_strats, results$metadata$strategies$name)
+    if (length(missing) > 0) {
+      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
     }
   }
 
-  # Determine source data based on group parameter
-  if (is.null(group)) {
-    # Mode 3: Faceted - combine aggregated and all segments
-    source_data <- bind_rows(
-      results$aggregated %>% mutate(group = "Aggregated"),
-      results$segments
-    )
-  } else if (group == "aggregated") {
-    # Mode 1: Aggregated only
-    source_data <- results$aggregated %>% mutate(group = "Aggregated")
-  } else {
-    # Mode 2: Specific group
-    source_data <- results$segments %>% filter(group == !!group)
-    if (nrow(source_data) == 0) {
-      stop(sprintf("Group '%s' not found in results", group))
-    }
-  }
+  # Select source data based on groups parameter
+  source_data <- select_source_data(groups, results)
 
   # Filter by strategy if specified
   if (!is.null(strategies)) {
@@ -634,48 +670,80 @@ get_summaries <- function(results,
   combined <- combined %>%
     select(strategy, group, summary, value, amount)
 
-  # Calculate differences if referent/comparator provided
+  # Calculate differences if interventions/comparators provided
   differences_created <- FALSE
-  if (!is.null(referent) || !is.null(comparator)) {
-    ref_strategy <- if (!is.null(referent)) referent else comparator
+  if (!is.null(interventions) || !is.null(comparators)) {
+    # Get all strategies from source data (technical names)
+    all_strategies <- unique(combined$strategy)
+
+    # Determine comparison pairs based on DSA pattern
+    comparison_pairs <- list()
+
+    if (!is.null(interventions) && !is.null(comparators)) {
+      # Both provided: N×M explicit comparisons
+      for (int_strat in interventions) {
+        for (comp_strat in comparators) {
+          # Skip self-comparisons
+          if (int_strat != comp_strat) {
+            comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+              intervention = int_strat,
+              comparator = comp_strat
+            )
+          }
+        }
+      }
+      if (length(comparison_pairs) == 0) {
+        stop("No valid comparisons after excluding self-comparisons")
+      }
+    } else if (!is.null(interventions)) {
+      # Intervention only: each intervention vs all others
+      for (int_strat in interventions) {
+        other_strategies <- setdiff(all_strategies, int_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = other
+          )
+        }
+      }
+    } else {
+      # Comparator only: all others vs each comparator
+      for (comp_strat in comparators) {
+        other_strategies <- setdiff(all_strategies, comp_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = other,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
 
     # Pivot to wide format (strategies as columns with technical names)
     combined_wide <- combined %>%
       pivot_wider(names_from = strategy, values_from = amount, values_fill = NA)
 
-    # Get all strategies except reference
-    all_strategies <- setdiff(colnames(combined_wide), c("group", "summary", "value"))
-    other_strategies <- setdiff(all_strategies, ref_strategy)
+    # Calculate differences for each comparison pair
+    diff_cols <- character()
+    for (pair_idx in seq_along(comparison_pairs)) {
+      pair <- comparison_pairs[[pair_idx]]
+      int_strat <- pair$intervention
+      comp_strat <- pair$comparator
 
-    # Map strategy names for comparison labels
-    ref_mapped <- map_names(ref_strategy, results$metadata$strategies, strategy_name_field)
-    other_mapped <- map_names(other_strategies, results$metadata$strategies, strategy_name_field)
+      # Map names for comparison label
+      int_mapped <- map_names(int_strat, results$metadata$strategies, name_field)
+      comp_mapped <- map_names(comp_strat, results$metadata$strategies, name_field)
+      comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
-    # Create comparison labels with mapped names using "vs." separator
-    if (!is.null(referent)) {
-      # referent vs. others: "Standard Care vs. New Treatment"
-      comparison_cols <- paste0(ref_mapped, " vs. ", other_mapped)
-    } else {
-      # others vs. comparator: "New Treatment vs. Standard Care"
-      comparison_cols <- paste0(other_mapped, " vs. ", ref_mapped)
-    }
-
-    # Calculate differences using technical names, assign to mapped labels
-    for (i in seq_along(other_strategies)) {
-      other <- other_strategies[i]
-      new_col <- comparison_cols[i]
-
-      if (!is.null(referent)) {
-        combined_wide[[new_col]] <- combined_wide[[referent]] - combined_wide[[other]]
-      } else {
-        combined_wide[[new_col]] <- combined_wide[[other]] - combined_wide[[comparator]]
-      }
+      # Calculate difference (intervention - comparator)
+      combined_wide[[comp_label]] <- combined_wide[[int_strat]] - combined_wide[[comp_strat]]
+      diff_cols <- c(diff_cols, comp_label)
     }
 
     # Keep only difference columns and pivot back
     combined <- combined_wide %>%
-      select(group, summary, value, all_of(comparison_cols)) %>%
-      pivot_longer(cols = all_of(comparison_cols),
+      select(group, summary, value, all_of(diff_cols)) %>%
+      pivot_longer(cols = all_of(diff_cols),
                    names_to = "strategy",
                    values_to = "amount")
 
@@ -684,16 +752,16 @@ get_summaries <- function(results,
 
   # Map names for display if metadata available
   if (!is.null(results$metadata)) {
-    if (!is.null(results$metadata$strategies) && strategy_name_field != "name" &&
+    if (!is.null(results$metadata$strategies) && name_field != "name" &&
         !differences_created) {
       # Only map if we didn't already create comparison strings with mapped names
-      combined$strategy <- map_names(combined$strategy, results$metadata$strategies, strategy_name_field)
+      combined$strategy <- map_names(combined$strategy, results$metadata$strategies, name_field)
     }
-    if (!is.null(results$metadata$groups) && group_name_field != "name") {
-      combined$group <- map_names(combined$group, results$metadata$groups, group_name_field)
+    if (!is.null(results$metadata$groups) && name_field != "name") {
+      combined$group <- map_names(combined$group, results$metadata$groups, name_field)
     }
-    if (!is.null(results$metadata$values) && value_name_field != "name") {
-      combined$value <- map_value_names(combined$value, results$metadata, value_name_field)
+    if (!is.null(results$metadata$values) && name_field != "name") {
+      combined$value <- map_value_names(combined$value, results$metadata, name_field)
     }
   }
 
@@ -704,16 +772,16 @@ get_summaries <- function(results,
 #' Calculate Net Monetary Benefit
 #'
 #' Calculates Net Monetary Benefit (NMB) as: (Difference in Outcomes × WTP) - Difference in Costs
-#' Requires comparison between strategies using either referent or comparator.
+#' Requires comparison between strategies using either intervention or comparator.
 #'
 #' @param results A heRomod2 model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param wtp Optional override for willingness-to-pay value. If NULL, attempts to extract from
 #'   outcome summary metadata. Must be numeric and positive.
 #' @param discounted Logical. If TRUE, use discounted values. If FALSE (default),
@@ -731,8 +799,8 @@ get_summaries <- function(results,
 #'     where component is one of "Outcome Benefit", "Cost Difference", "Total"
 #'
 #' @details
-#' One of `referent` or `comparator` must be provided. The function calculates NMB as:
-#' - When referent specified: (referent_outcome - other_outcome) × WTP - (referent_cost - other_cost)
+#' One of `intervention` or `comparator` must be provided. The function calculates NMB as:
+#' - When intervention specified: (intervention_outcome - other_outcome) × WTP - (intervention_cost - other_cost)
 #' - When comparator specified: (other_outcome - comparator_outcome) × WTP - (other_cost - comparator_cost)
 #'
 #' WTP is automatically extracted from the outcome summary metadata if available,
@@ -756,7 +824,7 @@ get_summaries <- function(results,
 #'   results,
 #'   outcome_summary = "total_qalys",
 #'   cost_summary = "total_cost",
-#'   referent = "new_treatment",
+#'   intervention = "new_treatment",
 #'   wtp = 50000
 #' )
 #' }
@@ -765,47 +833,36 @@ get_summaries <- function(results,
 calculate_nmb <- function(results,
                           outcome_summary,
                           cost_summary,
-                          group = "aggregated",
-                          referent = NULL,
-                          comparator = NULL,
+                          groups = "overall",
+                          interventions = NULL,
+                          comparators = NULL,
                           wtp = NULL,
                           discounted = FALSE,
-                          strategy_name_field = "display_name",
-                          group_name_field = "display_name",
-                          value_name_field = "display_name",
-                          summary_name_field = "display_name",
+                          use_display_names = TRUE,
                           return_components = FALSE) {
 
-  # Validate that exactly one of referent or comparator is provided
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided (both cannot be NULL)")
-  }
-
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
   # Get outcome and cost summaries
   outcome_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    use_display_names = use_display_names
   )
 
   cost_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    use_display_names = use_display_names
   )
 
   # Aggregate outcome and cost by strategy and group (sum across value components)
@@ -834,7 +891,7 @@ calculate_nmb <- function(results,
 
     wtp <- outcome_meta$wtp[1]
 
-    if (is.na(wtp) || is.null(wtp)) {
+    if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
     }
   }
@@ -844,43 +901,64 @@ calculate_nmb <- function(results,
     stop("WTP must be a numeric value")
   }
 
-  # Pivot to wide format using TECHNICAL names (like get_summaries does)
+  # Pivot to wide format using TECHNICAL names
   outcome_wide <- outcome_agg %>%
     pivot_wider(names_from = strategy, values_from = outcome_total, values_fill = NA)
 
   cost_wide <- cost_agg %>%
     pivot_wider(names_from = strategy, values_from = cost_total, values_fill = NA)
 
-  # Get all strategies (technical names from column names)
-  outcome_strategies <- setdiff(colnames(outcome_wide), "group")
-  cost_strategies <- setdiff(colnames(cost_wide), "group")
-  all_strategies <- union(outcome_strategies, cost_strategies)
+  # Get all strategies (technical names from combined data)
+  all_strategies <- unique(c(unique(outcome_agg$strategy), unique(cost_agg$strategy)))
 
-  ref_strategy <- if (!is.null(referent)) referent else comparator
+  # Determine comparison pairs based on DSA pattern
+  comparison_pairs <- list()
 
-  # Validate reference strategy exists
-  if (!ref_strategy %in% all_strategies) {
-    stop(sprintf("Reference strategy '%s' not found in results", ref_strategy))
-  }
-
-  other_strategies <- setdiff(all_strategies, ref_strategy)
-
-  # Map strategy names for comparison labels (follows get_summaries pattern, lines 522-532)
-  ref_mapped <- map_names(ref_strategy, results$metadata$strategies, strategy_name_field)
-  other_mapped <- map_names(other_strategies, results$metadata$strategies, strategy_name_field)
-
-  # Create comparison labels with mapped names
-  if (!is.null(referent)) {
-    # referent vs. others: "Standard Care vs. New Treatment"
-    comparison_labels <- paste0(ref_mapped, " vs. ", other_mapped)
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N×M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        # Skip self-comparisons
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
   } else {
-    # others vs. comparator: "New Treatment vs. Standard Care"
-    comparison_labels <- paste0(other_mapped, " vs. ", ref_mapped)
+    # Comparator only: all others vs each comparator
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
   }
 
-  # Calculate NMB for each comparison (keep technical names until end)
+  # Map strategy names for display
+  name_field <- field_from_display_names(use_display_names)
+
+  # Initialize results
   if (return_components) {
-    # Return component breakdown
     nmb_results <- data.frame(
       strategy = character(),
       group = character(),
@@ -889,7 +967,6 @@ calculate_nmb <- function(results,
       stringsAsFactors = FALSE
     )
   } else {
-    # Return only totals
     nmb_results <- data.frame(
       strategy = character(),
       group = character(),
@@ -898,64 +975,53 @@ calculate_nmb <- function(results,
     )
   }
 
-  for (i in seq_along(other_strategies)) {
-    other <- other_strategies[i]
-    comp_label <- comparison_labels[i]
+  # Calculate NMB for each comparison pair
+  for (pair_idx in seq_along(comparison_pairs)) {
+    pair <- comparison_pairs[[pair_idx]]
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    # Create comparison label with display names
+    int_mapped <- map_names(int_strat, results$metadata$strategies, name_field)
+    comp_mapped <- map_names(comp_strat, results$metadata$strategies, name_field)
+    comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
     for (grp in unique(outcome_wide$group)) {
-      # Access outcome values using TECHNICAL names (like get_summaries)
-      outcome_ref <- outcome_wide %>%
+      # Access outcome values using technical names
+      outcome_int <- outcome_wide %>%
         filter(group == grp) %>%
-        pull(!!ref_strategy)
+        pull(!!int_strat)
 
-      outcome_other <- outcome_wide %>%
+      outcome_comp <- outcome_wide %>%
         filter(group == grp) %>%
-        pull(!!other)
+        pull(!!comp_strat)
 
-      # Access cost values using TECHNICAL names
-      cost_ref <- cost_wide %>%
+      # Access cost values using technical names
+      cost_int <- cost_wide %>%
         filter(group == grp) %>%
-        pull(!!ref_strategy)
+        pull(!!int_strat)
 
-      cost_other <- cost_wide %>%
+      cost_comp <- cost_wide %>%
         filter(group == grp) %>%
-        pull(!!other)
+        pull(!!comp_strat)
 
-      # Handle empty results (when pull returns 0-length vector)
-      if (length(outcome_ref) == 0) outcome_ref <- NA_real_
-      if (length(outcome_other) == 0) outcome_other <- NA_real_
-      if (length(cost_ref) == 0) cost_ref <- NA_real_
-      if (length(cost_other) == 0) cost_other <- NA_real_
+      # Handle empty results
+      if (length(outcome_int) == 0) outcome_int <- NA_real_
+      if (length(outcome_comp) == 0) outcome_comp <- NA_real_
+      if (length(cost_int) == 0) cost_int <- NA_real_
+      if (length(cost_comp) == 0) cost_comp <- NA_real_
 
-      # Calculate differences using TECHNICAL names
-      if (!is.null(referent)) {
-        # referent perspective: referent - other
-        outcome_diff <- if (length(outcome_ref) > 0 && length(outcome_other) > 0 &&
-                            !is.na(outcome_ref) && !is.na(outcome_other)) {
-          outcome_ref - outcome_other
-        } else {
-          NA_real_
-        }
-        cost_diff <- if (length(cost_ref) > 0 && length(cost_other) > 0 &&
-                         !is.na(cost_ref) && !is.na(cost_other)) {
-          cost_ref - cost_other
-        } else {
-          NA_real_
-        }
+      # Calculate differences (always intervention - comparator)
+      outcome_diff <- if (!is.na(outcome_int) && !is.na(outcome_comp)) {
+        outcome_int - outcome_comp
       } else {
-        # comparator perspective: other - comparator
-        outcome_diff <- if (length(outcome_ref) > 0 && length(outcome_other) > 0 &&
-                            !is.na(outcome_ref) && !is.na(outcome_other)) {
-          outcome_other - outcome_ref
-        } else {
-          NA_real_
-        }
-        cost_diff <- if (length(cost_ref) > 0 && length(cost_other) > 0 &&
-                         !is.na(cost_ref) && !is.na(cost_other)) {
-          cost_other - cost_ref
-        } else {
-          NA_real_
-        }
+        NA_real_
+      }
+
+      cost_diff <- if (!is.na(cost_int) && !is.na(cost_comp)) {
+        cost_int - cost_comp
+      } else {
+        NA_real_
       }
 
       # Calculate NMB
@@ -987,7 +1053,6 @@ calculate_nmb <- function(results,
           stringsAsFactors = FALSE
         ))
       } else {
-        # Add row with MAPPED comparison label (calculated above) and TECHNICAL group name
         nmb_results <- rbind(nmb_results, data.frame(
           strategy = comp_label,
           group = grp,
@@ -1000,8 +1065,8 @@ calculate_nmb <- function(results,
 
   # Map group names at the end (follows get_summaries pattern, lines 563-564)
   if (!is.null(results$metadata) && !is.null(results$metadata$groups) &&
-      group_name_field != "name") {
-    nmb_results$group <- map_names(nmb_results$group, results$metadata$groups, group_name_field)
+      name_field != "name") {
+    nmb_results$group <- map_names(nmb_results$group, results$metadata$groups, name_field)
   }
 
   # Factor component column if returning components

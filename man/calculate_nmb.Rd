@@ -8,15 +8,12 @@ calculate_nmb(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
-  referent = NULL,
-  comparator = NULL,
+  groups = "overall",
+  interventions = NULL,
+  comparators = NULL,
   wtp = NULL,
   discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name",
-  summary_name_field = "display_name",
+  use_display_names = TRUE,
   return_components = FALSE
 )
 }
@@ -27,19 +24,22 @@ calculate_nmb(
 
 \item{cost_summary}{Name of the cost summary (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
-
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{wtp}{Optional override for willingness-to-pay value. If NULL, attempts to extract from
 outcome summary metadata. Must be numeric and positive.}
 
 \item{discounted}{Logical. If TRUE, use discounted values. If FALSE (default),
 use undiscounted values}
+
+\item{return_components}{Logical. If TRUE, returns breakdown of Outcome Benefit,
+Cost Difference, and Total. If FALSE (default), returns only total NMB.}
+
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
+
+\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 
 \item{strategy_name_field}{Which strategy name field to use: "name" or "display_name"}
 
@@ -48,9 +48,6 @@ use undiscounted values}
 \item{value_name_field}{Which value name field to use}
 
 \item{summary_name_field}{Which summary name field to use}
-
-\item{return_components}{Logical. If TRUE, returns breakdown of Outcome Benefit,
-Cost Difference, and Total. If FALSE (default), returns only total NMB.}
 }
 \value{
 A data frame with columns:
@@ -60,11 +57,11 @@ A data frame with columns:
 }
 \description{
 Calculates Net Monetary Benefit (NMB) as: (Difference in Outcomes × WTP) - Difference in Costs
-Requires comparison between strategies using either referent or comparator.
+Requires comparison between strategies using either intervention or comparator.
 }
 \details{
-One of `referent` or `comparator` must be provided. The function calculates NMB as:
-- When referent specified: (referent_outcome - other_outcome) × WTP - (referent_cost - other_cost)
+One of `intervention` or `comparator` must be provided. The function calculates NMB as:
+- When intervention specified: (intervention_outcome - other_outcome) × WTP - (intervention_cost - other_cost)
 - When comparator specified: (other_outcome - comparator_outcome) × WTP - (other_cost - comparator_cost)
 
 WTP is automatically extracted from the outcome summary metadata if available,
@@ -88,7 +85,7 @@ nmb <- calculate_nmb(
   results,
   outcome_summary = "total_qalys",
   cost_summary = "total_cost",
-  referent = "new_treatment",
+  intervention = "new_treatment",
   wtp = 50000
 )
 }

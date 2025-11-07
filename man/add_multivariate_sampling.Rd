@@ -17,9 +17,10 @@ add_multivariate_sampling(
 
 \item{name}{Character string naming this sampling specification}
 
-\item{distribution}{Formula or character string defining the distribution function.
+\item{distribution}{Expression defining the distribution function (uses NSE).
 The distribution should return a function(n) that generates n × k samples.
-Can reference any evaluated variables including base case values of sampled variables.}
+Can reference any evaluated variables including base case values of sampled variables.
+For backward compatibility, can also be a character string.}
 
 \item{variables}{Character vector of variable names to be sampled together,
 or a tibble with columns: variable, strategy, group (for segment-specific sampling)}
@@ -40,7 +41,7 @@ parameters need to be sampled together with a specified correlation structure.
 model <- define_model("markov") |>
   add_multivariate_sampling(
     name = "transition_probs",
-    distribution = "dirichlet(c(alpha_stable, alpha_progression, alpha_death))",
+    distribution = dirichlet(c(alpha_stable, alpha_progression, alpha_death)),
     variables = c("p_stable", "p_progression", "p_death"),
     description = "Transition probabilities from sick state"
   )
@@ -49,7 +50,7 @@ model <- define_model("markov") |>
 model <- model |>
   add_multivariate_sampling(
     name = "cost_qaly_correlation",
-    distribution = "mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6)",
+    distribution = mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6),
     variables = c("cost_treatment", "qaly_treatment")
   )
 
@@ -57,7 +58,7 @@ model <- model |>
 model <- model |>
   add_multivariate_sampling(
     name = "strategy_specific",
-    distribution = "mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5)",
+    distribution = mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5),
     variables = tibble(
       variable = c("treatment_cost", "treatment_qaly"),
       strategy = c("intervention", "intervention"),

@@ -10,12 +10,8 @@ nmb_plot_bar(
   cost_summary,
   group = "aggregated",
   wtp = NULL,
-  referent = NULL,
-  comparator = NULL,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name",
-  summary_name_field = "display_name",
+  interventions = NULL,
+  comparators = NULL,
   discounted = FALSE
 )
 }
@@ -26,23 +22,23 @@ nmb_plot_bar(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
-
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
+\item{discounted}{Logical. Use discounted values?}
+
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
+
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
 
 \item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 
 \item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
 
 \item{group_name_field}{Field to use for group names: "name" or "display_name"}
 
 \item{summary_name_field}{Field to use for summary labels}
-
-\item{discounted}{Logical. Use discounted values?}
 }
 \value{
 A ggplot2 object
@@ -52,7 +48,7 @@ Creates a bar chart showing Net Monetary Benefit (NMB) by strategy comparison an
 NMB = (Difference in Outcomes × WTP) - Difference in Costs
 }
 \details{
-Either `referent` or `comparator` must be specified (one is mandatory).
+Either `intervention` or `comparator` must be specified (one is mandatory).
 WTP is automatically extracted from the outcome summary metadata if available,
 but can be overridden using the `wtp` parameter.
 }
@@ -64,8 +60,8 @@ results <- run_model(model)
 # NMB with WTP from metadata (comparator perspective)
 nmb_plot_bar(results, "total_qalys", "total_cost", comparator = "control")
 
-# NMB with explicit WTP (referent perspective)
-nmb_plot_bar(results, "total_qalys", "total_cost", referent = "new_treatment", wtp = 50000)
+# NMB with explicit WTP (intervention perspective)
+nmb_plot_bar(results, "total_qalys", "total_cost", intervention = "new_treatment", wtp = 50000)
 }
 
 }

@@ -32,7 +32,7 @@ test_that("Variables preserve all fields including pass-through", {
   model <- define_model("markov") |>
     add_variable("p_disease", 0.1,
                 source = "Smith et al. (2020)",
-                sampling = "beta(10, 90)")
+                sampling = beta(10, 90))
 
   expect_equal(model$variables$source[1], "Smith et al. (2020)")
   expect_equal(model$variables$sampling[1], "beta(10, 90)")
@@ -211,4 +211,227 @@ test_that("Path validation works correctly", {
     write_model(model, "test_folder/", format = "r"),
     "must include a filename"
   )
+})
+
+# Tests for variable display name validation
+test_that("Variable display names are validated - R builder format", {
+  library(tibble)
+
+  # Test validation at the normalize stage (simulating what happens in run_model)
+  # Valid: All display names provided for strategy-specific variable
+  valid_model1 <- list(
+    variables = tibble(
+      name = c("cost", "cost"),
+      formula = c("1000", "2000"),
+      display_name = c("Drug Cost (Standard)", "Drug Cost (Intervention)"),
+      description = c("Drug Cost (Standard)", "Drug Cost (Intervention)"),
+      strategy = c("standard", "intervention"),
+      group = c("", ""),
+      source = c("", ""),
+      sampling = c("", "")
+    ),
+    settings = list(model_type = "markov")
+  )
+
+  # Should work without error
+  expect_no_error(heRomod2:::normalize_and_validate_model(valid_model1))
+
+  # Valid: No display names (all auto-generated)
+  valid_model2 <- list(
+    variables = tibble(
+      name = c("cost", "cost"),
+      formula = c("1000", "2000"),
+      display_name = c("", ""),
+      description = c("", ""),
+      strategy = c("standard", "intervention"),
+      group = c("", ""),
+      source = c("", ""),
+      sampling = c("", "")
+    ),
+    settings = list(model_type = "markov")
+  )
+
+  expect_no_error(heRomod2:::normalize_and_validate_model(valid_model2))
+
+  # Invalid: Only one strategy has display name
+  invalid_model <- list(
+    variables = tibble(
+      name = c("cost", "cost"),
+      formula = c("1000", "2000"),
+      display_name = c("Drug Cost (Standard)", ""),
+      description = c("", ""),
+      strategy = c("standard", "intervention"),
+      group = c("", ""),
+      source = c("", ""),
+      sampling = c("", "")
+    ),
+    settings = list(model_type = "markov")
+  )
+
+  expect_error(
+    heRomod2:::normalize_and_validate_model(invalid_model),
+    "Variable 'cost'.*display_name must be provided for ALL definitions or NONE"
+  )
+})
+
+test_that("R builder catches mixed auto-generated and custom display names immediately", {
+  # This is the edge case from scratch.R - first variable has no display_name,
+  # subsequent variables have custom display names
+  expect_error({
+    define_model("markov") |>
+      add_variable(name = 'p_well_to_sick', strategy = 'treatment_a',
+                   group = 'group_1', formula = 0.3) |>  # No display_name
+      add_variable(name = 'p_well_to_sick', display_name = "Custom Name",
+                   strategy = 'treatment_b', group = 'group_1', formula = 0.18)
+  }, "Variable 'p_well_to_sick'.*display_name must be provided for ALL definitions or NONE")
+
+  # Reverse order - custom first, then auto-generated
+  expect_error({
+    define_model("markov") |>
+      add_variable(name = 'p_well_to_sick', display_name = "Custom Name",
+                   strategy = 'treatment_a', group = 'group_1', formula = 0.3) |>
+      add_variable(name = 'p_well_to_sick', strategy = 'treatment_b',
+                   group = 'group_1', formula = 0.18)  # No display_name
+  }, "Variable 'p_well_to_sick'.*display_name must be provided for ALL definitions or NONE")
+
+  # Three variables - error thrown when second is added (before third)
+  expect_error({
+    define_model("markov") |>
+      add_variable(name = 'cost', strategy = 's1', formula = 100) |>
+      add_variable(name = 'cost', display_name = "Cost S2", strategy = 's2', formula = 200) |>
+      add_variable(name = 'cost', strategy = 's3', formula = 300)
+  }, "Variable 'cost'.*display_name must be provided for ALL definitions or NONE")
+})
+
+test_that("Variable display names are validated - Direct dataframe (simulating Excel/JSON)", {
+  library(tibble)
+  library(dplyr)
+
+  # Valid: All display names provided
+  valid_vars1 <- tibble(
+    name = c("cost", "cost"),
+    formula = c("1000", "2000"),
+    display_name = c("Drug Cost (Standard)", "Drug Cost (Intervention)"),
+    description = c("", ""),
+    strategy = c("standard", "intervention"),
+    group = c("", ""),
+    source = c("", ""),
+    sampling = c("", "")
+  )
+
+  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'heRomod2'))
+  expect_no_error(heRomod2:::check_tbl(valid_vars1, spec, "Variables"))
+
+  # Valid: No display names (will be auto-generated)
+  valid_vars2 <- tibble(
+    name = c("cost", "cost"),
+    formula = c("1000", "2000"),
+    display_name = c("", ""),
+    description = c("", ""),
+    strategy = c("standard", "intervention"),
+    group = c("", ""),
+    source = c("", ""),
+    sampling = c("", "")
+  )
+
+  expect_no_error(heRomod2:::check_tbl(valid_vars2, spec, "Variables"))
+
+  # Invalid: Partial display names for strategy-specific variable
+  invalid_vars1 <- tibble(
+    name = c("cost", "cost"),
+    formula = c("1000", "2000"),
+    display_name = c("Drug Cost (Standard)", ""),
+    description = c("", ""),
+    strategy = c("standard", "intervention"),
+    group = c("", ""),
+    source = c("", ""),
+    sampling = c("", "")
+  )
+
+  expect_error(
+    heRomod2:::check_tbl(invalid_vars1, spec, "Variables"),
+    "Variable 'cost'.*display_name must be provided for ALL definitions or NONE"
+  )
+
+  # Invalid: Partial display names for group-specific variable
+  invalid_vars2 <- tibble(
+    name = c("utility", "utility"),
+    formula = c("0.8", "0.7"),
+    display_name = c("", "Utility (Elderly)"),
+    description = c("", ""),
+    strategy = c("", ""),
+    group = c("young", "elderly"),
+    source = c("", ""),
+    sampling = c("", "")
+  )
+
+  expect_error(
+    heRomod2:::check_tbl(invalid_vars2, spec, "Variables"),
+    "Variable 'utility'.*display_name must be provided for ALL definitions or NONE"
+  )
+
+  # Invalid: Partial display names with both strategy and group
+  invalid_vars3 <- tibble(
+    name = c("param", "param", "param"),
+    formula = c("1", "2", "3"),
+    display_name = c("Param A", "", "Param C"),
+    description = c("", "", ""),
+    strategy = c("s1", "s2", "s1"),
+    group = c("g1", "g1", "g2"),
+    source = c("", "", ""),
+    sampling = c("", "", "")
+  )
+
+  expect_error(
+    heRomod2:::check_tbl(invalid_vars3, spec, "Variables"),
+    "Variable 'param'.*display_name must be provided for ALL definitions or NONE"
+  )
+})
+
+test_that("Variable display names validation - edge cases", {
+  library(tibble)
+
+  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'heRomod2'))
+
+  # Valid: Single variable (no consistency check needed)
+  single_var <- tibble(
+    name = "cost",
+    formula = "1000",
+    display_name = "",
+    description = "",
+    strategy = "",
+    group = "",
+    source = "",
+    sampling = ""
+  )
+
+  expect_no_error(heRomod2:::check_tbl(single_var, spec, "Variables"))
+
+  # Valid: Multiple different variables, each with consistent display names
+  multi_vars <- tibble(
+    name = c("cost", "cost", "utility", "utility"),
+    formula = c("1000", "2000", "0.8", "0.7"),
+    display_name = c("Cost A", "Cost B", "", ""),
+    description = c("", "", "", ""),
+    strategy = c("s1", "s2", "s1", "s2"),
+    group = c("", "", "", ""),
+    source = c("", "", "", ""),
+    sampling = c("", "", "", "")
+  )
+
+  expect_no_error(heRomod2:::check_tbl(multi_vars, spec, "Variables"))
+
+  # Valid: NA display names (treated as missing)
+  na_vars <- tibble(
+    name = c("cost", "cost"),
+    formula = c("1000", "2000"),
+    display_name = c(NA_character_, NA_character_),
+    description = c("", ""),
+    strategy = c("s1", "s2"),
+    group = c("", ""),
+    source = c("", ""),
+    sampling = c("", "")
+  )
+
+  expect_no_error(heRomod2:::check_tbl(na_vars, spec, "Variables"))
 })

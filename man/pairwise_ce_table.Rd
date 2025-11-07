@@ -10,13 +10,10 @@ pairwise_ce_table(
   cost_summary,
   group = "aggregated",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   decimals = 2,
   discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name",
   font_size = 11,
   table_format = c("kable", "flextable")
 )
@@ -28,27 +25,21 @@ pairwise_ce_table(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL}
-
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{referent}{Single reference strategy for intervention perspective}
-
-\item{comparator}{Single reference strategy for comparator perspective}
 
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
 
-\item{strategy_name_field}{Which strategy name field to use}
-
-\item{group_name_field}{Which group name field to use}
-
-\item{summary_name_field}{Which summary name field to use}
-
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+
+\item{intervention}{Single reference strategy for intervention perspective}
+
+\item{comparator}{Single reference strategy for comparator perspective}
 }
 \value{
 A table object (flextable or kable depending on table_format)

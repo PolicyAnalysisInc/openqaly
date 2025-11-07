@@ -5,24 +5,24 @@
 #'
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
 #' @param group_name_field Field to use for group names: "name" or "display_name"
 #' @param value_name_field Field to use for value component names
 #' @param summary_name_field Field to use for the outcome label
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #'
 #' @return A ggplot2 object
 #'
 #' @details
-#' When neither referent nor comparator is specified, shows absolute outcome values.
+#' When neither intervention nor comparator is specified, shows absolute outcome values.
 #'
-#' When referent is specified (intervention perspective):
-#' - Creates N-1 comparisons showing (referent - each_other_strategy)
-#' - Example with 3 strategies {A, B, C} and referent=A: shows "A vs. B" and "A vs. C"
+#' When intervention is specified (intervention perspective):
+#' - Creates N-1 comparisons showing (intervention - each_other_strategy)
+#' - Example with 3 strategies {A, B, C} and intervention=A: shows "A vs. B" and "A vs. C"
 #'
 #' When comparator is specified (comparator perspective):
 #' - Creates N-1 comparisons showing (each_other_strategy - comparator)
@@ -40,27 +40,28 @@
 #' outcomes_plot_bar(results, "total_qalys", comparator = "control")
 #'
 #' # New treatment vs others (intervention perspective)
-#' outcomes_plot_bar(results, "total_qalys", referent = "new_treatment")
+#' outcomes_plot_bar(results, "total_qalys", intervention = "new_treatment")
 #' }
 #'
 #' @export
 outcomes_plot_bar <- function(res, outcome,
-                         group = "aggregated",
-                         strategy_name_field = "display_name",
-                         group_name_field = "display_name",
-                         value_name_field = "display_name",
-                         summary_name_field = "display_name",
-                         referent = NULL,
-                         comparator = NULL) {
+                         groups = "overall",
+                         strategies = NULL,
+                         interventions = NULL,
+                         comparators = NULL) {
+  # Validate mutual exclusivity
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' cannot be used with 'interventions' or 'comparators'")
+  }
+
   summaries <- get_summaries(
     res,
-    group = group,
+    groups = groups,
+    strategies = strategies,
     summaries = outcome,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field,
-    referent = referent,
-    comparator = comparator
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   # Check if summaries is valid
@@ -76,12 +77,12 @@ outcomes_plot_bar <- function(res, outcome,
 
   # Map summary name for axis label
   outcome_label <- outcome  # default to technical name
-  if (!is.null(res$metadata) && !is.null(res$metadata$summaries) && summary_name_field != "name") {
-    outcome_label <- map_names(outcome, res$metadata$summaries, summary_name_field)
+  if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
+    outcome_label <- map_names(outcome, res$metadata$summaries, "display_name")
   }
 
   # Add prefix if showing differences
-  if (!is.null(referent) || !is.null(comparator)) {
+  if (!is.null(interventions) || !is.null(comparators)) {
     outcome_label <- paste0("Difference in ", outcome_label)
   }
 
@@ -108,11 +109,17 @@ outcomes_plot_bar <- function(res, outcome,
       .pos_or_neg = ifelse(amount >= 0, "Positive", "Negative")
     )
 
+  # Calculate axis breaks and limits to include 0 and extend beyond data
+  breaks_fn <- scales::pretty_breaks(n = 5)
+  x_range <- range(c(0, summaries_with_total$amount))
+  x_breaks <- breaks_fn(x_range)
+  x_limits <- range(x_breaks)
+
   summaries_with_total %>%
     ggplot(aes(fill=.pos_or_neg, x=amount, y=value)) +
     geom_bar(stat="identity", position = "dodge") +
     facet_component +
-    scale_x_continuous(labels = comma) +
+    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +
     guides(fill = "none") +
     labs(y = NULL, x = outcome_label) +
     theme_bw()
@@ -127,16 +134,16 @@ outcomes_plot_bar <- function(res, outcome,
 #'
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #'   (all groups plus aggregated)
 #' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
 #' @param group_name_field Field to use for group names: "name" or "display_name"
 #' @param value_name_field Field to use for outcome component names
 #' @param summary_name_field Field to use for the outcome label
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param time_unit Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"
 #' @param cumulative Logical. If TRUE (default), shows cumulative outcomes over time.
 #'   If FALSE, shows per-cycle outcomes.
@@ -144,11 +151,11 @@ outcomes_plot_bar <- function(res, outcome,
 #' @return A ggplot2 object
 #'
 #' @details
-#' When neither referent nor comparator is specified, shows absolute outcome values.
+#' When neither intervention nor comparator is specified, shows absolute outcome values.
 #'
-#' When referent is specified (intervention perspective):
-#' - Creates N-1 comparisons showing (referent - each_other_strategy)
-#' - Example with 3 strategies {A, B, C} and referent=A: shows "A vs. B" and "A vs. C"
+#' When intervention is specified (intervention perspective):
+#' - Creates N-1 comparisons showing (intervention - each_other_strategy)
+#' - Example with 3 strategies {A, B, C} and intervention=A: shows "A vs. B" and "A vs. C"
 #'
 #' When comparator is specified (comparator perspective):
 #' - Creates N-1 comparisons showing (each_other_strategy - comparator)
@@ -169,30 +176,33 @@ outcomes_plot_bar <- function(res, outcome,
 #' outcomes_plot_line(results, outcome = "total_qalys", comparator = "control")
 #'
 #' # New treatment vs others (intervention perspective)
-#' outcomes_plot_line(results, outcome = "total_qalys", referent = "new_treatment")
+#' outcomes_plot_line(results, outcome = "total_qalys", intervention = "new_treatment")
 #' }
 #'
 #' @export
 outcomes_plot_line <- function(res, outcome,
-                         group = "aggregated",
-                         strategy_name_field = "display_name",
-                         group_name_field = "display_name",
-                         value_name_field = "display_name",
-                         summary_name_field = "display_name",
-                         referent = NULL,
-                         comparator = NULL,
+                         groups = "overall",
+                         strategies = NULL,
+                         interventions = NULL,
+                         comparators = NULL,
                          time_unit = "cycle",
                          cumulative = TRUE,
                          discounted = FALSE) {
 
+  # Validate mutual exclusivity
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' cannot be used with 'interventions' or 'comparators'")
+  }
+
   # Get the values that belong to this summary
   summary_data <- get_summaries(
     res,
-    group = group,
+    groups = groups,
+    strategies = strategies,
     summaries = outcome,  # Pass the summary name
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   # Extract unique value names from the summary
@@ -202,16 +212,15 @@ outcomes_plot_line <- function(res, outcome,
   values_data <- get_values(
     res,
     format = "long",
-    group = group,
+    groups = groups,
+    strategies = strategies,
     values = summary_values,  # Pass the extracted value names
     value_type = "all",  # Support both cost and outcome summaries
     time_unit = time_unit,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field,
-    referent = referent,
-    comparator = comparator
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   # Get time column name
@@ -258,12 +267,12 @@ outcomes_plot_line <- function(res, outcome,
   # Create outcome label
   outcome_label <- outcome  # Use the summary name
   # Map outcome label if metadata available
-  if (!is.null(res$metadata) && !is.null(res$metadata$summaries) && summary_name_field != "name") {
-    outcome_label <- map_names(outcome, res$metadata$summaries, summary_name_field)
+  if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
+    outcome_label <- map_names(outcome, res$metadata$summaries, "display_name")
   }
 
-  # Prepend "Difference in" if referent/comparator was provided (get_values handles the calculations)
-  if (!is.null(referent) || !is.null(comparator)) {
+  # Prepend "Difference in" if interventions/comparators was provided (get_values handles the calculations)
+  if (!is.null(interventions) || !is.null(comparators)) {
     outcome_label <- paste0("Difference in ", outcome_label)
   }
 
@@ -313,12 +322,12 @@ outcomes_plot_line <- function(res, outcome,
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
 #' @param group_name_field Field to use for group names: "name" or "display_name"
 #' @param summary_name_field Field to use for summary labels
@@ -327,7 +336,7 @@ outcomes_plot_line <- function(res, outcome,
 #' @return A ggplot2 object
 #'
 #' @details
-#' Either `referent` or `comparator` must be specified (one is mandatory).
+#' Either `intervention` or `comparator` must be specified (one is mandatory).
 #' WTP is automatically extracted from the outcome summary metadata if available,
 #' but can be overridden using the `wtp` parameter.
 #'
@@ -339,8 +348,8 @@ outcomes_plot_line <- function(res, outcome,
 #' # NMB with WTP from metadata (comparator perspective)
 #' nmb_plot_bar(results, "total_qalys", "total_cost", comparator = "control")
 #'
-#' # NMB with explicit WTP (referent perspective)
-#' nmb_plot_bar(results, "total_qalys", "total_cost", referent = "new_treatment", wtp = 50000)
+#' # NMB with explicit WTP (intervention perspective)
+#' nmb_plot_bar(results, "total_qalys", "total_cost", intervention = "new_treatment", wtp = 50000)
 #' }
 #'
 #' @export
@@ -349,21 +358,13 @@ nmb_plot_bar <- function(res,
                      cost_summary,
                      group = "aggregated",
                      wtp = NULL,
-                     referent = NULL,
-                     comparator = NULL,
-                     strategy_name_field = "display_name",
-                     group_name_field = "display_name",
-                     value_name_field = "display_name",
-                     summary_name_field = "display_name",
+                     interventions = NULL,
+                     comparators = NULL,
                      discounted = FALSE) {
 
-  # Validate that one of referent or comparator is provided
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided")
-  }
-
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
   # Get WTP if needed (before calling get_summaries)
@@ -377,7 +378,7 @@ nmb_plot_bar <- function(res,
       stop(sprintf("Outcome summary '%s' not found in metadata", outcome_summary))
     }
     wtp <- outcome_meta$wtp[1]
-    if (is.na(wtp)) {
+    if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
     }
   }
@@ -385,30 +386,26 @@ nmb_plot_bar <- function(res,
   # Get outcome components with differences (follows outcomes_plot pattern)
   outcome_components <- get_summaries(
     res,
-    group = group,
+    groups = groups,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    referent = referent,
-    comparator = comparator,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    interventions = interventions,
+    comparators = comparators,
+    use_display_names = TRUE
   ) %>%
     mutate(amount = amount * wtp)  # Multiply by WTP
 
   # Get cost components with differences
   cost_components <- get_summaries(
     res,
-    group = group,
+    groups = groups,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    referent = referent,
-    comparator = comparator,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    interventions = interventions,
+    comparators = comparators,
+    use_display_names = TRUE
   ) %>%
     mutate(amount = -amount)  # Negate costs (we subtract them)
 
@@ -431,8 +428,8 @@ nmb_plot_bar <- function(res,
     )
 
   # Create outcome label with display names
-  outcome_label <- map_names(outcome_summary, res$metadata$summaries, summary_name_field)
-  cost_label <- map_names(cost_summary, res$metadata$summaries, summary_name_field)
+  outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
+  cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
   wtp_formatted <- format(wtp, big.mark = ",")
   nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, λ = {wtp_formatted})")
 
@@ -469,12 +466,12 @@ nmb_plot_bar <- function(res,
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
 #' @param group_name_field Field to use for group names: "name" or "display_name"
 #' @param value_name_field Field to use for value names
@@ -487,7 +484,7 @@ nmb_plot_bar <- function(res,
 #' @return A ggplot2 object
 #'
 #' @details
-#' Either `referent` or `comparator` must be specified (one is mandatory).
+#' Either `intervention` or `comparator` must be specified (one is mandatory).
 #'
 #' @examples
 #' \dontrun{
@@ -498,32 +495,24 @@ nmb_plot_bar <- function(res,
 #' nmb_plot_line(results, "total_qalys", "total_cost", comparator = "control")
 #'
 #' # Per-cycle NMB
-#' nmb_plot_line(results, "total_qalys", "total_cost", referent = "new_treatment", cumulative = FALSE)
+#' nmb_plot_line(results, "total_qalys", "total_cost", intervention = "new_treatment", cumulative = FALSE)
 #' }
 #'
 #' @export
 nmb_plot_line <- function(res,
                           outcome_summary,
                           cost_summary,
-                          group = "aggregated",
+                          groups = "overall",
                           wtp = NULL,
-                          referent = NULL,
-                          comparator = NULL,
-                          strategy_name_field = "display_name",
-                          group_name_field = "display_name",
-                          value_name_field = "display_name",
-                          summary_name_field = "display_name",
+                          interventions = NULL,
+                          comparators = NULL,
                           time_unit = "cycle",
                           cumulative = TRUE,
                           discounted = FALSE) {
 
-  # Validate referent/comparator
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided")
-  }
-
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
   # Get WTP if needed (before calling get_values)
@@ -537,7 +526,7 @@ nmb_plot_line <- function(res,
       stop(sprintf("Outcome summary '%s' not found in metadata", outcome_summary))
     }
     wtp <- outcome_meta$wtp[1]
-    if (is.na(wtp)) {
+    if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
     }
   }
@@ -546,15 +535,13 @@ nmb_plot_line <- function(res,
   outcome_components <- get_values(
     res,
     format = "long",
-    group = group,
+    groups = groups,
     value_type = "outcome",
     time_unit = time_unit,
     discounted = discounted,
-    referent = referent,
-    comparator = comparator,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    interventions = interventions,
+    comparators = comparators,
+    use_display_names = TRUE
   ) %>%
     mutate(amount = amount * wtp)  # Multiply by WTP
 
@@ -562,15 +549,13 @@ nmb_plot_line <- function(res,
   cost_components <- get_values(
     res,
     format = "long",
-    group = group,
+    groups = groups,
     value_type = "cost",
     time_unit = time_unit,
     discounted = discounted,
-    referent = referent,
-    comparator = comparator,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field
+    interventions = interventions,
+    comparators = comparators,
+    use_display_names = TRUE
   ) %>%
     mutate(amount = -amount)  # Negate costs (we subtract them)
 
@@ -620,9 +605,9 @@ nmb_plot_line <- function(res,
 
   # Create NMB label with display names
   outcome_label <- map_names(outcome_summary, res$metadata$summaries,
-                             summary_name_field)
+                             "display_name")
   cost_label <- map_names(cost_summary, res$metadata$summaries,
-                          summary_name_field)
+                          "display_name")
   wtp_formatted <- format(wtp, big.mark = ",")
   nmb_label <- glue(
     "Net Monetary Benefit ({cost_label}, {outcome_label}, λ = {wtp_formatted})"
@@ -676,7 +661,7 @@ nmb_plot_line <- function(res,
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
@@ -708,24 +693,19 @@ nmb_plot_line <- function(res,
 incremental_ce_plot <- function(res,
                                 outcome_summary,
                                 cost_summary,
-                                group = "aggregated",
+                                groups = "overall",
                                 strategies = NULL,
-                                discounted = FALSE,
-                                strategy_name_field = "display_name",
-                                group_name_field = "display_name",
-                                summary_name_field = "display_name") {
+                                discounted = FALSE) {
 
   # Calculate incremental CE
   ce_data <- calculate_incremental_ce(
     res,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field
+    use_display_names = TRUE
   )
 
   # Create status factor for coloring/shaping
@@ -748,9 +728,9 @@ incremental_ce_plot <- function(res,
   # Map summary names for axis labels
   outcome_label <- outcome_summary
   cost_label <- cost_summary
-  if (!is.null(res$metadata) && !is.null(res$metadata$summaries) && summary_name_field != "name") {
-    outcome_label <- map_names(outcome_summary, res$metadata$summaries, summary_name_field)
-    cost_label <- map_names(cost_summary, res$metadata$summaries, summary_name_field)
+  if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
+    outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
   }
 
   # Determine faceting
@@ -802,12 +782,12 @@ incremental_ce_plot <- function(res,
 #' @param res A heRomod2 model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
 #' @param group_name_field Field to use for group names: "name" or "display_name" (default: "display_name")
@@ -824,9 +804,9 @@ incremental_ce_plot <- function(res,
 #' - Lines connect origin to each point, with slope representing ICER
 #' - Single plot (or faceted by group if group=NULL)
 #'
-#' When referent is specified:
-#' - Each comparison gets its own facet panel showing referent vs. one other strategy
-#' - One point per panel at the referent's incremental position
+#' When intervention is specified:
+#' - Each comparison gets its own facet panel showing intervention vs. one other strategy
+#' - One point per panel at the intervention's incremental position
 #' - Line shows ICER slope from origin
 #' - If group=NULL: uses facet_grid with group on rows, comparison on columns
 #'
@@ -838,8 +818,8 @@ incremental_ce_plot <- function(res,
 #' # Pairwise CE plane vs control (comparator perspective)
 #' pairwise_ce_plot(results, "total_qalys", "total_cost", comparator = "control")
 #'
-#' # New treatment vs others (referent perspective)
-#' pairwise_ce_plot(results, "total_qalys", "total_cost", referent = "new_treatment")
+#' # New treatment vs others (intervention perspective)
+#' pairwise_ce_plot(results, "total_qalys", "total_cost", intervention = "new_treatment")
 #'
 #' # For all groups
 #' pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,
@@ -850,21 +830,15 @@ incremental_ce_plot <- function(res,
 pairwise_ce_plot <- function(res,
                              outcome_summary,
                              cost_summary,
-                             group = "aggregated",
+                             groups = "overall",
                              strategies = NULL,
-                             referent = NULL,
-                             comparator = NULL,
-                             discounted = FALSE,
-                             strategy_name_field = "display_name",
-                             group_name_field = "display_name",
-                             summary_name_field = "display_name") {
+                             interventions = NULL,
+                             comparators = NULL,
+                             discounted = FALSE) {
 
-  # Validate referent/comparator
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided")
-  }
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
   # Calculate pairwise CE
@@ -872,33 +846,35 @@ pairwise_ce_plot <- function(res,
     res,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    referent = referent,
-    comparator = comparator,
-    discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted
   )
 
   # Map summary names for axis labels
   outcome_label <- outcome_summary
   cost_label <- cost_summary
-  if (!is.null(res$metadata) && !is.null(res$metadata$summaries) && summary_name_field != "name") {
-    outcome_label <- map_names(outcome_summary, res$metadata$summaries, summary_name_field)
-    cost_label <- map_names(cost_summary, res$metadata$summaries, summary_name_field)
+  if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
+    outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
   }
 
-  # Get unique groups
+  # Get unique groups and comparisons
   n_groups <- length(unique(ce_data$group))
+  n_comparisons <- nrow(ce_data) / n_groups  # Approximate
 
-  # Build plot based on mode
-  if (!is.null(comparator)) {
-    # Comparator mode: all comparisons on one plot (or faceted by group)
+  # Create comparison label
+  ce_data <- ce_data %>%
+    mutate(comparison = paste(strategy, "vs.", comparator))
+
+  # Determine plot mode based on number of comparisons
+  if (n_comparisons <= 5) {
+    # Few comparisons: all on one plot with color by comparison
     p <- ggplot(ce_data, aes(x = doutcome, y = dcost)) +
-      geom_point(aes(color = strategy), size = 3) +
-      geom_segment(aes(xend = doutcome, yend = dcost, color = strategy),
+      geom_point(aes(color = comparison), size = 3) +
+      geom_segment(aes(xend = doutcome, yend = dcost, color = comparison),
                    x = 0, y = 0, alpha = 0.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
@@ -906,7 +882,7 @@ pairwise_ce_plot <- function(res,
       scale_y_continuous(labels = comma) +
       labs(x = paste0("\u0394 ", outcome_label),
            y = paste0("\u0394 ", cost_label),
-           color = "Strategy") +
+           color = "Comparison") +
       theme_bw()
 
     # Add faceting if multiple groups
@@ -915,10 +891,7 @@ pairwise_ce_plot <- function(res,
     }
 
   } else {
-    # Referent mode: separate panel per comparison
-    ce_data <- ce_data %>%
-      mutate(comparison = paste(strategy, "vs.", comparator))
-
+    # Many comparisons: separate panel per comparison
     p <- ggplot(ce_data, aes(x = doutcome, y = dcost)) +
       geom_point(color = "blue", size = 3) +
       geom_segment(aes(xend = doutcome, yend = dcost),

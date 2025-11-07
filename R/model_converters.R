@@ -107,6 +107,51 @@ write_model_excel <- function(model, path) {
     wb_list$trees <- model$trees
   }
 
+  # Handle multivariate sampling if present
+  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
+    # Create multivariate_sampling sheet
+    mv_sampling_df <- tibble()
+    mv_variables_df <- tibble()
+
+    for (mv_spec in model$multivariate_sampling) {
+      # Add to multivariate_sampling sheet
+      mv_sampling_df <- bind_rows(
+        mv_sampling_df,
+        tibble(
+          name = mv_spec$name,
+          distribution = mv_spec$distribution,
+          description = mv_spec$description %||% ""
+        )
+      )
+
+      # Add to multivariate_sampling_variables sheet
+      if (!is.null(mv_spec$variables)) {
+        vars_df <- mv_spec$variables
+        if (is.data.frame(vars_df)) {
+          vars_df$sampling_name <- mv_spec$name
+          # Ensure all columns exist
+          if (!"strategy" %in% names(vars_df)) vars_df$strategy <- ""
+          if (!"group" %in% names(vars_df)) vars_df$group <- ""
+          # Reorder columns
+          vars_df <- vars_df %>%
+            select(sampling_name, variable, strategy, group)
+        } else if (is.character(vars_df)) {
+          # Convert character vector to dataframe
+          vars_df <- tibble(
+            sampling_name = mv_spec$name,
+            variable = vars_df,
+            strategy = "",
+            group = ""
+          )
+        }
+        mv_variables_df <- bind_rows(mv_variables_df, vars_df)
+      }
+    }
+
+    wb_list$multivariate_sampling <- mv_sampling_df
+    wb_list$multivariate_sampling_variables <- mv_variables_df
+  }
+
   # Write the Excel file
   excel_path <- file.path(path, "model.xlsx")
   write.xlsx(wb_list, excel_path)

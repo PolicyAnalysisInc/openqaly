@@ -8,15 +8,12 @@ prepare_pairwise_ce_table_data(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   decimals = 2,
   discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name",
   font_size = 11
 )
 }
@@ -27,25 +24,19 @@ prepare_pairwise_ce_table_data(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL}
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{referent}{Single reference strategy for intervention perspective}
-
-\item{comparator}{Single reference strategy for comparator perspective}
 
 \item{decimals}{Number of decimal places}
 
 \item{discounted}{Logical. Use discounted values?}
 
-\item{strategy_name_field}{Which strategy name field to use}
-
-\item{group_name_field}{Which group name field to use}
-
-\item{summary_name_field}{Which summary name field to use}
-
 \item{font_size}{Font size for rendering}
+
+\item{intervention}{Single reference strategy for intervention perspective}
+
+\item{comparator}{Single reference strategy for comparator perspective}
 }
 \value{
 List with prepared data and metadata for render_table()

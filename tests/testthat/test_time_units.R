@@ -88,21 +88,21 @@ test_that("plot functions use time_unit parameter", {
 
   results <- run_model(model)
 
-  # Test plot_trace with different time units
-  p_cycles <- plot_trace(results, time_unit = "cycle")
+  # Test trace_plot_area with different time units
+  p_cycles <- trace_plot_area(results, time_unit = "cycle")
   expect_s3_class(p_cycles, "ggplot")
   expect_equal(p_cycles$labels$x, "Cycle")
 
-  p_months <- plot_trace(results, time_unit = "month")
+  p_months <- trace_plot_area(results, time_unit = "month")
   expect_s3_class(p_months, "ggplot")
   expect_equal(p_months$labels$x, "Months")
 
-  p_years <- plot_trace(results, time_unit = "year")
+  p_years <- trace_plot_area(results, time_unit = "year")
   expect_s3_class(p_years, "ggplot")
   expect_equal(p_years$labels$x, "Years")
 
-  # Test plot_trace_lines with different time units
-  p_lines_weeks <- plot_trace_lines(results, time_unit = "week")
+  # Test trace_plot_line with different time units
+  p_lines_weeks <- trace_plot_line(results, time_unit = "week")
   expect_s3_class(p_lines_weeks, "ggplot")
   expect_equal(p_lines_weeks$labels$x, "Weeks")
 })
@@ -128,13 +128,13 @@ test_that("table function uses time_unit parameter", {
   results <- run_model(model)
 
   # Test table with different time units
-  ft_cycles <- format_trace_flextable(results, time_unit = "cycle", cycles = 1:3)
+  ft_cycles <- trace_table(results, time_unit = "cycle", cycles = 1:3, table_format = "flextable")
   expect_s3_class(ft_cycles, "flextable")
 
-  ft_weeks <- format_trace_flextable(results, time_unit = "week", cycles = 1:3)
+  ft_weeks <- trace_table(results, time_unit = "week", cycles = 1:3, table_format = "flextable")
   expect_s3_class(ft_weeks, "flextable")
 
-  ft_days <- format_trace_flextable(results, time_unit = "day", cycles = 1:3)
+  ft_days <- trace_table(results, time_unit = "day", cycles = 1:3, table_format = "flextable")
   expect_s3_class(ft_days, "flextable")
 })
 

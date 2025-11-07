@@ -7,13 +7,10 @@
 outcomes_plot_bar(
   res,
   outcome,
-  group = "aggregated",
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name",
-  summary_name_field = "display_name",
-  referent = NULL,
-  comparator = NULL
+  groups = "overall",
+  strategies = NULL,
+  interventions = NULL,
+  comparators = NULL
 )
 }
 \arguments{
@@ -21,7 +18,7 @@ outcomes_plot_bar(
 
 \item{outcome}{Name of the outcome summary to plot (e.g., "total_qalys")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
 
@@ -31,11 +28,11 @@ outcomes_plot_bar(
 
 \item{summary_name_field}{Field to use for the outcome label}
 
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
 
 \item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 }
 \value{
 A ggplot2 object
@@ -45,11 +42,11 @@ Creates a bar chart showing outcome values by value component and strategy.
 Can display absolute values or differences between strategies.
 }
 \details{
-When neither referent nor comparator is specified, shows absolute outcome values.
+When neither intervention nor comparator is specified, shows absolute outcome values.
 
-When referent is specified (intervention perspective):
-- Creates N-1 comparisons showing (referent - each_other_strategy)
-- Example with 3 strategies {A, B, C} and referent=A: shows "A vs. B" and "A vs. C"
+When intervention is specified (intervention perspective):
+- Creates N-1 comparisons showing (intervention - each_other_strategy)
+- Example with 3 strategies {A, B, C} and intervention=A: shows "A vs. B" and "A vs. C"
 
 When comparator is specified (comparator perspective):
 - Creates N-1 comparisons showing (each_other_strategy - comparator)
@@ -67,7 +64,7 @@ outcomes_plot_bar(results, "total_qalys")
 outcomes_plot_bar(results, "total_qalys", comparator = "control")
 
 # New treatment vs others (intervention perspective)
-outcomes_plot_bar(results, "total_qalys", referent = "new_treatment")
+outcomes_plot_bar(results, "total_qalys", intervention = "new_treatment")
 }
 
 }

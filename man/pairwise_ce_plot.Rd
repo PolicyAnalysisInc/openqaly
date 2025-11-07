@@ -8,14 +8,11 @@ pairwise_ce_plot(
   res,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
-  discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name"
+  interventions = NULL,
+  comparators = NULL,
+  discounted = FALSE
 )
 }
 \arguments{
@@ -25,17 +22,17 @@ pairwise_ce_plot(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
+\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
 
 \item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 
 \item{strategy_name_field}{Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")}
 
@@ -60,9 +57,9 @@ When comparator is specified:
 - Lines connect origin to each point, with slope representing ICER
 - Single plot (or faceted by group if group=NULL)
 
-When referent is specified:
-- Each comparison gets its own facet panel showing referent vs. one other strategy
-- One point per panel at the referent's incremental position
+When intervention is specified:
+- Each comparison gets its own facet panel showing intervention vs. one other strategy
+- One point per panel at the intervention's incremental position
 - Line shows ICER slope from origin
 - If group=NULL: uses facet_grid with group on rows, comparison on columns
 }
@@ -74,8 +71,8 @@ results <- run_model(model)
 # Pairwise CE plane vs control (comparator perspective)
 pairwise_ce_plot(results, "total_qalys", "total_cost", comparator = "control")
 
-# New treatment vs others (referent perspective)
-pairwise_ce_plot(results, "total_qalys", "total_cost", referent = "new_treatment")
+# New treatment vs others (intervention perspective)
+pairwise_ce_plot(results, "total_qalys", "total_cost", intervention = "new_treatment")
 
 # For all groups
 pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,

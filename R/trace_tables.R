@@ -8,21 +8,16 @@
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
 #' @param decimals Number of decimal places for probabilities (default: 4)
-#' @param strategy_name_field Which strategy name field to use
-#' @param state_name_field Which state name field to use
 #' @param time_unit Which time unit to display
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
 prepare_trace_table_data <- function(results,
                                      strategies = NULL,
-                                     group = "aggregated",
+                                     groups = "overall",
                                      states = NULL,
                                      cycles = NULL,
                                      decimals = 4,
-                                     strategy_name_field = "display_name",
-                                     group_name_field = "display_name",
-                                     state_name_field = "display_name",
                                      time_unit = "cycle",
                                      font_size = 11) {
 
@@ -32,13 +27,11 @@ prepare_trace_table_data <- function(results,
     format = "long",
     collapsed = TRUE,
     strategies = strategies,
-    groups = if(is.null(group)) "all" else if(group == "aggregated") NULL else group,
+    groups = groups,
     states = states,
     cycles = cycles,
     time_unit = time_unit,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    state_name_field = state_name_field
+    use_display_names = TRUE
   )
 
   # Get unique strategies, groups, and states (already have display names)
@@ -334,17 +327,10 @@ prepare_trace_table_data <- function(results,
 #'
 #' @param results A heRomod2 model results object
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param group Character. Either NULL (show all groups), "aggregated" (show aggregated
-#'   data only), or a specific group name to display.
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
 #' @param decimals Number of decimal places for probabilities (default: 4)
-#' @param strategy_name_field Which strategy name field to use: "name" (technical name),
-#'   "display_name", or "abbreviation". Default is "display_name" if available.
-#' @param group_name_field Which group name field to use: "name" (technical name),
-#'   "display_name", or "abbreviation". Default is "display_name" if available.
-#' @param state_name_field Which state name field to use: "name" (technical name),
-#'   "display_name", or "abbreviation". Default is "display_name" if available.
 #' @param time_unit Which time unit to display: "cycle" (default), "day", "week",
 #'   "month", or "year".
 #' @param font_size Font size for the table (default: 11)
@@ -364,7 +350,7 @@ prepare_trace_table_data <- function(results,
 #' kt <- trace_table(results, table_format = "kable")
 #'
 #' # Show all groups
-#' trace_table(results, group = NULL)
+#' trace_table(results, groups = NULL)
 #'
 #' # Show specific strategies and cycles
 #' trace_table(results, strategies = c("Strategy1", "Strategy2"), cycles = 0:20)
@@ -373,13 +359,10 @@ prepare_trace_table_data <- function(results,
 #' @export
 trace_table <- function(results,
                         strategies = NULL,
-                        group = "aggregated",
+                        groups = "overall",
                         states = NULL,
                         cycles = NULL,
                         decimals = 4,
-                        strategy_name_field = "display_name",
-                        group_name_field = "display_name",
-                        state_name_field = "display_name",
                         time_unit = "cycle",
                         font_size = 11,
                         table_format = c("kable", "flextable")) {
@@ -390,13 +373,10 @@ trace_table <- function(results,
   prepared <- prepare_trace_table_data(
     results = results,
     strategies = strategies,
-    group = group,
+    groups = groups,
     states = states,
     cycles = cycles,
     decimals = decimals,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    state_name_field = state_name_field,
     time_unit = time_unit,
     font_size = font_size
   )

@@ -423,12 +423,215 @@ is_faslsy_chr <- function(x) {
 #' Check a model inputs dataframe based on a given specification dataframe. Specification
 #' dataframes are used to check input dataframes, ensure that required columns are present
 #' and impute missing values for non-required columns.
-#' 
+#'
 #' @param df The input dataframe to be checked
 #' @param spec The specification dataframe
 #' @param context A string used in error messages to indicate the type of input dataframe
-#' 
+#'
 #' @return The input dataframe with missing values imputed
+
+#' Auto-Generate Display Names for Variables
+#'
+#' Generates display names for variables based on name, strategy, and group.
+#' Only fills in missing display_name values, preserving any user-provided names.
+#'
+#' Format:
+#' - No strategy/group: "var_name"
+#' - Strategy only: "var_name, strategy_name"
+#' - Group only: "var_name, group_name"
+#' - Both: "var_name, strategy_name, group_name"
+#'
+#' This function is called after \code{\link{validate_variable_display_names}} to ensure
+#' consistency. Variables with multiple rows (strategy/group specific) must have display
+#' names provided for either all rows or no rows.
+#'
+#' @param df A dataframe with columns: name, display_name, strategy (optional), group (optional)
+#'
+#' @return The dataframe with auto-generated display names where missing
+#' @keywords internal
+auto_generate_display_name_variables <- function(df) {
+  # Only process rows with missing display_name
+  missing_display <- is.na(df$display_name) | df$display_name == ""
+
+  if (!any(missing_display)) {
+    return(df)  # Nothing to do
+  }
+
+  # Generate display names for missing rows
+  for (i in which(missing_display)) {
+    display_name <- df$name[i]
+
+    # Add strategy if present and non-empty
+    if ("strategy" %in% colnames(df)) {
+      strategy_val <- df$strategy[i]
+      if (!is.na(strategy_val) && strategy_val != "") {
+        display_name <- paste0(display_name, ", ", strategy_val)
+      }
+    }
+
+    # Add group if present and non-empty
+    if ("group" %in% colnames(df)) {
+      group_val <- df$group[i]
+      if (!is.na(group_val) && group_val != "") {
+        display_name <- paste0(display_name, ", ", group_val)
+      }
+    }
+
+    df$display_name[i] <- display_name
+  }
+
+  return(df)
+}
+
+#' Validate Display Names for Variables
+#'
+#' Ensures that for variables with multiple rows (strategy/group specific),
+#' if a display_name is provided for at least one row, it must be provided
+#' for all rows of that variable.
+#'
+#' @param df Data frame containing variables with columns: name, display_name, strategy, group
+#'
+#' @return Empty string if valid, error message if invalid
+#' @keywords internal
+validate_variable_display_names <- function(df) {
+  # Group by variable name
+  var_names <- unique(df$name)
+
+  for (var_name in var_names) {
+    var_rows <- df[df$name == var_name, ]
+
+    if (nrow(var_rows) == 1) {
+      next  # Single row, no consistency check needed
+    }
+
+    # Check which rows have user-provided display names
+    # User-provided means: not NA/empty
+    has_display <- !is.na(var_rows$display_name) & var_rows$display_name != ""
+
+    if (!any(has_display)) {
+      next  # All missing, will be auto-generated - valid
+    }
+
+    if (all(has_display)) {
+      next  # All provided - valid
+    }
+
+    # Some but not all have display names - ERROR
+    # Build informative error message with tabular format
+    missing_indices <- which(!has_display)
+    table_string <- format_missing_display_names_table(var_rows, missing_indices)
+
+    error_msg <- sprintf(
+      "Variable '%s': display_name must be provided for ALL definitions or NONE.\n\nMissing display_name for the following definitions:\n\n%s",
+      var_name,
+      table_string
+    )
+
+    return(error_msg)
+  }
+
+  return("")  # All valid
+}
+
+#' Format Missing Display Names as Table
+#'
+#' Helper function to format missing display name information as a markdown-style table.
+#' Used in validation error messages.
+#'
+#' @param vars_df Dataframe of variables
+#' @param missing_indices Indices of rows with missing display names
+#'
+#' @return Formatted table string
+#' @keywords internal
+format_missing_display_names_table <- function(vars_df, missing_indices) {
+  # Build table data
+  table_data <- data.frame(
+    Strategy = character(length(missing_indices)),
+    Group = character(length(missing_indices)),
+    stringsAsFactors = FALSE
+  )
+
+  for (i in seq_along(missing_indices)) {
+    row_idx <- missing_indices[i]
+    strategy_val <- vars_df$strategy[row_idx]
+    group_val <- vars_df$group[row_idx]
+
+    table_data$Strategy[i] <- if (!is.na(strategy_val) && strategy_val != "") strategy_val else "N/A"
+    table_data$Group[i] <- if (!is.na(group_val) && group_val != "") group_val else "N/A"
+  }
+
+  # Calculate column widths
+  col_widths <- c(
+    Strategy = max(nchar("Strategy"), max(nchar(table_data$Strategy))),
+    Group = max(nchar("Group"), max(nchar(table_data$Group)))
+  )
+
+  # Build table
+  header <- paste0("| ",
+                  format("Strategy", width = col_widths["Strategy"], justify = "left"),
+                  " | ",
+                  format("Group", width = col_widths["Group"], justify = "left"),
+                  " |")
+
+  separator <- paste0("|-",
+                     paste(rep("-", col_widths["Strategy"]), collapse = ""),
+                     "-|-",
+                     paste(rep("-", col_widths["Group"]), collapse = ""),
+                     "-|")
+
+  rows <- apply(table_data, 1, function(row) {
+    paste0("| ",
+          format(row["Strategy"], width = col_widths["Strategy"], justify = "left"),
+          " | ",
+          format(row["Group"], width = col_widths["Group"], justify = "left"),
+          " |")
+  })
+
+  paste(c(header, separator, rows), collapse = "\n")
+}
+
+#' Validate Display Names for Variables (Builder Context)
+#'
+#' Validates display name consistency for variables being added via the R model builder.
+#' This is called after each add_variable() to ensure that if any variable with a given
+#' name has a user-provided display_name, all variables with that name must have one.
+#'
+#' @param vars_df Dataframe of variables with the same name
+#' @param var_name The variable name being validated
+#'
+#' @return Empty string if valid, error message if invalid
+#' @keywords internal
+validate_variable_display_names_for_builder <- function(vars_df, var_name) {
+  if (nrow(vars_df) <= 1) {
+    return("")  # Single variable, no consistency check needed
+  }
+
+  # Check which rows have user-provided display names
+  # User-provided means: not NA/empty
+  has_display <- !is.na(vars_df$display_name) & vars_df$display_name != ""
+
+  if (!any(has_display)) {
+    return("")  # All missing, will be auto-generated - valid
+  }
+
+  if (all(has_display)) {
+    return("")  # All provided - valid
+  }
+
+  # Some but not all have display names - ERROR
+  # Build informative error message with tabular format
+  missing_indices <- which(!has_display)
+  table_string <- format_missing_display_names_table(vars_df, missing_indices)
+
+  error_msg <- sprintf(
+    "Variable '%s': display_name must be provided for ALL definitions or NONE.\n\nMissing display_name for the following definitions:\n\n%s",
+    var_name,
+    table_string
+  )
+
+  return(error_msg)
+}
+
 check_tbl <- function(df, spec, context) {
   
   spec_cn <- spec$name
@@ -488,7 +691,19 @@ check_tbl <- function(df, spec, context) {
       df[[col_name]] <- convert_to_type(df[[col_name]], type)
     }
   }
-  
+
+  # Auto-generate display names for variables (which have strategy/group context)
+  if ("display_name" %in% spec_cn &&
+      all(c("strategy", "group") %in% colnames(df))) {
+    # First validate that display names are consistently provided
+    error_msg <- validate_variable_display_names(df)
+    if (error_msg != "") {
+      stop(error_msg, call. = FALSE)
+    }
+    # Then auto-generate for missing display names
+    df <- auto_generate_display_name_variables(df)
+  }
+
   # Use only the columns defined in the spec
   select(df, {{spec_cn}})
 }
@@ -814,6 +1029,11 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   # Ensure tables and scripts are named lists
   if (is.null(model$tables)) model$tables <- list()
   if (is.null(model$scripts)) model$scripts <- list()
+
+  # Validate group names (no reserved keywords)
+  if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
+    validate_group_names(model$groups$name)
+  }
 
   # Set class
   if (preserve_builder && "heRomodel_builder" %in% class(model)) {
@@ -1284,4 +1504,145 @@ write_model_json <- function(model) {
   )
 
   as.character(json_string)
+}
+
+
+#' Validate Group Names for Reserved Keywords
+#'
+#' Checks that group names do not use reserved keywords that are used
+#' for special operations in the groups argument.
+#'
+#' @param group_names Character vector of group names to validate
+#'
+#' @return Invisibly returns TRUE if valid, otherwise stops with error
+#' @keywords internal
+validate_group_names <- function(group_names) {
+  reserved <- c("overall", "all", "all_groups")
+  conflicts <- intersect(group_names, reserved)
+
+  if (length(conflicts) > 0) {
+    stop(sprintf(
+      "Reserved group names detected: %s\nThese names are reserved for special operations. Please rename your groups to avoid these reserved keywords.",
+      paste(conflicts, collapse = ", ")
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Resolve Groups Argument to Actual Group Names
+#'
+#' Internal helper that resolves the groups argument (which can be NULL, strings, or vectors)
+#' into a list specifying which groups and whether to include overall.
+#'
+#' @param groups The groups argument value (NULL, character vector, or string)
+#' @param results A heRomod2 model results object
+#'
+#' @return List with elements:
+#'   \item{include_overall}{Logical - whether to include overall/aggregated}
+#'   \item{include_groups}{Character vector of group names to include}
+#'
+#' @keywords internal
+resolve_groups <- function(groups, results) {
+  # Get available groups from results
+  available_groups <- if (!is.null(results$segments) && nrow(results$segments) > 0) {
+    unique(results$segments$group)
+  } else {
+    character(0)
+  }
+
+  # Reserved keywords
+  reserved <- c("overall", "all", "all_groups")
+
+  # Check for conflicts (should have been caught at model load, but double-check)
+  conflicts <- intersect(available_groups, reserved)
+  if (length(conflicts) > 0) {
+    stop(sprintf(
+      "Model contains reserved group names: %s\nThis should have been caught during model loading.",
+      paste(conflicts, collapse = ", ")
+    ))
+  }
+
+  # Handle NULL (backward compatible)
+  if (is.null(groups)) {
+    return(list(
+      include_overall = TRUE,
+      include_groups = available_groups
+    ))
+  }
+
+  # Expand special keywords
+  if (length(groups) == 1 && groups == "all") {
+    return(list(
+      include_overall = TRUE,
+      include_groups = available_groups
+    ))
+  }
+
+  if (length(groups) == 1 && groups == "all_groups") {
+    return(list(
+      include_overall = FALSE,
+      include_groups = available_groups
+    ))
+  }
+
+  if (length(groups) == 1 && groups == "overall") {
+    return(list(
+      include_overall = TRUE,
+      include_groups = character(0)
+    ))
+  }
+
+  # Multiple values - check for "overall" and actual group names
+  include_overall <- "overall" %in% groups
+  include_groups <- setdiff(groups, "overall")
+
+  # Validate that all non-reserved groups exist
+  invalid <- setdiff(include_groups, available_groups)
+  if (length(invalid) > 0) {
+    stop(sprintf(
+      "Group(s) not found: %s\nAvailable groups: %s",
+      paste(invalid, collapse = ", "),
+      paste(c("overall", available_groups), collapse = ", ")
+    ))
+  }
+
+  list(
+    include_overall = include_overall,
+    include_groups = include_groups
+  )
+}
+
+
+#' Select Source Data Based on Groups Argument
+#'
+#' Internal helper that selects the appropriate source data from results
+#' based on the resolved groups specification.
+#'
+#' @param groups The groups argument value
+#' @param results A heRomod2 model results object
+#'
+#' @return Tibble with combined data from requested groups
+#' @keywords internal
+select_source_data <- function(groups, results) {
+  resolved <- resolve_groups(groups, results)
+
+  parts <- list()
+
+  if (resolved$include_overall) {
+    parts[[length(parts) + 1]] <- results$aggregated %>%
+      mutate(group = "Overall")
+  }
+
+  if (length(resolved$include_groups) > 0) {
+    parts[[length(parts) + 1]] <- results$segments %>%
+      filter(group %in% resolved$include_groups)
+  }
+
+  if (length(parts) == 0) {
+    stop("No groups selected")
+  }
+
+  bind_rows(parts)
 }

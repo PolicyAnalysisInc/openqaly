@@ -90,7 +90,7 @@ test_that("trace_table uses name fields correctly", {
   results <- run_model(model)
 
   # Test with display_name (default)
-  ft_display <- trace_table(results, cycles = 0:3)
+  ft_display <- trace_table(results, cycles = 0:3, table_format = "flextable")
   ft_data <- ft_display$body$dataset
 
   # Extract header content - flextable stores headers differently
@@ -104,7 +104,8 @@ test_that("trace_table uses name fields correctly", {
   # Test with technical names
   ft_tech <- trace_table(results, cycles = 0:3,
                         strategy_name_field = "name",
-                        state_name_field = "name")
+                        state_name_field = "name",
+                        table_format = "flextable")
 
   # All should produce valid flextables
   expect_s3_class(ft_display, "flextable")
@@ -132,6 +133,6 @@ test_that("name fields work with missing metadata", {
   results$metadata <- NULL
 
   # Should work without error using technical names
-  ft <- trace_table(results, cycles = 0:3)
+  ft <- trace_table(results, cycles = 0:3, table_format = "flextable")
   expect_s3_class(ft, "flextable")
 })

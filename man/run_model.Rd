@@ -4,16 +4,10 @@
 \alias{run_model}
 \title{Run a Model}
 \usage{
-run_model(model, psa = FALSE, n_sim = NULL, seed = NULL, ...)
+run_model(model, ...)
 }
 \arguments{
 \item{model}{A heRo_model object.}
-
-\item{psa}{Logical. If TRUE, run probabilistic sensitivity analysis.}
-
-\item{n_sim}{Number of PSA simulations (required if psa = TRUE).}
-
-\item{seed}{Random seed for reproducibility in PSA.}
 
 \item{...}{additional arguments.}
 }
@@ -21,5 +15,6 @@ run_model(model, psa = FALSE, n_sim = NULL, seed = NULL, ...)
 A list containing the results of the model.
 }
 \description{
-Takes a model specification object and runs the model.
+Takes a model specification object and runs the model for the base case.
+For probabilistic sensitivity analysis, use [run_psa()] instead.
 }

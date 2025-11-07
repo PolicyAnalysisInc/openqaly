@@ -11,8 +11,6 @@ prepare_simple_trace_table(
   states = NULL,
   cycles = NULL,
   decimals = 4,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
   state_name_field = "display_name",
   time_unit = "cycle",
   font_size = 11
@@ -31,15 +29,15 @@ prepare_simple_trace_table(
 
 \item{decimals}{Number of decimal places}
 
-\item{strategy_name_field}{Field to use for strategy names}
-
-\item{group_name_field}{Field to use for group names}
-
 \item{state_name_field}{Field to use for state names}
 
 \item{time_unit}{Time unit to display}
 
 \item{font_size}{Font size in points}
+
+\item{strategy_name_field}{Field to use for strategy names}
+
+\item{group_name_field}{Field to use for group names}
 }
 \value{
 A simple table specification

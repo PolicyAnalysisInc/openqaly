@@ -11,7 +11,7 @@ map_value_names(names, metadata, field = "name")
 
 \item{metadata}{Results metadata containing values information}
 
-\item{field}{Which field to use: "name", "display_name", "abbreviation"}
+\item{field}{Which field to use: "name" or "display_name"}
 }
 \value{
 Character vector of mapped names

@@ -1,10 +1,22 @@
+#' Convert use_display_names to field name
+#'
+#' Internal helper to convert boolean use_display_names parameter to field name.
+#'
+#' @param use_display_names Logical. If TRUE, use "display_name", else use "name"
+#'
+#' @return Character string: "display_name" or "name"
+#' @keywords internal
+field_from_display_names <- function(use_display_names = TRUE) {
+  if (use_display_names) "display_name" else "name"
+}
+
 #' Map Names Using Specified Field
 #'
 #' Internal helper to map technical names to display names based on metadata.
 #'
 #' @param names Character vector of technical names to map
-#' @param metadata Data frame with name fields (name, display_name, abbreviation)
-#' @param field Which field to use: "name", "display_name", "abbreviation"
+#' @param metadata Data frame with name fields (name, display_name)
+#' @param field Which field to use: "name" or "display_name"
 #'
 #' @return Character vector of mapped names
 #' @keywords internal
@@ -49,8 +61,15 @@ map_names <- function(names, metadata, field = "name") {
 #' @param collapsed Logical. If TRUE (default), use aggregated traces from
 #'   results$aggregated. If FALSE, use segment-level traces from results$segments
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param groups Character vector of group names to include (NULL for all).
-#'   Only used when collapsed = FALSE
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param states Character vector of state names to include (NULL for all)
 #' @param cycles Integer vector of cycles to include (NULL for all)
 #'
@@ -61,14 +80,15 @@ map_names <- function(names, metadata, field = "name") {
 #' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 #' results <- run_model(model)
 #'
-#' # Get long format (ggplot2-ready)
+#' # Get long format (ggplot2-ready) for overall population
 #' trace_long <- get_trace(results, format = "long")
 #'
 #' # Get wide format (Excel-style)
 #' trace_wide <- get_trace(results, format = "wide")
 #'
-#' # Get specific strategies only
-#' trace_subset <- get_trace(results, strategies = c("standard"))
+#' # Get specific strategies and groups
+#' trace_subset <- get_trace(results, strategies = c("standard"),
+#'                           groups = c("overall", "moderate"))
 #' }
 #'
 #' @export
@@ -76,46 +96,20 @@ get_trace <- function(results,
                       format = c("long", "wide", "matrix"),
                       collapsed = TRUE,
                       strategies = NULL,
-                      groups = NULL,
+                      groups = "overall",
                       states = NULL,
                       cycles = NULL,
                       time_unit = c("cycle", "day", "week", "month", "year"),
-                      strategy_name_field = "display_name",
-                      group_name_field = "display_name",
-                      state_name_field = "display_name") {
+                      use_display_names = TRUE) {
 
   format <- match.arg(format)
   time_unit <- match.arg(time_unit)
 
-  # Determine source data based on groups parameter (like get_values does)
-  if (is.null(groups)) {
-    # Default: aggregated only
-    source_data <- results$aggregated %>% mutate(group = "Aggregated")
-  } else if (groups == "all") {
-    # Explicit request for all groups - combine aggregated and segments
-    if (!is.null(results$segments) && nrow(results$segments) > 0) {
-      source_data <- bind_rows(
-        results$aggregated %>% mutate(group = "Aggregated"),
-        results$segments
-      )
-    } else {
-      # No segments available, use aggregated only
-      source_data <- results$aggregated %>% mutate(group = "Aggregated")
-    }
-  } else {
-    # Specific group(s)
-    if (!is.null(results$segments) && nrow(results$segments) > 0) {
-      source_data <- results$segments %>% filter(group %in% groups)
-      if (nrow(source_data) == 0) {
-        # Fall back to aggregated if group not found
-        warning(sprintf("Group '%s' not found, using aggregated data", groups))
-        source_data <- results$aggregated %>% mutate(group = "Aggregated")
-      }
-    } else {
-      # No segments available
-      source_data <- results$aggregated %>% mutate(group = "Aggregated")
-    }
-  }
+  # Convert use_display_names to field names
+  name_field <- field_from_display_names(use_display_names)
+
+  # Select source data based on groups parameter
+  source_data <- select_source_data(groups, results)
 
   # Determine which trace column to use
   trace_column <- if (collapsed) "collapsed_trace" else "expanded_trace"
@@ -138,13 +132,13 @@ get_trace <- function(results,
   # Extract traces based on format
   if (format == "matrix") {
     return(extract_trace_matrix(source_data, states, cycles, time_unit, trace_column,
-                                results$metadata, strategy_name_field, group_name_field, state_name_field))
+                                results$metadata, name_field))
   } else if (format == "wide") {
     return(extract_trace_wide(source_data, states, cycles, time_unit, trace_column,
-                              results$metadata, strategy_name_field, group_name_field, state_name_field))
+                              results$metadata, name_field))
   } else {
     return(extract_trace_long(source_data, states, cycles, time_unit, trace_column,
-                              results$metadata, strategy_name_field, group_name_field, state_name_field))
+                              results$metadata, name_field))
   }
 }
 
@@ -152,7 +146,7 @@ get_trace <- function(results,
 #' Extract Trace as Matrix
 #' @keywords internal
 extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
-                                 metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
+                                 metadata = NULL, name_field = "display_name") {
   traces <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -179,10 +173,10 @@ extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time
   names(traces) <- paste0(source_data$strategy, "_", source_data$group)
 
   # Map state column names if metadata available
-  if (!is.null(metadata) && !is.null(metadata$states) && state_name_field != "name") {
+  if (!is.null(metadata) && !is.null(metadata$states) && name_field != "name") {
     traces <- lapply(traces, function(trace) {
       old_colnames <- colnames(trace)
-      new_colnames <- map_names(old_colnames, metadata$states, state_name_field)
+      new_colnames <- map_names(old_colnames, metadata$states, name_field)
       colnames(trace) <- new_colnames
       trace
     })
@@ -195,7 +189,7 @@ extract_trace_matrix <- function(source_data, states = NULL, cycles = NULL, time
 #' Extract Trace as Wide Format
 #' @keywords internal
 extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
-                               metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
+                               metadata = NULL, name_field = "display_name") {
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -231,18 +225,18 @@ extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_u
 
   # Map names for display
   if (!is.null(metadata)) {
-    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
-      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    if (!is.null(metadata$strategies) && name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, name_field)
     }
-    if (!is.null(metadata$groups) && group_name_field != "name") {
-      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    if (!is.null(metadata$groups) && name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, name_field)
     }
     # Map state column names
-    if (!is.null(metadata$states) && state_name_field != "name") {
+    if (!is.null(metadata$states) && name_field != "name") {
       time_cols <- c("strategy", "group", "cycle", "day", "week", "month", "year")
       state_cols <- setdiff(colnames(result), time_cols)
       colnames(result)[colnames(result) %in% state_cols] <-
-        map_names(state_cols, metadata$states, state_name_field)
+        map_names(state_cols, metadata$states, name_field)
     }
   }
 
@@ -253,7 +247,7 @@ extract_trace_wide <- function(source_data, states = NULL, cycles = NULL, time_u
 #' Extract Trace as Long Format
 #' @keywords internal
 extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_unit = "cycle", trace_column = "collapsed_trace",
-                               metadata = NULL, strategy_name_field = "display_name", group_name_field = "display_name", state_name_field = "display_name") {
+                               metadata = NULL, name_field = "display_name") {
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     trace <- source_data[[trace_column]][[i]]
 
@@ -351,15 +345,15 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 
   # Map names for display
   if (!is.null(metadata)) {
-    if (!is.null(metadata$strategies) && strategy_name_field != "name") {
-      result$strategy <- map_names(result$strategy, metadata$strategies, strategy_name_field)
+    if (!is.null(metadata$strategies) && name_field != "name") {
+      result$strategy <- map_names(result$strategy, metadata$strategies, name_field)
     }
-    if (!is.null(metadata$groups) && group_name_field != "name") {
-      result$group <- map_names(result$group, metadata$groups, group_name_field)
+    if (!is.null(metadata$groups) && name_field != "name") {
+      result$group <- map_names(result$group, metadata$groups, name_field)
     }
     # For long format, map state column
-    if (!is.null(metadata$states) && state_name_field != "name") {
-      result$state <- map_names(result$state, metadata$states, state_name_field)
+    if (!is.null(metadata$states) && name_field != "name") {
+      result$state <- map_names(result$state, metadata$states, name_field)
     }
   }
 
@@ -416,21 +410,20 @@ trace_plot_area <- function(results,
                        color_palette = NULL,
                        show_legend = TRUE,
                        collapsed = TRUE,
-                       strategy_name_field = "name",
-                       state_name_field = "name",
+                       use_display_names = FALSE,
                        time_unit = "cycle") {
 
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
                           time_unit = time_unit,
-                          strategy_name_field = strategy_name_field,
-                          state_name_field = state_name_field)
+                          use_display_names = use_display_names)
 
   # Update color palette keys if provided (plot-specific mapping)
+  name_field <- field_from_display_names(use_display_names)
   if (!is.null(color_palette) && !is.null(names(color_palette))) {
-    if (!is.null(results$metadata) && !is.null(results$metadata$states) && state_name_field != "name") {
+    if (!is.null(results$metadata) && !is.null(results$metadata$states) && name_field != "name") {
       old_names <- names(color_palette)
-      new_names <- map_names(old_names, results$metadata$states, state_name_field)
+      new_names <- map_names(old_names, results$metadata$states, name_field)
       names(color_palette) <- new_names
     }
   }
@@ -558,21 +551,20 @@ trace_plot_line <- function(results,
                               color_palette = NULL,
                               show_legend = TRUE,
                               collapsed = TRUE,
-                              strategy_name_field = "name",
-                              state_name_field = "name",
+                              use_display_names = FALSE,
                               time_unit = "cycle") {
 
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
                           time_unit = time_unit,
-                          strategy_name_field = strategy_name_field,
-                          state_name_field = state_name_field)
+                          use_display_names = use_display_names)
 
   # Update color palette keys if provided (plot-specific mapping)
+  name_field <- field_from_display_names(use_display_names)
   if (!is.null(color_palette) && !is.null(names(color_palette))) {
-    if (!is.null(results$metadata) && !is.null(results$metadata$states) && state_name_field != "name") {
+    if (!is.null(results$metadata) && !is.null(results$metadata$states) && name_field != "name") {
       old_names <- names(color_palette)
-      new_names <- map_names(old_names, results$metadata$states, state_name_field)
+      new_names <- map_names(old_names, results$metadata$states, name_field)
       names(color_palette) <- new_names
     }
   }

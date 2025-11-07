@@ -96,6 +96,13 @@ run_segment.markov <- function(segment, model, env, ...) {
   # Capture the extra arguments provided to function
   dots <- list(...)
 
+  # Apply setting overrides if present (DSA mode)
+  model <- apply_setting_overrides(segment, model)
+
+  # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
+  model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
+  model$settings$n_cycles <- get_n_cycles(model$settings)
+
   # Parse the specification tables provided for states,
   # variables, transitions, values, and summaries
   uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year)
@@ -141,20 +148,22 @@ run_segment.markov <- function(segment, model, env, ...) {
   # variables so that they can be referenced.
   ns <- create_namespace(model, segment)
 
-  # Check if PSA mode (sampled values provided)
-  if ("simulation" %in% names(segment)) {
-    # Extract sampled variable names (exclude segment metadata columns)
-    sampled_vars <- setdiff(names(segment), c("strategy", "group", "simulation"))
+  # Check if parameter overrides provided (PSA or DSA mode)
+  if ("parameter_overrides" %in% names(segment)) {
+    # Extract the list of parameter overrides for this run
+    override_vals <- segment$parameter_overrides[[1]]
 
-    # Inject sampled values into namespace
-    for (var_name in sampled_vars) {
-      ns[[var_name]] <- segment[[var_name]]
+    # Inject override values into namespace
+    for (var_name in names(override_vals)) {
+      val <- override_vals[[var_name]]
+      # Assign to environment (override values are scalar parameters)
+      assign(var_name, val, envir = ns$env)
     }
 
-    # Filter uneval_vars to exclude sampled variables
+    # Filter uneval_vars to exclude overridden variables
     # (they already have values, skip formula evaluation)
     uneval_vars <- uneval_vars %>%
-      filter(!(name %in% sampled_vars))
+      filter(!(name %in% names(override_vals)))
   }
 
   # Evaluate variables, initial state probabilities, transitions,
@@ -223,13 +232,9 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Create the object to return that will summarize the results of
   # this segment.
-  # In PSA mode, store only sampled values instead of full eval_vars
-  if ("simulation" %in% names(segment)) {
-    # PSA mode: extract and store only sampled variable values
-    metadata_cols <- c("strategy", "group", "simulation")
-    sampled_cols <- setdiff(names(segment), metadata_cols)
-    sampled_values <- as.list(segment[sampled_cols])
-    segment$sampled_values <- list(sampled_values)
+  # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
+  if ("parameter_overrides" %in% names(segment)) {
+    # Override mode: parameter_overrides already in segment from resample() or DSA
     # Don't store heavy objects: eval_vars, uneval_vars, initial_state, trace_and_values
   } else {
     # Base case mode: keep current behavior

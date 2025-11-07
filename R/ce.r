@@ -5,7 +5,7 @@
 #' @param deffect numeric vector of outcome differences (intervention - comparator)
 #' @return An object of class "icer" (numeric under the hood) with this encoding:
 #'   - More costly & more effective  :  +ICER (ΔC/ΔE)
-#'   - Less costly & less effective  :  -ICER (negative whose opposite is ICER of comparator vs referent)
+#'   - Less costly & less effective  :  -ICER (negative whose opposite is ICER of comparator vs intervention)
 #'   - Dominant (less costly, more effective OR same cost & more effective OR less costly & same effect): 0
 #'   - Dominated (more costly, less effective OR ties that imply dominance against): Inf
 #'   - Equivalent (same cost AND same effect): NaN
@@ -52,7 +52,7 @@ icer <- function(dcost, deffect) {
     ne <- dcost[idx] > 0 & deffect[idx] > 0
     res[idx[ne]] <- ratio[ne]
 
-    # SW quadrant (-/-): store negative value whose opposite is ICER of comparator vs. referent
+    # SW quadrant (-/-): store negative value whose opposite is ICER of comparator vs. intervention
     sw <- dcost[idx] < 0 & deffect[idx] < 0
     res[idx[sw]] <- -ratio[sw]
   }
@@ -143,16 +143,13 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
-#' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
-#' @param group_name_field Field to use for group names: "name" or "display_name" (default: "display_name")
-#' @param summary_name_field Field to use for summary labels: "name" or "display_name" (default: "display_name")
 #'
 #' @return A tibble with columns:
-#'   \item{group}{Group name (mapped via group_name_field)}
-#'   \item{strategy}{Strategy name (mapped via strategy_name_field)}
+#'   \item{group}{Group name (using display_name)}
+#'   \item{strategy}{Strategy name (using display_name)}
 #'   \item{comparator}{Name of strategy being compared against (NA for reference)}
 #'   \item{cost}{Total cost}
 #'   \item{outcome}{Total outcome}
@@ -191,23 +188,20 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 calculate_incremental_ce <- function(results,
                                      outcome_summary,
                                      cost_summary,
-                                     group = "aggregated",
+                                     groups = "overall",
                                      strategies = NULL,
-                                     discounted = FALSE,
-                                     strategy_name_field = "display_name",
-                                     group_name_field = "display_name",
-                                     summary_name_field = "display_name") {
+                                     discounted = FALSE) {
 
   # Get cost summaries
   cost_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
+    strategy_name_field = "display_name",
+    group_name_field = "display_name",
     value_name_field = "name"  # We don't need value names, just totals
   ) %>%
     group_by(strategy, group) %>%
@@ -216,13 +210,13 @@ calculate_incremental_ce <- function(results,
   # Get outcome summaries
   outcome_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
+    strategy_name_field = "display_name",
+    group_name_field = "display_name",
     value_name_field = "name"
   ) %>%
     group_by(strategy, group) %>%
@@ -253,6 +247,8 @@ calculate_incremental_ce <- function(results,
       grp_data$comparator <- NA_character_
 
       if (n_strategies == 0) {
+        # Create combined dominated column for consistency
+        grp_data$dominated <- logical(0)
         return(grp_data)
       }
 
@@ -264,6 +260,8 @@ calculate_incremental_ce <- function(results,
       grp_data$comparator[1] <- NA_character_
 
       if (n_strategies == 1) {
+        # Create combined dominated column for consistency
+        grp_data$dominated <- grp_data$strictly_dominated | grp_data$extendedly_dominated
         return(grp_data)
       }
 
@@ -344,27 +342,24 @@ calculate_incremental_ce <- function(results,
 #' Calculate Pairwise Cost-Effectiveness Comparisons
 #'
 #' Performs pairwise cost-effectiveness analysis comparing all strategies against
-#' a single reference strategy (either comparator or referent). Unlike incremental
+#' a single reference strategy (either comparator or intervention). Unlike incremental
 #' CE which compares along the efficiency frontier, this creates independent
 #' comparisons useful for evaluating specific interventions.
 #'
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param referent Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.
+#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
 #' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
 #' @param discounted Logical. Use discounted values? (default: FALSE)
-#' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
-#' @param group_name_field Field to use for group names: "name" or "display_name" (default: "display_name")
-#' @param summary_name_field Field to use for summary labels: "name" or "display_name" (default: "display_name")
 #'
 #' @return A tibble with columns:
-#'   \item{group}{Group name (mapped via group_name_field)}
-#'   \item{strategy}{Strategy name (mapped via strategy_name_field)}
+#'   \item{group}{Group name (using display_name)}
+#'   \item{strategy}{Strategy name (using display_name)}
 #'   \item{comparator}{Name of strategy being compared against}
 #'   \item{cost}{Total cost of the strategy}
 #'   \item{outcome}{Total outcome of the strategy}
@@ -376,10 +371,10 @@ calculate_incremental_ce <- function(results,
 #' The function creates pairwise comparisons based on the perspective:
 #' \itemize{
 #'   \item When comparator is specified: Creates N-1 comparisons showing (strategy - comparator) for each non-comparator strategy
-#'   \item When referent is specified: Creates N-1 comparisons showing (referent - strategy) for each non-referent strategy
+#'   \item When intervention is specified: Creates N-1 comparisons showing (intervention - strategy) for each non-intervention strategy
 #' }
 #'
-#' Exactly one of referent or comparator must be provided.
+#' Exactly one of intervention or comparator must be provided.
 #'
 #' When \code{group = NULL}, analysis is performed separately for each group and aggregated results.
 #'
@@ -392,36 +387,30 @@ calculate_incremental_ce <- function(results,
 #' pw_ce <- calculate_pairwise_ce(results, "total_qalys", "total_cost",
 #'                                 comparator = "control")
 #'
-#' # Pairwise comparisons from new treatment perspective (referent)
+#' # Pairwise comparisons from new treatment perspective (intervention)
 #' pw_ce <- calculate_pairwise_ce(results, "total_qalys", "total_cost",
-#'                                 referent = "new_treatment")
+#'                                 intervention = "new_treatment")
 #' }
 #'
 #' @export
 calculate_pairwise_ce <- function(results,
                                   outcome_summary,
                                   cost_summary,
-                                  group = "aggregated",
+                                  groups = "overall",
                                   strategies = NULL,
-                                  referent = NULL,
-                                  comparator = NULL,
-                                  discounted = FALSE,
-                                  strategy_name_field = "display_name",
-                                  group_name_field = "display_name",
-                                  summary_name_field = "display_name") {
+                                  interventions = NULL,
+                                  comparators = NULL,
+                                  discounted = FALSE) {
 
-  # Validate that exactly one of referent or comparator is provided
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided")
-  }
-  if (!is.null(referent) && !is.null(comparator)) {
-    stop("Only one of 'referent' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
   # Get cost summaries (use technical names internally for matching)
   cost_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
@@ -436,7 +425,7 @@ calculate_pairwise_ce <- function(results,
   # Get outcome summaries (use technical names internally for matching)
   outcome_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
@@ -452,80 +441,115 @@ calculate_pairwise_ce <- function(results,
   combined_data <- cost_data %>%
     inner_join(outcome_data, by = c("strategy", "group"))
 
-  # Determine reference strategy
-  reference_strategy <- if (!is.null(comparator)) comparator else referent
+  # Get all strategies (technical names)
+  all_strategies <- unique(combined_data$strategy)
+
+  # Determine comparison pairs based on DSA pattern
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N×M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        # Skip self-comparisons
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others (or filtered strategies)
+    comp_strategies <- if (!is.null(strategies)) {
+      setdiff(strategies, interventions)
+    } else {
+      setdiff(all_strategies, interventions)
+    }
+    for (int_strat in interventions) {
+      for (comp_strat in comp_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = comp_strat
+        )
+      }
+    }
+  } else {
+    # Comparator only: all others (or filtered strategies) vs each comparator
+    int_strategies <- if (!is.null(strategies)) {
+      setdiff(strategies, comparators)
+    } else {
+      setdiff(all_strategies, comparators)
+    }
+    for (comp_strat in comparators) {
+      for (int_strat in int_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
 
   # Perform pairwise comparisons for each group separately
   result_list <- combined_data %>%
     group_by(group) %>%
     group_split() %>%
     lapply(function(grp_data) {
-      # Get reference strategy data
-      ref_data <- grp_data %>%
-        filter(strategy == reference_strategy)
+      comparisons_list <- list()
 
-      if (nrow(ref_data) == 0) {
-        stop(sprintf("Reference strategy '%s' not found in group '%s'",
-                     reference_strategy, grp_data$group[1]))
+      for (pair_idx in seq_along(comparison_pairs)) {
+        pair <- comparison_pairs[[pair_idx]]
+        int_strat <- pair$intervention
+        comp_strat <- pair$comparator
+
+        # Get data for intervention and comparator
+        int_data <- grp_data %>% filter(strategy == int_strat)
+        comp_data <- grp_data %>% filter(strategy == comp_strat)
+
+        if (nrow(int_data) == 0 || nrow(comp_data) == 0) {
+          next  # Skip if either strategy not found in this group
+        }
+
+        # Calculate comparison (intervention - comparator)
+        comparison <- tibble(
+          group = grp_data$group[1],
+          strategy = int_strat,
+          comparator = comp_strat,
+          cost = int_data$cost[1],
+          outcome = int_data$outcome[1],
+          dcost = int_data$cost[1] - comp_data$cost[1],
+          doutcome = int_data$outcome[1] - comp_data$outcome[1],
+          icer = icer(int_data$cost[1] - comp_data$cost[1],
+                     int_data$outcome[1] - comp_data$outcome[1])
+        )
+
+        comparisons_list[[length(comparisons_list) + 1]] <- comparison
       }
 
-      ref_cost <- ref_data$cost[1]
-      ref_outcome <- ref_data$outcome[1]
-
-      # Get all other strategies
-      other_strategies <- grp_data %>%
-        filter(strategy != reference_strategy)
-
-      if (nrow(other_strategies) == 0) {
-        # No comparisons to make
-        return(tibble())
-      }
-
-      # Create comparison rows
-      if (!is.null(comparator)) {
-        # Comparator perspective: (strategy - comparator)
-        comparisons <- other_strategies %>%
-          mutate(
-            comparator = reference_strategy,
-            dcost = cost - ref_cost,
-            doutcome = outcome - ref_outcome,
-            icer = icer(dcost, doutcome)
-          )
+      if (length(comparisons_list) > 0) {
+        bind_rows(comparisons_list)
       } else {
-        # Referent perspective: (referent - strategy)
-        # Here, each other strategy becomes the comparator
-        comparisons <- other_strategies %>%
-          mutate(
-            comparator = strategy,  # The other strategy is the comparator
-            strategy = reference_strategy,  # Referent is the strategy
-            cost = ref_cost,  # Use referent's values
-            outcome = ref_outcome,
-            dcost = ref_cost - other_strategies$cost,
-            doutcome = ref_outcome - other_strategies$outcome,
-            icer = icer(dcost, doutcome)
-          )
+        tibble()
       }
-
-      comparisons
     })
 
   # Combine results from all groups
   result <- bind_rows(result_list)
 
   # Map strategy names for display
-  if (!is.null(results$metadata) && !is.null(results$metadata$strategies) &&
-      strategy_name_field != "name") {
-    result$strategy <- map_names(result$strategy, results$metadata$strategies,
-                                 strategy_name_field)
-    result$comparator <- map_names(result$comparator, results$metadata$strategies,
-                                   strategy_name_field)
+  if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
+    result$strategy <- map_names(result$strategy, results$metadata$strategies, "display_name")
+    result$comparator <- map_names(result$comparator, results$metadata$strategies, "display_name")
   }
 
   # Map group names for display
-  if (!is.null(results$metadata) && !is.null(results$metadata$groups) &&
-      group_name_field != "name") {
-    result$group <- map_names(result$group, results$metadata$groups,
-                             group_name_field)
+  if (!is.null(results$metadata) && !is.null(results$metadata$groups)) {
+    result$group <- map_names(result$group, results$metadata$groups, "display_name")
   }
 
   # Return with proper column order

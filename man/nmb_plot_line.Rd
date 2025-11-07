@@ -8,14 +8,10 @@ nmb_plot_line(
   res,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   wtp = NULL,
-  referent = NULL,
-  comparator = NULL,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name",
-  summary_name_field = "display_name",
+  interventions = NULL,
+  comparators = NULL,
   time_unit = "cycle",
   cumulative = TRUE,
   discounted = FALSE
@@ -28,15 +24,22 @@ nmb_plot_line(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
+\item{time_unit}{Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"}
+
+\item{cumulative}{Logical. If TRUE (default), shows cumulative NMB over time.
+If FALSE, shows per-cycle NMB.}
+
+\item{discounted}{Logical. Use discounted values?}
+
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
 
 \item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 
 \item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
 
@@ -45,13 +48,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 \item{value_name_field}{Field to use for value names}
 
 \item{summary_name_field}{Field to use for summary labels}
-
-\item{time_unit}{Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"}
-
-\item{cumulative}{Logical. If TRUE (default), shows cumulative NMB over time.
-If FALSE, shows per-cycle NMB.}
-
-\item{discounted}{Logical. Use discounted values?}
 }
 \value{
 A ggplot2 object
@@ -60,7 +56,7 @@ A ggplot2 object
 Creates a line chart showing cumulative or per-cycle Net Monetary Benefit over time.
 }
 \details{
-Either `referent` or `comparator` must be specified (one is mandatory).
+Either `intervention` or `comparator` must be specified (one is mandatory).
 }
 \examples{
 \dontrun{
@@ -71,7 +67,7 @@ results <- run_model(model)
 nmb_plot_line(results, "total_qalys", "total_cost", comparator = "control")
 
 # Per-cycle NMB
-nmb_plot_line(results, "total_qalys", "total_cost", referent = "new_treatment", cumulative = FALSE)
+nmb_plot_line(results, "total_qalys", "total_cost", intervention = "new_treatment", cumulative = FALSE)
 }
 
 }

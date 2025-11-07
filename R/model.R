@@ -1,15 +1,15 @@
-#' Run Model with PSA
+#' Run Probabilistic Sensitivity Analysis
 #'
 #' Runs probabilistic sensitivity analysis by sampling from distributions
 #' and running the model for each set of sampled parameters.
 #'
-#' @param model Model object
-#' @param n_sim Number of simulations
+#' @param model A heRomodel object with sampling specifications
+#' @param n_sim Number of PSA simulations to run
 #' @param seed Random seed for reproducibility
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes simulation dimension)
-#' @keywords internal
-run_model_psa <- function(model, n_sim, seed = NULL, ...) {
+#' @export
+run_psa <- function(model, n_sim, seed = NULL, ...) {
   # Finalize builders (convert to heRomodel)
   if ("heRomodel_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
@@ -40,6 +40,7 @@ run_model_psa <- function(model, n_sim, seed = NULL, ...) {
   # Run segments with sampled values
   # sampled_vars has columns: strategy, group, simulation, var1, var2, ...
   res <- list()
+
   res$segments <- sampled_vars %>%
     rowwise() %>%
     group_split() %>%
@@ -57,24 +58,16 @@ run_model_psa <- function(model, n_sim, seed = NULL, ...) {
 
 #' Run a Model
 #'
-#' Takes a model specification object and runs the model.
+#' Takes a model specification object and runs the model for the base case.
+#' For probabilistic sensitivity analysis, use [run_psa()] instead.
 #'
 #' @param model A heRo_model object.
-#' @param psa Logical. If TRUE, run probabilistic sensitivity analysis.
-#' @param n_sim Number of PSA simulations (required if psa = TRUE).
-#' @param seed Random seed for reproducibility in PSA.
 #' @param ... additional arguments.
 #'
 #' @return A list containing the results of the model.
 #'
 #' @export
-run_model <- function(model, psa = FALSE, n_sim = NULL, seed = NULL, ...) {
-
-  # Route to PSA-specific function
-  if (psa) {
-    if (is.null(n_sim)) stop("n_sim required when psa = TRUE")
-    return(run_model_psa(model, n_sim = n_sim, seed = seed, ...))
-  }
+run_model <- function(model, ...) {
 
   # Base case: existing logic
   # Finalize builders (convert to heRomodel)
@@ -99,7 +92,7 @@ run_model <- function(model, psa = FALSE, n_sim = NULL, seed = NULL, ...) {
   res$segments <- segments %>%
     rowwise() %>%
     group_split() %>%
-    future_map(function(segment) run_segment(segment, parsed_model, ...), .options = furrr_options(seed=1)) %>%
+    future_map(function(segment) run_segment(segment, parsed_model, ...), .progress = TRUE, .options = furrr_options(seed=1)) %>%
     bind_rows()
 
   # Process the results
@@ -148,13 +141,16 @@ parse_model <- function(model, ...) {
     groups = if (nrow(model$groups) > 0) model$groups %>%
       select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
     summaries = if (nrow(model$summaries) > 0) model$summaries %>%
-      select(any_of(c("name", "display_name", "description"))) else tibble(),
+      select(any_of(c("name", "display_name", "description", "wtp", "values"))) else tibble(),
     values = if (nrow(model$values) > 0) model$values %>%
-      select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) else tibble()
+      select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) else tibble(),
+    variables = if (nrow(model$variables) > 0) model$variables %>%
+      select(any_of(c("name", "display_name", "description", "strategy", "group"))) else tibble()
   )
 
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  model$settings$n_cycles <- get_n_cycles(model$settings)
+  # Note: n_cycles is calculated in run_segment after apply_setting_overrides
+  # This ensures DSA timeframe overrides work correctly
 
   # Set the class of the object based on model type
   # Note: model_type should already be normalized to canonical form by normalize_and_validate_model
@@ -217,7 +213,39 @@ aggregate_segments <- function(segments, parsed_model) {
     return(aggregated_results)
   }
 
-  # Base case: no simulation dimension
+  # Check if this is DSA (has run_id column)
+  if ("run_id" %in% names(segments)) {
+    # DSA mode: group by run_id first, then aggregate within each run
+    run_ids <- unique(segments$run_id)
+
+    # Process each run
+    aggregated_results <- map_dfr(run_ids, function(run) {
+      # Get segments for this run
+      run_segments <- segments %>%
+        filter(run_id == run)
+
+      # Get unique strategies for this run
+      strategies <- unique(run_segments$strategy)
+
+      # Process each strategy within this run
+      map_dfr(strategies, function(strat) {
+        # Get segments for this strategy
+        strat_segments <- run_segments %>%
+          filter(strategy == strat)
+
+        # Perform standard aggregation
+        result <- aggregate_strategy_segments(strat_segments, parsed_model)
+
+        # Add run_id column
+        result %>%
+          mutate(run_id = run, .before = 1)
+      })
+    })
+
+    return(aggregated_results)
+  }
+
+  # Base case: no simulation or run_id dimension
   # Get unique strategies
   strategies <- unique(segments$strategy)
 

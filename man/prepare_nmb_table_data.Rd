@@ -10,16 +10,11 @@ prepare_nmb_table_data(
   cost_summary,
   group = "aggregated",
   wtp = NULL,
-  referent = NULL,
-  comparator = NULL,
-  strategies = NULL,
+  interventions = NULL,
+  comparators = NULL,
   show_total = TRUE,
   decimals = 2,
   discounted = FALSE,
-  value_name_field = "display_name",
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name",
   font_size = 11
 )
 }
@@ -30,15 +25,7 @@ prepare_nmb_table_data(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL}
-
 \item{wtp}{Optional override for willingness-to-pay}
-
-\item{referent}{Single reference strategy for intervention perspective.}
-
-\item{comparator}{Single reference strategy for comparator perspective.}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
@@ -46,13 +33,13 @@ prepare_nmb_table_data(
 
 \item{discounted}{Logical. Use discounted values?}
 
-\item{value_name_field}{Which value name field to use}
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
-\item{strategy_name_field}{Which strategy name field to use}
+\item{intervention}{Single reference strategy for intervention perspective.}
 
-\item{group_name_field}{Which group name field to use}
+\item{comparator}{Single reference strategy for comparator perspective.}
 
-\item{summary_name_field}{Which summary name field to use}
+\item{strategies}{Character vector of strategies to include (NULL for all)}
 }
 \value{
 List with prepared data and metadata for render_table()

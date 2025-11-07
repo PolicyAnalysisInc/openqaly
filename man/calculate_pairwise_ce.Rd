@@ -8,14 +8,11 @@ calculate_pairwise_ce(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
-  discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name"
+  interventions = NULL,
+  comparators = NULL,
+  discounted = FALSE
 )
 }
 \arguments{
@@ -25,28 +22,22 @@ calculate_pairwise_ce(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
-\item{referent}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows referent - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with referent.}
-
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
-\item{strategy_name_field}{Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")}
+\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
 
-\item{group_name_field}{Field to use for group names: "name" or "display_name" (default: "display_name")}
-
-\item{summary_name_field}{Field to use for summary labels: "name" or "display_name" (default: "display_name")}
+\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 }
 \value{
 A tibble with columns:
-  \item{group}{Group name (mapped via group_name_field)}
-  \item{strategy}{Strategy name (mapped via strategy_name_field)}
+  \item{group}{Group name (using display_name)}
+  \item{strategy}{Strategy name (using display_name)}
   \item{comparator}{Name of strategy being compared against}
   \item{cost}{Total cost of the strategy}
   \item{outcome}{Total outcome of the strategy}
@@ -56,7 +47,7 @@ A tibble with columns:
 }
 \description{
 Performs pairwise cost-effectiveness analysis comparing all strategies against
-a single reference strategy (either comparator or referent). Unlike incremental
+a single reference strategy (either comparator or intervention). Unlike incremental
 CE which compares along the efficiency frontier, this creates independent
 comparisons useful for evaluating specific interventions.
 }
@@ -64,10 +55,10 @@ comparisons useful for evaluating specific interventions.
 The function creates pairwise comparisons based on the perspective:
 \itemize{
   \item When comparator is specified: Creates N-1 comparisons showing (strategy - comparator) for each non-comparator strategy
-  \item When referent is specified: Creates N-1 comparisons showing (referent - strategy) for each non-referent strategy
+  \item When intervention is specified: Creates N-1 comparisons showing (intervention - strategy) for each non-intervention strategy
 }
 
-Exactly one of referent or comparator must be provided.
+Exactly one of intervention or comparator must be provided.
 
 When \code{group = NULL}, analysis is performed separately for each group and aggregated results.
 }
@@ -80,9 +71,9 @@ results <- run_model(model)
 pw_ce <- calculate_pairwise_ce(results, "total_qalys", "total_cost",
                                 comparator = "control")
 
-# Pairwise comparisons from new treatment perspective (referent)
+# Pairwise comparisons from new treatment perspective (intervention)
 pw_ce <- calculate_pairwise_ce(results, "total_qalys", "total_cost",
-                                referent = "new_treatment")
+                                intervention = "new_treatment")
 }
 
 }

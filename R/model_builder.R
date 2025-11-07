@@ -65,7 +65,8 @@ define_model <- function(type = "markov") {
       days_per_year = 365,
       half_cycle_method = "start",
       discount_cost = 0,
-      discount_outcomes = 0
+      discount_outcomes = 0,
+      reduce_state_cycle = FALSE
     ),
     states = states_init,
     transitions = transitions_init,
@@ -92,7 +93,6 @@ define_model <- function(type = "markov") {
       name = character(0),
       display_name = character(0),
       description = character(0),
-      abbreviation = character(0),
       enabled = numeric(0)
     ),
     groups = tibble(
@@ -112,7 +112,8 @@ define_model <- function(type = "markov") {
     tables = list(),
     scripts = list(),
     trees = NULL,
-    multivariate_sampling = list()
+    multivariate_sampling = list(),
+    dsa_parameters = structure(list(), class = "dsa_parameters")
   )
 
   class(model) <- c("heRomodel_builder", "heRomodel")
@@ -382,10 +383,26 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
 #'
 #' Add one or more variables to the model. Uses NSE to capture formula expressions.
 #'
+#' **Display Names**: The `display_name` parameter is optional. If not provided, display names
+#' are automatically generated based on the variable name, strategy, and group:
+#' - No strategy/group: `"var_name"`
+#' - Strategy only: `"var_name, strategy_name"`
+#' - Group only: `"var_name, group_name"`
+#' - Both: `"var_name, strategy_name, group_name"`
+#'
+#' This auto-generation ensures unique display names for strategy/group-specific variables,
+#' which is important for DSA/PSA plots and tables.
+#'
+#' **Important**: When a variable has multiple definitions (e.g., one per strategy/group), if you
+#' provide a custom `display_name` for at least one definition, you must provide it for ALL definitions
+#' of that variable. Mixing custom and auto-generated display names for the same variable will result
+#' in a validation error **immediately** when you call `add_variable()` with the inconsistent definition.
+#'
 #' @param model A heRomodel_builder object
 #' @param name Character string for the variable name
 #' @param formula An unquoted R expression for the variable calculation
-#' @param display_name Optional display name
+#' @param display_name Optional display name. If not provided, will be auto-generated
+#'   from name, strategy, and group. You can override with a custom name if desired.
 #' @param description Optional description
 #' @param strategy Optional strategy association
 #' @param group Optional group association
@@ -398,9 +415,24 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
 #' @examples
 #' model <- define_model("markov") |>
 #'   add_variable("p_disease", look_up(table, age = cohort_age))
+#'
+#' # Strategy-specific variables - display names auto-generated
+#' model <- model |>
+#'   add_variable("cost_med", strategy = "treatment_a", formula = 5000,
+#'                sampling = normal(5000, 500)) |>
+#'   add_variable("cost_med", strategy = "treatment_b", formula = 3000,
+#'                sampling = normal(3000, 300))
+#' # Auto-generates: "cost_med, treatment_a" and "cost_med, treatment_b"
+#'
+#' # Or provide custom display names if preferred
+#' model <- model |>
+#'   add_variable("cost_med", display_name = "Treatment A Cost",
+#'                strategy = "treatment_a", formula = 5000) |>
+#'   add_variable("cost_med", display_name = "Treatment B Cost",
+#'                strategy = "treatment_b", formula = 3000)
 add_variable <- function(model, name, formula, display_name = NULL,
                         description = NULL, strategy = "", group = "",
-                        source = "", sampling = "") {
+                        source = "", sampling) {
 
   # Capture the formula expression using NSE
   formula_quo <- enquo(formula)
@@ -408,18 +440,52 @@ add_variable <- function(model, name, formula, display_name = NULL,
   formula_expr <- quo_get_expr(formula_quo)
   formula_str <- expr_text(formula_expr)
 
+  # Capture the sampling expression using NSE
+  # Handle optional parameter: if missing, use empty string
+  if (missing(sampling)) {
+    sampling_str <- ""
+  } else {
+    sampling_quo <- enquo(sampling)
+    sampling_expr <- quo_get_expr(sampling_quo)
+
+    # Handle sampling: if already a string, use as-is (backward compatibility)
+    # If an expression/call, convert to string using NSE
+    if (is.character(sampling_expr)) {
+      sampling_str <- sampling_expr
+    } else {
+      sampling_str <- expr_text(sampling_expr)
+    }
+  }
+
+  # Store display_name as-is (don't auto-generate yet)
+  # Auto-generation happens later in normalize_and_validate_model()
+  # Convert NULL to empty string for consistency
+  if (is.null(display_name)) {
+    display_name <- ""
+  }
+
   new_var <- tibble(
     name = name,
     formula = formula_str,
-    display_name = display_name %||% name,
-    description = description %||% display_name %||% name,
+    display_name = display_name,
+    description = description %||% "",
     strategy = strategy,
     group = group,
     source = source,
-    sampling = sampling
+    sampling = sampling_str
   )
 
   model$variables <- bind_rows(model$variables, new_var)
+
+  # Validate display name consistency for all variables with this name
+  vars_with_same_name <- model$variables[model$variables$name == name, ]
+  if (nrow(vars_with_same_name) > 1) {
+    error_msg <- validate_variable_display_names_for_builder(vars_with_same_name, name)
+    if (error_msg != "") {
+      stop(error_msg, call. = FALSE)
+    }
+  }
+
   model
 }
 
@@ -431,22 +497,20 @@ add_variable <- function(model, name, formula, display_name = NULL,
 #' @param name Character string for the strategy name
 #' @param display_name Optional display name
 #' @param description Optional description
-#' @param abbreviation Optional abbreviation
 #'
 #' @return The modified model object
 #'
 #' @export
 #' @examples
 #' model <- define_model("markov") |>
-#'   add_strategy("treatment_a", "Treatment A", abbreviation = "TX-A")
+#'   add_strategy("treatment_a", "Treatment A")
 add_strategy <- function(model, name, display_name = NULL,
-                        description = NULL, abbreviation = NULL, enabled = 1) {
+                        description = NULL, enabled = 1) {
 
   new_strat <- tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
-    abbreviation = abbreviation %||% toupper(substr(name, 1, 4)),
     enabled = as.numeric(enabled)
   )
 
@@ -596,9 +660,10 @@ as_r_code <- function(model) {
 #'
 #' @param model A heRomodel_builder object
 #' @param name Character string naming this sampling specification
-#' @param distribution Formula or character string defining the distribution function.
+#' @param distribution Expression defining the distribution function (uses NSE).
 #'   The distribution should return a function(n) that generates n × k samples.
 #'   Can reference any evaluated variables including base case values of sampled variables.
+#'   For backward compatibility, can also be a character string.
 #' @param variables Character vector of variable names to be sampled together,
 #'   or a tibble with columns: variable, strategy, group (for segment-specific sampling)
 #' @param description Optional description of this sampling specification
@@ -612,7 +677,7 @@ as_r_code <- function(model) {
 #' model <- define_model("markov") |>
 #'   add_multivariate_sampling(
 #'     name = "transition_probs",
-#'     distribution = "dirichlet(c(alpha_stable, alpha_progression, alpha_death))",
+#'     distribution = dirichlet(c(alpha_stable, alpha_progression, alpha_death)),
 #'     variables = c("p_stable", "p_progression", "p_death"),
 #'     description = "Transition probabilities from sick state"
 #'   )
@@ -621,7 +686,7 @@ as_r_code <- function(model) {
 #' model <- model |>
 #'   add_multivariate_sampling(
 #'     name = "cost_qaly_correlation",
-#'     distribution = "mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6)",
+#'     distribution = mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6),
 #'     variables = c("cost_treatment", "qaly_treatment")
 #'   )
 #'
@@ -629,7 +694,7 @@ as_r_code <- function(model) {
 #' model <- model |>
 #'   add_multivariate_sampling(
 #'     name = "strategy_specific",
-#'     distribution = "mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5)",
+#'     distribution = mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5),
 #'     variables = tibble(
 #'       variable = c("treatment_cost", "treatment_qaly"),
 #'       strategy = c("intervention", "intervention"),
@@ -639,13 +704,16 @@ as_r_code <- function(model) {
 #' }
 add_multivariate_sampling <- function(model, name, distribution, variables, description = NULL) {
 
-  # Convert distribution to character if it's a formula/expression
-  if (inherits(distribution, "formula")) {
-    distribution <- as.character(distribution)[2]
-  } else if (is.call(distribution) || is.expression(distribution)) {
-    distribution <- deparse(distribution, width.cutoff = 500L)
-  } else if (!is.character(distribution)) {
-    distribution <- as.character(distribution)
+  # Capture the distribution expression using NSE
+  distribution_quo <- enquo(distribution)
+  distribution_expr <- quo_get_expr(distribution_quo)
+
+  # Handle distribution: if already a string, use as-is (backward compatibility)
+  # If an expression/call, convert to string using NSE
+  if (is.character(distribution_expr)) {
+    distribution_str <- distribution_expr
+  } else {
+    distribution_str <- expr_text(distribution_expr)
   }
 
   # Convert variables to tibble format
@@ -684,7 +752,7 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   # Create the sampling specification
   new_spec <- list(
     name = name,
-    distribution = distribution,
+    distribution = distribution_str,
     description = description %||% "",
     variables = variables_df
   )
@@ -693,4 +761,198 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   model$multivariate_sampling <- c(model$multivariate_sampling, list(new_spec))
 
   model
+}
+
+#' Add Deterministic Sensitivity Analysis Variable to Model
+#'
+#' Define a variable to include in deterministic sensitivity analysis (DSA).
+#' DSA will run the model with this variable set to its low and high values
+#' to assess parameter sensitivity.
+#'
+#' The low and high bounds can be specified as:
+#' - Literal numeric values (e.g., 0.01, 0.05)
+#' - Expressions using the `bc` keyword to reference the base case value (e.g., bc * 0.5)
+#' - Expressions referencing other model variables (e.g., bc - 2 * cost_se)
+#'
+#' **Display Names**: DSA parameters automatically inherit display names from their variables.
+#' Since variables auto-generate unique display names for strategy/group combinations
+#' (e.g., "cost, treatment_a"), DSA parameters will also have unique names. You can optionally
+#' override with custom `display_name` values in either `add_variable()` or `add_dsa_variable()`.
+#'
+#' @param model A heRomodel_builder object
+#' @param variable Character string naming the variable to vary (must exist in model$variables)
+#' @param low Expression or numeric value for the low bound of the sensitivity range.
+#'   Can use `bc` keyword to reference the base case value and other model variables.
+#' @param high Expression or numeric value for the high bound of the sensitivity range.
+#'   Can use `bc` keyword to reference the base case value and other model variables.
+#' @param strategy Optional strategy name to limit DSA to specific strategy
+#' @param group Optional group name to limit DSA to specific group
+#' @param display_name Optional display name for plots and tables. If not provided,
+#'   inherits from the variable definition. Required to be unique across all DSA parameters.
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' # Example 1: Literal values (backward compatible)
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+#'
+#' # Example 2: Relative to base case using bc keyword
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease",
+#'                    low = bc * 0.5,    # 50% of base case
+#'                    high = bc * 1.5)   # 150% of base case
+#'
+#' # Example 3: Using other variables (standard error pattern)
+#' model <- define_model("markov") |>
+#'   add_variable("cost_tx", 1000) |>
+#'   add_variable("cost_tx_se", 100) |>
+#'   add_dsa_variable("cost_tx",
+#'                    low = bc - 2 * cost_tx_se,  # Base - 2 SE
+#'                    high = bc + 2 * cost_tx_se) # Base + 2 SE
+#'
+#' # Example 4: Strategy-specific DSA with auto-generated display names
+#' model <- define_model("markov") |>
+#'   add_variable("p_prog", strategy = "treatment_a", formula = 0.3) |>
+#'   add_variable("p_prog", strategy = "treatment_b", formula = 0.2) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_a", low = 0.2, high = 0.4) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_b", low = 0.1, high = 0.3)
+#' # Auto-generates: "p_prog, treatment_a" and "p_prog, treatment_b"
+#'
+#' # Example 5: Override auto-generated names with custom display names
+#' model <- define_model("markov") |>
+#'   add_variable("p_prog", display_name = "Treatment A Progression",
+#'                strategy = "treatment_a", formula = 0.3) |>
+#'   add_variable("p_prog", display_name = "Treatment B Progression",
+#'                strategy = "treatment_b", formula = 0.2) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_a", low = 0.2, high = 0.4) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_b", low = 0.1, high = 0.3)
+#' }
+add_dsa_variable <- function(model, variable, low, high,
+                             strategy = "", group = "",
+                             display_name = NULL) {
+
+  # Validate variable name
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string")
+  }
+
+  # Capture low expression using NSE
+  low_quo <- enquo(low)
+  low_expr <- quo_get_expr(low_quo)
+
+  # Convert to heroformula object for evaluation later
+  if (is.numeric(low_expr)) {
+    low_formula <- as.heRoFormula(as.character(low_expr))
+  } else {
+    low_formula <- as.heRoFormula(expr_text(low_expr))
+  }
+
+  # Capture high expression using NSE
+  high_quo <- enquo(high)
+  high_expr <- quo_get_expr(high_quo)
+
+  if (is.numeric(high_expr)) {
+    high_formula <- as.heRoFormula(as.character(high_expr))
+  } else {
+    high_formula <- as.heRoFormula(expr_text(high_expr))
+  }
+
+  # Create new DSA parameter specification as a list
+  new_param <- list(
+    type = "variable",
+    name = variable,
+    low = low_formula,      # Store as heroformula object
+    high = high_formula,    # Store as heroformula object
+    strategy = as.character(strategy),
+    group = as.character(group),
+    display_name = display_name
+  )
+
+  # Add to model's dsa_parameters list
+  model$dsa_parameters <- c(model$dsa_parameters, list(new_param))
+  class(model$dsa_parameters) <- "dsa_parameters"
+
+  model
+}
+
+#' Add Deterministic Sensitivity Analysis Setting to Model
+#'
+#' Define a model setting to include in deterministic sensitivity analysis (DSA).
+#' Settings include parameters like discount rates, timeframe, and other global
+#' model configuration values that are not part of the variables table.
+#'
+#' @param model A heRomodel_builder object
+#' @param setting Character string naming the setting to vary
+#'   (e.g., "discount_cost", "discount_outcomes", "timeframe")
+#' @param low Value for the low bound (numeric or character depending on setting)
+#' @param high Value for the high bound (numeric or character depending on setting)
+#' @param display_name Optional display name for plots and tables
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
+#'   add_dsa_setting("timeframe", low = 10, high = 30)
+#' }
+add_dsa_setting <- function(model, setting, low, high,
+                            display_name = NULL) {
+
+  # Validate inputs
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string")
+  }
+
+  # Create new DSA parameter specification as a list
+  # Store low/high as literal values (not formulas)
+  new_param <- list(
+    type = "setting",
+    name = setting,
+    low = low,           # Store as literal value
+    high = high,         # Store as literal value
+    display_name = display_name %||% setting
+  )
+
+  # Add to model's dsa_parameters list
+  model$dsa_parameters <- c(model$dsa_parameters, list(new_param))
+  class(model$dsa_parameters) <- "dsa_parameters"
+
+  model
+}
+
+#' Print DSA Parameters
+#'
+#' Print method for dsa_parameters objects
+#'
+#' @param x A dsa_parameters object (list)
+#' @param ... Additional arguments (unused)
+#'
+#' @export
+print.dsa_parameters <- function(x, ...) {
+  if (length(x) == 0) {
+    cat("No DSA parameters defined\n")
+    return(invisible(x))
+  }
+
+  cat("DSA Parameters (", length(x), "):\n", sep = "")
+  for (i in seq_along(x)) {
+    param <- x[[i]]
+    display <- if (param$type == "variable") {
+      # Variables use their own display_name from the model
+      param$name
+    } else {
+      # Settings have display_name in the parameter
+      param$display_name
+    }
+    cat(sprintf("  %d. [%s] %s\n", i, param$type, display))
+  }
+  invisible(x)
 }

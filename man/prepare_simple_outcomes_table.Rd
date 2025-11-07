@@ -13,8 +13,6 @@ prepare_simple_outcomes_table(
   decimals = 2,
   discounted = FALSE,
   value_name_field = "display_name",
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
   font_size = 11
 )
 }
@@ -35,11 +33,11 @@ prepare_simple_outcomes_table(
 
 \item{value_name_field}{Field to use for value names}
 
+\item{font_size}{Font size in points}
+
 \item{strategy_name_field}{Field to use for strategy names}
 
 \item{group_name_field}{Field to use for group names}
-
-\item{font_size}{Font size in points}
 }
 \value{
 A simple table specification

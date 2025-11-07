@@ -4,14 +4,7 @@
 \alias{add_strategy}
 \title{Add Strategies to Model}
 \usage{
-add_strategy(
-  model,
-  name,
-  display_name = NULL,
-  description = NULL,
-  abbreviation = NULL,
-  enabled = 1
-)
+add_strategy(model, name, display_name = NULL, description = NULL, enabled = 1)
 }
 \arguments{
 \item{model}{A heRomodel_builder object}
@@ -21,8 +14,6 @@ add_strategy(
 \item{display_name}{Optional display name}
 
 \item{description}{Optional description}
-
-\item{abbreviation}{Optional abbreviation}
 }
 \value{
 The modified model object
@@ -32,5 +23,5 @@ Add one or more strategies to the model.
 }
 \examples{
 model <- define_model("markov") |>
-  add_strategy("treatment_a", "Treatment A", abbreviation = "TX-A")
+  add_strategy("treatment_a", "Treatment A")
 }

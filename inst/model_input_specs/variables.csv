@@ -1,6 +1,6 @@
 name,required,type,default,fallback
 name,TRUE,character,,
-display_name,FALSE,character,,name
+display_name,FALSE,character,,
 description,FALSE,character,,display_name
 formula,TRUE,character,,
 strategy,FALSE,character,,

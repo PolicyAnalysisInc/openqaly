@@ -190,6 +190,13 @@ render_flextable_simple <- function(spec) {
     }
   }
 
+  # Indented rows (add left padding)
+  if (!is.null(spec$special_rows$indented_rows)) {
+    for (row_idx in spec$special_rows$indented_rows) {
+      ft <- flextable::padding(ft, i = row_idx, j = 1, padding.left = 20, part = "body")
+    }
+  }
+
   # Footnote
   if (!is.null(spec$special_rows$footnote)) {
     # Add footnote below the table
@@ -393,6 +400,17 @@ render_kable_simple <- function(spec) {
   if (!is.null(spec$special_rows$group_header_rows)) {
     for (row_idx in spec$special_rows$group_header_rows) {
       kt <- kableExtra::row_spec(kt, row = row_idx, bold = TRUE, italic = TRUE)
+    }
+  }
+
+  # Indented rows (add left padding via CSS)
+  if (!is.null(spec$special_rows$indented_rows)) {
+    for (row_idx in spec$special_rows$indented_rows) {
+      # Add CSS for left padding in first column
+      css_lines <- c(css_lines,
+        sprintf("tbody tr:nth-child(%d) td:nth-child(1) {", row_idx),
+        "  padding-left: 20px !important;",
+        "}")
     }
   }
 

@@ -11,9 +11,7 @@ extract_trace_wide(
   time_unit = "cycle",
   trace_column = "collapsed_trace",
   metadata = NULL,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  state_name_field = "display_name"
+  name_field = "display_name"
 )
 }
 \description{

@@ -27,8 +27,6 @@ prepare_simple_trace_table <- function(results,
                                       states = NULL,
                                       cycles = NULL,
                                       decimals = 4,
-                                      strategy_name_field = "display_name",
-                                      group_name_field = "display_name",
                                       state_name_field = "display_name",
                                       time_unit = "cycle",
                                       font_size = 11) {
@@ -43,8 +41,8 @@ prepare_simple_trace_table <- function(results,
     states = states,
     cycles = cycles,
     time_unit = time_unit,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
+    strategy_name_field = "display_name",
+    group_name_field = "display_name",
     state_name_field = state_name_field
   )
 
@@ -238,8 +236,6 @@ prepare_simple_outcomes_table <- function(results,
                                          decimals = 2,
                                          discounted = FALSE,
                                          value_name_field = "display_name",
-                                         strategy_name_field = "display_name",
-                                         group_name_field = "display_name",
                                          font_size = 11) {
 
   # Get summary data
@@ -250,8 +246,8 @@ prepare_simple_outcomes_table <- function(results,
     summaries = summary_name,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
+    strategy_name_field = "display_name",
+    group_name_field = "display_name",
     value_name_field = value_name_field
   )
 

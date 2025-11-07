@@ -5,44 +5,36 @@
 #'
 #' @param results A heRomod2 model results object
 #' @param summary_name Name of summary to display (e.g., "total_qalys")
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row?
 #' @param decimals Number of decimal places
 #' @param discounted Logical. Use discounted values?
-#' @param value_name_field Which value name field to use
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
 prepare_outcomes_table_data <- function(results,
                                         summary_name,
-                                        group = "aggregated",
+                                        groups = "overall",
                                         strategies = NULL,
-                                        referent = NULL,
-                                        comparator = NULL,
+                                        interventions = NULL,
+                                        comparators = NULL,
                                         show_total = TRUE,
                                         decimals = 2,
                                         discounted = FALSE,
-                                        value_name_field = "display_name",
-                                        strategy_name_field = "display_name",
-                                        group_name_field = "display_name",
                                         font_size = 11) {
 
   # Get summary data (names already mapped by get_summaries)
   summary_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = summary_name,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field,
-    referent = referent,
-    comparator = comparator
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   # Get unique strategies, groups, values (already have display names)
@@ -306,9 +298,6 @@ prepare_outcomes_table_data <- function(results,
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
-#' @param value_name_field Which value name field to use
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
@@ -330,33 +319,32 @@ outcomes_table <- function(results,
                            summary_name,
                            group = "aggregated",
                            strategies = NULL,
-                           referent = NULL,
-                           comparator = NULL,
+                           interventions = NULL,
+                           comparators = NULL,
                            show_total = TRUE,
                            decimals = 2,
                            discounted = FALSE,
-                           value_name_field = "display_name",
-                           strategy_name_field = "display_name",
-                           group_name_field = "display_name",
                            font_size = 11,
                            table_format = c("kable", "flextable")) {
 
   table_format <- match.arg(table_format)
 
+  # Validate that strategies cannot be used with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("Cannot specify 'strategies' together with 'interventions' or 'comparators'. Use either 'strategies' for absolute values, or 'interventions'/'comparators' for differences.")
+  }
+
   # Prepare data
   prepared <- prepare_outcomes_table_data(
     results = results,
     summary_name = summary_name,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    referent = referent,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     show_total = show_total,
     decimals = decimals,
     discounted = discounted,
-    value_name_field = value_name_field,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
     font_size = font_size
   )
 
@@ -372,18 +360,14 @@ outcomes_table <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay
-#' @param referent Single reference strategy for intervention perspective.
+#' @param intervention Single reference strategy for intervention perspective.
 #' @param comparator Single reference strategy for comparator perspective.
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
-#' @param value_name_field Which value name field to use
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -392,21 +376,16 @@ prepare_nmb_table_data <- function(results,
                                   cost_summary,
                                   group = "aggregated",
                                   wtp = NULL,
-                                  referent = NULL,
-                                  comparator = NULL,
-                                  strategies = NULL,
+                                  interventions = NULL,
+                                  comparators = NULL,
                                   show_total = TRUE,
                                   decimals = 2,
                                   discounted = FALSE,
-                                  value_name_field = "display_name",
-                                  strategy_name_field = "display_name",
-                                  group_name_field = "display_name",
-                                  summary_name_field = "display_name",
                                   font_size = 11) {
 
-  # Validate referent/comparator
-  if (is.null(referent) && is.null(comparator)) {
-    stop("One of 'referent' or 'comparator' must be provided")
+  # Validate interventions/comparators
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("One of 'interventions' or 'comparators' must be provided")
   }
 
   # Get WTP
@@ -420,38 +399,32 @@ prepare_nmb_table_data <- function(results,
       stop(sprintf("Outcome summary '%s' not found", outcome_summary))
     }
     wtp <- outcome_meta$wtp[1]
-    if (is.na(wtp)) {
-      stop("WTP not found. Provide explicit wtp parameter.")
+    if (length(wtp) == 0 || is.na(wtp)) {
+      stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
     }
   }
 
   # Get outcome and cost summaries with differences
   outcome_data <- get_summaries(
     results,
-    group = group,
-    strategies = strategies,
+    groups = groups,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field,
-    referent = referent,
-    comparator = comparator
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   cost_data <- get_summaries(
     results,
-    group = group,
-    strategies = strategies,
+    groups = groups,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = value_name_field,
-    referent = referent,
-    comparator = comparator
+    use_display_names = TRUE,
+    interventions = interventions,
+    comparators = comparators
   )
 
   # Transform outcome data: multiply by WTP
@@ -718,18 +691,14 @@ prepare_nmb_table_data <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay
-#' @param referent Single reference strategy for intervention perspective.
+#' @param intervention Single reference strategy for intervention perspective.
 #' @param comparator Single reference strategy for comparator perspective.
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
-#' @param value_name_field Which value name field to use
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
@@ -754,16 +723,11 @@ nmb_table <- function(results,
                      cost_summary,
                      group = "aggregated",
                      wtp = NULL,
-                     referent = NULL,
-                     comparator = NULL,
-                     strategies = NULL,
+                     interventions = NULL,
+                     comparators = NULL,
                      show_total = TRUE,
                      decimals = 2,
                      discounted = FALSE,
-                     value_name_field = "display_name",
-                     strategy_name_field = "display_name",
-                     group_name_field = "display_name",
-                     summary_name_field = "display_name",
                      font_size = 11,
                      table_format = c("kable", "flextable")) {
 
@@ -774,18 +738,13 @@ nmb_table <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     wtp = wtp,
-    referent = referent,
-    comparator = comparator,
-    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
     show_total = show_total,
     decimals = decimals,
     discounted = discounted,
-    value_name_field = value_name_field,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field,
     font_size = font_size
   )
 
@@ -802,13 +761,10 @@ nmb_table <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places
 #' @param discounted Logical. Use discounted values?
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -816,13 +772,10 @@ nmb_table <- function(results,
 prepare_incremental_ce_table_data <- function(results,
                                               outcome_summary,
                                               cost_summary,
-                                              group = "aggregated",
+                                              groups = "overall",
                                               strategies = NULL,
                                               decimals = 2,
                                               discounted = FALSE,
-                                              strategy_name_field = "display_name",
-                                              group_name_field = "display_name",
-                                              summary_name_field = "display_name",
                                               font_size = 11) {
 
   # Calculate incremental CE
@@ -830,12 +783,10 @@ prepare_incremental_ce_table_data <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field
+    use_display_names = TRUE
   )
 
   # Format ICER column using print.icer() logic
@@ -970,13 +921,10 @@ prepare_incremental_ce_table_data <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -1002,9 +950,6 @@ incremental_ce_table <- function(results,
                                 strategies = NULL,
                                 decimals = 2,
                                 discounted = FALSE,
-                                strategy_name_field = "display_name",
-                                group_name_field = "display_name",
-                                summary_name_field = "display_name",
                                 font_size = 11,
                                 table_format = c("kable", "flextable")) {
 
@@ -1015,13 +960,10 @@ incremental_ce_table <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     decimals = decimals,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field,
     font_size = font_size
   )
 
@@ -1038,15 +980,12 @@ incremental_ce_table <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param referent Single reference strategy for intervention perspective
+#' @param intervention Single reference strategy for intervention perspective
 #' @param comparator Single reference strategy for comparator perspective
 #' @param decimals Number of decimal places
 #' @param discounted Logical. Use discounted values?
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -1054,15 +993,12 @@ incremental_ce_table <- function(results,
 prepare_pairwise_ce_table_data <- function(results,
                                           outcome_summary,
                                           cost_summary,
-                                          group = "aggregated",
+                                          groups = "overall",
                                           strategies = NULL,
-                                          referent = NULL,
-                                          comparator = NULL,
+                                          interventions = NULL,
+                                          comparators = NULL,
                                           decimals = 2,
                                           discounted = FALSE,
-                                          strategy_name_field = "display_name",
-                                          group_name_field = "display_name",
-                                          summary_name_field = "display_name",
                                           font_size = 11) {
 
   # Calculate pairwise CE
@@ -1070,41 +1006,35 @@ prepare_pairwise_ce_table_data <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    referent = referent,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field
+    use_display_names = TRUE
   )
 
   # Get absolute values for all strategies
   cost_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = "name"
+    use_display_names = TRUE
   ) %>%
     group_by(strategy, group) %>%
     summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
 
   outcome_data <- get_summaries(
     results,
-    group = group,
+    groups = groups,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    value_name_field = "name"
+    use_display_names = TRUE
   ) %>%
     group_by(strategy, group) %>%
     summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")
@@ -1269,7 +1199,7 @@ prepare_pairwise_ce_table_data <- function(results,
 
   # Add footnote if needed
   if (needs_footnote) {
-    special_rows$footnote <- "* Referent is less effective and less costly than comparator. ICER reflects cost-effectiveness of comparator vs. referent"
+    special_rows$footnote <- "* Intervention is less effective and less costly than comparator. ICER reflects cost-effectiveness of comparator vs. intervention"
   }
 
   # Return clean spec
@@ -1294,15 +1224,12 @@ prepare_pairwise_ce_table_data <- function(results,
 #' @param results A heRomod2 model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param referent Single reference strategy for intervention perspective
+#' @param intervention Single reference strategy for intervention perspective
 #' @param comparator Single reference strategy for comparator perspective
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
-#' @param strategy_name_field Which strategy name field to use
-#' @param group_name_field Which group name field to use
-#' @param summary_name_field Which summary name field to use
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -1327,13 +1254,10 @@ pairwise_ce_table <- function(results,
                              cost_summary,
                              group = "aggregated",
                              strategies = NULL,
-                             referent = NULL,
-                             comparator = NULL,
+                             interventions = NULL,
+                             comparators = NULL,
                              decimals = 2,
                              discounted = FALSE,
-                             strategy_name_field = "display_name",
-                             group_name_field = "display_name",
-                             summary_name_field = "display_name",
                              font_size = 11,
                              table_format = c("kable", "flextable")) {
 
@@ -1344,15 +1268,12 @@ pairwise_ce_table <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    referent = referent,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     decimals = decimals,
     discounted = discounted,
-    strategy_name_field = strategy_name_field,
-    group_name_field = group_name_field,
-    summary_name_field = summary_name_field,
     font_size = font_size
   )
 

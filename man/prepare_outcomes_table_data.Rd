@@ -7,16 +7,13 @@
 prepare_outcomes_table_data(
   results,
   summary_name,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   show_total = TRUE,
   decimals = 2,
   discounted = FALSE,
-  value_name_field = "display_name",
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
   font_size = 11
 )
 }
@@ -25,7 +22,7 @@ prepare_outcomes_table_data(
 
 \item{summary_name}{Name of summary to display (e.g., "total_qalys")}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL}
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -34,12 +31,6 @@ prepare_outcomes_table_data(
 \item{decimals}{Number of decimal places}
 
 \item{discounted}{Logical. Use discounted values?}
-
-\item{value_name_field}{Which value name field to use}
-
-\item{strategy_name_field}{Which strategy name field to use}
-
-\item{group_name_field}{Which group name field to use}
 }
 \value{
 List with prepared data and metadata for render_table()

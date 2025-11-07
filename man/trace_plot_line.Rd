@@ -12,8 +12,7 @@ trace_plot_line(
   color_palette = NULL,
   show_legend = TRUE,
   collapsed = TRUE,
-  strategy_name_field = "name",
-  state_name_field = "name",
+  use_display_names = FALSE,
   time_unit = "cycle"
 )
 }

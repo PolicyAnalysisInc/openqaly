@@ -8,12 +8,9 @@ calculate_incremental_ce(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name"
+  discounted = FALSE
 )
 }
 \arguments{
@@ -23,22 +20,16 @@ calculate_incremental_ce(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL (all groups + aggregated)}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
-
-\item{strategy_name_field}{Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name" (default: "display_name")}
-
-\item{summary_name_field}{Field to use for summary labels: "name" or "display_name" (default: "display_name")}
 }
 \value{
 A tibble with columns:
-  \item{group}{Group name (mapped via group_name_field)}
-  \item{strategy}{Strategy name (mapped via strategy_name_field)}
+  \item{group}{Group name (using display_name)}
+  \item{strategy}{Strategy name (using display_name)}
   \item{comparator}{Name of strategy being compared against (NA for reference)}
   \item{cost}{Total cost}
   \item{outcome}{Total outcome}

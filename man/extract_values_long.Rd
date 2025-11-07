@@ -12,9 +12,7 @@ extract_values_long(
   cycles,
   time_unit,
   metadata,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name"
+  name_field = "display_name"
 )
 }
 \description{

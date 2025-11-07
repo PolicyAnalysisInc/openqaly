@@ -7,13 +7,10 @@
 prepare_trace_table_data(
   results,
   strategies = NULL,
-  group = "aggregated",
+  groups = "overall",
   states = NULL,
   cycles = NULL,
   decimals = 4,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  state_name_field = "display_name",
   time_unit = "cycle",
   font_size = 11
 )
@@ -28,10 +25,6 @@ prepare_trace_table_data(
 \item{cycles}{Integer vector or range of cycles to display (NULL for all)}
 
 \item{decimals}{Number of decimal places for probabilities (default: 4)}
-
-\item{strategy_name_field}{Which strategy name field to use}
-
-\item{state_name_field}{Which state name field to use}
 
 \item{time_unit}{Which time unit to display}
 }

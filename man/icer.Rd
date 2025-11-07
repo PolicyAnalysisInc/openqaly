@@ -14,7 +14,7 @@ icer(dcost, deffect)
 \value{
 An object of class "icer" (numeric under the hood) with this encoding:
   - More costly & more effective  :  +ICER (ΔC/ΔE)
-  - Less costly & less effective  :  -ICER (negative whose opposite is ICER of comparator vs referent)
+  - Less costly & less effective  :  -ICER (negative whose opposite is ICER of comparator vs intervention)
   - Dominant (less costly, more effective OR same cost & more effective OR less costly & same effect): 0
   - Dominated (more costly, less effective OR ties that imply dominance against): Inf
   - Equivalent (same cost AND same effect): NaN

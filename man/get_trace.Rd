@@ -9,13 +9,11 @@ get_trace(
   format = c("long", "wide", "matrix"),
   collapsed = TRUE,
   strategies = NULL,
-  groups = NULL,
+  groups = "overall",
   states = NULL,
   cycles = NULL,
   time_unit = c("cycle", "day", "week", "month", "year"),
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  state_name_field = "display_name"
+  use_display_names = TRUE
 )
 }
 \arguments{
@@ -29,8 +27,15 @@ results$aggregated. If FALSE, use segment-level traces from results$segments}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
-\item{groups}{Character vector of group names to include (NULL for all).
-Only used when collapsed = FALSE}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{states}{Character vector of state names to include (NULL for all)}
 
@@ -48,14 +53,15 @@ suitable for visualization and export.
 model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 results <- run_model(model)
 
-# Get long format (ggplot2-ready)
+# Get long format (ggplot2-ready) for overall population
 trace_long <- get_trace(results, format = "long")
 
 # Get wide format (Excel-style)
 trace_wide <- get_trace(results, format = "wide")
 
-# Get specific strategies only
-trace_subset <- get_trace(results, strategies = c("standard"))
+# Get specific strategies and groups
+trace_subset <- get_trace(results, strategies = c("standard"),
+                          groups = c("overall", "moderate"))
 }
 
 }

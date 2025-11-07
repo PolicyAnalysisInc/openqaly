@@ -43,6 +43,24 @@ prepare_segment_for_sampling <- function(model, segment) {
 #' @export
 resample <- function(model, n, segments, seed = NULL) {
 
+  # Check the model's sampling specification early
+  # Check if we have any form of sampling (univariate or multivariate)
+  has_univariate <- FALSE
+  has_multivariate <- FALSE
+
+  if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
+    has_univariate <- any(!is.empty(model$variables$sampling))
+  }
+
+  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
+    has_multivariate <- TRUE
+  }
+
+  # Error if no sampling is specified at all
+  if (!has_univariate && !has_multivariate) {
+    stop('Error in variables specification, no sampling distributions were specified.', call. = FALSE)
+  }
+
   # Segments must have eval_vars and uneval_vars columns
   if (!("eval_vars" %in% names(segments))) {
     stop("Segments must be enriched with eval_vars. Call prepare_segment_for_sampling() first.")
@@ -60,7 +78,8 @@ resample <- function(model, n, segments, seed = NULL) {
     seg_ns <- clone_namespace(segment$eval_vars[[1]])
     seg_vars <- segment$uneval_vars[[1]]
 
-    sampled_values <- list()
+    # Parameter overrides generated via probabilistic sampling
+    parameter_overrides <- list()
 
     # PART 1: Univariate sampling from variables.sampling
     if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
@@ -96,15 +115,14 @@ resample <- function(model, n, segments, seed = NULL) {
         var_name <- var_row$name
 
         # Set bc (base case) to this variable's evaluated value
-        seg_ns$env$bc <- seg_ns[[var_name]]
+        seg_ns$env$bc <- seg_ns[var_name]
 
         # Evaluate distribution formula in namespace
         formula <- as.heRoFormula(var_row$sampling)
         dist_fn <- eval_formula(formula, seg_ns)
 
         if (is_hero_error(dist_fn)) {
-          warning(glue("Error evaluating sampling for {var_name}: {dist_fn}"), call. = FALSE)
-          next
+          stop(glue("Failed to evaluate sampling distribution for parameter '{var_name}': {dist_fn}"), call. = FALSE)
         }
 
         # Sample using inverse CDF approach
@@ -112,11 +130,10 @@ resample <- function(model, n, segments, seed = NULL) {
         samples <- safe_eval(dist_fn(u))
 
         if (is_hero_error(samples)) {
-          warning(glue("Error sampling {var_name}: {samples}"), call. = FALSE)
-          next
+          stop(glue("Failed to sample parameter '{var_name}': {samples}"), call. = FALSE)
         }
 
-        sampled_values[[var_name]] <- samples
+        parameter_overrides[[var_name]] <- samples
       }
     }
 
@@ -144,42 +161,48 @@ resample <- function(model, n, segments, seed = NULL) {
         dist_fn <- eval_formula(formula, seg_ns)
 
         if (is_hero_error(dist_fn)) {
-          warning(glue("Error evaluating multivariate distribution {mv_spec$name}: {dist_fn}"), call. = FALSE)
-          next
+          stop(glue("Failed to evaluate multivariate distribution '{mv_spec$name}': {dist_fn}"), call. = FALSE)
         }
 
         # Sample (returns n × k matrix)
         samples_matrix <- safe_eval(dist_fn(n))
 
         if (is_hero_error(samples_matrix)) {
-          warning(glue("Error sampling multivariate {mv_spec$name}: {samples_matrix}"), call. = FALSE)
-          next
+          stop(glue("Failed to sample multivariate distribution '{mv_spec$name}': {samples_matrix}"), call. = FALSE)
         }
 
         # Validate dimensionality
         if (ncol(samples_matrix) != nrow(relevant_vars)) {
-          warning(glue(
-            "Distribution {mv_spec$name} returned {ncol(samples_matrix)} columns ",
+          stop(glue(
+            "Distribution '{mv_spec$name}' returned {ncol(samples_matrix)} columns ",
             "but {nrow(relevant_vars)} variables specified"
           ), call. = FALSE)
-          next
         }
 
         # Assign columns to variables (row order determines mapping)
         for (i in 1:nrow(relevant_vars)) {
           var_name <- relevant_vars$variable[i]
-          sampled_values[[var_name]] <- samples_matrix[, i]
+          parameter_overrides[[var_name]] <- samples_matrix[, i]
         }
       }
     }
 
     # Build result for this segment
+    # Convert parameter_overrides from list-of-vectors to list-of-named-lists
+    # Each element is one simulation's parameter overrides as a named list
+    if (length(parameter_overrides) == 0) {
+      # No sampling for this segment - use empty lists (base case values will be used)
+      override_list <- rep(list(list()), n)
+    } else {
+      override_list <- purrr::transpose(parameter_overrides)
+    }
+
     seg_result <- tibble(
       strategy = segment$strategy,
       group = segment$group,
-      simulation = 1:n
-    ) %>%
-      bind_cols(as_tibble(sampled_values))
+      simulation = 1:n,
+      parameter_overrides = override_list  # List column containing parameter overrides
+    )
 
     results <- bind_rows(results, seg_result)
   }

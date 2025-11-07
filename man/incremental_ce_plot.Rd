@@ -8,12 +8,9 @@ incremental_ce_plot(
   res,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  summary_name_field = "display_name"
+  discounted = FALSE
 )
 }
 \arguments{
@@ -23,7 +20,7 @@ incremental_ce_plot(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 

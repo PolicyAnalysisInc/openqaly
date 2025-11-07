@@ -7,18 +7,16 @@
 get_values(
   results,
   format = c("long", "wide"),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   values = NULL,
   value_type = c("all", "cost", "outcome"),
   discounted = FALSE,
   cycles = NULL,
   time_unit = c("cycle", "day", "week", "month", "year"),
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
-  value_name_field = "display_name",
-  referent = NULL,
-  comparator = NULL
+  use_display_names = TRUE,
+  interventions = NULL,
+  comparators = NULL
 )
 }
 \arguments{
@@ -27,8 +25,15 @@ get_values(
 \item{format}{Output format: "long" (one row per cycle×value×strategy×group) or
 "wide" (one row per cycle, values as columns)}
 
-\item{group}{Group selection: "aggregated" (default, population-weighted average),
-specific group name (e.g., "moderate"), or NULL (all groups plus aggregated)}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
@@ -42,6 +47,9 @@ use undiscounted values}
 \item{cycles}{Integer vector of cycles to include (NULL for all)}
 
 \item{time_unit}{Time unit for output: "cycle" (default), "day", "week", "month", "year"}
+
+\item{use_display_names}{Logical. If TRUE (default), use display names for all entities
+(strategies, groups, values). If FALSE, use technical names.}
 }
 \value{
 A data frame in the requested format
@@ -55,14 +63,20 @@ in various formats suitable for visualization and export.
 model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 results <- run_model(model)
 
-# Get aggregated outcomes in long format
+# Get overall population outcomes in long format
 outcomes_long <- get_values(results, value_type = "outcome")
 
 # Get cost data for a specific group
-costs_group <- get_values(results, group = "moderate", value_type = "cost")
+costs_group <- get_values(results, groups = "moderate", value_type = "cost")
 
-# Get all groups plus aggregated for faceting
-all_data <- get_values(results, group = NULL)
+# Get all groups plus overall for faceting
+all_data <- get_values(results, groups = NULL)
+
+# Get multiple specific groups + overall
+selected_data <- get_values(results, groups = c("overall", "moderate", "severe"))
+
+# Use technical names instead of display names
+outcomes_tech <- get_values(results, use_display_names = FALSE)
 }
 
 }

@@ -9,9 +9,9 @@ map_names(names, metadata, field = "name")
 \arguments{
 \item{names}{Character vector of technical names to map}
 
-\item{metadata}{Data frame with name fields (name, display_name, abbreviation)}
+\item{metadata}{Data frame with name fields (name, display_name)}
 
-\item{field}{Which field to use: "name", "display_name", "abbreviation"}
+\item{field}{Which field to use: "name" or "display_name"}
 }
 \value{
 Character vector of mapped names

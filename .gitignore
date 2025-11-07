@@ -4,3 +4,4 @@ env.RDataTmp*
 ~$*.xlsx
 launch.json 
 .claude
+inst/doc

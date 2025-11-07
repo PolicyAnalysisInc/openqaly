@@ -51,8 +51,8 @@ test_that("eval_variables collects and throws multiple errors", {
   err <- expect_error({
     # Use the helper to create a valid model structure
     minimal_model <- create_minimal_model()
-    test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
-    eval_variables(bad_vars, test_ns, context = "variables") # hero_error_checkpoint is called inside this
+    test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment)
+    heRomod2:::eval_variables(bad_vars, test_ns, context = "variables") # hero_error_checkpoint is called inside this
   })
   
   # Check that the error message contains the key components using grepl
@@ -90,8 +90,8 @@ test_that("checkpoint filters out dependency errors", {
   err <- expect_error({
       # Use the helper to create a valid model structure
       minimal_model <- create_minimal_model()
-      test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment) 
-      eval_variables(vars, test_ns, context = "variables") # Checkpoint inside
+      test_ns <- heRomod2:::create_namespace(model=minimal_model, segment=mock_segment)
+      heRomod2:::eval_variables(vars, test_ns, context = "variables") # Checkpoint inside
   })
 
   # Check that the final message ONLY contains the root error

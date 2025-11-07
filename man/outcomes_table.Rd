@@ -9,14 +9,11 @@ outcomes_table(
   summary_name,
   group = "aggregated",
   strategies = NULL,
-  referent = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   show_total = TRUE,
   decimals = 2,
   discounted = FALSE,
-  value_name_field = "display_name",
-  strategy_name_field = "display_name",
-  group_name_field = "display_name",
   font_size = 11,
   table_format = c("kable", "flextable")
 )
@@ -35,12 +32,6 @@ outcomes_table(
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
-
-\item{value_name_field}{Which value name field to use}
-
-\item{strategy_name_field}{Which strategy name field to use}
-
-\item{group_name_field}{Which group name field to use}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
