@@ -37,8 +37,19 @@ test_that("Lookup Erros", {
   )
   
   expect_error(
+    look_up(CO2, Plant == "Qn1", conc = 95, value = 'uptake'),
+    paste0(
+      "Error in look_up: Use '=' instead of '==' to specify lookup variables.",
+      " Found an argument like ", sQuote("Plant == \"Qn1\""), ".",
+      " Did you mean ", sQuote("Plant = \"Qn1\""), "?"
+    ),
+    fixed = TRUE
+  )
+  
+  expect_error(
     look_up(CO2, Plant = "Qn1", conc = 95, 40, value = 'uptake'),
-    'must be named'
+    "All lookup variables passed to 'look_up()' must be named using '='.",
+    fixed = TRUE
   )
   
   expect_error(

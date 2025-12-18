@@ -40,33 +40,70 @@
 #'   variables to bin (see examples).
 #'   
 #' @return A vector of values, same lenght as `...`.
+#' @examples
+#' 
+#' # Create a data frame with some example data
+#' tbl <- data.frame(
+#'   age = c(20, 30, 40, 50, 60),
+#'   income = c(30000, 40000, 50000, 60000, 70000)
+#' )
+#' 
+#' # Look up the value of income for age 30
+#' look_up(tbl, age = 30, value = "income")
 #' @export
 look_up <- function(data, ..., bin = FALSE, value = "value") {
 
-  # Handle case where this may be a vector by using first el
+  # Argument validation
+  call <- match.call(expand.dots = FALSE)
+  dots <- call$...
+
+  if (length(dots) > 0) {
+    dot_names <- names(dots)
+    if (is.null(dot_names)) dot_names <- rep("", length(dots)) # Handle case where no args are named
+    
+    unnamed_indices <- which(dot_names == "")
+    
+    if (length(unnamed_indices) > 0) {
+      is_equality_check <- sapply(dots[unnamed_indices], function(arg) {
+        is.call(arg) && length(arg) == 3 && deparse(arg[[1]]) == "=="
+      })
+      
+      if (any(is_equality_check)) {
+        offending_arg_expr <- deparse(dots[unnamed_indices][is_equality_check][[1]])
+        # Try to reconstruct a corrected example
+        corrected_example <- gsub("==", "=", offending_arg_expr, fixed = TRUE)
+        
+        stop(paste0(
+          "Error in look_up: Use '=' instead of '==' to specify lookup variables.",
+          " Found an argument like ", sQuote(offending_arg_expr), ".",
+          " Did you mean ", sQuote(corrected_example), "?"
+        ))
+      } else {
+        # Original error for other unnamed args
+        stop("All lookup variables passed to 'look_up()' must be named using '='.")
+      }
+    }
+  }
+
   value <- value[1]
 
   if (!inherits(data, "data.frame"))
     stop("'data' must be a data.frame")
 
+  # Evaluate the ... arguments
+  list_specs <- list(...)
+  
   data <- clean_factors(data)
 
-  list_specs <- list(...)
-
-  if (any(names(list_specs) == "")) {
-    stop("All variables passed to 'look_up()' must be named.")
-  }
-
   df_vars <- do.call(
-    tibble::tibble,
+    tibble,
     list_specs
   ) %>%
     clean_factors
 
   if (any(pb <- !c(names(df_vars), value) %in% names(data))) {
-    stop(sprintf(
-      "Names passed to 'look_up()' not found in 'data': %s.",
-      paste(c(names(df_vars), value)[pb], collapse = ", ")
+    stop(glue(
+      "Names passed to 'look_up()' not found in 'data': {paste(c(names(df_vars), value)[pb], collapse = ', ')}."
     ))
   }
 
@@ -77,16 +114,14 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   } else if (is.character(bin)) {
     if (any(pb <- !bin %in% names(df_vars))) {
-      stop(sprintf(
-        "Names in 'bin' not found in source data: %s.",
-        paste(bin[pb], collapse = ", ")
+      stop(glue(
+        "Names in 'bin' not found in source data: {paste(bin[pb], collapse = ', ')}."
       ))
     }
 
     if (any(pb <- !bin %in% num_vars)) {
-      stop(sprintf(
-        "Some variables in 'bin' are not numeric in the selection data: %s.",
-        paste(bin[pb], collapse = ", ")
+      stop(glue(
+        "Some variables in 'bin' are not numeric in the selection data: {paste(bin[pb], collapse = ', ')}."
       ))
     }
   } else {
@@ -97,9 +132,8 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
     pb_bin_src <- bin[unlist(Map(
       function(x) !is.numeric(x), data[bin]))]
     if (length(pb_bin_src)) {
-      stop(sprintf(
-        "Some variables in 'bin' are not numeric in the source data: %s.",
-        paste(pb_bin_src, collapse = ", ")
+      stop(glue(
+        "Some variables in 'bin' are not numeric in the source data: {paste(pb_bin_src, collapse = ', ')}."
       ))
     }
     with_infinite <- bin[sapply(data[bin], function(x){any(is.infinite(x))})]
@@ -122,13 +156,12 @@ look_up <- function(data, ..., bin = FALSE, value = "value") {
 
   # do this test after binning
   if (any(pb <- duplicated(data[names(df_vars)]))) {
-    stop(sprintf(
-      "Some rows in 'data' are duplicates: %s.",
-      paste(which(pb), collapse = ", ")
+    stop(glue(
+      "Some rows in 'data' are duplicates: {paste(which(pb), collapse = ', ')}."
     ))
   }
   res <- suppressMessages(
-    dplyr::left_join(
+    left_join(
       df_vars,
       data,
       by = names(df_vars)

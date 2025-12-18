@@ -15,5 +15,6 @@ run_model(model, ...)
 A list containing the results of the model.
 }
 \description{
-Takes a model specification object and runs the model.
+Takes a model specification object and runs the model for the base case.
+For probabilistic sensitivity analysis, use [run_psa()] instead.
 }

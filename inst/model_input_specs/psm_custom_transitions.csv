@@ -1,0 +1,3 @@
+name,required,type,default,fallback
+state,TRUE,character,,
+formula,TRUE,character,,

@@ -1,0 +1,5 @@
+name,required,type,default,fallback
+sampling_name,TRUE,character,,
+variable,TRUE,character,,
+strategy,FALSE,character,,
+group,FALSE,character,,

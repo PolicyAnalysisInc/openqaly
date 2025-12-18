@@ -1,9 +1,10 @@
 #' Define Decision Trees
 parse_tree_vars <- function(trees) {
-  
+
   # Make and return a variables list containing the decision trees
-  if (!is.null(trees)) {
-    
+  # Check for NULL or empty dataframe
+  if (!is.null(trees) && is.data.frame(trees) && nrow(trees) > 0) {
+
     # Check that tree specification is valid
     check_trees_df(trees)
     
@@ -19,7 +20,7 @@ parse_tree_vars <- function(trees) {
           group_split() %>%
           set_names(tree_df$node) %>%
           map(function(y) {
-            vars <- all.vars(parse(text = y$formula), functions = T)
+            vars <- all.vars(parse_expr(y$formula), functions = T)
             # If a node variable references C, effectively its dependencies include
             # the dependencies of all other nodes at with the same parent in the tree.
             if ('C' %in% vars) {
@@ -40,14 +41,12 @@ parse_tree_vars <- function(trees) {
         vars <- unique(flatten_chr(map(vars_by_node, ~.$depends)))
         
         # Define a variable which will create the decision tree object.
-        hero_var <- define_formula(paste0('decision_tree(.trees, "', x, '")'))
+        hero_var <- define_formula(glue('decision_tree(.trees, "{x}", cycle)'))
         
-        # Add the variables from the tree itself to the 'after' field to ensure the
-        # tree is evaluated after all variables referenced by it
+        # Ensure tree is evaluated after all variables it references
         hero_var$after <- vars
         
-        # Add the list of dependencies by node so that calls that references nodes can
-        # inherit those dependencies
+        # Track dependencies by node for inheritance by node references
         hero_var$node_depends <- vars_by_node
         
         # Return the row
@@ -137,10 +136,9 @@ check_tree_df <- function(df) {
 }
 
 #' @export
-decision_tree <- function(df, name) {
+decision_tree <- function(df, name, cycle) {
   
   the_env <- parent.frame()
-  
   # Pull out tree from trees df
   tree_df <- filter(df, name == name)
   tree_df$parent <- ifelse(is.na(tree_df$parent), '', tree_df$parent)
@@ -151,6 +149,7 @@ decision_tree <- function(df, name) {
   # Calculate the conditional probabilities level-by-level
   cond_prob <- parent_names %>%
     lapply(function(x) {
+
       # Get the subtree
       subtree <- filter(tree_df, parent == x)
       # Parse subtree as variables
@@ -159,7 +158,7 @@ decision_tree <- function(df, name) {
         parse_variables()
       
       # Create a namespace from parent environment
-      ns <- define_namespace(the_env, data.frame(the_env$cycle))
+      ns <- define_namespace(the_env, data.frame(cycle = cycle))
       
       # Evaluate the variables
       res <- eval_variables(subtree_vars, ns, T, 'trees')
@@ -221,9 +220,9 @@ decision_tree <- function(df, name) {
 
 #' @export
 p <- function(statement, tree) {
-  
+
   # Create & populate environment in which to evaluate probability statement
-  my_env <- new.env(parent =  parent.frame())
+  my_env <- env(parent = parent.frame())
   assign('|', `%given%`, envir = my_env)
   assign('%and%', `%and%`, envir = my_env)
   assign('%or%', `%or%`, envir = my_env)
@@ -234,12 +233,14 @@ p <- function(statement, tree) {
     assign(name, subtree, envir = my_env)
   }
   assign('.all', tree$all, envir = my_env)
-  
-  # Evaluate probability statement
-  lazy_statement <- as.lazy(interp(lazy(statement), `-` = `not`))
-  lazy_statement$env <- my_env
-  res <- lazy_eval(lazy_statement)
-  
+
+  # Capture, rewrite AST, and evaluate
+  stmt_expr <- enexpr(statement)
+  stmt_expr <- rewrite_unary_minus_to_not(stmt_expr)
+  stmt_quo <- new_quosure(stmt_expr, env = my_env)
+
+  res <- eval_tidy(stmt_quo)
+
   # Extract probability from result
   get_prob(res)
 }

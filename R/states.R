@@ -1,33 +1,60 @@
 
 
 
-parse_states <- function(states, settings) {
-  
+parse_states <- function(states, cycle_length_days, days_per_year, model_type = "markov") {
+
   # Check that variables definition is valid
   check_states(states)
-  
+
+  if (tolower(model_type) %in% c("psm", "psm_custom")) {
+    # PSM: Already has correct minimal structure from spec
+    # No initial_probability, no tunnel states
+    # Just pass through as states object (no sorting needed - no formulas)
+    parsed_states <- states %>%
+      select(name, display_name, description)
+
+    return(as.states(parsed_states))
+  }
+
+  # Markov: Full processing with tunnel states
   # If state time limit is unspecified, assume infinite
-  states$state_cycle_limit <- ifelse(
-    is.na(states$state_cycle_limit),
-    Inf,
-    states$state_cycle_limit
-  )
-  
+  if ("state_cycle_limit" %in% names(states)) {
+    states$state_cycle_limit <- ifelse(
+      is.na(states$state_cycle_limit),
+      Inf,
+      states$state_cycle_limit
+    )
+  } else {
+    states$state_cycle_limit <- Inf
+  }
+
   # If state time limit unit is undefined, use cycles
-  states$state_cycle_limit_unit <- ifelse(
-    is.na(states$state_cycle_limit_unit),
-    'cycles',
-    states$state_cycle_limit_unit
-  )
-  
+  if ("state_cycle_limit_unit" %in% names(states)) {
+    states$state_cycle_limit_unit <- ifelse(
+      is.na(states$state_cycle_limit_unit),
+      'cycles',
+      states$state_cycle_limit_unit
+    )
+  } else {
+    states$state_cycle_limit_unit <- 'cycles'
+  }
+
+  # Ensure optional columns exist
+  if (!"state_group" %in% names(states)) {
+    states$state_group <- NA_character_
+  }
+  if (!"share_state_time" %in% names(states)) {
+    states$share_state_time <- FALSE
+  }
+
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
     mutate(
       formula = map(initial_probability, as.heRoFormula),
       max_state_time = ceiling(
-        days_per_unit(state_cycle_limit_unit, settings) * state_cycle_limit / get_cycle_length_days(settings)
+        ceiling(days_per_unit(state_cycle_limit_unit, cycle_length_days, days_per_year) * state_cycle_limit / cycle_length_days)
       ),
-      state_group = ifelse(is.na(state_group), paste0('.', name), state_group),
+      state_group = ifelse(is.na(state_group), glue(".{name}"), state_group),
       share_state_time = ifelse(is.na(share_state_time), F, share_state_time)
     ) %>%
     select(
@@ -40,7 +67,7 @@ parse_states <- function(states, settings) {
       max_state_time
     ) %>%
     sort_variables()
-  
+
   # Construct Object & Return
   as.states(parsed_states)
 }
@@ -53,11 +80,42 @@ eval_states <- function(x, ns) {
   # Limit variables to first cycle
   cloned_ns <- clone_namespace(ns)
   cloned_ns$df <- cloned_ns$df[1, ]
-  eval_variables(x, cloned_ns, T)$df[ ,x$name]
+  result <- eval_variables(x, cloned_ns, T)$df[ ,x$name, drop = FALSE]
+
+  # Ensure the result has column names
+  if (is.null(colnames(result))) {
+    # If only one state and result is a matrix/dataframe without names
+    if (ncol(result) == length(x$name)) {
+      colnames(result) <- x$name
+    } else {
+      stop("eval_states: Cannot determine column names for initial state probabilities")
+    }
+  }
+
+  # Validate that initial probabilities sum to 1
+  prob_sum <- sum(result[1, ])
+  tol <- sqrt(.Machine$double.eps)  # Standard tolerance for floating point comparison
+  if (abs(prob_sum - 1.0) > tol) {
+    error_msg <- glue("Initial state probabilities must sum to 1 (got {prob_sum})")
+    accumulate_hero_error(define_error(error_msg), context_msg = "Initial state validation")
+    hero_error_checkpoint()
+  }
+
+  return(result)
 }
 
 expand_init_states <- function(x, expand) {
-  n_states_exp <- sum(expand$max_st)
+  # Ensure x has column names
+  if (is.null(colnames(x)) || length(colnames(x)) == 0) {
+    # If single state in expand, use it
+    if (nrow(expand) == 1) {
+      colnames(x) <- expand$state[1]
+    } else {
+      stop("expand_init_states: Initial state matrix has no column names and cannot infer them")
+    }
+  }
+
+  n_states_exp <- sum(ifelse(is.na(expand$max_st), 1, expand$max_st))
   init_mat <- matrix(numeric(n_states_exp), nrow = 1)
   col_names <- character(n_states_exp)
   index <- 1
@@ -72,6 +130,7 @@ expand_init_states <- function(x, expand) {
     index <- max(indices) + 1
   }
   colnames(init_mat) <- col_names
+      
   init_mat
 }
 
@@ -87,5 +146,5 @@ as.states.data.frame <- function(x) {
 }
 
 expand_state_name <- function(name, index) {
-  paste0(name, '.', index)
+  glue("{name}.{index}")
 }

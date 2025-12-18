@@ -1,0 +1,250 @@
+---
+title: "Base Case Results - Net Monetary Benefit"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Base Case Results - Net Monetary Benefit}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = FALSE,
+  comment = ""
+)
+```
+
+```{r setup}
+library(heRomod2)
+
+model <- read_model(system.file("models", "checkimab", package = "heRomod2"))
+
+results <- run_model(model)
+
+```
+
+## Overview
+
+This vignette demonstrates how to visualize and tabulate net monetary benefit (NMB) from model results.
+
+The heRomod2 package provides flexible tools for creating publication-ready plots and tables.
+
+### Quick Start
+
+```{r eval=FALSE}
+# Create a bar plot showing NMB components
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "check"
+)
+
+# Create an NMB summary table
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "check"
+)
+```
+
+## Visualizing NMB with Plots
+
+The heRomod2 package provides two main plot types for net monetary benefit:
+
+- **Bar plots** (`nmb_plot_bar()`): Show the components of NMB (health benefits, costs, and net benefit) for strategy comparisons
+- **Line plots** (`nmb_plot_line()`): Display how NMB evolves over the model time horizon
+
+Both plot types support filtering by intervention and comparator strategies, grouping by subpopulations, and customization of willingness-to-pay thresholds.
+
+### Basic Bar Plots
+
+Bar plots break down NMB into its components, making it easy to see how health benefits and costs contribute to the overall net benefit. You must specify which health and cost outcomes to use.
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Show NMB components comparing 'check' to the reference strategy
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check'
+)
+```
+
+### Basic Line Plots
+
+Line plots reveal how NMB accumulates over time, helping identify when an intervention becomes cost-effective.
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Show cumulative NMB over time for all non-reference strategies
+nmb_plot_line(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = 'chemo'
+)
+```
+
+### Filtering Comparisons
+
+NMB analyses compare interventions against comparators (reference strategies). You can control which strategies to analyze using the `interventions` and `comparators` parameters.
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Compare a specific intervention against a specific comparator
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  comparators = 'chemo'
+)
+
+# Compare all interventions against the same comparator
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = 'chemo'
+)
+```
+
+### Subgroup Analysis
+
+Examine how NMB varies across different patient subpopulations defined in your model.
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Show NMB for all subgroups
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  groups = 'all'
+)
+
+# Focus on a specific subgroup
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  groups = 'male_age_lt_35'
+)
+```
+
+Line plots can also display subgroup NMB trajectories over time:
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Show NMB trajectories for all groups
+nmb_plot_line(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = 'chemo',
+  groups = 'all'
+)
+```
+
+### Customization Options
+
+#### Willingness-to-Pay Threshold
+
+By default, plots use the willingness-to-pay (WTP) threshold defined for the selected health outcome. You can override this value to explore different cost-effectiveness thresholds.
+
+```{r fig.height=7.5, fig.width=9, out.height=500, out.width=600, dpi=300, fig.retina = 1}
+# Use a different WTP threshold (e.g., $200,000 per QALY)
+nmb_plot_bar(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  wtp = 200000
+)
+```
+
+## Summarizing NMB with Tables
+
+Tables provide precise numeric summaries of NMB, complementing the visual insights from plots. The `nmb_table()` function creates formatted tables suitable for reports and publications.
+
+### Basic Tables
+
+Create a simple NMB table to display net benefit and its components:
+
+```{r}
+# Create an NMB table for a specific intervention
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check'
+)
+```
+
+### Subgroup Tables
+
+Display NMB stratified by patient subpopulations:
+
+```{r}
+# Show NMB for all subgroups
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  groups = 'all'
+)
+
+# Focus on a specific subgroup
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  groups = 'male_age_lt_35'
+)
+```
+
+### Filtering Comparisons
+
+Control which intervention-comparator pairs to include:
+
+```{r}
+# Specific intervention vs specific comparator
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  comparators = 'chemo'
+)
+
+# All interventions vs same comparator
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = 'chemo'
+)
+```
+
+### Display Options
+
+#### Custom WTP Threshold
+
+Override the default willingness-to-pay threshold:
+
+```{r}
+# Use a different WTP threshold
+nmb_table(
+  results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = 'check',
+  wtp = 200000
+)
+```
+
+### Table Formats and Export
+
+NMB tables support the same export options as outcomes tables. By default, tables use **kableExtra** formatting. For Word or PowerPoint reports, use `table_format = "flextable"`. See the Base Case Results - Outcomes vignette for detailed examples of exporting tables to Microsoft Office formats.

@@ -1,7 +1,7 @@
 Package: heRomod2
 Type: Package
 Title: Reproducible Health Economic Modeling
-Version: 0.1.0
+Version: 0.1.3
 Authors@R: person("Jordan", "Amdahl", email = "jrdnmdhl@gmail.com",
   role = c("aut", "cre"))
 Description: An R package for creating and running reproducible and
@@ -9,8 +9,7 @@ Description: An R package for creating and running reproducible and
   creating using a consistent tabular structure which defines features
   of the model such as the strategies being compared and the health
   states between which patients transit.
-Imports: 
-    lazyeval,
+Imports:
     dplyr,
     magrittr,
     future,
@@ -18,20 +17,32 @@ Imports:
     furrr,
     tibble,
     mvnfast,
-    crayon,
     stringr,
     readr,
     openxlsx,
-    rlang,
+    rlang (>= 1.1.0),
     purrr,
     glue,
     ggplot2,
     ggraph,
-    tidygraph
+    tidygraph,
+    Rcpp,
+    jsonlite,
+    scales
+Depends:
+    herosurv
 License: AGPL-3
 Encoding: UTF-8
 LazyData: true
-Suggests: 
+Suggests:
     testthat,
-    covr
-RoxygenNote: 7.2.3
+    covr,
+    knitr,
+    rmarkdown,
+    flextable,
+    officer,
+    GGally
+VignetteBuilder: knitr
+RoxygenNote: 7.3.2
+LinkingTo: 
+    Rcpp

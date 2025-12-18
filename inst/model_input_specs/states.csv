@@ -3,5 +3,7 @@ name,TRUE,character,,
 display_name,FALSE,character,,name
 description,FALSE,character,,display_name
 initial_probability,TRUE,character,0,
-state_time_limit,FALSE,numeric,0,
-state_time_limit_unit,FALSE,character,cycles,
+state_group,FALSE,character,,
+share_state_time,FALSE,logical,FALSE,
+state_cycle_limit,FALSE,numeric,Inf,
+state_cycle_limit_unit,FALSE,character,cycles,

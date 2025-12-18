@@ -1,0 +1,8 @@
+Medication,Type,Dosing Unit,Dose,Doses per Cycle,Cycle Length (days),Max Cycles,Cost per mg
+Checkimab,Initial Tx,mg per patient,200,28,28,0,3.78
+Chemoplatin,Initial Tx,mg per m^2,40,1,7,0,6.5
+Lenrastim,Initial Tx,mg per kg,10,1,7,0,0.17
+Molgramotin,L1 Maintenance,mg per patient,250,3,21,0,0.12
+Bendecogin,L2 Rescue,mg per patient,400,1,7,0,0.17
+Sargramotide,L1 Maintenance,mg per patient,250,3,21,0,0.09
+Lupprumab,Post-HSCT Immunosuppressive,mg per patient,30,30,30,2,4.58

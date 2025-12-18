@@ -4,20 +4,22 @@
 \alias{resample}
 \title{Resample Model Parameters}
 \usage{
-resample(model, n, segments, corr = NULL, seed = NULL)
+resample(model, n, segments, seed = NULL)
 }
 \arguments{
 \item{model}{A heRomodel object}
 
 \item{n}{the number of simulations}
 
-\item{segments}{the segments for which resampling will be done}
+\item{segments}{the segments for which resampling will be done (must have eval_vars and uneval_vars columns)}
 
-\item{corr}{an optional correlation matrix}
+\item{seed}{random seed for reproducibility}
 }
 \value{
 a data.frame with resampled data by segment
 }
 \description{
 Resamples the parameters for a model based on the sampling specifications.
+Handles both univariate distributions (from variables.sampling column) and
+multivariate distributions (from model$multivariate_sampling).
 }

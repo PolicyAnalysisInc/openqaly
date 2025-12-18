@@ -1,2 +1,7 @@
 env.Rdata
 .DS_Store
+env.RDataTmp*
+~$*.xlsx
+launch.json 
+.claude
+inst/doc

@@ -3,6 +3,7 @@
 parse_seg_variables <- function(x, segment = NULL, trees = NULL,
                                 formula_column = 'formula',
                                 context = 'Variables') {
+
   # Check that all necessary columns are present
   missing_cols <- check_missing_colnames(x, c(vars_def_columns, formula_column, segment_vars))
   if (length(missing_cols) > 0) {
@@ -26,20 +27,32 @@ parse_seg_variables <- function(x, segment = NULL, trees = NULL,
   check_variables_df(df, context = context)
   
   # Parse decision tree variables
-  tree_vars <- parse_tree_vars(trees)
+  tree_vars <- parse_tree_vars(trees) #20ms
   
   # Parse formulas, combine with trees, and sort
-  parse_variables(df, formula_column, context, tree_vars)
+  parse_variables(df, formula_column, context, tree_vars) #40ms
 }
 
 parse_variables <- function(x, formula_column = 'formula', context = 'Variables', extras = NULL) {
+
   # Check that all necessary columns are present
   missing_cols <- check_missing_colnames(x, c(vars_def_columns, formula_column))
   if (length(missing_cols) > 0) {
     missing_msg <- err_name_string(missing_cols)
     stop(context, ' definition was missing columns: ', missing_msg, '.', call. = F)
   }
-  
+
+  # Handle empty variables case
+  if (nrow(x) == 0 && (is.null(extras) || nrow(extras) == 0)) {
+    empty_vars <- tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      formula = list()
+    )
+    return(as.variables(empty_vars))
+  }
+
   # Parse formulas, and sort
   vars <- x %>%
     rowwise() %>%
@@ -78,7 +91,7 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
 
 # Sort a dataframe of variables based on dependency tree
 sort_variables <- function(x, extra_vars = NULL) {
-  
+
   # Deal with extra vars if given
   if (is.null(extra_vars)) {
     extras <- list()
@@ -86,39 +99,32 @@ sort_variables <- function(x, extra_vars = NULL) {
     extras <- set_names(extra_vars$formula, extra_vars$name)
   }
   
-  # Extract variable names
   par_names <- x$name
   
   # Extract the variable names referenced in each variable's
   # formula
-  var_list <-  purrr::map(x$formula, function(y) {
+  var_list <-  map(x$formula, function(y) {
       vars <- c(y$depends, y$after)
       vars[vars %in% par_names]
     }) %>%
     set_names(x$name)
   
-  # Define the lists of ordered and unordered variables
   ordered <- c()
   unordered <- var_list
   
   # While we still have variables in the unordered list...
   while (length(unordered) > 0) {
     
-    # Define a vector which will hold the indices of each
-    # variable to be moved to the ordered list
     to_remove <- c()
     
-    # Loop through each unordered variable
     for (i in seq_len(length(unordered))) {
       
       # If all the variables its formula references are in the ordered
       # list then it can be added to ordered list.
       if (all(unordered[[i]] %in% ordered)) {
         
-        # Append it to the list of ordered variables
         ordered <- c(ordered, names(unordered)[i])
         
-        # Get current variable
         current_var <-  names(unordered)[i]
         
         # Make a named list of all variables
@@ -129,7 +135,7 @@ sort_variables <- function(x, extra_vars = NULL) {
         )
         
         # Extract any decision tree probability calls
-        p_calls <- extract_func_calls(x$formula[[which(x$name == current_var)]]$lazy$expr, 'p')
+        p_calls <- extract_func_calls(quo_get_expr(x$formula[[which(x$name == current_var)]]$quo), 'p')
         tree_deps <- map(p_calls, function(y) {
           referenced_nodes <- all_vars[[y$arg2]]$node_depends %>%
             keep(~any(.$tags %in% y$arg1)) %>%
@@ -169,46 +175,37 @@ sort_variables <- function(x, extra_vars = NULL) {
     }
   }
   
-  # Return variables in sorted order
   as_tibble(x[order(factor(x$name, levels = ordered)), ])
 }
 
 # Evaluate a variables object
-eval_variables <- function(x, ns, df_only = F, context = 'variables') {
-  
-  # Keep list of parameters that generated errors
-  error_params <- c()
+eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
   
   # Iterate over each parameter and its name
   walk2(x$name, x$formula, function(name, value) {
     
     # Evaluate it
     res <- eval_formula(value, ns)
-    
     # Check if the object was an error
-    if (class(res) == 'heRo_error') {
-      error_params <<- append(error_params, name)
-      warning(
-        'Error in evaluation of ', context, ' ',
-        err_name_string(name),
-        ": ",
-        paste0(res),
-        call. = F
-      )
+    if (is_hero_error(res)) {
+      # Always accumulate errors for checkpoint handling
+      accumulate_hero_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
     }
     
     # Determine whether result is a vector or object parameter
     vector_type <- is.vector(res) && !is.list(res)
     if (df_only || (vector_type && (length(res) == nrow(ns$df)))) {
       # If a vector parameter, assign to data frame
-      ns$df[name] <<- res
+      ns$df[name] <<- res 
     } else {
       # If an object parameter, assign to environment
       assign(name, res, envir = ns$env)
     }
     
-    
   })
+
+  # Trigger error checkpoint mechanism (checks mode internally)
+  hero_error_checkpoint()
   
   return(ns)
 }
@@ -223,7 +220,7 @@ check_variables_df <- function(x, context = "Variables") {
   if (any(dupe)) {
     dupe_names <- unique(x$name[dupe])
     dupe_msg <- err_name_string(dupe_names)
-    error_msg <- paste0(context, ' definition contained duplicate names for variables: ', dupe_msg, '.')
+    error_msg <- glue("{context} definition contained duplicate names for variables: {dupe_msg}.")
   }
   
   # Check that variable names are valid

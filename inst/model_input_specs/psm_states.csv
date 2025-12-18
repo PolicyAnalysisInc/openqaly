@@ -1,0 +1,4 @@
+name,required,type,default,fallback
+name,TRUE,character,,
+display_name,FALSE,character,,name
+description,FALSE,character,,display_name

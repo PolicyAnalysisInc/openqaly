@@ -9,61 +9,81 @@
 #' 
 #' @keywords internal
 define_formula <- function(string) {
-  
-  # Try to capture the expression
-  tryExpr <- try(
-    as.lazy(string),
-    silent = T
+
+  # Try to capture the expression as a quosure
+  tryExpr <- tryCatch(
+    parse_quo(string, env = global_env()),
+    error = function(e) NULL
   )
-  if (inherits(tryExpr, "try-error")) {
+
+  if (is.null(tryExpr)) {
     # If the expression can't be parsed, generate an error object.
     res_list <- list(
       text = string,
-      lazy = as.lazy(
-        'tryCatch(stop("Error in formula syntax."' %&%
-          ', call. = F), error = function(e) e)'
+      quo = new_quosure(
+        expr(tryCatch(
+          stop("Error in formula syntax.", call. = FALSE),
+          error = function(e) e
+        )),
+        empty_env()
       ),
-      err = tryExpr,
-      depends = '',
-      fo_depends = '',
-      after = ''
+      err = "parse-error",
+      depends = character(),
+      fo_depends = character(),
+      after = character()
     )
   } else {
+    # Extract expression for dependency analysis
+    expr_obj <- quo_get_expr(tryExpr)
     # Build data for heRoFormula object
     res_list <- list(
       text = string,
-      lazy = tryExpr,
-      depends = all.vars(tryExpr$expr, functions = T),
-      fo_depends = all.vars(tryExpr$expr, functions = T),
-      after = ''
+      quo = tryExpr,
+      depends = all.vars(expr_obj, functions = TRUE),
+      fo_depends = all.vars(expr_obj, functions = TRUE),
+      after = character()
     )
   }
-  
+
   # Return heRoFormula object
   as.heRoFormula(res_list)
 }
 
 # Evaluate Formula
-eval_formula <- function(x, ns) {
-  
-  # Attempt to evaluate expression
-  suppressWarnings({x$lazy$env <- ns$env})
-  res <- safe_eval(lazy_eval(x$lazy, data = ns$df))
-  if (is_error(res)) {
-    # Check if any of the variables referenced is an error 
+eval_formula <- function(x, ns, max_st = NULL) {
+
+  # Update quosure environment (no suppressWarnings needed)
+  x$quo <- quo_set_env(x$quo, ns$env)
+
+  df <- ns$df
+  if (!is.null(max_st)) {
+    df <- filter(df, state_cycle <= max_st)
+  }
+
+  # Evaluate with data masking
+  res <- safe_eval(eval_tidy(x$quo, data = df))
+
+  # If the initial evaluation did not result in a heRo_error, return it
+  # Otherwise, check if it was caused by a dependency error
+  if (is_hero_error(res)) {
+    # Check if any of the variables referenced is an error
     vars <- x$depends
     for (i in rev(vars)) {
       if (i %in% get_names(ns, 'all', keywords = F)) {
         value <- ns[i]
-        if (is_error(value)) {
+        if (is_hero_error(value)) {
+          # Use the specific constructor for dependency errors
           error_msg <- glue('Error in dependency "{i}".')
-          res <- define_error(error_msg)
+          # Overwrite the original error with a dependency error
+          res <- define_dependency_error(error_msg)
+          # Once a dependency error is found, no need to check others for this formula
+          break
         }
       }
     }
   }
-  
-  # Return the result
+
+  # Return the result (which might be the original error or a dependency error)
   res
 }
 
@@ -140,9 +160,9 @@ as.heRoFormula.numeric <- function(x) {
 #' @export
 as.heRoFormula.list <- function(x) {
   # Check for essential fields then set class property.
-  props_to_check <- c('text', 'depends', 'lazy')
+  props_to_check <- c('text', 'depends', 'quo')
   for (prop in props_to_check) {
-    if (is.null(x[[prop]])) stop(paste0('Property "', prop, '" was missing.'))
+    if (is.null(x[[prop]])) stop(glue('Property "{prop}" was missing.'))
   }
   class(x) <- c('heRoFormula', 'list')
   x

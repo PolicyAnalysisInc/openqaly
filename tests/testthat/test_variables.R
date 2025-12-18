@@ -53,34 +53,73 @@ test_that('formula syntax errors are handled properly', {
   # Parse the variables specification
   parsed_vars <- heRomod2:::parse_seg_variables(var_tests$invalid, segment)
   
-  # Check that a warning is produced naming all the variables generating
-  # errors.
-  expect_warning(
-    eval_vars <- heRomod2:::eval_variables(parsed_vars, test_ns),
-    c('Error in evaluation of variables "a": Error in formula syntax.')
+  # Clear any existing errors before test
+  heRomod2:::clear_hero_errors()
+  
+  # Check that an error is produced naming all the variables generating
+  # errors when checkpoint is triggered
+  expect_error(
+    heRomod2:::eval_variables(parsed_vars, test_ns),
+    regexp = "Multiple errors found during evaluation",
+    fixed = FALSE
   )
   
+  # Since eval_variables throws an error, we need to evaluate it again
+  # without triggering checkpoint to check the values
+  heRomod2:::clear_hero_errors()
+  
+  # Test without checkpoint to verify values
+  test_ns_copy <- heRomod2:::create_test_ns(segment)
+  
+  # Manually evaluate without checkpoint to inspect results
+  suppressWarnings({
+    # Re-evaluate each variable formula manually to check results
+    for (i in seq_len(nrow(parsed_vars))) {
+      name <- parsed_vars$name[i]
+      formula <- parsed_vars$formula[[i]]
+      res <- heRomod2:::eval_formula(formula, test_ns_copy)
+      
+      if (is_hero_error(res)) {
+        # For error objects, assign to environment only
+        assign(name, res, envir = test_ns_copy$env)
+      } else {
+        # Check if result can be assigned to dataframe
+        vector_type <- is.vector(res) && !is.list(res)
+        if (vector_type && (length(res) == nrow(test_ns_copy$df))) {
+          test_ns_copy$df[name] <- res
+        } else {
+          assign(name, res, envir = test_ns_copy$env)
+        }
+      }
+    }
+  })
+  
+  # Now check the values
   # Check that the blank formula evaluated to NA
-  expect_equal(eval_vars['d'], NA)
+  expect_true(all(is.na(test_ns_copy$df[['d']])))
   
   # Check that the value of the variables are heRo_error objects.
-  expect_equal(class(eval_vars['a']), 'heRo_error')
-  expect_equal(class(eval_vars['c']), 'heRo_error')
-  expect_equal(class(eval_vars['e']), 'heRo_error')
-  expect_equal(class(eval_vars['g']), 'heRo_error')
+  expect_true(is_hero_error(test_ns_copy$env$a), info = "'a' should be heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$c), info = "'c' should be heRo_error (dependency)")
+  expect_true(is_hero_error(test_ns_copy$env$e), info = "'e' should be heRo_error (dependency)")
+  expect_true(is_hero_error(test_ns_copy$env$g), info = "'g' should be heRo_error (dependency)")
   
   # Check that the error messages print correctly
   expect_output(
-    print(eval_vars['a'], 'Error: Error in formula syntax.')
+    print(test_ns_copy$env$a),
+    'Error: Error in formula syntax.'
   )
   expect_output(
-    print(eval_vars['c'], 'Error: Error in dependency "a".')
+    print(test_ns_copy$env$c),
+    'Error: Error in dependency "a".'
   )
   expect_output(
-    print(eval_vars['e'], 'Error: Error in dependency "c".')
+    print(test_ns_copy$env$e),
+    'Error: Error in dependency "c".' # Note: This dependency is indirect via 'c'
   )
   expect_output(
-    print(eval_vars['g'], 'Error: Error in dependency "c".')
+    print(test_ns_copy$env$g),
+    'Error: Error in dependency "c".' # Note: This dependency is indirect via 'c'
   )
 })
 test_that('formula evaluation errors are handled properly', {
@@ -88,31 +127,69 @@ test_that('formula evaluation errors are handled properly', {
   # Parse the variables specification
   parsed_vars <- heRomod2:::parse_seg_variables(var_tests$err, segment)
   
-  # Check that a warning is produced naming all the parameters generating
-  # errors.
-  expect_warning(
-    eval_vars <- heRomod2:::eval_variables(parsed_vars, test_ns),
-    'Error in evaluation of variables "a": Variable "z" not found.'
+  # Clear any existing errors before test
+  heRomod2:::clear_hero_errors()
+  
+  # Check that an error is produced naming all the parameters generating
+  # errors when checkpoint is triggered
+  expect_error(
+    heRomod2:::eval_variables(parsed_vars, test_ns),
+    regexp = "Multiple errors found during evaluation",
+    fixed = FALSE
   )
   
+  # Since eval_variables throws an error, we need to evaluate it again
+  # without triggering checkpoint to check the values
+  heRomod2:::clear_hero_errors()
+  
+  # Create a fresh namespace for manual evaluation
+  test_ns_copy <- heRomod2:::create_test_ns(segment)
+  
+  # Manually evaluate without checkpoint to inspect results
+  suppressWarnings({
+    # Re-evaluate each variable formula manually to check results
+    for (i in seq_len(nrow(parsed_vars))) {
+      name <- parsed_vars$name[i]
+      formula <- parsed_vars$formula[[i]]
+      res <- heRomod2:::eval_formula(formula, test_ns_copy)
+      
+      if (is_hero_error(res)) {
+        # For error objects, assign to environment only
+        assign(name, res, envir = test_ns_copy$env)
+      } else {
+        # Check if result can be assigned to dataframe
+        vector_type <- is.vector(res) && !is.list(res)
+        if (vector_type && (length(res) == nrow(test_ns_copy$df))) {
+          test_ns_copy$df[name] <- res
+        } else {
+          assign(name, res, envir = test_ns_copy$env)
+        }
+      }
+    }
+  })
+  
   # Check that the value of the parameters are heRo_error objects.
-  expect_equal(class(eval_vars['a']), 'heRo_error')
-  expect_equal(class(eval_vars['c']), 'heRo_error')
-  expect_equal(class(eval_vars['e']), 'heRo_error')
-  expect_equal(class(eval_vars['g']), 'heRo_error')
+  expect_true(is_hero_error(test_ns_copy$env$a), info = "'a' should be heRo_error")
+  expect_true(is_hero_error(test_ns_copy$env$c), info = "'c' should be heRo_error (dependency)")
+  expect_true(is_hero_error(test_ns_copy$env$e), info = "'e' should be heRo_error (dependency)")
+  expect_true(is_hero_error(test_ns_copy$env$g), info = "'g' should be heRo_error (dependency)")
   
   # Check that the error messages print correctly
   expect_output(
-    print(eval_vars['a'], 'Error: Variable "z" not found.')
+    print(test_ns_copy$env$a),
+    'Error: Variable "z" not found.'
   )
   expect_output(
-    print(eval_vars['c'], 'Error: Error in dependency "a".')
+    print(test_ns_copy$env$c),
+    'Error: Error in dependency "a".'
   )
   expect_output(
-    print(eval_vars['e'], 'Error: Error in dependency "c".')
+    print(test_ns_copy$env$e),
+    'Error: Error in dependency "c".' # Note: Indirect dependency
   )
   expect_output(
-    print(eval_vars['g'], 'Error: Error in dependency "c".')
+    print(test_ns_copy$env$g),
+    'Error: Error in dependency "c".' # Note: Indirect dependency
   )
 })
 test_that('variables are evaluated properly when sorted', {
@@ -160,18 +237,22 @@ test_that('variables are evaluated properly when sorted', {
     c("cars", "lm", "~", "speed", "dist", "d")  
   )
   
+  # Clear any existing errors before test
+  heRomod2:::clear_hero_errors()
+  
   # Check that no warnings, errors, or outputs are produced
   # during evaluation.
   expect_silent(
-    eval_vars <- heRomod2:::eval_variables(parsed_vars, test_ns)
+    result_ns <- heRomod2:::eval_variables(parsed_vars, test_ns)
   )
   
   # Check that parameter values are correct.
-  expect_equal(unname(eval_vars['g']), 25.00623, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['b']), 200, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['a']), 100, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['c']), 101, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['e']), 301, tolerance = 1e-7)
+  # These are all scalar values, so they should be in env
+  expect_equal(unname(result_ns$env$g), 25.00623, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$b), 200, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$a), 100, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$c), 101, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$e), 301, tolerance = 1e-7)
   
 })
 test_that('variables are evaluated properly when unsorted', {
@@ -219,17 +300,21 @@ test_that('variables are evaluated properly when unsorted', {
     c("cars", "lm", "~", "speed", "dist", "d")  
   )
   
+  # Clear any existing errors before test
+  heRomod2:::clear_hero_errors()
+  
   # Check that no warnings, errors, or outputs are produced
   # during evaluation.
   expect_silent(
-    eval_vars <- heRomod2:::eval_variables(parsed_vars, test_ns)
+    result_ns <- heRomod2:::eval_variables(parsed_vars, test_ns)
   )
   
   # Check that parameter values are correct.
-  expect_equal(unname(eval_vars['g']), 25.00623, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['b']), 200, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['a']), 100, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['c']), 101, tolerance = 1e-7)
-  expect_equal(unname(eval_vars['e']), 301, tolerance = 1e-7)
+  # These are all scalar values, so they should be in env
+  expect_equal(unname(result_ns$env$g), 25.00623, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$b), 200, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$a), 100, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$c), 101, tolerance = 1e-7)
+  expect_equal(unname(result_ns$env$e), 301, tolerance = 1e-7)
   
 })

@@ -1,0 +1,56 @@
+---
+title: "Base Case Results"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Base Case Results}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(heRomod2)
+
+model <- read_model(system.file("models", "checkimab", package = "heRomod2"))
+
+results <- run_model(model)
+
+```
+
+```r
+## Outcomes/Costs
+
+### Outcomes for all strategies, overall population
+outcomes_plot_bar(
+  results,
+  outcome = "qalys"
+)
+
+### Outcomes for all strategies, all subgroups
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  groups = 'all_groups'
+)
+
+### Filter outcomes to a specific strategy
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  strategies = 'chemo'
+)
+
+### Filter outcomes to a specific set of strategies
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  strategies = c('chemo', 'check')
+)
+
+```

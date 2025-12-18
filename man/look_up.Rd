@@ -35,3 +35,14 @@ If binning is activated, numeric individual
 characteristics are matched to the corresponding 
 reference value that is directly inferior.
 }
+\examples{
+
+# Create a data frame with some example data
+tbl <- data.frame(
+  age = c(20, 30, 40, 50, 60),
+  income = c(30000, 40000, 50000, 60000, 70000)
+)
+
+# Look up the value of income for age 30
+look_up(tbl, age = 30, value = "income")
+}

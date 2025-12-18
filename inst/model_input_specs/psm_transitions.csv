@@ -1,0 +1,4 @@
+name,required,type,default,fallback
+endpoint,TRUE,character,,
+time_unit,TRUE,character,,
+formula,TRUE,character,,

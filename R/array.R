@@ -1,5 +1,16 @@
 #' Convert a longform table to a multi-dimensional array
 lf_to_arr <- function(df, dimcols, value) {
+  # # Try to use C++ version if available
+  # cpp_available <- tryCatch({
+  #   exists("cpp_lf_to_array_direct", mode = "function")
+  # }, error = function(e) FALSE)
+
+  # if (cpp_available) {
+  #   # Use optimized C++ version
+  #   return(cpp_lf_to_array_direct(df, dimcols, value))
+  # }
+
+  # Original R implementation
   n_dims <- length(dimcols)
   index <- integer(nrow(df))
   lengths <- integer(n_dims)
@@ -43,8 +54,11 @@ arr_last_unique <- function(mat, dim_index) {
   )
   last_mat <- eval(parse(text = access_str))
   diff_from_last <- apply(mat, dim_index, function(x) {
-    all(x != last_mat)
+    any(x != last_mat)
   })
+  if(any(is.na(diff_from_last))) {
+    return(nrow(mat))
+  }
   if (!any(diff_from_last)) return(1)
-  max(which(diff_from_last))
+  max(which(diff_from_last)) + 1
 }

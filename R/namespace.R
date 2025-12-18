@@ -2,12 +2,13 @@ create_namespace <- function(model, segment) {
   
   # Calculate cycle lengths and times in days/weeks/months/years
   # for each model cycle. 
-  cl_vars <- cl_variables(model$settings)
+  cl_vars <- cycle_length_variables(model$settings)
   time_vars <- time_variables(model$settings, model$states)
-  
+  unit_vars <- time_unit_variables(model$settings)
+
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
-  ns <- define_namespace(model$env, time_vars, cl_vars) %>%
+  ns <- define_namespace(model$env, time_vars, cl_vars, unit_vars) %>%
     update_segment_ns(segment)
   
   ns
@@ -15,19 +16,48 @@ create_namespace <- function(model, segment) {
 
 #' Define a Namespace Object
 #'
-#' Creates a new namespace object which can be used
-#' to store evaluated parameters.  A namespace object
-#' combines a data frame for storing vector parameters
-#' with an environment for storing non-vector parameters.
+#' A namespace object stores evaluated parameters by combining
+#' a data frame for vector parameters with an environment
+#' for non-vector parameters.
 #'
 #' @param df A data frame of pre-existing parameter values
 #' @param env An environment of pre-existing values
 #'
 #' @export
-define_namespace <- function(env, df, additional = NULL) {
-  ns <- list(df = df, env = rlang::env_clone(env))
-  for (nm in names(additional)) {
-    assign(nm, additional[[nm]], envir = ns$env)
+define_namespace <- function(env, df, additional = NULL, ...) {
+  # Merge dataframes if additional ones are provided
+  extra_dfs <- list(...)
+  if (length(extra_dfs) > 0) {
+    # Bind all dataframes column-wise
+    all_dfs <- list(df, additional)
+    all_dfs <- c(all_dfs, extra_dfs)
+    all_dfs <- all_dfs[!sapply(all_dfs, is.null)]
+    
+    # Check if all are dataframes
+    df_mask <- sapply(all_dfs, is.data.frame)
+    df_list <- all_dfs[df_mask]
+    non_df_list <- all_dfs[!df_mask]
+    
+    # Merge dataframes by columns
+    if (length(df_list) > 1) {
+      df <- do.call(cbind, df_list)
+    } else if (length(df_list) == 1) {
+      df <- df_list[[1]]
+    }
+    
+    # Handle non-dataframe additional items
+    additional <- if (length(non_df_list) > 0) non_df_list[[1]] else NULL
+  } else if (!is.null(additional) && is.data.frame(additional)) {
+    # If additional is a dataframe, merge it with df
+    df <- cbind(df, additional)
+    additional <- NULL
+  }
+  
+  ns <- list(df = df, env = env_clone(env))
+  if (!is.null(additional)) {
+    for (nm in names(additional)) {
+      assign(nm, additional[[nm]], envir = ns$env)
+    }
   }
   class(ns) <- 'namespace'
   ns
@@ -46,7 +76,7 @@ get_names <- function(ns, type = "all", keywords = T) {
     stop("Invalid value for argument 'type'")
   }
 
-  # Remove keywords
+  # Exclude keywords if requested
   if (!keywords) {
     res <- setdiff(res, heRo_keywords)
   }
@@ -64,7 +94,7 @@ get_names <- function(ns, type = "all", keywords = T) {
 #' @keywords internal
 clone_namespace <- function(x) {
   new <- x
-  new$env <- rlang::env_clone(x$env)
+  new$env <- env_clone(x$env)
   new
 }
 
@@ -76,13 +106,13 @@ summary.namespace <- function(object, ...) {
   df_names <- get_names(object, "df", keywords = F)
   
   if (length(df_names) > 0) {
-    res_df <- tidyr::pivot_longer(
+    res_df <- pivot_longer(
         object$df,
         names_to = 'name',
         values_to = 'value',
         all_of(df_names)
       ) %>%
-      dplyr::mutate(
+      mutate(
         print = NA,
         summary = NA
       ) %>%
@@ -108,8 +138,16 @@ summary.namespace <- function(object, ...) {
   for (i in seq_len(length(env_names))) {
     name <- env_names[i]
     export_res <- export(get(name, envir = object$env))
-    res_env$print[i] <- export_res$print
-    res_env$summary[i] <- export_res$summary
+    res_env$print[i] <- if (!is.null(export_res$print)) {
+      export_res$print
+    } else {
+      NA_character_
+    }
+    res_env$summary[i] <- if (!is.null(export_res$summary)) {
+      export_res$summary
+    } else {
+      NA_character_
+    }
   }
 
   res_env <- select(
@@ -168,12 +206,12 @@ update_segment_ns <- function(x, newdata) {
   # Clone the namespace
   new_ns <- clone_namespace(x)
   
-  # Remove existing vars from df
-  names_to_clear <- dplyr::intersect(colnames(newdata), colnames(new_ns$df))
-  new_ns$df <- dplyr::select(new_ns$df, !all_of(names_to_clear))
+  # Clear overlapping column names from dataframe
+  names_to_clear <- intersect(colnames(newdata), colnames(new_ns$df))
+  new_ns$df <- select(new_ns$df, !all_of(names_to_clear))
   
-  # Assign new values
-  purrr::iwalk(newdata, function(x, n) {
+  # Store new data in environment
+  iwalk(newdata, function(x, n) {
     assign(n, x[[1]], envir = new_ns$env)
   })
   
