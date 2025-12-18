@@ -150,7 +150,7 @@ define_object_ <- function(obj, class) {
 
 create_default_group <- function() {
   tibble(
-    name = 'all',
+    name = 'all_patients',
     display_name = 'All Patients',
     description = 'Entire model population.',
     weight = 1,
@@ -533,6 +533,74 @@ validate_variable_display_names <- function(df) {
   return("")  # All valid
 }
 
+#' Format Data Frame as Markdown Table
+#'
+#' Generic helper function to format any data frame as a markdown-style table.
+#' Handles NA values, calculates column widths dynamically, and creates a properly
+#' formatted markdown table suitable for console output or error messages.
+#'
+#' @param df Data frame to format
+#' @param col_names Optional custom column names (defaults to colnames(df))
+#' @return Formatted markdown table as a character string
+#' @keywords internal
+format_dataframe_as_markdown_table <- function(df, col_names = NULL) {
+  if (is.null(df) || nrow(df) == 0) {
+    return("")
+  }
+
+  # Use custom column names if provided, otherwise use data frame column names
+  if (is.null(col_names)) {
+    col_names <- colnames(df)
+  }
+
+  if (length(col_names) != ncol(df)) {
+    stop("col_names must have same length as number of columns in df")
+  }
+
+  # Convert all columns to character, handling NA values
+  df_char <- as.data.frame(lapply(df, function(col) {
+    ifelse(is.na(col), "NA", as.character(col))
+  }), stringsAsFactors = FALSE)
+
+  # Calculate column widths (max of header and data)
+  col_widths <- numeric(ncol(df))
+  for (i in seq_along(col_names)) {
+    col_widths[i] <- max(
+      nchar(col_names[i]),
+      max(nchar(df_char[[i]]), na.rm = TRUE)
+    )
+  }
+
+  # Build header
+  header_parts <- character(length(col_names))
+  for (i in seq_along(col_names)) {
+    header_parts[i] <- format(col_names[i], width = col_widths[i], justify = "left")
+  }
+  header <- paste0("| ", paste(header_parts, collapse = " | "), " |")
+
+  # Build separator
+  separator_parts <- character(length(col_names))
+  for (i in seq_along(col_names)) {
+    separator_parts[i] <- paste(rep("-", col_widths[i]), collapse = "")
+  }
+  separator <- paste0("|-", paste(separator_parts, collapse = "-|-"), "-|")
+
+  # Build data rows
+  rows <- character(nrow(df))
+  for (row_idx in seq_len(nrow(df))) {
+    row_parts <- character(ncol(df))
+    for (col_idx in seq_len(ncol(df))) {
+      row_parts[col_idx] <- format(df_char[row_idx, col_idx],
+                                   width = col_widths[col_idx],
+                                   justify = "left")
+    }
+    rows[row_idx] <- paste0("| ", paste(row_parts, collapse = " | "), " |")
+  }
+
+  # Combine all parts
+  paste(c(header, separator, rows), collapse = "\n")
+}
+
 #' Format Missing Display Names as Table
 #'
 #' Helper function to format missing display name information as a markdown-style table.
@@ -560,34 +628,8 @@ format_missing_display_names_table <- function(vars_df, missing_indices) {
     table_data$Group[i] <- if (!is.na(group_val) && group_val != "") group_val else "N/A"
   }
 
-  # Calculate column widths
-  col_widths <- c(
-    Strategy = max(nchar("Strategy"), max(nchar(table_data$Strategy))),
-    Group = max(nchar("Group"), max(nchar(table_data$Group)))
-  )
-
-  # Build table
-  header <- paste0("| ",
-                  format("Strategy", width = col_widths["Strategy"], justify = "left"),
-                  " | ",
-                  format("Group", width = col_widths["Group"], justify = "left"),
-                  " |")
-
-  separator <- paste0("|-",
-                     paste(rep("-", col_widths["Strategy"]), collapse = ""),
-                     "-|-",
-                     paste(rep("-", col_widths["Group"]), collapse = ""),
-                     "-|")
-
-  rows <- apply(table_data, 1, function(row) {
-    paste0("| ",
-          format(row["Strategy"], width = col_widths["Strategy"], justify = "left"),
-          " | ",
-          format(row["Group"], width = col_widths["Group"], justify = "left"),
-          " |")
-  })
-
-  paste(c(header, separator, rows), collapse = "\n")
+  # Use the generic formatter
+  format_dataframe_as_markdown_table(table_data)
 }
 
 #' Validate Display Names for Variables (Builder Context)
@@ -1573,21 +1615,21 @@ resolve_groups <- function(groups, results) {
   }
 
   # Expand special keywords
-  if (length(groups) == 1 && groups == "all") {
+  if (is.character(groups) && length(groups) == 1 && groups == "all") {
     return(list(
       include_overall = TRUE,
       include_groups = available_groups
     ))
   }
 
-  if (length(groups) == 1 && groups == "all_groups") {
+  if (is.character(groups) && length(groups) == 1 && groups == "all_groups") {
     return(list(
       include_overall = FALSE,
       include_groups = available_groups
     ))
   }
 
-  if (length(groups) == 1 && groups == "overall") {
+  if (is.character(groups) && length(groups) == 1 && groups == "overall") {
     return(list(
       include_overall = TRUE,
       include_groups = character(0)
@@ -1599,13 +1641,11 @@ resolve_groups <- function(groups, results) {
   include_groups <- setdiff(groups, "overall")
 
   # Validate that all non-reserved groups exist
-  invalid <- setdiff(include_groups, available_groups)
-  if (length(invalid) > 0) {
-    stop(sprintf(
-      "Group(s) not found: %s\nAvailable groups: %s",
-      paste(invalid, collapse = ", "),
-      paste(c("overall", available_groups), collapse = ", ")
-    ))
+  if (length(include_groups) > 0) {
+    # Use check_groups_exist helper for consistent formatted error messages
+    # Create a mock results object with segments for validation
+    mock_results <- list(segments = data.frame(group = available_groups))
+    check_groups_exist(include_groups, mock_results)
   }
 
   list(

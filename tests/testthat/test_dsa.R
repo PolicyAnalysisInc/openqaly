@@ -461,8 +461,8 @@ test_that("DSA timeframe override works for PSM models", {
     add_state("pfs", display_name = "Progression Free") %>%
     add_state("progressed", display_name = "Progressed") %>%
     add_state("dead", display_name = "Dead") %>%
-    add_variable("pfs_dist", herosurv::define_surv_dist(dist = "exp", lambda = 0.1)) %>%
-    add_variable("os_dist", herosurv::define_surv_dist(dist = "exp", lambda = 0.05)) %>%
+    add_variable("pfs_dist", herosurv::define_surv_param(dist = "exp", rate = 0.1)) %>%
+    add_variable("os_dist", herosurv::define_surv_param(dist = "exp", rate = 0.05)) %>%
     add_psm_transition("PFS", "months", pfs_dist) %>%
     add_psm_transition("OS", "months", os_dist) %>%
     add_value("qaly_pfs", 0.9, state = "pfs") %>%

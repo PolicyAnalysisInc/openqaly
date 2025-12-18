@@ -6,9 +6,9 @@
 \usage{
 nmb_plot_bar(
   res,
-  outcome_summary,
-  cost_summary,
-  group = "aggregated",
+  health_outcome,
+  cost_outcome,
+  groups = "overall",
   wtp = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -18,15 +18,15 @@ nmb_plot_bar(
 \arguments{
 \item{res}{A heRomod2 model results object (output from run_model)}
 
-\item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost summary to use (e.g., "total_cost")}
+
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
 \item{discounted}{Logical. Use discounted values?}
-
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
@@ -49,7 +49,7 @@ NMB = (Difference in Outcomes × WTP) - Difference in Costs
 }
 \details{
 Either `intervention` or `comparator` must be specified (one is mandatory).
-WTP is automatically extracted from the outcome summary metadata if available,
+WTP is automatically extracted from the health outcome summary metadata if available,
 but can be overridden using the `wtp` parameter.
 }
 \examples{

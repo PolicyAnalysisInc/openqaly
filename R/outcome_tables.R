@@ -4,7 +4,7 @@
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A heRomod2 model results object
-#' @param summary_name Name of summary to display (e.g., "total_qalys")
+#' @param outcome Name of outcome to display (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row?
@@ -14,7 +14,7 @@
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
 prepare_outcomes_table_data <- function(results,
-                                        summary_name,
+                                        outcome,
                                         groups = "overall",
                                         strategies = NULL,
                                         interventions = NULL,
@@ -29,7 +29,7 @@ prepare_outcomes_table_data <- function(results,
     results,
     groups = groups,
     strategies = strategies,
-    summaries = summary_name,
+    summaries = outcome,
     value_type = "outcome",
     discounted = discounted,
     use_display_names = TRUE,
@@ -48,10 +48,10 @@ prepare_outcomes_table_data <- function(results,
   summary_data$value_display <- summary_data$value
 
   # Determine mode and pivoting strategy
-  mode <- if (n_groups > 1 || is.null(group)) "three_level" else "single"
+  mode <- if (n_groups > 1 || is.null(groups)) "three_level" else "single"
 
   # Pivot to table format
-  if (n_groups > 1 || is.null(group)) {
+  if (n_groups > 1 || is.null(groups)) {
     # Mode 3: Group > Strategy columns
     pivot_data <- summary_data %>%
       pivot_wider(
@@ -292,8 +292,8 @@ prepare_outcomes_table_data <- function(results,
 #' Supports both flextable and kableExtra backends for flexible output formatting.
 #'
 #' @param results A heRomod2 model results object
-#' @param summary_name Name of summary to display (e.g., "total_qalys")
-#' @param group Group selection: "aggregated" (default), specific group, or NULL (all groups + aggregated)
+#' @param outcome Name of outcome to display (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
@@ -307,17 +307,17 @@ prepare_outcomes_table_data <- function(results,
 #' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 #' results <- run_model(model)
 #'
-#' # Summary table for aggregated
+#' # Summary table for overall
 #' ft <- outcomes_table(results, "total_qalys")
 #'
 #' # Compare across groups
-#' ft <- outcomes_table(results, "total_qalys", group = NULL)
+#' ft <- outcomes_table(results, "total_qalys", groups = NULL)
 #' }
 #'
 #' @export
 outcomes_table <- function(results,
-                           summary_name,
-                           group = "aggregated",
+                           outcome,
+                           groups = "overall",
                            strategies = NULL,
                            interventions = NULL,
                            comparators = NULL,
@@ -337,7 +337,7 @@ outcomes_table <- function(results,
   # Prepare data
   prepared <- prepare_outcomes_table_data(
     results = results,
-    summary_name = summary_name,
+    outcome = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -374,7 +374,7 @@ outcomes_table <- function(results,
 prepare_nmb_table_data <- function(results,
                                   outcome_summary,
                                   cost_summary,
-                                  group = "aggregated",
+                                  groups = "overall",
                                   wtp = NULL,
                                   interventions = NULL,
                                   comparators = NULL,
@@ -393,11 +393,10 @@ prepare_nmb_table_data <- function(results,
     if (is.null(results$metadata$summaries)) {
       stop("Cannot extract WTP from metadata.")
     }
+    # Check if outcome summary exists using validation helper
+    check_summary_exists(outcome_summary, results$metadata)
     outcome_meta <- results$metadata$summaries %>%
       filter(name == outcome_summary)
-    if (nrow(outcome_meta) == 0) {
-      stop(sprintf("Outcome summary '%s' not found", outcome_summary))
-    }
     wtp <- outcome_meta$wtp[1]
     if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
@@ -447,7 +446,7 @@ prepare_nmb_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Determine mode
-  mode <- if (n_groups > 1 || is.null(group)) "three_level" else "single"
+  mode <- if (n_groups > 1 || is.null(groups)) "three_level" else "single"
 
   # Pivot to table format
   if (mode == "three_level") {
@@ -689,8 +688,8 @@ prepare_nmb_table_data <- function(results,
 #' Supports both flextable and kableExtra backends for flexible output formatting.
 #'
 #' @param results A heRomod2 model results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome summary
+#' @param cost_outcome Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay
 #' @param intervention Single reference strategy for intervention perspective.
@@ -719,9 +718,9 @@ prepare_nmb_table_data <- function(results,
 #'
 #' @export
 nmb_table <- function(results,
-                     outcome_summary,
-                     cost_summary,
-                     group = "aggregated",
+                     health_outcome,
+                     cost_outcome,
+                     groups = "overall",
                      wtp = NULL,
                      interventions = NULL,
                      comparators = NULL,
@@ -736,8 +735,8 @@ nmb_table <- function(results,
   # Prepare data
   prepared <- prepare_nmb_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     wtp = wtp,
     interventions = interventions,
@@ -785,8 +784,7 @@ prepare_incremental_ce_table_data <- function(results,
     cost_summary = cost_summary,
     groups = groups,
     strategies = strategies,
-    discounted = discounted,
-    use_display_names = TRUE
+    discounted = discounted
   )
 
   # Format ICER column using print.icer() logic
@@ -820,7 +818,7 @@ prepare_incremental_ce_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Determine mode
-  mode <- if (n_groups > 1 || is.null(group)) "multi_group" else "single_group"
+  mode <- if (n_groups > 1 || is.null(groups)) "multi_group" else "single_group"
 
   # Create data for table - each strategy is already a row (no pivot needed!)
   table_data <- ce_data %>%
@@ -939,14 +937,14 @@ prepare_incremental_ce_table_data <- function(results,
 #' incremental_ce_table(results, "total_qalys", "total_cost")
 #'
 #' # For all groups
-#' incremental_ce_table(results, "total_qalys", "total_cost", group = NULL)
+#' incremental_ce_table(results, "total_qalys", "total_cost", groups = NULL)
 #' }
 #'
 #' @export
 incremental_ce_table <- function(results,
                                 outcome_summary,
                                 cost_summary,
-                                group = "aggregated",
+                                groups = "overall",
                                 strategies = NULL,
                                 decimals = 2,
                                 discounted = FALSE,
@@ -1086,7 +1084,7 @@ prepare_pairwise_ce_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Determine mode
-  mode <- if (n_groups > 1 || is.null(group)) "multi_group" else "single_group"
+  mode <- if (n_groups > 1 || is.null(groups)) "multi_group" else "single_group"
 
   # Build table data
   if (mode == "single_group") {
@@ -1244,7 +1242,7 @@ prepare_pairwise_ce_table_data <- function(results,
 #' pairwise_ce_table(results, "total_qalys", "total_cost", comparator = "control")
 #'
 #' # For all groups
-#' pairwise_ce_table(results, "total_qalys", "total_cost", group = NULL,
+#' pairwise_ce_table(results, "total_qalys", "total_cost", groups = NULL,
 #'                   comparator = "control")
 #' }
 #'
@@ -1252,7 +1250,7 @@ prepare_pairwise_ce_table_data <- function(results,
 pairwise_ce_table <- function(results,
                              outcome_summary,
                              cost_summary,
-                             group = "aggregated",
+                             groups = "overall",
                              strategies = NULL,
                              interventions = NULL,
                              comparators = NULL,

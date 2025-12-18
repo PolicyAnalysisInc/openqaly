@@ -272,21 +272,16 @@ test_that("calculate_incremental_ce() filters strategies correctly", {
 test_that("calculate_incremental_ce() uses name fields correctly", {
   results <- get_example_results()
 
-  # Test with display names (default)
-  ce_display <- calculate_incremental_ce(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "display_name"
+  # Test with default names
+  ce_default <- calculate_incremental_ce(
+    results, "total_qalys", "total_cost"
   )
 
-  # Test with technical names
-  ce_tech <- calculate_incremental_ce(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "name"
-  )
-
-  # Both should work and have same structure
-  expect_equal(ncol(ce_display), ncol(ce_tech))
-  expect_equal(names(ce_display), names(ce_tech))
+  # Both should work and have expected structure
+  expect_s3_class(ce_default, "data.frame")
+  expect_true("strategy" %in% names(ce_default))
+  expect_true("cost" %in% names(ce_default))
+  expect_true("outcome" %in% names(ce_default))
 })
 
 test_that("calculate_incremental_ce() handles discounted parameter", {
@@ -461,21 +456,13 @@ test_that("incremental_ce_plot() colors strategies by status", {
 test_that("incremental_ce_plot() uses name fields for labels", {
   results <- get_example_results()
 
-  # Test with display names
-  p_display <- incremental_ce_plot(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "display_name"
+  # Test with default names
+  p_default <- incremental_ce_plot(
+    results, "total_qalys", "total_cost"
   )
 
-  # Test with technical names
-  p_tech <- incremental_ce_plot(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "name"
-  )
-
-  # Both should create valid plots
-  expect_s3_class(p_display, "ggplot")
-  expect_s3_class(p_tech, "ggplot")
+  # Should create valid plot
+  expect_s3_class(p_default, "ggplot")
 })
 
 test_that("incremental_ce_plot() filters strategies", {
@@ -640,21 +627,13 @@ test_that("incremental_ce_table() shows dominated status correctly", {
 test_that("incremental_ce_table() uses name fields", {
   results <- get_example_results()
 
-  # Test with display names
-  tbl_display <- incremental_ce_table(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "display_name"
+  # Test with default names
+  tbl_default <- incremental_ce_table(
+    results, "total_qalys", "total_cost"
   )
 
-  # Test with technical names
-  tbl_tech <- incremental_ce_table(
-    results, "total_qalys", "total_cost",
-    strategy_name_field = "name"
-  )
-
-  # Both should create valid tables
-  expect_true(inherits(tbl_display, "kableExtra") || inherits(tbl_display, "flextable"))
-  expect_true(inherits(tbl_tech, "kableExtra") || inherits(tbl_tech, "flextable"))
+  # Should create valid table
+  expect_true(inherits(tbl_default, "kableExtra") || inherits(tbl_default, "flextable"))
 })
 
 test_that("incremental_ce_table() filters strategies", {

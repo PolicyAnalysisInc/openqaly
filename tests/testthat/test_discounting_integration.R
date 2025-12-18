@@ -22,7 +22,7 @@ test_that("Discounting produces mathematically exact results", {
     {"setting": "reduce_state_cycle", "value": "false"}
   ],
   "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
-  "groups": [{"name": "all", "display_name": "All", "description": "", "weight": "1"}],
+  "groups": [],
   "states": [
     {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""},
     {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
@@ -101,7 +101,7 @@ test_that("Zero discount rate produces identical values", {
     {"setting": "reduce_state_cycle", "value": "false"}
   ],
   "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
-  "groups": [{"name": "all", "display_name": "All", "description": "", "weight": "1"}],
+  "groups": [],
   "states": [
     {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""},
     {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
@@ -161,7 +161,7 @@ test_that("Different discount rates for costs vs outcomes work correctly", {
     {"setting": "reduce_state_cycle", "value": "false"}
   ],
   "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
-  "groups": [{"name": "all", "display_name": "All", "description": "", "weight": "1"}],
+  "groups": [],
   "states": [
     {"name": "Healthy", "display_name": "Healthy", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],
@@ -229,7 +229,7 @@ test_that("High discount rate (50%) works correctly", {
     {"setting": "reduce_state_cycle", "value": "false"}
   ],
   "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
-  "groups": [{"name": "all", "display_name": "All", "description": "", "weight": "1"}],
+  "groups": [],
   "states": [
     {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
   ],

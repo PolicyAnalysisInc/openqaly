@@ -94,6 +94,8 @@ incremental_ceac_plot <- function(results,
 
   # Filter strategies if specified
   if (!is.null(strategies)) {
+    # Validate strategies exist using helper
+    check_strategies_exist(strategies, results$metadata)
     ceac_data <- ceac_data %>%
       filter(strategy %in% strategies)
   }

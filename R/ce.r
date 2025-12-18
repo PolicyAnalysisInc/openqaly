@@ -199,10 +199,7 @@ calculate_incremental_ce <- function(results,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
-    discounted = discounted,
-    strategy_name_field = "display_name",
-    group_name_field = "display_name",
-    value_name_field = "name"  # We don't need value names, just totals
+    discounted = discounted
   ) %>%
     group_by(strategy, group) %>%
     summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
@@ -214,10 +211,7 @@ calculate_incremental_ce <- function(results,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
-    discounted = discounted,
-    strategy_name_field = "display_name",
-    group_name_field = "display_name",
-    value_name_field = "name"
+    discounted = discounted
   ) %>%
     group_by(strategy, group) %>%
     summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")

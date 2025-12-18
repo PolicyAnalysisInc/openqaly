@@ -6,8 +6,8 @@
 \usage{
 nmb_plot_line(
   res,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   groups = "overall",
   wtp = NULL,
   interventions = NULL,
@@ -20,9 +20,9 @@ nmb_plot_line(
 \arguments{
 \item{res}{A heRomod2 model results object (output from run_model)}
 
-\item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost summary to use (e.g., "total_cost")}
 
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 

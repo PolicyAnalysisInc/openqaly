@@ -7,6 +7,7 @@ create_test_model_with_all_sampling <- function() {
     set_settings(
       n_cycles = 50,
       cycle_length = 1,
+      cycle_length_unit = "years",
       discount_rate_costs = 0.03,
       discount_rate_effects = 0.03
     ) |>

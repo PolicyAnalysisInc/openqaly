@@ -5,8 +5,8 @@
 #' across strategies.
 #'
 #' @param results A heRomod2 DSA results object
-#' @param summary_name Name of summary to display
-#' @param group Group selection: "aggregated", specific group, or NULL
+#' @param outcome Name of outcome to display
+#' @param groups Group selection: "overall", specific group, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Intervention strategy name
 #' @param comparators Comparator strategy name
@@ -17,8 +17,8 @@
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
 prepare_dsa_outcomes_table_data <- function(results,
-                                            summary_name,
-                                            group = "aggregated",
+                                            outcome,
+                                            groups = "overall",
                                             strategies = NULL,
                                             interventions = NULL,
                                             comparators = NULL,
@@ -29,9 +29,9 @@ prepare_dsa_outcomes_table_data <- function(results,
   # Extract DSA summaries
   dsa_data <- extract_dsa_summaries(
     results,
-    summary_name = summary_name,
+    summary_name = outcome,
     value_type = "all",
-    group = group,
+    group = groups,
     strategies = strategies,
     discounted = discounted
   )
@@ -147,7 +147,7 @@ prepare_dsa_outcomes_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Determine mode
-  mode <- if (n_groups > 1 || is.null(group)) "multi_group" else "single_group"
+  mode <- if (n_groups > 1 || is.null(groups)) "multi_group" else "single_group"
 
   # Build table data based on mode
   if (mode == "single_group") {
@@ -313,9 +313,9 @@ prepare_dsa_outcomes_table_data <- function(results,
 #' for each parameter across strategies. Supports both outcome and cost summaries.
 #'
 #' @param results A heRomod2 DSA results object (output from run_dsa)
-#' @param summary_name Name of summary to display (e.g., "total_qalys", "total_cost")
-#' @param group Group selection: "aggregated" (default), specific group, or NULL
-#'   (all groups plus aggregated)
+#' @param outcome Name of outcome to display (e.g., "total_qalys", "total_cost")
+#' @param groups Group selection: "overall" (default), specific group, or NULL
+#'   (all groups)
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Single reference strategy for intervention perspective.
 #'   If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.
@@ -332,7 +332,7 @@ prepare_dsa_outcomes_table_data <- function(results,
 #' The table shows each DSA parameter as a row with three columns per strategy:
 #' Low, Base, and High values.
 #'
-#' When multiple groups need to be displayed (group = NULL), uses group label rows
+#' When multiple groups need to be displayed (groups = NULL), uses group label rows
 #' (in bold) followed by indented parameter rows for each group.
 #'
 #' When interventions or comparators is specified, shows differences between strategies
@@ -355,14 +355,14 @@ prepare_dsa_outcomes_table_data <- function(results,
 #' dsa_outcomes_table(dsa_results, "total_cost")
 #'
 #' # All groups with flextable format
-#' dsa_outcomes_table(dsa_results, "total_qalys", group = NULL,
+#' dsa_outcomes_table(dsa_results, "total_qalys", groups = NULL,
 #'                    table_format = "flextable")
 #' }
 #'
 #' @export
 dsa_outcomes_table <- function(results,
-                               summary_name,
-                               group = "aggregated",
+                               outcome,
+                               groups = "overall",
                                strategies = NULL,
                                interventions = NULL,
                                comparators = NULL,
@@ -381,8 +381,8 @@ dsa_outcomes_table <- function(results,
   # Prepare data
   prepared <- prepare_dsa_outcomes_table_data(
     results = results,
-    summary_name = summary_name,
-    group = group,
+    outcome = outcome,
+    groups = groups,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,

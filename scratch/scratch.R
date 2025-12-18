@@ -163,7 +163,7 @@ cat("\n=== Testing dsa_nmb_plot ===\n")
 
 # Single comparison
 cat("1. Single comparison (treatment_a vs treatment_b):\n")
-p1 <- dsa_nmb_plot(res1, "qalys", "costs",
+p1 <- dsa_nmb_plot(res1, health_outcome = "qalys", cost_outcome = "costs",
                    intervention = "treatment_a",
                    comparator = "treatment_b",
                    wtp = 50000)
@@ -171,7 +171,7 @@ ggplot2::ggsave('~/downloads/nmb_single.png', p1, width = 10, height = 6)
 
 # N×M comparison
 cat("2. N×M comparison (treatment_a, treatment_b vs treatment_c):\n")
-p2 <- dsa_nmb_plot(res1, "qalys", "costs",
+p2 <- dsa_nmb_plot(res1, health_outcome = "qalys", cost_outcome = "costs",
                    intervention = c("treatment_a", "treatment_b"),
                    comparator = "treatment_c",
                    wtp = 50000)
@@ -259,14 +259,14 @@ cat("=== Tests complete ===\n")
 # # outcomes_table(res, 'qalys', intervention = 'checkimab')
 # # outcomes_table(res, 'qalys', table_format='kable', intervention = 'checkimab')
 
-# # nmb_table(res, 'qalys', 'costs', group=NULL, intervention = 'checkimab', wtp = 30000)
-# # nmb_table(res, 'qalys', 'costs', group=NULL, table_format='kable', intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', group=NULL, intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', group=NULL, table_format='kable', intervention = 'checkimab', wtp = 30000)
 
 
-# # nmb_table(res, 'qalys', 'costs', intervention = 'checkimab', wtp = 30000)
-# # nmb_table(res, 'qalys', 'costs', table_format='kable', intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', table_format='kable', intervention = 'checkimab', wtp = 30000)
 
-# # nmb_table(res, 'qalys', 'costs', intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', intervention = 'checkimab', wtp = 30000)
 # # outcomes_table(res, 'qalys', group=NULL)
 
 # # outcomes_table(res, 'qalys', group=NULL, table_format='kable')
@@ -274,9 +274,9 @@ cat("=== Tests complete ===\n")
 # # outcomes_plot_line(res, 'costs')
 # # trace_plot_line(res)
 # # nmb_plot_bar# outcomes_plot_bar(res, 'costs', intervention = 'checkimab')
-# # nmb_plot_bar(res, "qalys", "costs", wtp=30000, intervention = "checkimab")
+# # nmb_plot_bar(res, health_outcome = "qalys", cost_outcome = "costs", wtp=30000, intervention = "checkimab")
 # # trace_table(res, strategy_name_field = "abbreviation", state_name_field = "display_name")
-# # nmb_table(res, 'qalys', 'costs', intervention = 'checkimab', wtp = 30000)
+# # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', intervention = 'checkimab', wtp = 30000)
 # # outcomes_table(res, 'qalys', group = NULL)
 # # ref_model <- system.file("models", "markov_medium", package = "heRomod2") %>% read_model()
 # # ref_res <- run_model(ref_model)

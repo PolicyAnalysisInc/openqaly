@@ -6,9 +6,9 @@
 \usage{
 nmb_table(
   results,
-  outcome_summary,
-  cost_summary,
-  group = "aggregated",
+  health_outcome,
+  cost_outcome,
+  groups = "overall",
   wtp = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -22,9 +22,11 @@ nmb_table(
 \arguments{
 \item{results}{A heRomod2 model results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome summary}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost summary}
+
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{wtp}{Optional override for willingness-to-pay}
 
@@ -35,8 +37,6 @@ nmb_table(
 \item{discounted}{Logical. Use discounted values?}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
-
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{intervention}{Single reference strategy for intervention perspective.}
 

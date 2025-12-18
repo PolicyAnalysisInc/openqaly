@@ -6,8 +6,8 @@
 \usage{
 dsa_nmb_plot(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   group = "aggregated",
   wtp = NULL,
   interventions = NULL,
@@ -20,9 +20,9 @@ dsa_nmb_plot(
 \arguments{
 \item{results}{A heRomod2 DSA results object (output from run_dsa)}
 
-\item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost summary to use (e.g., "total_cost")}
 
 \item{group}{Group selection: "aggregated" (default), specific group name, or NULL
 (all groups plus aggregated)}

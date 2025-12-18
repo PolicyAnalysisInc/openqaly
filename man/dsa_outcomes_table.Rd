@@ -6,8 +6,8 @@
 \usage{
 dsa_outcomes_table(
   results,
-  summary_name,
-  group = "aggregated",
+  outcome,
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -20,10 +20,10 @@ dsa_outcomes_table(
 \arguments{
 \item{results}{A heRomod2 DSA results object (output from run_dsa)}
 
-\item{summary_name}{Name of summary to display (e.g., "total_qalys", "total_cost")}
+\item{outcome}{Name of outcome to display (e.g., "total_qalys", "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group, or NULL
-(all groups plus aggregated)}
+\item{groups}{Group selection: "overall" (default), specific group, or NULL
+(all groups)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -52,7 +52,7 @@ for each parameter across strategies. Supports both outcome and cost summaries.
 The table shows each DSA parameter as a row with three columns per strategy:
 Low, Base, and High values.
 
-When multiple groups need to be displayed (group = NULL), uses group label rows
+When multiple groups need to be displayed (groups = NULL), uses group label rows
 (in bold) followed by indented parameter rows for each group.
 
 When interventions or comparators is specified, shows differences between strategies
@@ -75,7 +75,7 @@ dsa_outcomes_table(dsa_results, "total_qalys", comparators = "control")
 dsa_outcomes_table(dsa_results, "total_cost")
 
 # All groups with flextable format
-dsa_outcomes_table(dsa_results, "total_qalys", group = NULL,
+dsa_outcomes_table(dsa_results, "total_qalys", groups = NULL,
                    table_format = "flextable")
 }
 

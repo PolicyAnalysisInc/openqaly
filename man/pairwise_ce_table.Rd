@@ -8,7 +8,7 @@ pairwise_ce_table(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -25,6 +25,8 @@ pairwise_ce_table(
 
 \item{cost_summary}{Name of the cost summary}
 
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places (default: 2)}
@@ -34,8 +36,6 @@ pairwise_ce_table(
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
-
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{intervention}{Single reference strategy for intervention perspective}
 
@@ -58,7 +58,7 @@ results <- run_model(model)
 pairwise_ce_table(results, "total_qalys", "total_cost", comparator = "control")
 
 # For all groups
-pairwise_ce_table(results, "total_qalys", "total_cost", group = NULL,
+pairwise_ce_table(results, "total_qalys", "total_cost", groups = NULL,
                   comparator = "control")
 }
 

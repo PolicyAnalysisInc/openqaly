@@ -8,7 +8,7 @@ incremental_ce_table(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   decimals = 2,
   discounted = FALSE,
@@ -23,6 +23,8 @@ incremental_ce_table(
 
 \item{cost_summary}{Name of the cost summary}
 
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places (default: 2)}
@@ -32,8 +34,6 @@ incremental_ce_table(
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
-
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 }
 \value{
 A table object (flextable or kable depending on table_format)
@@ -51,7 +51,7 @@ results <- run_model(model)
 incremental_ce_table(results, "total_qalys", "total_cost")
 
 # For all groups
-incremental_ce_table(results, "total_qalys", "total_cost", group = NULL)
+incremental_ce_table(results, "total_qalys", "total_cost", groups = NULL)
 }
 
 }

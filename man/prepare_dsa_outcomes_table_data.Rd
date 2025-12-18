@@ -6,8 +6,8 @@
 \usage{
 prepare_dsa_outcomes_table_data(
   results,
-  summary_name,
-  group = "aggregated",
+  outcome,
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -19,9 +19,9 @@ prepare_dsa_outcomes_table_data(
 \arguments{
 \item{results}{A heRomod2 DSA results object}
 
-\item{summary_name}{Name of summary to display}
+\item{outcome}{Name of outcome to display}
 
-\item{group}{Group selection: "aggregated", specific group, or NULL}
+\item{groups}{Group selection: "overall", specific group, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 

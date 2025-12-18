@@ -177,18 +177,24 @@ get_psa_simulations <- function(results,
       results$segments
     )
   } else {
-    # Specific group(s)
+    # Specific group(s) - validate using helper
+    for (g in group) {
+      check_group_exists(g, results)
+    }
     if (!is.null(results$segments) && nrow(results$segments) > 0) {
       # Use technical names for filtering
       source_data <- results$segments %>%
         filter(group %in% group)
     } else {
-      stop(sprintf("Group '%s' not found in results", group))
+      # Groups were validated to exist, but no segments data
+      stop(sprintf("No segment data available for groups: %s", paste(group, collapse = ", ")))
     }
   }
 
   # Filter strategies if specified
   if (!is.null(strategies)) {
+    # Validate strategies exist using helper
+    check_strategies_exist(strategies, results$metadata)
     source_data <- source_data %>%
       filter(strategy %in% strategies)
   }
@@ -903,13 +909,14 @@ get_sampled_parameters <- function(results,
   if (!use_tuple_specification) {
     # Use global filtering when not using tuple specification
     if (!is.null(group) && !group %in% c("aggregated", "all")) {
+      # Validate groups exist using helper
+      for (g in group) {
+        check_group_exists(g, results)
+      }
+
       # Filter to specific group(s)
       source_data <- source_data %>%
         filter(group %in% !!group)
-
-      if (nrow(source_data) == 0) {
-        stop(sprintf("Group '%s' not found in results", group))
-      }
     }
 
     # Filter strategies if specified

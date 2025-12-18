@@ -429,10 +429,25 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
   # Extract expanded state names from init columns (critical!)
   state_names <- colnames(init)  # These are the expanded state names
 
+  # Convert inputs to proper types
+  init_numeric <- as.numeric(init)
+  trans_matrix <- as.matrix(transitions)
+
+  # Validate all inputs before calling C++
+  validate_cpp_inputs(
+    init_numeric,
+    trans_matrix,
+    values,
+    value_names,
+    state_names,
+    expanded_state_map,
+    half_cycle_method
+  )
+
   # All processing now happens in optimized C++
   cppCalculateTraceAndValues(
-    as.numeric(init),  # Pass just the values
-    as.matrix(transitions),
+    init_numeric,
+    trans_matrix,
     values,
     value_names,
     state_names,  # Pass expanded state names separately
@@ -686,25 +701,23 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
           time_df$error <- value$message
         }
       }
-      
-      # Check if value is numeric
-      if (any(class(value) %in% c('numeric', 'integer'))) {
-        time_df$value <- as.numeric(value)
-      } else {
-        # If not numeric, check if it's already an error handled above
-        if (!is_hero_error(value)) {
-            # Handle non-numeric result
-            type <- class(value)[1]
-            error_msg <- glue("Error evaluating transition '{row$name}': Result was type '{type}', expected numeric.")
-            # Check global option: stop or record error?
-            if (getOption("heRomod2.stop_on_error", default = FALSE)) {
-                stop(error_msg, call. = FALSE)
-            } else {
-                # Original behavior: record the error message
-                time_df$error <- error_msg
-            }
-        }
-        # If it IS a hero_error, it was handled by the previous if block
+
+      # Validate that the result is numeric and a valid probability
+      if (!is_error) {
+        tryCatch({
+          # Use the validation function to check type and range
+          value <- validate_transition_result(
+            value,
+            from_state = row$from_state,
+            to_state = row$to_state,
+            trans_name = row$name,
+            formula_text = as.character(row$formula[[1]]$expr)
+          )
+          time_df$value <- as.numeric(value)
+        }, error = function(e) {
+          # Always stop on type/range validation errors - these are critical
+          stop(e$message, call. = FALSE)
+        })
       }
       if (isTRUE(simplify) && !is_error) {
         # Transform to matrix to check st-dependency

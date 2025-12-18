@@ -125,47 +125,28 @@ accumulate_hero_error <- function(error_obj, context_msg) {
 format_and_throw_errors <- function(error_list) {
   # Filter out dependency errors before formatting
   root_cause_errors <- Filter(function(item) {
-    !is_hero_dependency_error(item$error) 
+    !is_hero_dependency_error(item$error)
   }, error_list)
-  
+
   # Only proceed if there are non-dependency errors remaining
   if (length(root_cause_errors) > 0) {
     # Create data frame for easy formatting using only root cause errors
     error_df <- do.call(rbind, lapply(root_cause_errors, function(item) {
       error_text <- if (is_hero_error(item$error) && !is.null(item$error$message)) {
-        item$error$message 
+        item$error$message
       } else {
          as.character(item$error)
       }
       data.frame(Context = as.character(item$context), Error = as.character(error_text), stringsAsFactors = FALSE)
     }))
 
-    # Determine max column widths for formatting
-    context_width <- max(nchar("Context"), max(nchar(error_df$Context)), na.rm = TRUE)
-    error_width <- max(nchar("Error"), max(nchar(error_df$Error)), na.rm = TRUE)
-    
-    # Create table components with left justification
-    header <- paste0("| ", format("Context", width = context_width, justify = "left"), 
-                     " | ", 
-                     format("Error", width = error_width, justify = "left"), 
-                     " |")
-    separator <- paste0("|-", paste(rep("-", context_width), collapse = ""), 
-                        "-|-", paste(rep("-", error_width), collapse = ""), 
-                        "-|")
-    
-    rows <- apply(error_df, 1, function(row) {
-        paste0("| ", 
-               format(row["Context"], width = context_width, justify = "left"), 
-               " | ", 
-               format(row["Error"], width = error_width, justify = "left"), 
-               " |")
-    })
-    
-    # Combine components into final message
+    # Use the generic formatter to create the markdown table
+    table_string <- format_dataframe_as_markdown_table(error_df)
+
+    # Combine with prefix message
     prefix <- "Multiple errors found during evaluation:"
-    table_string <- paste(header, separator, paste(rows, collapse = "\n"), sep = "\n")
     final_message <- glue("{prefix}\n\n{table_string}")
-    
+
     stop(final_message, call. = FALSE)
   }
   # If only dependency errors existed or list was empty, the function implicitly returns NULL here

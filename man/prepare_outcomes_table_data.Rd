@@ -6,7 +6,7 @@
 \usage{
 prepare_outcomes_table_data(
   results,
-  summary_name,
+  outcome,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
@@ -20,7 +20,7 @@ prepare_outcomes_table_data(
 \arguments{
 \item{results}{A heRomod2 model results object}
 
-\item{summary_name}{Name of summary to display (e.g., "total_qalys")}
+\item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
 \item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 

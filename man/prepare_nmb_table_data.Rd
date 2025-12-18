@@ -8,7 +8,7 @@ prepare_nmb_table_data(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   wtp = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -25,6 +25,8 @@ prepare_nmb_table_data(
 
 \item{cost_summary}{Name of the cost summary}
 
+\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+
 \item{wtp}{Optional override for willingness-to-pay}
 
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
@@ -32,8 +34,6 @@ prepare_nmb_table_data(
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
-
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
 
 \item{intervention}{Single reference strategy for intervention perspective.}
 

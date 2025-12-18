@@ -199,20 +199,42 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   processed_groups_and_na_info <- map(grouped_df_list, function(x_group) {
       state_ns <- eval_variables(x_group, clone_namespace(ns), FALSE)
       state_res <- state_ns$df # This contains cycle, state_cycle, and evaluated variable columns
-      
+
 
       # Determine which of the model's value_names are present as columns in state_res
       # These are the names of the values defined in this x_group
       value_cols_in_stateres <- intersect(colnames(state_res), value_names)
-      
-      # Collect NA details for the current group
+
+      # Collect NA details and type validation for the current group
       current_group_na_details_list <- list()
       if (nrow(state_res) > 0 && length(value_cols_in_stateres) > 0) {
           for (v_col_name in value_cols_in_stateres) {
               # Check if the column itself exists before trying to access it
               if (v_col_name %in% colnames(state_res)) {
-                  if (anyNA(state_res[[v_col_name]])) {
-                      na_indices <- which(is.na(state_res[[v_col_name]]))
+                  col_data <- state_res[[v_col_name]]
+
+                  # First check for non-numeric types (critical error)
+                  if (!is.numeric(col_data) && !is.integer(col_data)) {
+                      # Find the formula text for better error message
+                      formula_text <- NULL
+                      formula_row <- which(x_group$name == v_col_name)
+                      if (length(formula_row) > 0) {
+                          formula_text <- as.character(x_group$formula[[formula_row[1]]]$expr)
+                      }
+
+                      # Use validation helper to generate proper error
+                      validate_value_result(
+                          col_data,
+                          value_name = v_col_name,
+                          state = x_group$state[1],
+                          destination = x_group$destination[1],
+                          formula_text = formula_text
+                      )
+                  }
+
+                  # Then check for NA values (existing behavior)
+                  if (anyNA(col_data)) {
+                      na_indices <- which(is.na(col_data))
                       if (length(na_indices) > 0) {
                           current_group_na_details_list[[length(current_group_na_details_list) + 1]] <-
                               tibble(

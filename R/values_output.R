@@ -148,6 +148,11 @@ get_values <- function(results,
   value_type <- match.arg(value_type)
   time_unit <- match.arg(time_unit)
 
+  # Validate mutual exclusivity of strategies with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'")
+  }
+
   # Convert use_display_names to field names
   name_field <- field_from_display_names(use_display_names)
 
@@ -156,23 +161,11 @@ get_values <- function(results,
     # Both provided: explicit N×M comparisons
     # Validate all strategies exist
     all_strats <- c(interventions, comparators)
-    if (is.null(results$metadata$strategies)) {
-      stop("No strategy metadata available")
-    }
-    missing <- setdiff(all_strats, results$metadata$strategies$name)
-    if (length(missing) > 0) {
-      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
-    }
+    check_strategies_exist(all_strats, results$metadata)
   } else if (!is.null(interventions) || !is.null(comparators)) {
     # Only one provided: validate those strategies
     provided_strats <- if (!is.null(interventions)) interventions else comparators
-    if (is.null(results$metadata$strategies)) {
-      stop("No strategy metadata available")
-    }
-    missing <- setdiff(provided_strats, results$metadata$strategies$name)
-    if (length(missing) > 0) {
-      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
-    }
+    check_strategies_exist(provided_strats, results$metadata)
   }
 
   # Select source data based on groups parameter
@@ -180,6 +173,8 @@ get_values <- function(results,
 
   # Filter by strategy if specified
   if (!is.null(strategies)) {
+    # Validate strategies exist using helper
+    check_strategies_exist(strategies, results$metadata)
     source_data <- source_data %>% filter(strategy %in% strategies)
   }
 
@@ -562,6 +557,11 @@ get_summaries <- function(results,
 
   value_type <- match.arg(value_type)
 
+  # Validate mutual exclusivity of strategies with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'")
+  }
+
   # Convert use_display_names to field names
   name_field <- field_from_display_names(use_display_names)
 
@@ -569,23 +569,11 @@ get_summaries <- function(results,
   if (!is.null(interventions) && !is.null(comparators)) {
     # Both provided: explicit N×M comparisons
     all_strats <- c(interventions, comparators)
-    if (is.null(results$metadata$strategies)) {
-      stop("No strategy metadata available")
-    }
-    missing <- setdiff(all_strats, results$metadata$strategies$name)
-    if (length(missing) > 0) {
-      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
-    }
+    check_strategies_exist(all_strats, results$metadata)
   } else if (!is.null(interventions) || !is.null(comparators)) {
     # Only one provided: validate those strategies
     provided_strats <- if (!is.null(interventions)) interventions else comparators
-    if (is.null(results$metadata$strategies)) {
-      stop("No strategy metadata available")
-    }
-    missing <- setdiff(provided_strats, results$metadata$strategies$name)
-    if (length(missing) > 0) {
-      stop(sprintf("Strategies not found in results: %s", paste(missing, collapse = ", ")))
-    }
+    check_strategies_exist(provided_strats, results$metadata)
   }
 
   # Select source data based on groups parameter
@@ -593,6 +581,8 @@ get_summaries <- function(results,
 
   # Filter by strategy if specified
   if (!is.null(strategies)) {
+    # Validate strategies exist using helper
+    check_strategies_exist(strategies, results$metadata)
     source_data <- source_data %>% filter(strategy %in% strategies)
   }
 
@@ -624,6 +614,11 @@ get_summaries <- function(results,
 
   # Filter by summary names if specified
   if (!is.null(summaries)) {
+    # Validate that all requested summaries exist using the helper
+    # This will throw an informative error with table if any are missing
+    for (summary_name in summaries) {
+      check_summary_exists(summary_name, results$metadata)
+    }
     combined <- combined %>% filter(summary %in% summaries)
   }
 
@@ -648,21 +643,13 @@ get_summaries <- function(results,
 
   # Validate that we have data after all filtering
   if (nrow(combined) == 0) {
+    # Since summaries are now validated above with check_summary_exists(),
+    # if we get here with no data, it's due to values or value_type filtering
     filter_description <- c()
-    if (!is.null(summaries)) filter_description <- c(filter_description, paste("summary:", paste(summaries, collapse = ", ")))
     if (!is.null(values)) filter_description <- c(filter_description, paste("values:", paste(values, collapse = ", ")))
     if (value_type != "all") filter_description <- c(filter_description, paste("value_type:", value_type))
 
     error_msg <- sprintf("No data found matching filters: %s", paste(filter_description, collapse = "; "))
-
-    # Add available options to error message
-    if (!is.null(summaries) && length(summary_dfs) > 0) {
-      available_summaries <- unique(summary_dfs[[1]]$summary)
-      if (length(available_summaries) > 0) {
-        error_msg <- sprintf("%s\nAvailable summaries: %s", error_msg, paste(available_summaries, collapse = ", "))
-      }
-    }
-
     stop(error_msg)
   }
 
@@ -882,12 +869,11 @@ calculate_nmb <- function(results,
       stop("Cannot extract WTP from metadata. Metadata not available.")
     }
 
+    # Check if outcome summary exists using validation helper
+    check_summary_exists(outcome_summary, results$metadata)
+
     outcome_meta <- results$metadata$summaries %>%
       filter(name == outcome_summary)
-
-    if (nrow(outcome_meta) == 0) {
-      stop(sprintf("Outcome summary '%s' not found in metadata", outcome_summary))
-    }
 
     wtp <- outcome_meta$wtp[1]
 

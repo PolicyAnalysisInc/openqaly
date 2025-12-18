@@ -6,8 +6,8 @@
 \usage{
 outcomes_table(
   results,
-  summary_name,
-  group = "aggregated",
+  outcome,
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -21,9 +21,9 @@ outcomes_table(
 \arguments{
 \item{results}{A heRomod2 model results object}
 
-\item{summary_name}{Name of summary to display (e.g., "total_qalys")}
+\item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
-\item{group}{Group selection: "aggregated" (default), specific group, or NULL (all groups + aggregated)}
+\item{groups}{Group selection: "overall" (default), specific group, or NULL (all groups)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -47,11 +47,11 @@ Supports both flextable and kableExtra backends for flexible output formatting.
 model <- read_model(system.file("models/example_psm", package = "heRomod2"))
 results <- run_model(model)
 
-# Summary table for aggregated
+# Summary table for overall
 ft <- outcomes_table(results, "total_qalys")
 
 # Compare across groups
-ft <- outcomes_table(results, "total_qalys", group = NULL)
+ft <- outcomes_table(results, "total_qalys", groups = NULL)
 }
 
 }

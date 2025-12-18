@@ -587,15 +587,14 @@ extract_dsa_summaries <- function(results,
       source_data <- source_data %>% mutate(group = "Aggregated")
     }
   } else {
-    # Specific group
+    # Specific group - validate using helper
+    check_group_exists(group, results)
     if (!is.null(results$segments) && nrow(results$segments) > 0) {
       source_data <- results$segments %>%
         filter(group == !!group)
-      if (nrow(source_data) == 0) {
-        stop(sprintf("Group '%s' not found in results", group))
-      }
     } else {
-      stop(sprintf("Group '%s' not found in results", group))
+      # Group was validated to exist, but no segments data
+      stop(sprintf("No segment data available for group '%s'", group))
     }
   }
 
@@ -651,6 +650,8 @@ extract_dsa_summaries <- function(results,
 
   # Filter to selected strategies
   if (!is.null(strategies_to_include)) {
+    # Validate strategies exist using helper
+    check_strategies_exist(strategies_to_include, results$metadata)
     source_data <- source_data %>%
       filter(strategy %in% strategies_to_include)
   }

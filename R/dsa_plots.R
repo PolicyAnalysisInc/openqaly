@@ -662,8 +662,8 @@ dsa_outcomes_plot <- function(results,
 #' the base case.
 #'
 #' @param results A heRomod2 DSA results object (output from run_dsa)
-#' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
-#' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
+#' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
+#' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param group Group selection: "aggregated" (default), specific group name, or NULL
 #'   (all groups plus aggregated)
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
@@ -728,8 +728,8 @@ dsa_outcomes_plot <- function(results,
 #'
 #' @export
 dsa_nmb_plot <- function(results,
-                         outcome_summary,
-                         cost_summary,
+                         health_outcome,
+                         cost_outcome,
                          group = "aggregated",
                          wtp = NULL,
                          interventions = NULL,
@@ -749,20 +749,20 @@ dsa_nmb_plot <- function(results,
       stop("Cannot extract WTP from metadata. Metadata not available. Provide explicit wtp parameter.")
     }
     outcome_meta <- results$metadata$summaries %>%
-      filter(name == outcome_summary)
+      filter(name == health_outcome)
     if (nrow(outcome_meta) == 0) {
-      stop(sprintf("Outcome summary '%s' not found in metadata", outcome_summary))
+      stop(sprintf("Health outcome '%s' not found in metadata", health_outcome))
     }
     wtp <- outcome_meta$wtp[1]
     if (length(wtp) == 0 || is.na(wtp)) {
-      stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
+      stop(sprintf("WTP not found for health outcome '%s'. Provide explicit wtp parameter.", health_outcome))
     }
   }
 
   # Prepare tornado data for outcomes
   outcome_tornado <- prepare_dsa_tornado_data(
     results = results,
-    summary_name = outcome_summary,
+    summary_name = health_outcome,
     group = group,
     strategies = NULL,
     interventions = interventions,
@@ -786,7 +786,7 @@ dsa_nmb_plot <- function(results,
   # Prepare tornado data for costs
   cost_tornado <- prepare_dsa_tornado_data(
     results = results,
-    summary_name = cost_summary,
+    summary_name = cost_outcome,
     group = group,
     strategies = NULL,
     interventions = interventions,
@@ -887,11 +887,11 @@ dsa_nmb_plot <- function(results,
     )
 
   # Create NMB label with display names
-  outcome_label <- outcome_summary
-  cost_label <- cost_summary
+  outcome_label <- health_outcome
+  cost_label <- cost_outcome
   if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
-    outcome_label <- map_names(outcome_summary, results$metadata$summaries, "display_name")
-    cost_label <- map_names(cost_summary, results$metadata$summaries, "display_name")
+    outcome_label <- map_names(health_outcome, results$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
   }
 
   wtp_formatted <- format(wtp, big.mark = ",")
