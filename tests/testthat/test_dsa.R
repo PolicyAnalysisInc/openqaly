@@ -490,11 +490,11 @@ test_that("DSA timeframe override works for PSM models", {
 
   # Check that QALY totals differ
   base_qalys <- results$aggregated %>% filter(run_id == 1, strategy == "standard") %>%
-    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount)
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount) %>% sum()
   low_qalys <- results$aggregated %>% filter(run_id == 2, strategy == "standard") %>%
-    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount)
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount) %>% sum()
   high_qalys <- results$aggregated %>% filter(run_id == 3, strategy == "standard") %>%
-    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount)
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_qalys") %>% pull(amount) %>% sum()
 
   expect_true(low_qalys < base_qalys)
   expect_true(base_qalys < high_qalys)

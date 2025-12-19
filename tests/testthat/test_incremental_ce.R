@@ -236,16 +236,16 @@ test_that("calculate_incremental_ce() handles group parameter correctly", {
   # Use real model results which may have groups
   results <- get_example_results()
 
-  # Test aggregated (default)
+  # Test overall (default)
   ce_agg <- calculate_incremental_ce(results, "total_qalys", "total_cost",
-                                      group = "aggregated")
-  expect_equal(unique(ce_agg$group), "Aggregated")
+                                      group = "overall")
+  expect_equal(unique(ce_agg$group), "Overall")
 
   # Test NULL (all groups)
   ce_all <- calculate_incremental_ce(results, "total_qalys", "total_cost",
                                       group = NULL)
-  # Should have at least aggregated
-  expect_true("Aggregated" %in% ce_all$group)
+  # Should have at least overall
+  expect_true("Overall" %in% ce_all$group)
 })
 
 test_that("calculate_incremental_ce() filters strategies correctly", {
@@ -391,11 +391,11 @@ test_that("incremental_ce_plot() creates ggplot object", {
   expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomPoint"))))
 })
 
-test_that("incremental_ce_plot() handles group=aggregated", {
+test_that("incremental_ce_plot() handles group=overall", {
   results <- get_example_results()
 
   p <- incremental_ce_plot(results, "total_qalys", "total_cost",
-                           group = "aggregated")
+                           group = "overall")
 
   expect_s3_class(p, "ggplot")
   # Should not have facets for single group
@@ -417,9 +417,9 @@ test_that("incremental_ce_plot() handles group=NULL with faceting", {
 test_that("incremental_ce_plot() handles specific group", {
   results <- get_example_results()
 
-  # Test with aggregated as specific group
+  # Test with overall as specific group
   p <- incremental_ce_plot(results, "total_qalys", "total_cost",
-                           group = "aggregated")
+                           group = "overall")
 
   expect_s3_class(p, "ggplot")
 })
@@ -520,11 +520,11 @@ test_that("incremental_ce_table() handles flextable backend", {
   expect_s3_class(tbl, "flextable")
 })
 
-test_that("incremental_ce_table() handles group=aggregated", {
+test_that("incremental_ce_table() handles group=overall", {
   results <- get_example_results()
 
   tbl <- incremental_ce_table(results, "total_qalys", "total_cost",
-                               group = "aggregated")
+                               group = "overall")
 
   expect_true(inherits(tbl, "kableExtra") || inherits(tbl, "flextable"))
 })
@@ -543,7 +543,7 @@ test_that("incremental_ce_table() handles specific group", {
   results <- get_example_results()
 
   tbl <- incremental_ce_table(results, "total_qalys", "total_cost",
-                               group = "aggregated")
+                               group = "overall")
 
   expect_true(inherits(tbl, "kableExtra") || inherits(tbl, "flextable"))
 })

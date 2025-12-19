@@ -43,6 +43,11 @@ prepare_segment_for_sampling <- function(model, segment) {
 #' @export
 resample <- function(model, n, segments, seed = NULL) {
 
+  # Validate the variables specification if provided
+  if (!is.null(model$variables)) {
+    check_sampling_spec(model$variables)
+  }
+
   # Check the model's sampling specification early
   # Check if we have any form of sampling (univariate or multivariate)
   has_univariate <- FALSE
@@ -281,15 +286,6 @@ check_sampling_spec <- function(x) {
   if (length(missing_col) > 0) {
     stop(
       'Error in variables specification, "sampling" column was missing.',
-      call. = F
-    )
-  }
-
-  # Check that at least one variable is sampled
-  none_sampled <- all(is.empty(x$sampling))
-  if (none_sampled) {
-    stop(
-      'Error in variables specification, no sampling distributions were specified.',
       call. = F
     )
   }

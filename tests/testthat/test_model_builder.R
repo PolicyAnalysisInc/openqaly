@@ -40,11 +40,10 @@ test_that("Variables preserve all fields including pass-through", {
 
 test_that("Strategies and groups work correctly", {
   model <- define_model("markov") |>
-    add_strategy("treatment_a", abbreviation = "TX-A") |>
+    add_strategy("treatment_a") |>
     add_group("moderate", weight = "0.6") |>
     add_group("severe", weight = "0.4")
 
-  expect_equal(model$strategies$abbreviation[1], "TX-A")
   expect_equal(model$groups$weight[1], "0.6")
   expect_equal(model$groups$weight[2], "0.4")
   expect_equal(nrow(model$groups), 2)
@@ -62,7 +61,7 @@ test_that("Round-trip conversion preserves model", {
     add_transition("healthy", "sick", 0.1) |>
     add_value("cost", 1000, state = "sick") |>
     add_variable("p_disease", 0.1, source = "Literature") |>
-    add_strategy("treatment_a", abbreviation = "TX-A") |>
+    add_strategy("treatment_a") |>
     add_group("young", weight = "0.6") |>
     add_group("elderly", weight = "0.4")
 

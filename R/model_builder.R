@@ -284,6 +284,10 @@ add_transition <- function(model, from_state, to_state, formula) {
   # Remove the ~ if it exists (enquo adds it)
   formula_expr <- quo_get_expr(formula_quo)
   formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly (expr_text adds extra quotes)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
 
   new_trans <- tibble(
     from_state = from_state,
@@ -317,6 +321,10 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
   # Remove the ~ if it exists (enquo adds it)
   formula_expr <- quo_get_expr(formula_quo)
   formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly (expr_text adds extra quotes)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
 
   new_trans <- tibble(
     endpoint = endpoint,
@@ -360,6 +368,10 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
   # Remove the ~ if it exists (enquo adds it)
   formula_expr <- quo_get_expr(formula_quo)
   formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly (expr_text adds extra quotes)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
 
   new_value <- tibble(
     name = name,
@@ -439,6 +451,10 @@ add_variable <- function(model, name, formula, display_name = NULL,
   # Remove the ~ if it exists (enquo adds it)
   formula_expr <- quo_get_expr(formula_quo)
   formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly (expr_text adds extra quotes)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
 
   # Capture the sampling expression using NSE
   # Handle optional parameter: if missing, use empty string

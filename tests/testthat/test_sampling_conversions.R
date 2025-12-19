@@ -61,8 +61,8 @@ create_test_model_with_all_sampling <- function() {
     add_value("cost", "cost_healthy + treatment_cost", state = "healthy") |>
     add_value("cost", "cost_sick + treatment_cost * 2", state = "sick") |>
     add_value("cost", "0", state = "dead") |>
-    add_value("qaly", "utility_healthy * cycle_length", state = "healthy") |>
-    add_value("qaly", "utility_sick * cycle_length", state = "sick") |>
+    add_value("qaly", "utility_healthy * cycle_length_years", state = "healthy") |>
+    add_value("qaly", "utility_sick * cycle_length_years", state = "sick") |>
     add_value("qaly", "0", state = "dead") |>
 
     # Summaries
@@ -121,23 +121,25 @@ test_that("R to JSON to R preserves all sampling specifications", {
   # Test that both models produce same sampling results
   set.seed(123)
   orig_result <- run_model(original_model)
+  orig_parsed <- heRomod2:::parse_model(original_model)
   orig_segments <- orig_result$segments
   for (i in 1:nrow(orig_segments)) {
     orig_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
-      original_model, orig_segments[i, ]
+      orig_parsed, orig_segments[i, ]
     )
   }
-  orig_samples <- heRomod2:::resample(original_model, 10, orig_segments, seed = 123)
+  orig_samples <- heRomod2:::resample(orig_parsed, 10, orig_segments, seed = 123)
 
   set.seed(123)
   rest_result <- run_model(restored_model)
+  rest_parsed <- heRomod2:::parse_model(restored_model)
   rest_segments <- rest_result$segments
   for (i in 1:nrow(rest_segments)) {
     rest_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
-      restored_model, rest_segments[i, ]
+      rest_parsed, rest_segments[i, ]
     )
   }
-  rest_samples <- heRomod2:::resample(restored_model, 10, rest_segments, seed = 123)
+  rest_samples <- heRomod2:::resample(rest_parsed, 10, rest_segments, seed = 123)
 
   # Compare sampled values
   expect_equal(orig_samples, rest_samples, tolerance = 1e-10)
@@ -226,8 +228,23 @@ test_that("Excel to JSON to Excel preserves all sampling specifications", {
     group = rep("", 3)
   )
 
+  strategies <- tibble(
+    name = c("standard"),
+    display_name = c("Standard"),
+    description = c("Standard treatment")
+  )
+
+  groups <- tibble(
+    name = c("all_patients"),
+    display_name = c("All Patients"),
+    description = c("All patients"),
+    weight = c(1)
+  )
+
   wb_list <- list(
     settings = settings,
+    strategies = strategies,
+    groups = groups,
     states = states,
     variables = variables,
     transitions = transitions,
@@ -338,15 +355,16 @@ test_that("PSA runs correctly after format conversions", {
 
   set.seed(789)
   json_result <- run_model(json_model)
+  json_parsed <- heRomod2:::parse_model(json_model)
   json_segments <- json_result$segments
   for (i in 1:nrow(json_segments)) {
     json_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
-      json_model, json_segments[i, ]
+      json_parsed, json_segments[i, ]
     )
   }
 
   # Should not error
-  json_samples <- heRomod2:::resample(json_model, 10, json_segments, seed = 789)
+  json_samples <- heRomod2:::resample(json_parsed, 10, json_segments, seed = 789)
   expect_equal(nrow(json_samples), 10 * nrow(json_segments))
 
   # Test after Excel round-trip
@@ -356,15 +374,16 @@ test_that("PSA runs correctly after format conversions", {
 
   set.seed(789)
   excel_result <- run_model(excel_model)
+  excel_parsed <- heRomod2:::parse_model(excel_model)
   excel_segments <- excel_result$segments
   for (i in 1:nrow(excel_segments)) {
     excel_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
-      excel_model, excel_segments[i, ]
+      excel_parsed, excel_segments[i, ]
     )
   }
 
   # Should not error
-  excel_samples <- heRomod2:::resample(excel_model, 10, excel_segments, seed = 789)
+  excel_samples <- heRomod2:::resample(excel_parsed, 10, excel_segments, seed = 789)
   expect_equal(nrow(excel_samples), 10 * nrow(excel_segments))
 
   # Results should be identical (same seed)

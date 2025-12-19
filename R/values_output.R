@@ -324,8 +324,8 @@ get_values <- function(results,
     if (format == "wide") {
       # Wide format doesn't have strategy column to remap here
     } else {
-      if (!is.null(results$metadata$strategies) && strategy_name_field != "name") {
-        result$strategy <- map_names(result$strategy, results$metadata$strategies, strategy_name_field)
+      if (!is.null(results$metadata$strategies) && name_field != "name") {
+        result$strategy <- map_names(result$strategy, results$metadata$strategies, name_field)
       }
     }
   }

@@ -16,7 +16,8 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
       if (length(value) > 0) {
         val_str <- head(value, 1)
         # If the value matches the formula text, it's likely an undefined variable
-        if (!is.null(formula_text) && val_str == formula_text) {
+        # Guard against character(0) formula_text which would return logical(0) in comparison
+        if (!is.null(formula_text) && length(formula_text) > 0 && val_str == formula_text) {
           glue("undefined variable '{val_str}'")
         } else {
           glue("character string '{val_str}'")
@@ -34,7 +35,8 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
 
     # Add helpful hints based on the error type
     formula_hint <- ""
-    if (!is.null(formula_text) && is.character(formula_text)) {
+    # Guard against character(0) formula_text
+    if (!is.null(formula_text) && length(formula_text) > 0 && is.character(formula_text)) {
       if (is.character(value) && length(value) > 0 && value[1] == formula_text) {
         # Variable name evaluated to itself - likely undefined
         formula_hint <- glue("\nCheck that variable '{formula_text}' is defined and numeric.")

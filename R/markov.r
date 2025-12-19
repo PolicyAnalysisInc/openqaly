@@ -711,7 +711,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
             from_state = row$from_state,
             to_state = row$to_state,
             trans_name = row$name,
-            formula_text = as.character(row$formula[[1]]$expr)
+            formula_text = as.character(row$formula[[1]])
           )
           time_df$value <- as.numeric(value)
         }, error = function(e) {

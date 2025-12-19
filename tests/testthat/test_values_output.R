@@ -13,16 +13,16 @@ test_that("get_values works with aggregated data", {
   results <- run_model(model)
 
   # Test long format
-  values_long <- get_values(results, format = "long", group = "aggregated")
+  values_long <- get_values(results, format = "long", groups = "overall")
   expect_s3_class(values_long, "data.frame")
   expect_true("strategy" %in% colnames(values_long))
   expect_true("group" %in% colnames(values_long))
   expect_true("value_name" %in% colnames(values_long))
   expect_true("amount" %in% colnames(values_long))
-  expect_equal(unique(values_long$group), "Aggregated")
+  expect_equal(unique(values_long$group), "Overall")
 
   # Test wide format
-  values_wide <- get_values(results, format = "wide", group = "aggregated")
+  values_wide <- get_values(results, format = "wide", groups = "overall")
   expect_s3_class(values_wide, "data.frame")
   expect_true("strategy" %in% colnames(values_wide))
   expect_true("group" %in% colnames(values_wide))
@@ -88,7 +88,7 @@ test_that("get_summaries works with aggregated data", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  summaries <- get_summaries(results, group = "aggregated")
+  summaries <- get_summaries(results, groups = "overall")
 
   expect_s3_class(summaries, "data.frame")
   expect_true("strategy" %in% colnames(summaries))
@@ -96,7 +96,7 @@ test_that("get_summaries works with aggregated data", {
   expect_true("summary" %in% colnames(summaries))
   expect_true("value" %in% colnames(summaries))
   expect_true("amount" %in% colnames(summaries))
-  expect_equal(unique(summaries$group), "Aggregated")
+  expect_equal(unique(summaries$group), "Overall")
 })
 
 test_that("get_summaries filters by value type", {
@@ -114,7 +114,7 @@ test_that("get_summaries filters by value type", {
   expect_equal(length(unique(cost_summaries$value)), 4)
 
   # Verify technical names work with explicit parameter
-  cost_summaries_tech <- get_summaries(results, value_type = "cost", value_name_field = "name")
+  cost_summaries_tech <- get_summaries(results, value_type = "cost", use_display_names = FALSE)
   expect_true(all(cost_summaries_tech$value %in% c("cost_drug", "cost_admin", "cost_ae", "cost_prog")))
 
   # Get outcome summaries (default uses display names)
@@ -123,7 +123,7 @@ test_that("get_summaries filters by value type", {
   expect_true(length(unique(outcome_summaries$value)) >= 1)
 
   # Verify technical names work with explicit parameter
-  outcome_summaries_tech <- get_summaries(results, value_type = "outcome", value_name_field = "name")
+  outcome_summaries_tech <- get_summaries(results, value_type = "outcome", use_display_names = FALSE)
   expect_true(all(outcome_summaries_tech$value %in% c("qalys")))
 })
 

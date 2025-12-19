@@ -1,10 +1,13 @@
 context("Multivariate Sampling")
 suppressMessages(library(dplyr))
+suppressMessages(library(tidyr))
+suppressMessages(library(purrr))
 
 test_that("Dirichlet distribution generates valid transition probabilities", {
   # Create a simple model with Dirichlet sampling
   model <- define_model("markov") |>
-    set_settings(n_cycles = 10) |>
+    set_settings(n_cycles = 10, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("base") |>
     add_state("healthy", initial_prob = 0.7) |>
     add_state("sick", initial_prob = 0.2) |>
     add_state("dead", initial_prob = 0.1) |>
@@ -26,18 +29,28 @@ test_that("Dirichlet distribution generates valid transition probabilities", {
       variables = c("p_healthy_healthy", "p_healthy_sick", "p_healthy_dead")
     )
 
-  # Run model to get segments
-  result <- run_model(model)
-  segments <- result$segments
+  # Normalize and parse the model (as run_psa does)
+  normalized_model <- heRomod2:::normalize_and_validate_model(model)
+  parsed_model <- heRomod2:::parse_model(normalized_model)
 
-  # Prepare segments for sampling
-  for (i in 1:nrow(segments)) {
-    segments[i, ] <- heRomod2:::prepare_segment_for_sampling(model, segments[i, ])
-  }
+  # Get segments from parsed model and enrich with evaluated variables
+  segments <- heRomod2:::get_segments(parsed_model) %>%
+    rowwise() %>%
+    do({
+      seg <- as.list(.)
+      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+    }) %>%
+    ungroup()
 
   # Sample parameters
   set.seed(42)
-  sampled <- heRomod2:::resample(model, 100, segments, seed = 42)
+  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 42)
+
+  # Extract sampled values from parameter_overrides
+  sampled <- sampled_raw %>%
+    mutate(params = map(parameter_overrides, as_tibble)) %>%
+    select(-parameter_overrides) %>%
+    unnest(params)
 
   # Check that probabilities sum to 1
   prob_sums <- sampled$p_healthy_healthy + sampled$p_healthy_sick + sampled$p_healthy_dead
@@ -57,7 +70,8 @@ test_that("Dirichlet distribution generates valid transition probabilities", {
 test_that("Multivariate normal generates correlated parameters", {
   # Create model with mvnormal sampling
   model <- define_model("markov") |>
-    set_settings(n_cycles = 10) |>
+    set_settings(n_cycles = 10, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("base") |>
     add_state("healthy", initial_prob = 1) |>
     add_state("dead", initial_prob = 0) |>
     add_variable("mean_cost", 1000) |>
@@ -76,15 +90,27 @@ test_that("Multivariate normal generates correlated parameters", {
       variables = c("treatment_cost", "treatment_qaly")
     )
 
-  # Run model and sample
-  result <- run_model(model)
-  segments <- result$segments
-  for (i in 1:nrow(segments)) {
-    segments[i, ] <- heRomod2:::prepare_segment_for_sampling(model, segments[i, ])
-  }
+  # Normalize and parse the model (as run_psa does)
+  normalized_model <- heRomod2:::normalize_and_validate_model(model)
+  parsed_model <- heRomod2:::parse_model(normalized_model)
+
+  # Get segments from parsed model and enrich with evaluated variables
+  segments <- heRomod2:::get_segments(parsed_model) %>%
+    rowwise() %>%
+    do({
+      seg <- as.list(.)
+      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+    }) %>%
+    ungroup()
 
   set.seed(123)
-  sampled <- heRomod2:::resample(model, 1000, segments, seed = 123)
+  sampled_raw <- heRomod2:::resample(parsed_model, 1000, segments, seed = 123)
+
+  # Extract sampled values from parameter_overrides
+  sampled <- sampled_raw %>%
+    mutate(params = map(parameter_overrides, as_tibble)) %>%
+    select(-parameter_overrides) %>%
+    unnest(params)
 
   # Check means
   expect_equal(mean(sampled$treatment_cost), 1000, tolerance = 10)
@@ -102,7 +128,8 @@ test_that("Multivariate normal generates correlated parameters", {
 test_that("Multinomial distribution generates valid categorical outcomes", {
   # Create model with multinomial sampling
   model <- define_model("markov") |>
-    set_settings(n_cycles = 10) |>
+    set_settings(n_cycles = 10, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("base") |>
     add_state("state1", initial_prob = 0.5) |>
     add_state("state2", initial_prob = 0.3) |>
     add_state("state3", initial_prob = 0.2) |>
@@ -118,15 +145,27 @@ test_that("Multinomial distribution generates valid categorical outcomes", {
       variables = c("init_state1", "init_state2", "init_state3")
     )
 
-  # Run model and sample
-  result <- run_model(model)
-  segments <- result$segments
-  for (i in 1:nrow(segments)) {
-    segments[i, ] <- heRomod2:::prepare_segment_for_sampling(model, segments[i, ])
-  }
+  # Normalize and parse the model (as run_psa does)
+  normalized_model <- heRomod2:::normalize_and_validate_model(model)
+  parsed_model <- heRomod2:::parse_model(normalized_model)
+
+  # Get segments from parsed model and enrich with evaluated variables
+  segments <- heRomod2:::get_segments(parsed_model) %>%
+    rowwise() %>%
+    do({
+      seg <- as.list(.)
+      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+    }) %>%
+    ungroup()
 
   set.seed(456)
-  sampled <- heRomod2:::resample(model, 100, segments, seed = 456)
+  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 456)
+
+  # Extract sampled values from parameter_overrides
+  sampled <- sampled_raw %>%
+    mutate(params = map(parameter_overrides, as_tibble)) %>%
+    select(-parameter_overrides) %>%
+    unnest(params)
 
   # Check that each row sums to 1 (one-hot encoding)
   row_sums <- sampled$init_state1 + sampled$init_state2 + sampled$init_state3
@@ -138,7 +177,11 @@ test_that("Multinomial distribution generates valid categorical outcomes", {
   expect_true(all(sampled$init_state3 %in% c(0, 1)))
 
   # Check approximate probabilities (with larger sample for better accuracy)
-  sampled_large <- heRomod2:::resample(model, 1000, segments, seed = 789)
+  sampled_large_raw <- heRomod2:::resample(parsed_model, 1000, segments, seed = 789)
+  sampled_large <- sampled_large_raw %>%
+    mutate(params = map(parameter_overrides, as_tibble)) %>%
+    select(-parameter_overrides) %>%
+    unnest(params)
   expect_equal(mean(sampled_large$init_state1), 0.5, tolerance = 0.05)
   expect_equal(mean(sampled_large$init_state2), 0.3, tolerance = 0.05)
   expect_equal(mean(sampled_large$init_state3), 0.2, tolerance = 0.05)
@@ -147,7 +190,7 @@ test_that("Multinomial distribution generates valid categorical outcomes", {
 test_that("Segment-specific multivariate sampling works correctly", {
   # Create model with strategy-specific multivariate sampling
   model <- define_model("markov") |>
-    set_settings(n_cycles = 10) |>
+    set_settings(n_cycles = 10, cycle_length = 1, cycle_length_unit = "years") |>
     add_strategy("standard") |>
     add_strategy("intervention") |>
     add_state("healthy", initial_prob = 1) |>
@@ -173,25 +216,41 @@ test_that("Segment-specific multivariate sampling works correctly", {
       )
     )
 
-  # Run model and sample
-  result <- run_model(model)
-  segments <- result$segments
-  for (i in 1:nrow(segments)) {
-    segments[i, ] <- heRomod2:::prepare_segment_for_sampling(model, segments[i, ])
-  }
+  # Normalize and parse the model (as run_psa does)
+  normalized_model <- heRomod2:::normalize_and_validate_model(model)
+  parsed_model <- heRomod2:::parse_model(normalized_model)
 
-  sampled <- heRomod2:::resample(model, 100, segments, seed = 321)
+  # Get segments from parsed model and enrich with evaluated variables
+  segments <- heRomod2:::get_segments(parsed_model) %>%
+    rowwise() %>%
+    do({
+      seg <- as.list(.)
+      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+    }) %>%
+    ungroup()
 
-  # Separate by strategy
-  standard_samples <- filter(sampled, strategy == "standard")
-  intervention_samples <- filter(sampled, strategy == "intervention")
+  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 321)
 
-  # Check that standard strategy doesn't have multivariate sampling
-  # (variables should be constant at base values)
-  expect_equal(length(unique(standard_samples$cost_param)), 1)
-  expect_equal(length(unique(standard_samples$qaly_param)), 1)
+  # Separate by strategy in the raw results
+  standard_raw <- filter(sampled_raw, strategy == "standard")
+  intervention_raw <- filter(sampled_raw, strategy == "intervention")
 
-  # Check that intervention strategy has multivariate sampling
+  # Check that standard strategy has no parameter overrides (empty lists)
+  # This means the base values will be used without sampling
+  standard_override_lengths <- sapply(standard_raw$parameter_overrides, length)
+  expect_true(all(standard_override_lengths == 0))
+
+  # Check that intervention strategy has parameter overrides
+  intervention_override_lengths <- sapply(intervention_raw$parameter_overrides, length)
+  expect_true(all(intervention_override_lengths == 2))
+
+  # Extract sampled values for intervention only
+  intervention_samples <- intervention_raw %>%
+    mutate(params = map(parameter_overrides, as_tibble)) %>%
+    select(-parameter_overrides) %>%
+    unnest(params)
+
+  # Check that intervention strategy has multivariate sampling (varied values)
   expect_true(length(unique(intervention_samples$cost_param)) > 1)
   expect_true(length(unique(intervention_samples$qaly_param)) > 1)
 

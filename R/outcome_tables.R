@@ -120,9 +120,9 @@ prepare_outcomes_table_data <- function(results,
 
       col_counter <- col_counter + 1
 
-      # Group columns
+      # Group columns (use startsWith for literal matching to avoid regex issues with special chars)
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, grepl(paste0("^", grp, "_"), names(pivot_data)), drop = FALSE]
+      grp_cols <- pivot_data[, startsWith(names(pivot_data), paste0(grp, "_")), drop = FALSE]
       result_cols <- cbind(result_cols, grp_cols)
       col_counter <- col_counter + ncol(grp_cols) - 1
     }
@@ -519,9 +519,9 @@ prepare_nmb_table_data <- function(results,
 
       col_counter <- col_counter + 1
 
-      # Get columns for this group
+      # Get columns for this group (use startsWith for literal matching to avoid regex issues)
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, grepl(paste0("^", grp, "_"), names(pivot_data)), drop = FALSE]
+      grp_cols <- pivot_data[, startsWith(names(pivot_data), paste0(grp, "_")), drop = FALSE]
       result_cols <- cbind(result_cols, grp_cols)
       col_counter <- col_counter + ncol(grp_cols) - 1
     }

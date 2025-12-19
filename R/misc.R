@@ -12,12 +12,16 @@ read_model <- function(path) {
     mv_variables <- model$multivariate_sampling_variables
 
     # Join and convert to list structure
+    # Preserve original order from mv_sampling sheet
+    sampling_order <- mv_sampling$name
+
     model$multivariate_sampling <- mv_variables %>%
       left_join(mv_sampling, by = c("sampling_name" = "name")) %>%
-      group_by(sampling_name) %>%
-      group_map(function(vars, key) {
+      split(.$sampling_name) %>%
+      .[sampling_order] %>%  # Reorder to match original order
+      lapply(function(vars) {
         list(
-          name = key$sampling_name,
+          name = vars$sampling_name[1],
           distribution = vars$distribution[1],
           description = if ("description" %in% names(vars) && !is.na(vars$description[1])) {
             vars$description[1]
@@ -28,7 +32,8 @@ read_model <- function(path) {
             select(variable, strategy, group) %>%
             as_tibble()
         )
-      })
+      }) %>%
+      unname()
 
     # Remove the raw tables
     model$multivariate_sampling_variables <- NULL
@@ -727,6 +732,9 @@ check_tbl <- function(df, spec, context) {
       } else if (!is.na(default)) {
         # If a default is specified, use it
         df[[col_name]][miss_data] <- default
+      } else {
+        # No default specified - convert empty strings to NA for consistency
+        df[[col_name]][miss_data] <- NA
       }
 
       # Re-apply type conversion after defaults to ensure correct type

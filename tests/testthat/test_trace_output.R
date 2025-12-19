@@ -35,8 +35,7 @@ test_that("get_trace extracts data in long format", {
 
   # Verify technical names work when explicitly requested
   trace_long_technical <- get_trace(results, format = "long",
-                                     strategy_name_field = "name",
-                                     state_name_field = "name")
+                                     use_display_names = FALSE)
   expect_setequal(unique(trace_long_technical$strategy), c("standard", "new_drug"))
   expect_setequal(unique(trace_long_technical$state), c("progression_free", "progressed", "dead"))
 })
@@ -108,7 +107,7 @@ test_that("get_trace filters by strategy", {
 
   # Test filtering with explicit technical name output
   trace_filtered_tech <- get_trace(results, format = "long", strategies = "standard",
-                                   strategy_name_field = "name")
+                                   use_display_names = FALSE)
   expect_equal(unique(trace_filtered_tech$strategy), "standard")
 })
 
@@ -132,7 +131,7 @@ test_that("get_trace filters by states", {
   # Test filtering with explicit technical name output
   trace_filtered_tech <- get_trace(results, format = "long",
                                    states = c("progression_free", "dead"),
-                                   state_name_field = "name")
+                                   use_display_names = FALSE)
   expect_setequal(unique(trace_filtered_tech$state), c("progression_free", "dead"))
 
   # Verify filtering works
