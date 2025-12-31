@@ -7,7 +7,7 @@
 
 #' Prepare Simple Trace Table Specification
 #'
-#' @param results heRomod2 results object
+#' @param results openqaly results object
 #' @param strategies Character vector of strategies to include
 #' @param group Group selection
 #' @param states Character vector of states to include
@@ -214,7 +214,7 @@ prepare_simple_trace_table <- function(results,
 
 #' Prepare Simple Outcomes Table Specification
 #'
-#' @param results heRomod2 results object
+#' @param results openqaly results object
 #' @param summary_name Name of summary to display
 #' @param group Group selection
 #' @param strategies Character vector of strategies to include

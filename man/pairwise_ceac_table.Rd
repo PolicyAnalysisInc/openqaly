@@ -20,7 +20,7 @@ pairwise_ceac_table(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object}
+\item{results}{A openqaly PSA results object}
 
 \item{outcome_summary}{Name of the outcome summary}
 
@@ -72,7 +72,7 @@ results in a hierarchical structure (group → strategy → probabilities).
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # Comparator perspective: Compare strategies to control

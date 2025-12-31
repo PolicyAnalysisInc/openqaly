@@ -16,7 +16,7 @@ calculate_pairwise_ce(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
 
@@ -64,7 +64,7 @@ When \code{group = NULL}, analysis is performed separately for each group and ag
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Pairwise comparisons vs control (comparator perspective)

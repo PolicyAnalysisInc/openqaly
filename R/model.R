@@ -3,15 +3,15 @@
 #' Runs probabilistic sensitivity analysis by sampling from distributions
 #' and running the model for each set of sampled parameters.
 #'
-#' @param model A heRomodel object with sampling specifications
+#' @param model A oq_model object with sampling specifications
 #' @param n_sim Number of PSA simulations to run
 #' @param seed Random seed for reproducibility
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
 run_psa <- function(model, n_sim, seed = NULL, ...) {
-  # Finalize builders (convert to heRomodel)
-  if ("heRomodel_builder" %in% class(model)) {
+  # Finalize builders (convert to oq_model)
+  if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
 
@@ -61,7 +61,7 @@ run_psa <- function(model, n_sim, seed = NULL, ...) {
 #' Takes a model specification object and runs the model for the base case.
 #' For probabilistic sensitivity analysis, use [run_psa()] instead.
 #'
-#' @param model A heRo_model object.
+#' @param model An openqaly model object.
 #' @param ... additional arguments.
 #'
 #' @return A list containing the results of the model.
@@ -70,8 +70,8 @@ run_psa <- function(model, n_sim, seed = NULL, ...) {
 run_model <- function(model, ...) {
 
   # Base case: existing logic
-  # Finalize builders (convert to heRomodel)
-  if ("heRomodel_builder" %in% class(model)) {
+  # Finalize builders (convert to oq_model)
+  if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
 

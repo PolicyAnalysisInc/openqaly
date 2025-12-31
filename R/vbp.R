@@ -19,7 +19,7 @@ NULL
 #' across three test values and calculating the linear relationship between WTP
 #' and the price that maintains cost-effectiveness versus each comparator.
 #'
-#' @param model A heRomodel object or heRomodel_builder object
+#' @param model An openqaly model object or oq_model_builder object
 #' @param price_variable Name of the variable representing the intervention's price
 #' @param intervention_strategy Name of the intervention strategy
 #' @param outcome_summary Name of the outcome summary to use (default: "total_qalys")
@@ -49,7 +49,7 @@ NULL
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/checkimab", package = "heRomod2"))
+#' model <- read_model(system.file("models/checkimab", package = "openqaly"))
 #'
 #' vbp_results <- run_vbp(
 #'   model,
@@ -79,7 +79,7 @@ run_vbp <- function(model,
   price_values <- c(0, 1000, 2000)
 
   # Parse and validate model
-  if ("heRomodel_builder" %in% class(model)) {
+  if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
   parsed_model <- parse_model(model, ...)
@@ -463,10 +463,10 @@ validate_vbp_spec <- function(model, vbp_spec) {
 #' @export
 test_vbp_nmb_consistency <- function() {
   library(testthat)
-  library(heRomod2)
+  library(openqaly)
 
   # Step 1: Run VBP for checkimab model
-  model <- read_model(system.file("models", "checkimab", package = "heRomod2"))
+  model <- read_model(system.file("models", "checkimab", package = "openqaly"))
 
   vbp_results <- run_vbp(
     model,

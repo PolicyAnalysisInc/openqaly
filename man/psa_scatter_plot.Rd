@@ -20,7 +20,7 @@ psa_scatter_plot(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object, or pre-calculated CEAC data
+\item{results}{A openqaly PSA results object, or pre-calculated CEAC data
 from calculate_incremental_ceac()}
 
 \item{outcome_summary}{Name of the outcome summary (required if results is
@@ -64,7 +64,7 @@ indicate the central tendency of the distribution.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # Basic scatter plot

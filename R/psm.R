@@ -247,8 +247,8 @@ parse_and_eval_psm_transitions <- function(transitions, segment, namespace) {
 
   if (is.null(transitions) || nrow(transitions) == 0) {
     error_msg <- "PSM models require transitions table with PFS and OS endpoint definitions."
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM transitions parsing")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM transitions parsing")
+    oq_error_checkpoint()
     return(list(pfs = NULL, os = NULL))
   }
   
@@ -261,25 +261,25 @@ parse_and_eval_psm_transitions <- function(transitions, segment, namespace) {
   # Validate we have exactly one PFS and one OS definition
   if (nrow(pfs_def) == 0) {
     error_msg <- "PSM model missing PFS endpoint definition in transitions."
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM transitions validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM transitions validation")
+    oq_error_checkpoint()
     return(list(pfs = NULL, os = NULL))
   }
   if (nrow(os_def) == 0) {
     error_msg <- "PSM model missing OS endpoint definition in transitions."
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM transitions validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM transitions validation")
+    oq_error_checkpoint()
     return(list(pfs = NULL, os = NULL))
   }
   if (nrow(pfs_def) > 1) {
     error_msg <- glue("PSM model has multiple PFS endpoint definitions ({nrow(pfs_def)}). Only one is allowed.")
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM transitions validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM transitions validation")
+    oq_error_checkpoint()
   }
   if (nrow(os_def) > 1) {
     error_msg <- glue("PSM model has multiple OS endpoint definitions ({nrow(os_def)}). Only one is allowed.")
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM transitions validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM transitions validation")
+    oq_error_checkpoint()
   }
   
   # Take first definition if multiple exist
@@ -291,7 +291,7 @@ parse_and_eval_psm_transitions <- function(transitions, segment, namespace) {
   os_dist <- evaluate_psm_endpoint(os_def, "OS", namespace)
 
   # Check for any errors accumulated during endpoint evaluation
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   list(pfs = pfs_dist, os = os_dist)
 }
@@ -310,22 +310,22 @@ parse_and_eval_psm_transitions <- function(transitions, segment, namespace) {
 #' @keywords internal
 evaluate_psm_endpoint <- function(endpoint_def, endpoint_name, namespace) {
   
-  # Convert formula to heRoFormula
-  formula <- as.heRoFormula(as.character(endpoint_def$formula))
+  # Convert formula to oq_formula
+  formula <- as.oq_formula(as.character(endpoint_def$formula))
   
   # Evaluate the formula - this should reference a variable containing the survival distribution
   dist <- eval_formula(formula, namespace)
   
   # Check for errors
-  if (is_hero_error(dist)) {
-    accumulate_hero_error(dist, context_msg = glue("Evaluation of {endpoint_name} survival distribution"))
+  if (is_oq_error(dist)) {
+    accumulate_oq_error(dist, context_msg = glue("Evaluation of {endpoint_name} survival distribution"))
     return(NULL)
   }
   
   # Validate the result is a survival distribution
   if (!inherits(dist, "surv_dist")) {
     error_msg <- glue("{endpoint_name} formula must evaluate to a survival distribution object (got {class(dist)[1]}).")
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM endpoint validation")
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM endpoint validation")
     return(NULL)
   }
   
@@ -354,8 +354,8 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   # Validate we have exactly 3 states
   if (length(state_names) != 3) {
     error_msg <- glue("PSM models require exactly 3 states (got {length(state_names)}). States should represent progression-free, post-progression, and dead.")
-    accumulate_hero_error(define_error(error_msg), context_msg = "PSM state validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM state validation")
+    oq_error_checkpoint()
   }
   
   # Extract distributions
@@ -389,8 +389,8 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   os_times <- convert_cycles_to_time_unit(cycle_times, os_time_unit, namespace)
   
   # Get survival probabilities
-  pfs_surv <- herosurv::surv_prob(pfs_dist, pfs_times)
-  os_surv <- herosurv::surv_prob(os_dist, os_times)
+  pfs_surv <- surv_prob(pfs_dist, pfs_times)
+  os_surv <- surv_prob(os_dist, os_times)
   
   # Calculate state probabilities
   # State 1 (progression-free): min(PFS(t), OS(t))
@@ -418,15 +418,15 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
     row_sum <- sum(trace[cycle_idx, ])
     if (abs(row_sum - 1.0) > tol) {
       error_msg <- glue("PSM trace probabilities do not sum to 1 at cycle {cycle_idx - 1} (sum = {row_sum})")
-      accumulate_hero_error(define_error(error_msg), context_msg = "PSM trace validation")
+      accumulate_oq_error(define_error(error_msg), context_msg = "PSM trace validation")
     }
     # Allow small floating point errors beyond [0, 1] bounds
     if (any(trace[cycle_idx, ] < -tol | trace[cycle_idx, ] > 1 + tol)) {
       error_msg <- glue("PSM trace contains invalid probabilities at cycle {cycle_idx - 1} (must be in [0, 1])")
-      accumulate_hero_error(define_error(error_msg), context_msg = "PSM trace validation")
+      accumulate_oq_error(define_error(error_msg), context_msg = "PSM trace validation")
     }
   }
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   # Calculate transition probabilities for transitional values
   # Transitions: PFS -> Post-prog, Post-prog -> Dead
@@ -550,12 +550,12 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
       # Evaluate the formula
       evaluated_value <- eval_formula(value_row$formula[[1]], cycle_ns)
       
-      if (is_hero_error(evaluated_value)) {
-        accumulate_hero_error(evaluated_value, context_msg = glue("Evaluation of value '{value_name}' in cycle {cycle}"))
+      if (is_oq_error(evaluated_value)) {
+        accumulate_oq_error(evaluated_value, context_msg = glue("Evaluation of value '{value_name}' in cycle {cycle}"))
         evaluated_value <- 0
       } else if (!is.numeric(evaluated_value) || length(evaluated_value) != 1) {
         error_msg <- glue("Value '{value_name}' in cycle {cycle} must evaluate to a single numeric value.")
-        accumulate_hero_error(define_error(error_msg), context_msg = "PSM value validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "PSM value validation")
         evaluated_value <- 0
       }
       
@@ -612,7 +612,7 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
     }
   }
   
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   values_matrix
 }
@@ -626,7 +626,7 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
 #' Validates the structure of a Custom PSM model. Custom PSM models allow
 #' arbitrary numbers of states with direct probability formulas.
 #'
-#' @param model A heRomodel object
+#' @param model An openqaly model object
 #' @return The model with psm_custom class
 #' @keywords internal
 parse_psm_custom <- function(model) {
@@ -904,7 +904,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 #'
 #' @param transitions The transitions dataframe with state and formula columns
 #' @param state_names Vector of state names
-#' @return Named list of heRoFormula objects by state
+#' @return Named list of oq_formula objects by state
 #' @keywords internal
 parse_state_probability_formulas <- function(transitions, state_names) {
   # Create a named list of formulas by state
@@ -916,7 +916,7 @@ parse_state_probability_formulas <- function(transitions, state_names) {
   for (i in 1:nrow(transitions)) {
     state <- transitions$state[i]
     formula_str <- as.character(transitions$formula[i])
-    formulas[[state]] <- as.heRoFormula(formula_str)
+    formulas[[state]] <- as.oq_formula(formula_str)
   }
 
   formulas
@@ -928,7 +928,7 @@ parse_state_probability_formulas <- function(transitions, state_names) {
 #' State probabilities are evaluated directly from formulas at each cycle,
 #' with special handling for the complement operator "C".
 #'
-#' @param state_prob_formulas Named list of heRoFormula objects by state
+#' @param state_prob_formulas Named list of oq_formula objects by state
 #' @param uneval_values Unevaluated values specifications
 #' @param namespace Evaluated variables namespace
 #' @param value_names Vector of value names
@@ -987,17 +987,17 @@ calculate_psm_custom_trace_and_values <- function(
       prob <- eval_formula(formula, cycle_ns)
 
       # Error handling
-      if (is_hero_error(prob)) {
+      if (is_oq_error(prob)) {
         error_msg <- glue("Error evaluating state probability for '{state_name}' at cycle {cycle}")
-        accumulate_hero_error(prob, context_msg = error_msg)
+        accumulate_oq_error(prob, context_msg = error_msg)
         prob <- 0  # Fallback
       } else if (!is.numeric(prob) || length(prob) != 1) {
         error_msg <- glue("State probability for '{state_name}' at cycle {cycle} must evaluate to a single numeric value (got {class(prob)[1]} of length {length(prob)}).")
-        accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM probability validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM probability validation")
         prob <- 0  # Fallback
       } else if (prob < -tol || prob > 1 + tol) {
         error_msg <- glue("State probability for '{state_name}' at cycle {cycle} is out of bounds: {prob} (must be in [0, 1]).")
-        accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM probability validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM probability validation")
         prob <- max(0, min(1, prob))  # Clamp to valid range
       }
 
@@ -1012,7 +1012,7 @@ calculate_psm_custom_trace_and_values <- function(
 
       if (complement_prob < -tol || complement_prob > 1 + tol) {
         error_msg <- glue("Complement probability for state '{complement_state}' at cycle {cycle} is out of bounds: {complement_prob}. Sum of other states: {sum_other_probs}")
-        accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM complement validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM complement validation")
         complement_prob <- max(0, min(1, complement_prob))
       }
 
@@ -1024,19 +1024,19 @@ calculate_psm_custom_trace_and_values <- function(
     if (abs(row_sum - 1.0) > tol) {
       state_prob_str <- paste(sprintf("%s=%.6f", state_names, trace[cycle + 1, ]), collapse = ", ")
       error_msg <- glue("Custom PSM state probabilities do not sum to 1 at cycle {cycle} (sum = {row_sum}). State probabilities: {state_prob_str}")
-      accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM trace validation")
+      accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM trace validation")
     }
 
     # Check for negative probabilities
     if (any(trace[cycle + 1, ] < -tol)) {
       invalid_states <- state_names[trace[cycle + 1, ] < -tol]
       error_msg <- glue("Custom PSM has negative probabilities at cycle {cycle} for states: {paste(invalid_states, collapse = ', ')}")
-      accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM trace validation")
+      accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM trace validation")
     }
   }
 
   # Check for accumulated errors
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   # Calculate values (residency and model-level only)
   values_matrix <- calculate_psm_custom_values(
@@ -1103,19 +1103,19 @@ calculate_psm_custom_values <- function(
       # Validate: no transitional values
       if (!is.na(value_row$destination)) {
         error_msg <- glue("Transitional value '{value_name}' (state: {value_row$state}, destination: {value_row$destination}) is not allowed in Custom PSM models.")
-        accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM value validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM value validation")
         next
       }
 
       # Evaluate formula
       evaluated_value <- eval_formula(value_row$formula[[1]], cycle_ns)
 
-      if (is_hero_error(evaluated_value)) {
-        accumulate_hero_error(evaluated_value, context_msg = glue("Evaluation of value '{value_name}' in cycle {cycle}"))
+      if (is_oq_error(evaluated_value)) {
+        accumulate_oq_error(evaluated_value, context_msg = glue("Evaluation of value '{value_name}' in cycle {cycle}"))
         evaluated_value <- 0
       } else if (!is.numeric(evaluated_value) || length(evaluated_value) != 1) {
         error_msg <- glue("Value '{value_name}' in cycle {cycle} must evaluate to a single numeric value.")
-        accumulate_hero_error(define_error(error_msg), context_msg = "Custom PSM value validation")
+        accumulate_oq_error(define_error(error_msg), context_msg = "Custom PSM value validation")
         evaluated_value <- 0
       }
 
@@ -1149,7 +1149,7 @@ calculate_psm_custom_values <- function(
     }
   }
 
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   values_matrix
 }

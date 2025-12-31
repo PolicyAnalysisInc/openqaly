@@ -24,11 +24,11 @@
 NULL
 
 ## usethis namespace: start
-#' @useDynLib heRomod2
+#' @useDynLib openqaly
 ## usethis namespace: end
 NULL
 
-heRo_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_months", "cycle_length_years",
+oq_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_months", "cycle_length_years",
                    "cycle", "day", "week", "month", "year",
                    "cycle_lag", "day_lag", "week_lag", "month_lag", "year_lag",
                    "state_cycle", "state_day", "state_week", "state_month", "state_year",
@@ -36,7 +36,7 @@ heRo_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_mont
                    "days_per_year", "days_per_month",
                     "group", "strategy", "simulation", "bc", "analysis_type", '.trees', 'class')
 
-heRo_vars_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_months", "cycle_length_years",
+oq_vars_keywords <- c("cycle_length_days", "cycle_length_weeks", "cycle_length_months", "cycle_length_years",
                         "cycle", "day", "week", "month", "year",
                         "cycle_lag", "day_lag", "week_lag", "month_lag", "year_lag",
                         "state_cycle", "state_day", "state_week", "state_month", "state_year",

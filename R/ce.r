@@ -140,7 +140,7 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 #' (2) calculate incremental cost/outcome, (3) remove dominated strategies,
 #' (4) calculate ICERs, (5) remove extended dominance, (6) recalculate final ICERs.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
@@ -174,7 +174,7 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Incremental CE for aggregated population
@@ -340,7 +340,7 @@ calculate_incremental_ce <- function(results,
 #' CE which compares along the efficiency frontier, this creates independent
 #' comparisons useful for evaluating specific interventions.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
@@ -374,7 +374,7 @@ calculate_incremental_ce <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Pairwise comparisons vs control (comparator perspective)

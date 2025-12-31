@@ -1,29 +1,29 @@
 # Internal error state environment
-.hero_error_env <- new.env(parent = emptyenv())
-.hero_error_env$errors <- list()
+.oq_error_env <- new.env(parent = emptyenv())
+.oq_error_env$errors <- list()
 
-#' Clear Accumulated heRo Errors (Primarily for Testing)
+#' Clear Accumulated openqaly Errors (Primarily for Testing)
 #'
 #' Resets the internal list of accumulated errors.
 #' @export
-clear_hero_errors <- function() {
-  .hero_error_env$errors <- list()
+clear_oq_errors <- function() {
+  .oq_error_env$errors <- list()
 }
 
-#' Get Accumulated heRo Errors (Primarily for Testing)
+#' Get Accumulated openqaly Errors (Primarily for Testing)
 #'
 #' Returns the current internal list of accumulated errors without clearing it.
 #' @return A list of accumulated error objects.
 #' @export
 get_accumulated_errors <- function() {
-  .hero_error_env$errors
+  .oq_error_env$errors
 }
 
 # Core error definitions
 define_error <- function(x) {
   define_object(
     message = modify_error_msg(as.character(x)),
-    class = 'heRo_error'
+    class = 'oq_error'
   )
 }
 
@@ -71,47 +71,47 @@ modify_error_msg <- function(x) {
 }
 
 #' @export
-is_hero_error <- function(x) {
-  inherits(x, 'heRo_error') # Use inherits for class hierarchy check
+is_oq_error <- function(x) {
+  inherits(x, 'oq_error') # Use inherits for class hierarchy check
 }
 
 #' @export
-is_hero_dependency_error <- function(x) {
-  inherits(x, 'heRo_dependency_error')
+is_oq_dependency_error <- function(x) {
+  inherits(x, 'oq_dependency_error')
 }
 
 #' @export
-print.heRo_error <- function(x, ...) {
+print.oq_error <- function(x, ...) {
   print(glue("Error: {x$message}"))
 }
 
 define_dependency_error <- function(msg) {
   define_object(
     message = msg,
-    class = c('heRo_dependency_error', 'heRo_error')
+    class = c('oq_dependency_error', 'oq_error')
   )
 }
 
 
 # Error accumulation and checkpoint logic
 
-#' Accumulate a heRo_error (INTERNAL).
+#' Accumulate an oq_error (INTERNAL).
 #'
-#' Adds a heRo_error object to the internal error list.
+#' Adds an oq_error object to the internal error list.
 #'
-#' @param error_obj An object of class `heRo_error`.
+#' @param error_obj An object of class `oq_error`.
 #' @param context_msg A character string describing the context.
 #' @return Invisibly returns NULL.
-accumulate_hero_error <- function(error_obj, context_msg) {
-  if (!is_hero_error(error_obj)) return(invisible(NULL)) # Silently ignore non-errors
+accumulate_oq_error <- function(error_obj, context_msg) {
+  if (!is_oq_error(error_obj)) return(invisible(NULL)) # Silently ignore non-errors
 
   context_msg <- paste(context_msg, collapse = " ")
   new_error <- list(context = context_msg, error = error_obj)
-  
+
   # Append directly to the list in the dedicated environment
-  current_errors <- .hero_error_env$errors
-  .hero_error_env$errors <- c(current_errors, list(new_error))
-  
+  current_errors <- .oq_error_env$errors
+  .oq_error_env$errors <- c(current_errors, list(new_error))
+
   invisible(NULL)
 }
 
@@ -125,14 +125,14 @@ accumulate_hero_error <- function(error_obj, context_msg) {
 format_and_throw_errors <- function(error_list) {
   # Filter out dependency errors before formatting
   root_cause_errors <- Filter(function(item) {
-    !is_hero_dependency_error(item$error)
+    !is_oq_dependency_error(item$error)
   }, error_list)
 
   # Only proceed if there are non-dependency errors remaining
   if (length(root_cause_errors) > 0) {
     # Create data frame for easy formatting using only root cause errors
     error_df <- do.call(rbind, lapply(root_cause_errors, function(item) {
-      error_text <- if (is_hero_error(item$error) && !is.null(item$error$message)) {
+      error_text <- if (is_oq_error(item$error) && !is.null(item$error$message)) {
         item$error$message
       } else {
          as.character(item$error)
@@ -155,22 +155,22 @@ format_and_throw_errors <- function(error_list) {
 #' Check for and report errors at a checkpoint (INTERNAL).
 #'
 #' Called by package functions at specific points.
-#' This checks the internal error list (.hero_error_env$errors).
+#' This checks the internal error list (.oq_error_env$errors).
 #' If non-dependency errors exist, they are formatted and thrown via `format_and_throw_errors`.
 #' Regardless of whether errors were thrown, the internal error list is cleared.
 #'
 #' @return Invisibly returns NULL.
-hero_error_checkpoint <- function() {
+oq_error_checkpoint <- function() {
   # Get the errors directly from the dedicated environment
-  errors <- .hero_error_env$errors
+  errors <- .oq_error_env$errors
 
   # Always clear the list *before* potentially stopping
-  clear_hero_errors() 
+  clear_oq_errors()
 
   # If errors were accumulated, format and throw them
   if (!is.null(errors) && length(errors) > 0) {
     format_and_throw_errors(errors) # This stops if there are non-dependency errors
   }
-  
+
   invisible(NULL)
 }

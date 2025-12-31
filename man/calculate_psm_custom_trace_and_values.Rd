@@ -15,7 +15,7 @@ calculate_psm_custom_trace_and_values(
 )
 }
 \arguments{
-\item{state_prob_formulas}{Named list of heRoFormula objects by state}
+\item{state_prob_formulas}{Named list of oq_formula objects by state}
 
 \item{uneval_values}{Unevaluated values specifications}
 

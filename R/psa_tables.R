@@ -3,7 +3,7 @@
 #' Internal helper function that prepares incremental CEAC data for rendering as
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
@@ -251,7 +251,7 @@ prepare_incremental_ceac_table_data <- function(results,
 #' cost-effective at selected willingness-to-pay thresholds in a multi-way
 #' (incremental) comparison.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns.
@@ -278,7 +278,7 @@ prepare_incremental_ceac_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Incremental CEAC table at default thresholds
@@ -328,7 +328,7 @@ incremental_ceac_table <- function(results,
 #' Internal helper function that prepares PSA summary statistics for rendering.
 #' Creates a transposed table with strategies as columns and statistics as rows.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
@@ -724,7 +724,7 @@ prepare_psa_summary_table_data <- function(results,
 #' multiple WTP thresholds. Table is transposed with strategies as columns and
 #' statistics as rows.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
@@ -753,7 +753,7 @@ prepare_psa_summary_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # PSA summary table with default WTP thresholds
@@ -807,7 +807,7 @@ psa_summary_table <- function(results,
 #' Internal helper function that prepares pairwise CEAC data for rendering as
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param intervention Reference strategy for comparison (intervention perspective).
@@ -1052,7 +1052,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 #' Creates a table showing probabilities from pairwise comparisons at selected
 #' willingness-to-pay thresholds.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param intervention Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
@@ -1088,7 +1088,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Comparator perspective: Compare strategies to control
@@ -1146,7 +1146,7 @@ pairwise_ceac_table <- function(results,
 #' Internal helper function that prepares EVPI data for rendering as a table.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows
@@ -1288,7 +1288,7 @@ prepare_evpi_table_data <- function(results,
 #' Creates a table showing the Expected Value of Perfect Information (EVPI)
 #' at selected willingness-to-pay thresholds.
 #'
-#' @param results A heRomod2 PSA results object
+#' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows.
@@ -1319,7 +1319,7 @@ prepare_evpi_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # EVPI table at default thresholds

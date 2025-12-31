@@ -4,5 +4,5 @@
 \alias{model_codegen}
 \title{Model Code Generation}
 \description{
-Functions for generating executable R code from heRomod2 models.
+Functions for generating executable R code from openqaly models.
 }

@@ -1,10 +1,10 @@
 # Test Values Output Functions
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("get_values works with aggregated data", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -29,7 +29,7 @@ test_that("get_values works with aggregated data", {
 })
 
 test_that("get_values filters by value type correctly", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -57,7 +57,7 @@ test_that("get_values filters by value type correctly", {
 })
 
 test_that("get_values handles discounted vs undiscounted", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -80,7 +80,7 @@ test_that("get_values handles discounted vs undiscounted", {
 })
 
 test_that("get_summaries works with aggregated data", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -100,7 +100,7 @@ test_that("get_summaries works with aggregated data", {
 })
 
 test_that("get_summaries filters by value type", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -140,15 +140,15 @@ test_that("filter_by_value_type helper works correctly", {
   columns <- c("cost1", "cost2", "outcome1", "outcome2", "other")
 
   # Filter costs
-  cost_cols <- heRomod2:::filter_by_value_type(columns, metadata, "cost")
+  cost_cols <- openqaly:::filter_by_value_type(columns, metadata, "cost")
   expect_equal(cost_cols, c("cost1", "cost2"))
 
   # Filter outcomes
-  outcome_cols <- heRomod2:::filter_by_value_type(columns, metadata, "outcome")
+  outcome_cols <- openqaly:::filter_by_value_type(columns, metadata, "outcome")
   expect_equal(outcome_cols, c("outcome1", "outcome2"))
 
   # All
-  all_cols <- heRomod2:::filter_by_value_type(columns, metadata, "all")
+  all_cols <- openqaly:::filter_by_value_type(columns, metadata, "all")
   expect_equal(all_cols, columns)
 })
 
@@ -166,14 +166,14 @@ test_that("map_value_names helper works correctly", {
   names_technical <- c("cost_drug", "qalys", "unknown")
 
   # Map to display names
-  display <- heRomod2:::map_value_names(names_technical, metadata, "display_name")
+  display <- openqaly:::map_value_names(names_technical, metadata, "display_name")
   expect_equal(display, c("Drug Cost", "QALYs", "unknown"))
 
   # Map to abbreviations
-  abbrev <- heRomod2:::map_value_names(names_technical, metadata, "abbreviation")
+  abbrev <- openqaly:::map_value_names(names_technical, metadata, "abbreviation")
   expect_equal(abbrev, c("Drug", "Q", "unknown"))
 
   # Map to names (identity)
-  names_out <- heRomod2:::map_value_names(names_technical, metadata, "name")
+  names_out <- openqaly:::map_value_names(names_technical, metadata, "name")
   expect_equal(names_out, names_technical)
 })

@@ -19,7 +19,7 @@ psa_summary_table(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object}
+\item{results}{A openqaly PSA results object}
 
 \item{outcome_summary}{Name of the outcome summary}
 
@@ -65,7 +65,7 @@ to the nearest unit by default (cost_decimals = 0).
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # PSA summary table with default WTP thresholds

@@ -14,7 +14,7 @@ get_psa_simulations(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object (from run_psa)}
+\item{results}{A openqaly PSA results object (from run_psa)}
 
 \item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
 

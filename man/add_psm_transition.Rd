@@ -7,7 +7,7 @@
 add_psm_transition(model, endpoint, time_unit, formula)
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{endpoint}{Character string for the endpoint}
 

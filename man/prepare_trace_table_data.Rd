@@ -16,7 +16,7 @@ prepare_trace_table_data(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 

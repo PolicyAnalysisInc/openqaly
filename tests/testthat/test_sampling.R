@@ -6,12 +6,12 @@ suppressMessages(library(purrr))
 test_that("parameter sampling yields correct averages", {
 
   # Run a test model
-  model <- system.file("models", "checkimab", package = "heRomod2") %>%
+  model <- system.file("models", "checkimab", package = "openqaly") %>%
     read_model()
   eval_model <- run_model(model)
 
   # Generate sampled parameter values
-  sampled_segments_raw <- heRomod2:::resample(model, 1000, eval_model$segments, seed = 10)
+  sampled_segments_raw <- openqaly:::resample(model, 1000, eval_model$segments, seed = 10)
 
   # Extract scalar parameter values (exclude bootstrap data frames like eq5d_data)
   sampled_segments <- sampled_segments_raw %>%
@@ -126,12 +126,12 @@ test_that("parameter sampling yields correct averages", {
 test_that("parameter sampling with random seed is deterministic", {
 
   # Run a test model
-  model <- system.file("models", "checkimab", package = "heRomod2") %>%
+  model <- system.file("models", "checkimab", package = "openqaly") %>%
     read_model()
   eval_model <- run_model(model)
 
   # Generate sampled parameter values
-  sampled_segments_raw <- heRomod2:::resample(model, 1, eval_model$segments, seed = 1)
+  sampled_segments_raw <- openqaly:::resample(model, 1, eval_model$segments, seed = 1)
 
   # Extract scalar parameter values (exclude bootstrap data frames like eq5d_data)
   sampled_segments <- sampled_segments_raw %>%
@@ -170,7 +170,7 @@ test_that("parameter sampling with random seed is deterministic", {
 test_that("errors in distribution parsing are handled properly", {
   
   # Run a test model
-  model <- system.file("models", "checkimab", package = "heRomod2") %>%
+  model <- system.file("models", "checkimab", package = "openqaly") %>%
     read_model()
   
   # Model with syntax error
@@ -178,7 +178,7 @@ test_that("errors in distribution parsing are handled properly", {
   syntax_error$variables$sampling[1] <- 'normal(26, 2))'
   syntax_error_eval <- run_model(syntax_error)
   expect_error(
-    sampled_segments <- heRomod2:::resample(syntax_error, 10, syntax_error_eval$segments, seed = 1),
+    sampled_segments <- openqaly:::resample(syntax_error, 10, syntax_error_eval$segments, seed = 1),
     regexp = "Failed to evaluate sampling distribution.*start_age.*Error in formula syntax"
   )
   
@@ -187,7 +187,7 @@ test_that("errors in distribution parsing are handled properly", {
   no_dist$variables$sampling <- ''
   no_dist_eval <- run_model(no_dist)
   expect_error(
-    sampled_segments <- heRomod2:::resample(no_dist, 10, no_dist_eval$segments, seed = 1),
+    sampled_segments <- openqaly:::resample(no_dist, 10, no_dist_eval$segments, seed = 1),
     'Error in variables specification, no sampling distributions were specified.'
   )
   
@@ -196,7 +196,7 @@ test_that("errors in distribution parsing are handled properly", {
   missing_col$variables <- dplyr::select(missing_col$variables, -sampling)
   missing_col_eval <- run_model(missing_col)
   expect_error(
-    sampled_segments <- heRomod2:::resample(missing_col, 10, missing_col_eval$segments, seed = 1),
+    sampled_segments <- openqaly:::resample(missing_col, 10, missing_col_eval$segments, seed = 1),
     'Error in variables specification, "sampling" column was missing.'
   )
   
@@ -206,7 +206,7 @@ test_that("errors in distribution parsing are handled properly", {
   not_df_eval <- run_model(not_df)
   not_df$variables <- 'test'
   expect_error(
-    sampled_segments <- heRomod2:::resample(not_df, 10, missing_col_eval$segments, seed = 1),
+    sampled_segments <- openqaly:::resample(not_df, 10, missing_col_eval$segments, seed = 1),
     'Error in variables specification, specification was of class "character" rather than "data.frame".'
   )
   

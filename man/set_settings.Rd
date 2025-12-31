@@ -7,7 +7,7 @@
 set_settings(model, ...)
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{An oq_model_builder object}
 
 \item{...}{Named arguments for settings (e.g., n_cycles = 100)}
 }

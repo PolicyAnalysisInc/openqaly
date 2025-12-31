@@ -7,7 +7,7 @@
 add_transition(model, from_state, to_state, formula)
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{from_state}{Character string specifying the source state}
 

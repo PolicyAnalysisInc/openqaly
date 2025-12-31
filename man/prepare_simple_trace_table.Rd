@@ -17,7 +17,7 @@ prepare_simple_trace_table(
 )
 }
 \arguments{
-\item{results}{heRomod2 results object}
+\item{results}{openqaly results object}
 
 \item{strategies}{Character vector of strategies to include}
 

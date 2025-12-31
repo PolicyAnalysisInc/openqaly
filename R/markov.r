@@ -18,41 +18,41 @@ run_segment <- function(segment, model, env, ...) {
 #' @keywords internal
 evaluate_group_weight <- function(group_row, namespace) {
   # Convert weight to formula (handles both numeric and character inputs)
-  weight_formula <- as.heRoFormula(as.character(group_row$weight))
-  
+  weight_formula <- as.oq_formula(as.character(group_row$weight))
+
   # Evaluate the formula in the namespace
   evaluated_weight <- eval_formula(weight_formula, namespace)
-  
+
   # Check for errors in evaluation
-  if (is_hero_error(evaluated_weight)) {
-    accumulate_hero_error(evaluated_weight, context_msg = glue("Evaluation of weight for group '{group_row$name}'"))
+  if (is_oq_error(evaluated_weight)) {
+    accumulate_oq_error(evaluated_weight, context_msg = glue("Evaluation of weight for group '{group_row$name}'"))
     return(NA_real_)
   }
-  
+
   # Validate the evaluated result
   if (!is.numeric(evaluated_weight)) {
     error_msg <- glue("Weight for group '{group_row$name}' must be numeric (got {class(evaluated_weight)[1]}).")
-    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    accumulate_oq_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
     return(NA_real_)
   }
-  
+
   if (length(evaluated_weight) != 1) {
     error_msg <- glue("Weight for group '{group_row$name}' must be length 1 (got length {length(evaluated_weight)}). Weight formulas cannot be time-dependent.")
-    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    accumulate_oq_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
     return(NA_real_)
   }
-  
+
   weight_value <- as.numeric(evaluated_weight)
-  
+
   if (is.na(weight_value)) {
     error_msg <- glue("Weight for group '{group_row$name}' evaluated to NA.")
-    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    accumulate_oq_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
     return(NA_real_)
   }
-  
+
   if (!is.finite(weight_value)) {
     error_msg <- glue("Weight for group '{group_row$name}' must be finite (got {weight_value}).")
-    accumulate_hero_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
+    accumulate_oq_error(define_error(error_msg), context_msg = glue("Group '{group_row$name}' weight validation"))
     return(NA_real_)
   }
   
@@ -541,7 +541,7 @@ parse_trans_markov <- function(x, states, vars) {
   check_trans_markov(x, state_names)
 
   # Construct the transitions object
-  x$formula <- map(x$formula, as.heRoFormula)
+  x$formula <- map(x$formula, as.oq_formula)
   x$name <- glue("{x$from_state}→{x$to_state}")
 
   res <- sort_variables(x, vars) %>%
@@ -687,14 +687,14 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       
       # Evalulate transition formula
       value <- eval_formula(row$formula[[1]], ns, max_st = row$max_st)
-      is_error <- is_hero_error(value)
+      is_error <- is_oq_error(value)
       # Check if value was an error in evaluating the formula
       if (is_error) {
-        accumulate_hero_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
+        accumulate_oq_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
         # Construct the error message using the transition name
         error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
         # Check global option: stop or record error?
-        if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+        if (getOption("openqaly.stop_on_error", default = FALSE)) {
           stop(error_msg, call. = FALSE)
         } else {
           # Original behavior: record the error message
@@ -747,39 +747,39 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       
   #     # Evalulate transition formula
   #     value <- eval_formula(row$formula[[1]], ns)
-  #     is_error <- is_hero_error(value)
+  #     is_error <- is_oq_error(value)
   #     # Check if value was an error in evaluating the formula
   #     if (is_error) {
-  #       accumulate_hero_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
+  #       accumulate_oq_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
   #       # Construct the error message using the transition name
   #       error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
   #       # Check global option: stop or record error?
-  #       if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+  #       if (getOption("openqaly.stop_on_error", default = FALSE)) {
   #         stop(error_msg, call. = FALSE)
   #       } else {
   #         # Original behavior: record the error message
   #         time_df$error <- value$message
   #       }
   #     }
-      
+
   #     # Check if value is numeric
   #     if (any(class(value) %in% c('numeric', 'integer'))) {
   #       time_df$value <- as.numeric(value)
   #     } else {
   #       # If not numeric, check if it's already an error handled above
-  #       if (!is_hero_error(value)) {
+  #       if (!is_oq_error(value)) {
   #           # Handle non-numeric result
   #           type <- class(value)[1]
   #           error_msg <- glue("Error evaluating transition '{row$name}': Result was type '{type}', expected numeric.")
   #           # Check global option: stop or record error?
-  #           if (getOption("heRomod2.stop_on_error", default = FALSE)) {
+  #           if (getOption("openqaly.stop_on_error", default = FALSE)) {
   #               stop(error_msg, call. = FALSE)
   #           } else {
   #               # Original behavior: record the error message
   #               time_df$error <- error_msg
   #           }
   #       }
-  #       # If it IS a hero_error, it was handled by the previous if block
+  #       # If it IS an oq_error, it was handled by the previous if block
   #     }
   #     if (isTRUE(simplify) && !is_error) {
   #       # Transform to matrix to check st-dependency
@@ -794,7 +794,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
   #   }, ns, simplify = isTRUE(simplify)) %>%
   #   bind_rows()
 
-  hero_error_checkpoint()
+  oq_error_checkpoint()
 
   res
 }

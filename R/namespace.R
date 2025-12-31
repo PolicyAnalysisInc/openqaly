@@ -78,7 +78,7 @@ get_names <- function(ns, type = "all", keywords = T) {
 
   # Exclude keywords if requested
   if (!keywords) {
-    res <- setdiff(res, heRo_keywords)
+    res <- setdiff(res, oq_keywords)
   }
 
   res

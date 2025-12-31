@@ -17,7 +17,7 @@ get_trace(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object (output from run_model)}
+\item{results}{A openqaly model results object (output from run_model)}
 
 \item{format}{Output format: "long" (one row per cycle×state×strategy),
 "wide" (one row per cycle, states as columns), or "matrix" (keep as matrix)}
@@ -50,7 +50,7 @@ suitable for visualization and export.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Get long format (ggplot2-ready) for overall population

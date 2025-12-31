@@ -15,7 +15,7 @@ add_dsa_variable(
 )
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{variable}{Character string naming the variable to vary (must exist in model$variables)}
 

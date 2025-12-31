@@ -1,7 +1,7 @@
 # Test trace name field functionality
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("metadata is stored in parse_model", {
   model <- define_model("markov") |>
@@ -45,18 +45,18 @@ test_that("map_names function works correctly", {
 
   # Test mapping to display_name
   names <- c("state1", "state3")
-  mapped <- heRomod2:::map_names(names, metadata, "display_name")
+  mapped <- openqaly:::map_names(names, metadata, "display_name")
   expect_equal(mapped, c("State One", "State Three"))
 
   # Test with missing field (should warn and fallback)
   expect_warning(
-    mapped <- heRomod2:::map_names(names, metadata, "nonexistent"),
+    mapped <- openqaly:::map_names(names, metadata, "nonexistent"),
     "Field 'nonexistent' not found"
   )
   expect_equal(mapped, names)
 
   # Test with NULL metadata
-  mapped <- heRomod2:::map_names(names, NULL, "display_name")
+  mapped <- openqaly:::map_names(names, NULL, "display_name")
   expect_equal(mapped, names)
 })
 

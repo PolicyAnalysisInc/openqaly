@@ -2,7 +2,7 @@
 # Uses pure JSON models defined as strings to verify EXACT mathematical correctness
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 library(jsonlite)
 
 test_that("Discounting produces mathematically exact results", {

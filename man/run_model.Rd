@@ -7,7 +7,7 @@
 run_model(model, ...)
 }
 \arguments{
-\item{model}{A heRo_model object.}
+\item{model}{An openqaly model object.}
 
 \item{...}{additional arguments.}
 }

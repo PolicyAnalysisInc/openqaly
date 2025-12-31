@@ -3,7 +3,7 @@
 #' Internal helper function that prepares outcomes summary data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome Name of outcome to display (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -291,7 +291,7 @@ prepare_outcomes_table_data <- function(results,
 #' Creates a table showing outcome summary totals broken down by component values.
 #' Supports both flextable and kableExtra backends for flexible output formatting.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome Name of outcome to display (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -304,7 +304,7 @@ prepare_outcomes_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Summary table for overall
@@ -357,7 +357,7 @@ outcomes_table <- function(results,
 #' Internal helper function that prepares NMB data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -687,7 +687,7 @@ prepare_nmb_table_data <- function(results,
 #' Creates a table showing NMB breakdown by component values.
 #' Supports both flextable and kableExtra backends for flexible output formatting.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param health_outcome Name of the health outcome summary
 #' @param cost_outcome Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -704,7 +704,7 @@ prepare_nmb_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Create table using flextable (default)
@@ -757,7 +757,7 @@ nmb_table <- function(results,
 #' Internal helper function that prepares incremental CE data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -916,7 +916,7 @@ prepare_incremental_ce_table_data <- function(results,
 #' Creates a table showing incremental cost-effectiveness analysis with strategies
 #' sorted by cost, including incremental costs, outcomes, and ICERs.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -930,7 +930,7 @@ prepare_incremental_ce_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Create incremental CE table
@@ -975,7 +975,7 @@ incremental_ce_table <- function(results,
 #' Internal helper function that prepares pairwise CE data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -1219,7 +1219,7 @@ prepare_pairwise_ce_table_data <- function(results,
 #' reference strategy. Shows absolute values for all strategies plus incremental
 #' comparisons.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
@@ -1235,7 +1235,7 @@ prepare_pairwise_ce_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Pairwise CE table vs control

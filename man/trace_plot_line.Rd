@@ -17,7 +17,7 @@ trace_plot_line(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{facet_by}{Faceting variable: NULL (auto-detect), "strategy", "group",
 or "both". When NULL and multiple strategies/groups exist, automatically
@@ -51,7 +51,7 @@ Alternative to stacked area charts for easier comparison of individual states.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Line plot showing each state's trajectory

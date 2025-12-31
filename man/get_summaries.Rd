@@ -18,7 +18,7 @@ get_summaries(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object (output from run_model)}
+\item{results}{A openqaly model results object (output from run_model)}
 
 \item{groups}{Group selection:
 \itemize{
@@ -52,7 +52,7 @@ Extracts summary totals (e.g., total costs, total QALYs) from model results.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Get all summaries (overall population)

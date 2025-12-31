@@ -9,7 +9,7 @@ resolve_groups(groups, results)
 \arguments{
 \item{groups}{The groups argument value (NULL, character vector, or string)}
 
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 }
 \value{
 List with elements:

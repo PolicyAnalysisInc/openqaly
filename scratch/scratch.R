@@ -3,7 +3,7 @@
 # roxygen2::roxygenize()
 # devtools::build()
 # devtools::install(upgrade=FALSE)
-library(heRomod2)
+library(openqaly)
 #devtools::test()
 
 library(jsonlite)
@@ -12,7 +12,7 @@ library(future)
 #library(bench)
 
 # model_name <- "markov_medium"
-# model <- system.file("models", model_name, package = "heRomod2") %>%
+# model <- system.file("models", model_name, package = "openqaly") %>%
 #     read_model()
 
 # model <- read_model_json("/Users/jrdnmdhl/downloads/model_68e48d6e9ff29813a41997b6_2025-10-07.json")
@@ -278,7 +278,7 @@ cat("=== Tests complete ===\n")
 # # trace_table(res, strategy_name_field = "abbreviation", state_name_field = "display_name")
 # # nmb_table(res, health_outcome = 'qalys', cost_outcome = 'costs', intervention = 'checkimab', wtp = 30000)
 # # outcomes_table(res, 'qalys', group = NULL)
-# # ref_model <- system.file("models", "markov_medium", package = "heRomod2") %>% read_model()
+# # ref_model <- system.file("models", "markov_medium", package = "openqaly") %>% read_model()
 # # ref_res <- run_model(ref_model)
 # # outcomes_plot(res, "costs", group = NULL)
 # # write_json(ref_res, '~/downloads/test.json')

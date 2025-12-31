@@ -85,7 +85,7 @@ map_value_names <- function(names, metadata, field = "name") {
 #' Extracts cycle-by-cycle value data (costs and outcomes) from model results
 #' in various formats suitable for visualization and export.
 #'
-#' @param results A heRomod2 model results object (output from run_model)
+#' @param results A openqaly model results object (output from run_model)
 #' @param format Output format: "long" (one row per cycle×value×strategy×group) or
 #'   "wide" (one row per cycle, values as columns)
 #' @param groups Group selection:
@@ -111,7 +111,7 @@ map_value_names <- function(names, metadata, field = "name") {
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Get overall population outcomes in long format
@@ -533,7 +533,7 @@ extract_values_long <- function(source_data, values_field, values_filter,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Get all summaries (overall population)
@@ -761,7 +761,7 @@ get_summaries <- function(results,
 #' Calculates Net Monetary Benefit (NMB) as: (Difference in Outcomes × WTP) - Difference in Costs
 #' Requires comparison between strategies using either intervention or comparator.
 #'
-#' @param results A heRomod2 model results object (output from run_model)
+#' @param results A openqaly model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
@@ -795,7 +795,7 @@ get_summaries <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Calculate NMB with WTP from metadata

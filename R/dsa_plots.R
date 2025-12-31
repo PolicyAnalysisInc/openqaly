@@ -516,7 +516,7 @@ prepare_dsa_tornado_data <- function(results,
 #' its low to high value on a specified summary (outcome or cost). Shows horizontal
 #' bars representing the range of variation with a vertical line at the base case.
 #'
-#' @param results A heRomod2 DSA results object (output from run_dsa)
+#' @param results A openqaly DSA results object (output from run_dsa)
 #' @param summary_name Name of the summary to plot (e.g., "total_qalys", "total_cost")
 #' @param group Group selection: "aggregated" (default), specific group name, or NULL
 #'   (all groups plus aggregated)
@@ -661,7 +661,7 @@ dsa_outcomes_plot <- function(results,
 #' Shows horizontal bars representing the range of NMB variation with a vertical line at
 #' the base case.
 #'
-#' @param results A heRomod2 DSA results object (output from run_dsa)
+#' @param results A openqaly DSA results object (output from run_dsa)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param group Group selection: "aggregated" (default), specific group name, or NULL

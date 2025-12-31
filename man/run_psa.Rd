@@ -7,7 +7,7 @@
 run_psa(model, n_sim, seed = NULL, ...)
 }
 \arguments{
-\item{model}{A heRomodel object with sampling specifications}
+\item{model}{A oq_model object with sampling specifications}
 
 \item{n_sim}{Number of PSA simulations to run}
 

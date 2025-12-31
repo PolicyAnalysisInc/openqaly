@@ -17,7 +17,7 @@ prepare_dsa_outcomes_table_data(
 )
 }
 \arguments{
-\item{results}{A heRomod2 DSA results object}
+\item{results}{A openqaly DSA results object}
 
 \item{outcome}{Name of outcome to display}
 

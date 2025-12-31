@@ -18,7 +18,7 @@ psa_parameter_scatter_matrix(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object (from run_psa)}
+\item{results}{A openqaly PSA results object (from run_psa)}
 
 \item{variables}{Character vector of variable names to visualize (required)}
 
@@ -87,7 +87,7 @@ This is useful for:
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example", package = "heRomod2"))
+model <- read_model(system.file("models/example", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # Visualize selected parameters (all strategies/groups)

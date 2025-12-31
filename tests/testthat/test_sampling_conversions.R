@@ -121,25 +121,25 @@ test_that("R to JSON to R preserves all sampling specifications", {
   # Test that both models produce same sampling results
   set.seed(123)
   orig_result <- run_model(original_model)
-  orig_parsed <- heRomod2:::parse_model(original_model)
+  orig_parsed <- openqaly:::parse_model(original_model)
   orig_segments <- orig_result$segments
   for (i in 1:nrow(orig_segments)) {
-    orig_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
+    orig_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
       orig_parsed, orig_segments[i, ]
     )
   }
-  orig_samples <- heRomod2:::resample(orig_parsed, 10, orig_segments, seed = 123)
+  orig_samples <- openqaly:::resample(orig_parsed, 10, orig_segments, seed = 123)
 
   set.seed(123)
   rest_result <- run_model(restored_model)
-  rest_parsed <- heRomod2:::parse_model(restored_model)
+  rest_parsed <- openqaly:::parse_model(restored_model)
   rest_segments <- rest_result$segments
   for (i in 1:nrow(rest_segments)) {
-    rest_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
+    rest_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
       rest_parsed, rest_segments[i, ]
     )
   }
-  rest_samples <- heRomod2:::resample(rest_parsed, 10, rest_segments, seed = 123)
+  rest_samples <- openqaly:::resample(rest_parsed, 10, rest_segments, seed = 123)
 
   # Compare sampled values
   expect_equal(orig_samples, rest_samples, tolerance = 1e-10)
@@ -355,16 +355,16 @@ test_that("PSA runs correctly after format conversions", {
 
   set.seed(789)
   json_result <- run_model(json_model)
-  json_parsed <- heRomod2:::parse_model(json_model)
+  json_parsed <- openqaly:::parse_model(json_model)
   json_segments <- json_result$segments
   for (i in 1:nrow(json_segments)) {
-    json_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
+    json_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
       json_parsed, json_segments[i, ]
     )
   }
 
   # Should not error
-  json_samples <- heRomod2:::resample(json_parsed, 10, json_segments, seed = 789)
+  json_samples <- openqaly:::resample(json_parsed, 10, json_segments, seed = 789)
   expect_equal(nrow(json_samples), 10 * nrow(json_segments))
 
   # Test after Excel round-trip
@@ -374,16 +374,16 @@ test_that("PSA runs correctly after format conversions", {
 
   set.seed(789)
   excel_result <- run_model(excel_model)
-  excel_parsed <- heRomod2:::parse_model(excel_model)
+  excel_parsed <- openqaly:::parse_model(excel_model)
   excel_segments <- excel_result$segments
   for (i in 1:nrow(excel_segments)) {
-    excel_segments[i, ] <- heRomod2:::prepare_segment_for_sampling(
+    excel_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
       excel_parsed, excel_segments[i, ]
     )
   }
 
   # Should not error
-  excel_samples <- heRomod2:::resample(excel_parsed, 10, excel_segments, seed = 789)
+  excel_samples <- openqaly:::resample(excel_parsed, 10, excel_segments, seed = 789)
   expect_equal(nrow(excel_samples), 10 * nrow(excel_segments))
 
   # Results should be identical (same seed)

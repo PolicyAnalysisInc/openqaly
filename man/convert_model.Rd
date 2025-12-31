@@ -7,7 +7,7 @@
 convert_model(input, output, from = "auto", to = "auto")
 }
 \arguments{
-\item{input}{Either a heRomodel object, a path to a model file/folder, or a JSON string}
+\item{input}{Either a oq_model object, a path to a model file/folder, or a JSON string}
 
 \item{output}{Output path for the converted model}
 

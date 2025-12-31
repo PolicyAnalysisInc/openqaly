@@ -18,7 +18,7 @@ nmb_plot_line(
 )
 }
 \arguments{
-\item{res}{A heRomod2 model results object (output from run_model)}
+\item{res}{A openqaly model results object (output from run_model)}
 
 \item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 
@@ -60,7 +60,7 @@ Either `intervention` or `comparator` must be specified (one is mandatory).
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Cumulative NMB over time

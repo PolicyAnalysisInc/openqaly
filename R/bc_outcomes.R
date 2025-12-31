@@ -3,7 +3,7 @@
 #' Creates a bar chart showing outcome values by value component and strategy.
 #' Can display absolute values or differences between strategies.
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
 #' @param groups Which groups to include in the plot. By default, the overall population (weighted average over all groups) is shown. Other options include 'all_groups' (displays results for each group separately), 'all' (displays results for each group and overall), or a character vector of specific group names
 #' @param strategies Strategies to include (when plotting absolute values).
@@ -22,7 +22,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Absolute outcome values

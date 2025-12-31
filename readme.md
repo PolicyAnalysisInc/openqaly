@@ -2,12 +2,12 @@
 <!-- badges: start -->
 
 [![CircleCI build
-status](https://circleci.com/gh/jrdnmdhl/heRomod2.svg?style=svg)](https://circleci.com/gh/jrdnmdhl/heRomod2)
+status](https://circleci.com/gh/jrdnmdhl/openqaly.svg?style=svg)](https://circleci.com/gh/jrdnmdhl/openqaly)
 [![Codecov test
-coverage](https://codecov.io/gh/jrdnmdhl/heRomod2/branch/master/graph/badge.svg)](https://app.codecov.io/gh/jrdnmdhl/heRomod2?branch=master)
+coverage](https://codecov.io/gh/jrdnmdhl/openqaly/branch/master/graph/badge.svg)](https://app.codecov.io/gh/jrdnmdhl/openqaly?branch=master)
 <!-- badges: end -->
 
-# heRomod2
+# openqaly
 
 A package for creating and running cost-effectiveness models.
 

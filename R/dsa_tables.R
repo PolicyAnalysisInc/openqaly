@@ -4,7 +4,7 @@
 #' Creates a table showing low, base case, and high values for each parameter
 #' across strategies.
 #'
-#' @param results A heRomod2 DSA results object
+#' @param results A openqaly DSA results object
 #' @param outcome Name of outcome to display
 #' @param groups Group selection: "overall", specific group, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -312,7 +312,7 @@ prepare_dsa_outcomes_table_data <- function(results,
 #' Creates a table showing DSA outcomes with low, base case, and high values
 #' for each parameter across strategies. Supports both outcome and cost summaries.
 #'
-#' @param results A heRomod2 DSA results object (output from run_dsa)
+#' @param results A openqaly DSA results object (output from run_dsa)
 #' @param outcome Name of outcome to display (e.g., "total_qalys", "total_cost")
 #' @param groups Group selection: "overall" (default), specific group, or NULL
 #'   (all groups)

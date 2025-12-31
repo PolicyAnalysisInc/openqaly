@@ -7,12 +7,12 @@
 write_model_json(model)
 }
 \arguments{
-\item{model}{A heRomodel object to be converted to JSON.}
+\item{model}{A oq_model object to be converted to JSON.}
 }
 \value{
 A JSON string representing the model.
 }
 \description{
-Takes a heRomodel object (typically loaded from Excel) and converts it
+Takes a oq_model object (typically loaded from Excel) and converts it
 to a JSON string format.
 }

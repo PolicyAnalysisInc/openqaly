@@ -15,7 +15,7 @@ parse_values <- function(x, states, extra_vars) {
       description = character(0),
       state = character(0),
       destination = character(0),
-      formula = list(), # Formulas are parsed to heRoFormula objects, so list() for empty case
+      formula = list(), # Formulas are parsed to oq_formula objects, so list() for empty case
       type = character(0),
       max_st = numeric(0),
       .rows = 0
@@ -48,7 +48,7 @@ parse_values <- function(x, states, extra_vars) {
     do({
       as.data.frame(.) %>%
         select(name, display_name, description, state, destination, formula, type) %>%
-        mutate(formula = map(formula, as.heRoFormula)) %>%
+        mutate(formula = map(formula, as.oq_formula)) %>%
         sort_variables(extra_vars)
     }) %>%
     ungroup()

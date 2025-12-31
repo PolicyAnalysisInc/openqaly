@@ -3,7 +3,7 @@
 #' Internal helper function that prepares trace data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
@@ -325,7 +325,7 @@ prepare_trace_table_data <- function(results,
 #' Supports both flextable and kableExtra backends for flexible output to Word,
 #' PowerPoint, HTML, and PDF documents.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param states Character vector of states to include (NULL for all)
@@ -340,7 +340,7 @@ prepare_trace_table_data <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Create table using flextable (default)

@@ -7,7 +7,7 @@
 run_dsa(model, ...)
 }
 \arguments{
-\item{model}{A heRomodel object with DSA specifications}
+\item{model}{An openqaly model object with DSA specifications}
 
 \item{...}{Additional arguments passed to run_segment}
 }

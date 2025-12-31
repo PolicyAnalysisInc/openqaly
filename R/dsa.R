@@ -181,11 +181,11 @@ build_dsa_segments <- function(model) {
           high_val <- eval_formula(param$high, seg_ns)
 
           # Validate results
-          if (is_hero_error(low_val)) {
+          if (is_oq_error(low_val)) {
             stop(glue("Failed to evaluate low bound for DSA variable '{param$name}': {low_val}"),
                  call. = FALSE)
           }
-          if (is_hero_error(high_val)) {
+          if (is_oq_error(high_val)) {
             stop(glue("Failed to evaluate high bound for DSA variable '{param$name}': {high_val}"),
                  call. = FALSE)
           }
@@ -455,7 +455,7 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #' - The `bc` keyword to reference base case values (e.g., bc * 0.5)
 #' - Other model variables (e.g., bc - 2 * cost_se)
 #'
-#' @param model A heRomodel object with DSA specifications
+#' @param model An openqaly model object with DSA specifications
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes run_id dimension)
 #' @export
@@ -494,8 +494,8 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #' dsa_results <- run_dsa(model)
 #' }
 run_dsa <- function(model, ...) {
-  # Finalize builders (convert to heRomodel)
-  if ("heRomodel_builder" %in% class(model)) {
+  # Finalize builders (convert to openqaly model)
+  if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
 

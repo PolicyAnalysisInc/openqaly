@@ -15,9 +15,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-library(heRomod2)
+library(openqaly)
 
-model <- read_model(system.file("models", "checkimab", package = "heRomod2"))
+model <- read_model(system.file("models", "checkimab", package = "openqaly"))
 
 results <- run_model(model)
 

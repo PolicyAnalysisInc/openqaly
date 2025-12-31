@@ -2,7 +2,7 @@
 % Please edit documentation in R/error.R
 \name{get_accumulated_errors}
 \alias{get_accumulated_errors}
-\title{Get Accumulated heRo Errors (Primarily for Testing)}
+\title{Get Accumulated openqaly Errors (Primarily for Testing)}
 \usage{
 get_accumulated_errors()
 }

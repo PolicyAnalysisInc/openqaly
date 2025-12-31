@@ -9,7 +9,7 @@ normalize_and_validate_model(model, preserve_builder = FALSE)
 \arguments{
 \item{model}{Raw model list}
 
-\item{preserve_builder}{If TRUE, keeps heRomodel_builder class; if FALSE, returns heRomodel}
+\item{preserve_builder}{If TRUE, keeps oq_model_builder class; if FALSE, returns oq_model}
 }
 \value{
 Validated model with correct structure

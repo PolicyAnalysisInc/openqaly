@@ -4,6 +4,6 @@
 \alias{model_builder}
 \title{Model Builder Functions}
 \description{
-Functions for building heRomod2 models programmatically using a fluent API
+Functions for building openqaly models programmatically using a fluent API
 with non-standard evaluation (NSE) for formula expressions.
 }

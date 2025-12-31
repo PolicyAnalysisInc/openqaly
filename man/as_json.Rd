@@ -7,11 +7,11 @@
 as_json(model)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{A openqaly model object}
 }
 \value{
 A JSON string
 }
 \description{
-Convert a heRomodel object to a JSON string representation.
+Convert a openqaly model object to a JSON string representation.
 }

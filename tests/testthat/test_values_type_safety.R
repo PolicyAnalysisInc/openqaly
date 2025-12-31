@@ -2,7 +2,7 @@ context("Values DataFrame Type Safety")
 
 test_that("values dataframe enforces types proactively", {
   # Load the values spec for testing
-  values_spec <- system.file('model_input_specs', 'values.csv', package = 'heRomod2') %>%
+  values_spec <- system.file('model_input_specs', 'values.csv', package = 'openqaly') %>%
     readr::read_csv(col_types = 'clccc', progress = FALSE, show_col_types = FALSE)
 
   # Test 1: Empty columns get correct type (logical -> character)

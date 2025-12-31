@@ -223,7 +223,7 @@ define_surv_cure(
  scale = 34.43,
  mixture = TRUE
 )
-# Deprecated alias included for backwards compatability with heRomod
+# Deprecated alias included for backwards compatability with openqaly
 define_survival_cure(distribution = "exp", theta = 0.24, rate = 0.023)
 ```
 
@@ -326,7 +326,7 @@ first argument.
 * `female_col`: optional argument to change name of the `female` column accepted by the
 first argument.
 * `dpy`: optional argument specifying the number of days per year used in time unit
-conversion. This argument will be populated automatically in a heromod model.
+conversion. This argument will be populated automatically in an openqaly model.
 * `percent_female`: percent of population that is female. Calculated as 1 - percent_male if not provided.
 
 ## Value
@@ -404,7 +404,7 @@ a `surv_parametric` object.
 define_surv_param(distribution = "exp", rate = .5)
 define_surv_param(distribution = "gompertz", rate = .5, shape = 1)
 
-# Deprecated alias included for backwards compatability with heRomod
+# Deprecated alias included for backwards compatability with openqaly
 define_survival(distribution = "exp", rate = 0.05)
 ```
 

@@ -7,7 +7,7 @@
 parse_psm_custom(model)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{An openqaly model object}
 }
 \value{
 The model with psm_custom class

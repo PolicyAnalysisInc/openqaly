@@ -10,10 +10,10 @@ define_model(type = "markov")
 \item{type}{Character string specifying the model type ("markov" or "psm")}
 }
 \value{
-A heRomodel_builder object that can be piped to other builder functions
+An oq_model_builder object that can be piped to other builder functions
 }
 \description{
-Initialize a new heRomod2 model object with the specified type.
+Initialize a new openqaly model object with the specified type.
 }
 \examples{
 model <- define_model("markov")

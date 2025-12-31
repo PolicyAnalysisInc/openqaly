@@ -781,7 +781,7 @@ void processAndWarnTransitionErrors(
   std::string error_mode = "warning";
   Environment base_env = Environment::base_env();
   Function getOption = base_env["getOption"];
-  SEXP mode_opt = getOption("heRomod2.error_mode", "warning");
+  SEXP mode_opt = getOption("openqaly.error_mode", "warning");
   if (mode_opt != R_NilValue && TYPEOF(mode_opt) == STRSXP && LENGTH(mode_opt) > 0) {
     error_mode = as<std::string>(mode_opt);
   }

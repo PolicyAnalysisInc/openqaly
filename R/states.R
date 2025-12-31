@@ -50,7 +50,7 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
     mutate(
-      formula = map(initial_probability, as.heRoFormula),
+      formula = map(initial_probability, as.oq_formula),
       max_state_time = ceiling(
         ceiling(days_per_unit(state_cycle_limit_unit, cycle_length_days, days_per_year) * state_cycle_limit / cycle_length_days)
       ),
@@ -97,8 +97,8 @@ eval_states <- function(x, ns) {
   tol <- sqrt(.Machine$double.eps)  # Standard tolerance for floating point comparison
   if (abs(prob_sum - 1.0) > tol) {
     error_msg <- glue("Initial state probabilities must sum to 1 (got {prob_sum})")
-    accumulate_hero_error(define_error(error_msg), context_msg = "Initial state validation")
-    hero_error_checkpoint()
+    accumulate_oq_error(define_error(error_msg), context_msg = "Initial state validation")
+    oq_error_checkpoint()
   }
 
   return(result)

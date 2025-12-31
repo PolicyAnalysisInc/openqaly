@@ -17,7 +17,7 @@ add_state(
 )
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{...}{State specifications, either as direct arguments or using state() helper}
 }

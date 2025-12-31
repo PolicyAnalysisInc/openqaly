@@ -7,11 +7,11 @@
 as_r_code(model)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{A openqaly model object}
 }
 \value{
 A character vector of R code lines
 }
 \description{
-Convert a heRomodel object to executable R code.
+Convert a openqaly model object to executable R code.
 }

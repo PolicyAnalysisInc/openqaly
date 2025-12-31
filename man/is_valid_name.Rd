@@ -13,6 +13,6 @@ is_valid_name(x)
 logical vector indicating whether the elements of `x` are valid.
 }
 \description{
-Checks character vector to see if elements follow the rules of heRomod2 variable names,
+Checks character vector to see if elements follow the rules of openqaly variable names,
 which must start with a letter and include only letters, numbers, and underscores.
 }

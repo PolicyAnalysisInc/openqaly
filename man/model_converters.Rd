@@ -4,6 +4,6 @@
 \alias{model_converters}
 \title{Model Format Converters}
 \description{
-Functions for converting heRomod2 models between different formats
+Functions for converting openqaly models between different formats
 (Excel folders, JSON files, and R code).
 }

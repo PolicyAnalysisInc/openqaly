@@ -17,7 +17,7 @@ dsa_outcomes_plot(
 )
 }
 \arguments{
-\item{results}{A heRomod2 DSA results object (output from run_dsa)}
+\item{results}{A openqaly DSA results object (output from run_dsa)}
 
 \item{summary_name}{Name of the summary to plot (e.g., "total_qalys", "total_cost")}
 

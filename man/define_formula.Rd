@@ -10,10 +10,10 @@ define_formula(string)
 \item{text}{An atomic character vector containing an R-expression.}
 }
 \value{
-A heRoFormula object representing the given R-expression.
+An oq_formula object representing the given R-expression.
 }
 \description{
-Takes a string representing an R-expression and turns it into a heRoFormula
+Takes a string representing an R-expression and turns it into an oq_formula
 object. If the resulting R-expression is invalid, it will be replaced
 with an expression that evaluates to an error string.
 }

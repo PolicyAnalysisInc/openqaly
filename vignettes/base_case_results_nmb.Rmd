@@ -15,9 +15,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-library(heRomod2)
+library(openqaly)
 
-model <- read_model(system.file("models", "checkimab", package = "heRomod2"))
+model <- read_model(system.file("models", "checkimab", package = "openqaly"))
 
 results <- run_model(model)
 
@@ -27,7 +27,7 @@ results <- run_model(model)
 
 This vignette demonstrates how to visualize and tabulate net monetary benefit (NMB) from model results.
 
-The heRomod2 package provides flexible tools for creating publication-ready plots and tables.
+The openqaly package provides flexible tools for creating publication-ready plots and tables.
 
 ### Quick Start
 
@@ -51,7 +51,7 @@ nmb_table(
 
 ## Visualizing NMB with Plots
 
-The heRomod2 package provides two main plot types for net monetary benefit:
+The openqaly package provides two main plot types for net monetary benefit:
 
 - **Bar plots** (`nmb_plot_bar()`): Show the components of NMB (health benefits, costs, and net benefit) for strategy comparisons
 - **Line plots** (`nmb_plot_line()`): Display how NMB evolves over the model time horizon

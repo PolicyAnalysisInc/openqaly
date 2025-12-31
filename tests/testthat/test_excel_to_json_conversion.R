@@ -1,7 +1,7 @@
 # Load required functions if testing locally
 tryCatch({
   # Try to load from installed package first
-  write_model_json <- heRomod2::write_model_json
+  write_model_json <- openqaly::write_model_json
 }, error = function(e) {
   # If not available, source directly
   if (file.exists("../../R/misc.R")) {
@@ -16,7 +16,7 @@ test_that("Excel to JSON conversion preserves model structure and results", {
   }
   
   # Load the markov_medium model from Excel
-  excel_model_path <- system.file("models/markov_medium", package = "heRomod2")
+  excel_model_path <- system.file("models/markov_medium", package = "openqaly")
   if (excel_model_path == "") {
     excel_model_path <- "inst/models/markov_medium"
   }
@@ -32,7 +32,7 @@ test_that("Excel to JSON conversion preserves model structure and results", {
   
   # Test 2: JSON can be parsed back
   json_model <- read_model_json(json_string)
-  expect_s3_class(json_model, "heRomodel")
+  expect_s3_class(json_model, "oq_model")
   
   # Test 3: Compare model components structure
   # Settings should be preserved (though format changes from list to df and back)
@@ -161,7 +161,7 @@ test_that("Excel to JSON conversion handles special cases", {
   }
   
   # Test with empty tables/scripts
-  excel_model_path <- system.file("models/markov_medium", package = "heRomod2")
+  excel_model_path <- system.file("models/markov_medium", package = "openqaly")
   if (excel_model_path == "") {
     excel_model_path <- "inst/models/markov_medium"
   }
@@ -198,15 +198,15 @@ test_that("write_model_json validates input", {
     skip("write_model_json not available - package may need to be rebuilt")
   }
 
-  # Test with non-heRomodel object
+  # Test with non-oq_model object
   expect_error(
     write_model_json(list(a = 1, b = 2)),
-    "Input must be a heRomodel object"
+    "Input must be a oq_model object"
   )
 
   # Test with NULL settings
   fake_model <- list(strategies = data.frame(name = "test"))
-  class(fake_model) <- "heRomodel"
+  class(fake_model) <- "oq_model"
   fake_model$settings <- NULL
 
   expect_error(
@@ -222,7 +222,7 @@ test_that("example_psm Excel to JSON conversion preserves model structure and re
   }
 
   # Load the example_psm model from Excel
-  excel_model_path <- system.file("models/example_psm", package = "heRomod2")
+  excel_model_path <- system.file("models/example_psm", package = "openqaly")
   if (excel_model_path == "") {
     excel_model_path <- "inst/models/example_psm"
   }
@@ -238,7 +238,7 @@ test_that("example_psm Excel to JSON conversion preserves model structure and re
 
   # Test 2: JSON can be parsed back
   json_model <- read_model_json(json_string)
-  expect_s3_class(json_model, "heRomodel")
+  expect_s3_class(json_model, "oq_model")
 
   # Test 3: Model type is preserved
   expect_equal(

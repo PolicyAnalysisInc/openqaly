@@ -7,7 +7,7 @@
 resample(model, n, segments, seed = NULL)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{An openqaly model object}
 
 \item{n}{the number of simulations}
 

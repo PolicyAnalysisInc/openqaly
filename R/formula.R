@@ -1,11 +1,11 @@
 #' Define a Formula
 #'
-#' Takes a string representing an R-expression and turns it into a heRoFormula
+#' Takes a string representing an R-expression and turns it into an oq_formula
 #' object. If the resulting R-expression is invalid, it will be replaced
 #' with an expression that evaluates to an error string.
 #'
 #' @param text An atomic character vector containing an R-expression.
-#' @return A heRoFormula object representing the given R-expression.
+#' @return An oq_formula object representing the given R-expression.
 #' 
 #' @keywords internal
 define_formula <- function(string) {
@@ -35,7 +35,7 @@ define_formula <- function(string) {
   } else {
     # Extract expression for dependency analysis
     expr_obj <- quo_get_expr(tryExpr)
-    # Build data for heRoFormula object
+    # Build data for oq_formula object
     res_list <- list(
       text = string,
       quo = tryExpr,
@@ -45,8 +45,8 @@ define_formula <- function(string) {
     )
   }
 
-  # Return heRoFormula object
-  as.heRoFormula(res_list)
+  # Return oq_formula object
+  as.oq_formula(res_list)
 }
 
 # Evaluate Formula
@@ -63,15 +63,15 @@ eval_formula <- function(x, ns, max_st = NULL) {
   # Evaluate with data masking
   res <- safe_eval(eval_tidy(x$quo, data = df))
 
-  # If the initial evaluation did not result in a heRo_error, return it
+  # If the initial evaluation did not result in an oq_error, return it
   # Otherwise, check if it was caused by a dependency error
-  if (is_hero_error(res)) {
+  if (is_oq_error(res)) {
     # Check if any of the variables referenced is an error
     vars <- x$depends
     for (i in rev(vars)) {
       if (i %in% get_names(ns, 'all', keywords = F)) {
         value <- ns[i]
-        if (is_hero_error(value)) {
+        if (is_oq_error(value)) {
           # Use the specific constructor for dependency errors
           error_msg <- glue('Error in dependency "{i}".')
           # Overwrite the original error with a dependency error
@@ -105,65 +105,65 @@ safe_eval <- function(x) {
 
 #' Convert a Formula to Character
 #'
-#' Takes a heRoFormula object and converts it to its character representation.
+#' Takes an oq_formula object and converts it to its character representation.
 #'
-#' @param x A heRoFormula object.
+#' @param x An oq_formula object.
 #' @param ... additional unused arguments.
-#' 
+#'
 #' @return An atomic character vector representing the R-expression.
-#' 
+#'
 #' @export
-as.character.heRoFormula <- function(x, ...) {
+as.character.oq_formula <- function(x, ...) {
   x$text
 }
 
 #' @export
-print.heRoFormula <- function(x, ...) {
+print.oq_formula <- function(x, ...) {
   cat(paste0('FORMULA: ', x$text))
 }
 
 #' Convert to Formula
 #'
-#' Convert an object to a heRovar object.
+#' Convert an object to an oq_formula object.
 #'
-#' @param x Object to be converted to heRovar.
-#' @return A heRovar object.
-#' 
+#' @param x Object to be converted to oq_formula.
+#' @return An oq_formula object.
+#'
 #' @keywords internal
 #' @export
-as.heRoFormula <- function(x) {
-  UseMethod('as.heRoFormula', x)
+as.oq_formula <- function(x) {
+  UseMethod('as.oq_formula', x)
 }
 
-# heRoFormula => heRoFormula
+# oq_formula => oq_formula
 #' @export
-as.heRoFormula.heRoFormula <- function(x) {
+as.oq_formula.oq_formula <- function(x) {
   # Identity
   x
 }
 
-# character => heRoFormula
+# character => oq_formula
 #' @export
-as.heRoFormula.character <- function(x) {
+as.oq_formula.character <- function(x) {
   # Run define_formula on it
   define_formula(x)
 }
 
-# numeric => heRoFormula
+# numeric => oq_formula
 #' @export
-as.heRoFormula.numeric <- function(x) {
+as.oq_formula.numeric <- function(x) {
   # Run define_formula on it
   define_formula(as.character(x))
 }
 
-# list => heRoFormula
+# list => oq_formula
 #' @export
-as.heRoFormula.list <- function(x) {
+as.oq_formula.list <- function(x) {
   # Check for essential fields then set class property.
   props_to_check <- c('text', 'depends', 'quo')
   for (prop in props_to_check) {
     if (is.null(x[[prop]])) stop(glue('Property "{prop}" was missing.'))
   }
-  class(x) <- c('heRoFormula', 'list')
+  class(x) <- c('oq_formula', 'list')
   x
 }

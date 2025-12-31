@@ -2,11 +2,11 @@
 # Tests the example_psm model for mathematical correctness
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("example_psm model loads correctly", {
   # Load the model
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -14,7 +14,7 @@ test_that("example_psm model loads correctly", {
   model <- read_model(model_path)
 
   # Verify basic structure
-  expect_s3_class(model, "heRomodel")
+  expect_s3_class(model, "oq_model")
   expect_equal(tolower(model$settings$model_type), "psm")
 
   # Verify exactly 3 states
@@ -31,7 +31,7 @@ test_that("example_psm model loads correctly", {
 })
 
 test_that("Strategy-specific variables evaluate correctly", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -59,7 +59,7 @@ test_that("Strategy-specific variables evaluate correctly", {
 })
 
 test_that("example_psm model executes successfully", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -83,7 +83,7 @@ test_that("example_psm model executes successfully", {
 })
 
 test_that("PSM trace has correct structure and dimensions", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -108,7 +108,7 @@ test_that("PSM trace has correct structure and dimensions", {
 })
 
 test_that("PSM trace probabilities sum to 1 at all cycles", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -131,7 +131,7 @@ test_that("PSM trace probabilities sum to 1 at all cycles", {
 })
 
 test_that("PSM trace probabilities are valid", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -150,7 +150,7 @@ test_that("PSM trace probabilities are valid", {
 })
 
 test_that("PSM initial state is correct", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -169,7 +169,7 @@ test_that("PSM initial state is correct", {
 })
 
 test_that("PSM trace shows expected monotonic behavior", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -193,7 +193,7 @@ test_that("PSM trace shows expected monotonic behavior", {
 })
 
 test_that("PSM strategies produce different costs", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -221,7 +221,7 @@ test_that("PSM strategies produce different costs", {
 })
 
 test_that("PSM values are calculated correctly with half-cycle methods", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -264,7 +264,7 @@ test_that("PSM values are calculated correctly with half-cycle methods", {
 })
 
 test_that("PSM discounting is applied correctly", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -291,7 +291,7 @@ test_that("PSM discounting is applied correctly", {
 })
 
 test_that("PSM model can be converted to JSON and back", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -322,7 +322,7 @@ test_that("PSM model can be converted to JSON and back", {
 })
 
 test_that("PSM JSON conversion produces identical results", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }

@@ -18,7 +18,7 @@ dsa_nmb_plot(
 )
 }
 \arguments{
-\item{results}{A heRomod2 DSA results object (output from run_dsa)}
+\item{results}{A openqaly DSA results object (output from run_dsa)}
 
 \item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 

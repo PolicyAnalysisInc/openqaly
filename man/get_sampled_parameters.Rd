@@ -12,7 +12,7 @@ get_sampled_parameters(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object (from run_psa)}
+\item{results}{A openqaly PSA results object (from run_psa)}
 
 \item{variables}{Character vector of variable names to extract (NULL for all)}
 
@@ -49,7 +49,7 @@ all strategy/group combinations included as separate columns.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example", package = "heRomod2"))
+model <- read_model(system.file("models/example", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # Extract all sampled parameters

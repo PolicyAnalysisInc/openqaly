@@ -1,7 +1,7 @@
 #' Prepare Model Results for JSON Serialization
 #'
 #' Converts model results to a JSON-serializable format by converting
-#' namespace objects to dataframes and heRoFormula objects to strings.
+#' namespace objects to dataframes and oq_formula objects to strings.
 #' This function creates a copy of the results to avoid modifying the original.
 #'
 #' @param model_results Results from run_model()
@@ -29,9 +29,9 @@ prepare_model_results_for_json <- function(model_results) {
 prepare_segments_for_json <- function(segments) {
   # Process each row if segments is a dataframe/tibble
   if (is.data.frame(segments)) {
-    # Convert heRoFormula objects in uneval_vars
+    # Convert oq_formula objects in uneval_vars
     if ("uneval_vars" %in% names(segments) && !is.null(segments$uneval_vars)) {
-      segments$uneval_vars <- lapply(segments$uneval_vars, convert_hero_formulas)
+      segments$uneval_vars <- lapply(segments$uneval_vars, convert_oq_formulas)
     }
     
     # Convert namespace objects to dataframes
@@ -49,25 +49,25 @@ prepare_segments_for_json <- function(segments) {
   segments
 }
 
-#' Convert heRoFormula Objects to Strings
+#' Convert oq_formula Objects to Strings
 #'
-#' Recursively converts heRoFormula objects to character strings
+#' Recursively converts oq_formula objects to character strings
 #' throughout a nested data structure.
 #'
 #' @param obj Object to convert
-#' @return Object with heRoFormula objects converted to strings
+#' @return Object with oq_formula objects converted to strings
 #' @keywords internal
-convert_hero_formulas <- function(obj) {
-  if (inherits(obj, "heRoFormula")) {
+convert_oq_formulas <- function(obj) {
+  if (inherits(obj, "oq_formula")) {
     as.character(obj)
   } else if (is.list(obj)) {
     # Recursively convert lists
-    lapply(obj, convert_hero_formulas)
+    lapply(obj, convert_oq_formulas)
   } else if (is.data.frame(obj)) {
     # Convert formulas in dataframe columns
     obj[] <- lapply(obj, function(col) {
       if (is.list(col)) {
-        lapply(col, convert_hero_formulas)
+        lapply(col, convert_oq_formulas)
       } else {
         col
       }

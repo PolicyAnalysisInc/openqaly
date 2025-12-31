@@ -1,7 +1,7 @@
 # Test time unit functionality in trace output
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("time variables are stored in trace", {
   model <- define_model("markov") |>

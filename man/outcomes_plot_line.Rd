@@ -17,7 +17,7 @@ outcomes_plot_line(
 )
 }
 \arguments{
-\item{res}{A heRomod2 model results object (output from run_model)}
+\item{res}{A openqaly model results object (output from run_model)}
 
 \item{outcome}{Name of the outcome summary to plot (e.g., "total_qalys")}
 
@@ -64,7 +64,7 @@ When comparator is specified (comparator perspective):
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Cumulative outcome values over time

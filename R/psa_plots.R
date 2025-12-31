@@ -4,7 +4,7 @@
 #' cost-effective at different willingness-to-pay thresholds in a multi-way
 #' (incremental) comparison.
 #'
-#' @param results A heRomod2 PSA results object, or pre-calculated CEAC data
+#' @param results A openqaly PSA results object, or pre-calculated CEAC data
 #'   from calculate_incremental_ceac()
 #' @param outcome_summary Name of the outcome summary (required if results is
 #'   a model object)
@@ -38,7 +38,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Basic incremental CEAC plot
@@ -178,7 +178,7 @@ incremental_ceac_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Basic frontier plot
@@ -296,7 +296,7 @@ incremental_ceac_frontier_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Basic scatter plot
@@ -453,7 +453,7 @@ psa_scatter_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Comparator perspective: Compare strategies to control
@@ -542,7 +542,7 @@ pairwise_ceac_plot <- function(results,
 #' from probabilistic sensitivity analysis. Handles strategy/group-specific
 #' variables with appropriate labeling.
 #'
-#' @param results A heRomod2 PSA results object (from run_psa)
+#' @param results A openqaly PSA results object (from run_psa)
 #' @param variables Character vector of variable names to visualize (required)
 #' @param group Group selection with three modes:
 #'   \itemize{
@@ -596,7 +596,7 @@ pairwise_ceac_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example", package = "heRomod2"))
+#' model <- read_model(system.file("models/example", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Visualize selected parameters (all strategies/groups)
@@ -736,7 +736,7 @@ psa_parameter_scatter_matrix <- function(results,
 #' thresholds. EVPI represents the expected value of eliminating all parameter
 #' uncertainty.
 #'
-#' @param results A heRomod2 PSA results object, or pre-calculated EVPI data
+#' @param results A openqaly PSA results object, or pre-calculated EVPI data
 #'   from calculate_evpi()
 #' @param outcome_summary Name of the outcome summary (required if results is
 #'   a model object)
@@ -773,7 +773,7 @@ psa_parameter_scatter_matrix <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Basic EVPI plot
@@ -930,7 +930,7 @@ evpi_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Comparator perspective: Each strategy vs control in separate panels

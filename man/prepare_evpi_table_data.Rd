@@ -17,7 +17,7 @@ prepare_evpi_table_data(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object}
+\item{results}{A openqaly PSA results object}
 
 \item{outcome_summary}{Name of the outcome summary}
 

@@ -30,21 +30,21 @@ test_that("Dirichlet distribution generates valid transition probabilities", {
     )
 
   # Normalize and parse the model (as run_psa does)
-  normalized_model <- heRomod2:::normalize_and_validate_model(model)
-  parsed_model <- heRomod2:::parse_model(normalized_model)
+  normalized_model <- openqaly:::normalize_and_validate_model(model)
+  parsed_model <- openqaly:::parse_model(normalized_model)
 
   # Get segments from parsed model and enrich with evaluated variables
-  segments <- heRomod2:::get_segments(parsed_model) %>%
+  segments <- openqaly:::get_segments(parsed_model) %>%
     rowwise() %>%
     do({
       seg <- as.list(.)
-      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      openqaly:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
     }) %>%
     ungroup()
 
   # Sample parameters
   set.seed(42)
-  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 42)
+  sampled_raw <- openqaly:::resample(parsed_model, 100, segments, seed = 42)
 
   # Extract sampled values from parameter_overrides
   sampled <- sampled_raw %>%
@@ -91,20 +91,20 @@ test_that("Multivariate normal generates correlated parameters", {
     )
 
   # Normalize and parse the model (as run_psa does)
-  normalized_model <- heRomod2:::normalize_and_validate_model(model)
-  parsed_model <- heRomod2:::parse_model(normalized_model)
+  normalized_model <- openqaly:::normalize_and_validate_model(model)
+  parsed_model <- openqaly:::parse_model(normalized_model)
 
   # Get segments from parsed model and enrich with evaluated variables
-  segments <- heRomod2:::get_segments(parsed_model) %>%
+  segments <- openqaly:::get_segments(parsed_model) %>%
     rowwise() %>%
     do({
       seg <- as.list(.)
-      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      openqaly:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
     }) %>%
     ungroup()
 
   set.seed(123)
-  sampled_raw <- heRomod2:::resample(parsed_model, 1000, segments, seed = 123)
+  sampled_raw <- openqaly:::resample(parsed_model, 1000, segments, seed = 123)
 
   # Extract sampled values from parameter_overrides
   sampled <- sampled_raw %>%
@@ -146,20 +146,20 @@ test_that("Multinomial distribution generates valid categorical outcomes", {
     )
 
   # Normalize and parse the model (as run_psa does)
-  normalized_model <- heRomod2:::normalize_and_validate_model(model)
-  parsed_model <- heRomod2:::parse_model(normalized_model)
+  normalized_model <- openqaly:::normalize_and_validate_model(model)
+  parsed_model <- openqaly:::parse_model(normalized_model)
 
   # Get segments from parsed model and enrich with evaluated variables
-  segments <- heRomod2:::get_segments(parsed_model) %>%
+  segments <- openqaly:::get_segments(parsed_model) %>%
     rowwise() %>%
     do({
       seg <- as.list(.)
-      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      openqaly:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
     }) %>%
     ungroup()
 
   set.seed(456)
-  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 456)
+  sampled_raw <- openqaly:::resample(parsed_model, 100, segments, seed = 456)
 
   # Extract sampled values from parameter_overrides
   sampled <- sampled_raw %>%
@@ -177,7 +177,7 @@ test_that("Multinomial distribution generates valid categorical outcomes", {
   expect_true(all(sampled$init_state3 %in% c(0, 1)))
 
   # Check approximate probabilities (with larger sample for better accuracy)
-  sampled_large_raw <- heRomod2:::resample(parsed_model, 1000, segments, seed = 789)
+  sampled_large_raw <- openqaly:::resample(parsed_model, 1000, segments, seed = 789)
   sampled_large <- sampled_large_raw %>%
     mutate(params = map(parameter_overrides, as_tibble)) %>%
     select(-parameter_overrides) %>%
@@ -217,19 +217,19 @@ test_that("Segment-specific multivariate sampling works correctly", {
     )
 
   # Normalize and parse the model (as run_psa does)
-  normalized_model <- heRomod2:::normalize_and_validate_model(model)
-  parsed_model <- heRomod2:::parse_model(normalized_model)
+  normalized_model <- openqaly:::normalize_and_validate_model(model)
+  parsed_model <- openqaly:::parse_model(normalized_model)
 
   # Get segments from parsed model and enrich with evaluated variables
-  segments <- heRomod2:::get_segments(parsed_model) %>%
+  segments <- openqaly:::get_segments(parsed_model) %>%
     rowwise() %>%
     do({
       seg <- as.list(.)
-      heRomod2:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      openqaly:::prepare_segment_for_sampling(parsed_model, as_tibble(seg))
     }) %>%
     ungroup()
 
-  sampled_raw <- heRomod2:::resample(parsed_model, 100, segments, seed = 321)
+  sampled_raw <- openqaly:::resample(parsed_model, 100, segments, seed = 321)
 
   # Separate by strategy in the raw results
   standard_raw <- filter(sampled_raw, strategy == "standard")
@@ -277,7 +277,7 @@ test_that("Multivariate sampling validation catches conflicts", {
 
   # Should detect conflict
   expect_error(
-    heRomod2:::validate_sampling_spec(model),
+    openqaly:::validate_sampling_spec(model),
     "Variables appear in both variables.sampling and multivariate_sampling"
   )
 })
@@ -295,7 +295,7 @@ test_that("Multivariate sampling with missing variables is caught", {
 
   # Should detect missing variables
   expect_error(
-    heRomod2:::validate_sampling_spec(model),
+    openqaly:::validate_sampling_spec(model),
     "Variables in multivariate_sampling not found in variables table"
   )
 })

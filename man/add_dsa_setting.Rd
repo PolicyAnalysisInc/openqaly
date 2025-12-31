@@ -7,7 +7,7 @@
 add_dsa_setting(model, setting, low, high, display_name = NULL)
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{setting}{Character string naming the setting to vary
 (e.g., "discount_cost", "discount_outcomes", "timeframe")}

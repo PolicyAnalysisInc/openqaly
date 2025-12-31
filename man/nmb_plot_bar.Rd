@@ -16,7 +16,7 @@ nmb_plot_bar(
 )
 }
 \arguments{
-\item{res}{A heRomod2 model results object (output from run_model)}
+\item{res}{A openqaly model results object (output from run_model)}
 
 \item{health_outcome}{Name of the health outcome summary to use (e.g., "total_qalys")}
 
@@ -54,7 +54,7 @@ but can be overridden using the `wtp` parameter.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # NMB with WTP from metadata (comparator perspective)

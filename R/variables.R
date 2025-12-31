@@ -58,7 +58,7 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
     rowwise() %>%
     group_split() %>%
     map(function(var) {
-      formula <- as.heRoFormula(var[[formula_column]])
+      formula <- as.oq_formula(var[[formula_column]])
       if (('.is_ss' %in% colnames(var)) && var$.is_ss) {
         formula$depends <- c(formula$depends, 'strategy')
         formula$fo_depends <- c(formula$fo_depends, 'strategy')
@@ -187,9 +187,9 @@ eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
     # Evaluate it
     res <- eval_formula(value, ns)
     # Check if the object was an error
-    if (is_hero_error(res)) {
+    if (is_oq_error(res)) {
       # Always accumulate errors for checkpoint handling
-      accumulate_hero_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
+      accumulate_oq_error(res, context_msg = glue("Evaluation of {context} '{name}'"))
     }
     
     # Determine whether result is a vector or object parameter
@@ -205,7 +205,7 @@ eval_variables <- function(x, ns, df_only = FALSE, context = 'variables') {
   })
 
   # Trigger error checkpoint mechanism (checks mode internally)
-  hero_error_checkpoint()
+  oq_error_checkpoint()
   
   return(ns)
 }
@@ -237,7 +237,7 @@ check_variables_df <- function(x, context = "Variables") {
   }
   
   # Check that no reserved names are used
-  used_reserved <- x$name %in% heRo_keywords
+  used_reserved <- x$name %in% oq_keywords
   if (any(used_reserved)) {
     reserved_index <- which(used_reserved)
     reserved_names <- x$name[reserved_index]

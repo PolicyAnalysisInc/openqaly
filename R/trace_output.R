@@ -55,7 +55,7 @@ map_names <- function(names, metadata, field = "name") {
 #' Converts trace matrices from model results into various data frame formats
 #' suitable for visualization and export.
 #'
-#' @param results A heRomod2 model results object (output from run_model)
+#' @param results A openqaly model results object (output from run_model)
 #' @param format Output format: "long" (one row per cycle×state×strategy),
 #'   "wide" (one row per cycle, states as columns), or "matrix" (keep as matrix)
 #' @param collapsed Logical. If TRUE (default), use aggregated traces from
@@ -77,7 +77,7 @@ map_names <- function(names, metadata, field = "name") {
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Get long format (ggplot2-ready) for overall population
@@ -368,7 +368,7 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #' When multiple strategies or groups are present, they are automatically
 #' faceted into separate panels.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param facet_by Faceting variable: NULL (auto-detect), "strategy", "group",
 #'   or "both". When NULL and multiple strategies/groups exist, automatically
 #'   creates facets to separate them.
@@ -389,7 +389,7 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Basic stacked area plot (auto-facets by strategy if >1)
@@ -533,7 +533,7 @@ trace_plot_area <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Line plot showing each state's trajectory
@@ -656,7 +656,7 @@ trace_plot_line <- function(results,
 #'
 #' Exports trace data to various file formats including CSV, Excel, HTML, JSON, and RDS.
 #'
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #' @param file Output file path (extension determines format if format is NULL)
 #' @param format Output format: "csv", "excel", "html", "json", or "rds".
 #'   If NULL, inferred from file extension
@@ -669,7 +669,7 @@ trace_plot_line <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Export to CSV

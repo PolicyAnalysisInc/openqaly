@@ -2,7 +2,7 @@
 % Please edit documentation in R/misc.R
 \name{read_model_json}
 \alias{read_model_json}
-\title{Takes a JSON string and parses it into a heRomodel object.}
+\title{Takes a JSON string and parses it into a oq_model object.}
 \usage{
 read_model_json(json_string)
 }
@@ -10,8 +10,8 @@ read_model_json(json_string)
 \item{json_string}{A string containing the model in JSON format.}
 }
 \value{
-A heRomodel object
+A oq_model object
 }
 \description{
-Takes a JSON string and parses it into a heRomodel object.
+Takes a JSON string and parses it into a oq_model object.
 }

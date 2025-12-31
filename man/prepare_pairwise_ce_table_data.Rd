@@ -18,7 +18,7 @@ prepare_pairwise_ce_table_data(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{outcome_summary}{Name of the outcome summary}
 

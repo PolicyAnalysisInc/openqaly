@@ -2,46 +2,46 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 MarkovTraceAndValues <- function(transitions, values, init, ncycles, nstates, nvalues, ccons) {
-    .Call('_heRomod2_MarkovTraceAndValues', PACKAGE = 'heRomod2', transitions, values, init, ncycles, nstates, nvalues, ccons)
+    .Call('_openqaly_MarkovTraceAndValues', PACKAGE = 'openqaly', transitions, values, init, ncycles, nstates, nvalues, ccons)
 }
 
 cppMarkovTransitionsAndTrace <- function(transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod = "start") {
-    .Call('_heRomod2_cppMarkovTransitionsAndTrace', PACKAGE = 'heRomod2', transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod)
+    .Call('_openqaly_cppMarkovTransitionsAndTrace', PACKAGE = 'openqaly', transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod)
 }
 
 cppCalculateTraceAndValues <- function(init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method = "start") {
-    .Call('_heRomod2_cppCalculateTraceAndValues', PACKAGE = 'heRomod2', init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method)
+    .Call('_openqaly_cppCalculateTraceAndValues', PACKAGE = 'openqaly', init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method)
 }
 
 cpp_pivot_to_long <- function(df, value_names) {
-    .Call('_heRomod2_cpp_pivot_to_long', PACKAGE = 'heRomod2', df, value_names)
+    .Call('_openqaly_cpp_pivot_to_long', PACKAGE = 'openqaly', df, value_names)
 }
 
 cpp_lf_to_array <- function(lf_data, dims) {
-    .Call('_heRomod2_cpp_lf_to_array', PACKAGE = 'heRomod2', lf_data, dims)
+    .Call('_openqaly_cpp_lf_to_array', PACKAGE = 'openqaly', lf_data, dims)
 }
 
 cpp_arr_last_unique <- function(arr, dim_index) {
-    .Call('_heRomod2_cpp_arr_last_unique', PACKAGE = 'heRomod2', arr, dim_index)
+    .Call('_openqaly_cpp_arr_last_unique', PACKAGE = 'openqaly', arr, dim_index)
 }
 
 process_evaluated_values_cpp <- function(evaluated_groups, value_names, state_names, simplify) {
-    .Call('_heRomod2_process_evaluated_values_cpp', PACKAGE = 'heRomod2', evaluated_groups, value_names, state_names, simplify)
+    .Call('_openqaly_process_evaluated_values_cpp', PACKAGE = 'openqaly', evaluated_groups, value_names, state_names, simplify)
 }
 
 cpp_process_state_cycles_ultrafast <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
-    .Call('_heRomod2_cpp_process_state_cycles_ultrafast', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+    .Call('_openqaly_cpp_process_state_cycles_ultrafast', PACKAGE = 'openqaly', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
 }
 
 cpp_process_state_cycles_fast <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
-    .Call('_heRomod2_cpp_process_state_cycles_fast', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+    .Call('_openqaly_cpp_process_state_cycles_fast', PACKAGE = 'openqaly', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
 }
 
 cpp_process_state_cycles <- function(state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st) {
-    .Call('_heRomod2_cpp_process_state_cycles', PACKAGE = 'heRomod2', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
+    .Call('_openqaly_cpp_process_state_cycles', PACKAGE = 'openqaly', state_res, value_names_in_df, state_ns_env, value_names_in_env, state, destination, max_st)
 }
 
 cpp_lf_to_array_direct <- function(df, dimcols, value_col) {
-    .Call('_heRomod2_cpp_lf_to_array_direct', PACKAGE = 'heRomod2', df, dimcols, value_col)
+    .Call('_openqaly_cpp_lf_to_array_direct', PACKAGE = 'openqaly', df, dimcols, value_col)
 }
 

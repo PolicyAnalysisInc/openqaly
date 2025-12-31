@@ -1,4 +1,4 @@
-Package: heRomod2
+Package: openqaly
 Type: Package
 Title: Reproducible Health Economic Modeling
 Version: 0.1.3
@@ -30,7 +30,7 @@ Imports:
     jsonlite,
     scales
 Depends:
-    herosurv
+    openqalysurv
 License: AGPL-3
 Encoding: UTF-8
 LazyData: true

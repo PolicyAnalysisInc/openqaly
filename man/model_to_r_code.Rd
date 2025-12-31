@@ -7,7 +7,7 @@
 model_to_r_code(model, file = NULL)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{A oq_model object}
 
 \item{file}{Optional file path to write the code to}
 }
@@ -15,7 +15,7 @@ model_to_r_code(model, file = NULL)
 A character vector containing the R code lines
 }
 \description{
-Generate executable R code that recreates a heRomod2 model.
+Generate executable R code that recreates a openqaly model.
 }
 \examples{
 \dontrun{

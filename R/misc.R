@@ -403,7 +403,7 @@ err_name_string <- function(x) {
 
 #' Check if Name is Valid
 #' 
-#' Checks character vector to see if elements follow the rules of heRomod2 variable names,
+#' Checks character vector to see if elements follow the rules of openqaly variable names,
 #' which must start with a letter and include only letters, numbers, and underscores.
 #' 
 #' @param x character vector of names to check
@@ -919,7 +919,7 @@ validate_model_data <- function(model) {
 #' Used by all three input paths (Excel, JSON, R Builder) to ensure consistency.
 #'
 #' @param model Raw model list
-#' @param preserve_builder If TRUE, keeps heRomodel_builder class; if FALSE, returns heRomodel
+#' @param preserve_builder If TRUE, keeps oq_model_builder class; if FALSE, returns oq_model
 #'
 #' @return Validated model with correct structure
 #' @export
@@ -966,7 +966,7 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   }
 
   # Load type-specific specs
-  spec_path <- system.file('model_input_specs', package = 'heRomod2')
+  spec_path <- system.file('model_input_specs', package = 'openqaly')
 
   states_spec_file <- if (model_type %in% c("psm", "custom_psm")) {
     "psm_states.csv"
@@ -1086,21 +1086,21 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   }
 
   # Set class
-  if (preserve_builder && "heRomodel_builder" %in% class(model)) {
-    class(model) <- c("heRomodel_builder", "heRomodel")
+  if (preserve_builder && "oq_model_builder" %in% class(model)) {
+    class(model) <- c("oq_model_builder", "oq_model")
   } else {
-    class(model) <- "heRomodel"
+    class(model) <- "oq_model"
   }
 
   return(model)
 }
 
 #'
-#' Takes a JSON string and parses it into a heRomodel object.
+#' Takes a JSON string and parses it into a oq_model object.
 #'
 #' @param json_string A string containing the model in JSON format.
 #'
-#' @return A heRomodel object
+#' @return A oq_model object
 #'
 #' @export
 read_model_json <- function(json_string) {
@@ -1202,12 +1202,12 @@ read_model_json <- function(json_string) {
 convert_json_dataframes <- function(model, values_spec = NULL) {
   # Load all specs if not provided
   if (is.null(values_spec)) {
-    model_input_specs <- system.file('model_input_specs', package = 'heRomod2') %>%
+    model_input_specs <- system.file('model_input_specs', package = 'openqaly') %>%
       list.files() %>%
       set_names(str_split_fixed(., '\\.', Inf)[,1]) %>%
       map(function(x) {
         suppressWarnings(read_csv(
-          system.file('model_input_specs', x, package = 'heRomod2'),
+          system.file('model_input_specs', x, package = 'openqaly'),
           col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
           progress = FALSE
         ))
@@ -1417,18 +1417,18 @@ ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
 
 #' Write Model to JSON
 #'
-#' Takes a heRomodel object (typically loaded from Excel) and converts it
+#' Takes a oq_model object (typically loaded from Excel) and converts it
 #' to a JSON string format.
 #'
-#' @param model A heRomodel object to be converted to JSON.
+#' @param model A oq_model object to be converted to JSON.
 #'
 #' @return A JSON string representing the model.
 #'
 #' @export
 write_model_json <- function(model) {
-  # Ensure model is a heRomodel object
-  if (!"heRomodel" %in% class(model)) {
-    stop("Input must be a heRomodel object", call. = FALSE)
+  # Ensure model is a oq_model object
+  if (!"oq_model" %in% class(model)) {
+    stop("Input must be a oq_model object", call. = FALSE)
   }
 
   # Build JSON structure
@@ -1587,7 +1587,7 @@ validate_group_names <- function(group_names) {
 #' into a list specifying which groups and whether to include overall.
 #'
 #' @param groups The groups argument value (NULL, character vector, or string)
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #'
 #' @return List with elements:
 #'   \item{include_overall}{Logical - whether to include overall/aggregated}
@@ -1669,7 +1669,7 @@ resolve_groups <- function(groups, results) {
 #' based on the resolved groups specification.
 #'
 #' @param groups The groups argument value
-#' @param results A heRomod2 model results object
+#' @param results A openqaly model results object
 #'
 #' @return Tibble with combined data from requested groups
 #' @keywords internal

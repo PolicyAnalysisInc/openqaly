@@ -17,7 +17,7 @@ trace_plot_area(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{facet_by}{Faceting variable: NULL (auto-detect), "strategy", "group",
 or "both". When NULL and multiple strategies/groups exist, automatically
@@ -53,7 +53,7 @@ faceted into separate panels.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Basic stacked area plot (auto-facets by strategy if >1)

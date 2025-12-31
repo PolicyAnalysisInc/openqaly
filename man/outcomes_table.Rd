@@ -19,7 +19,7 @@ outcomes_table(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
@@ -44,7 +44,7 @@ Supports both flextable and kableExtra backends for flexible output formatting.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Summary table for overall

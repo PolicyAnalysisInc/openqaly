@@ -12,7 +12,7 @@ parse_state_probability_formulas(transitions, state_names)
 \item{state_names}{Vector of state names}
 }
 \value{
-Named list of heRoFormula objects by state
+Named list of oq_formula objects by state
 }
 \description{
 Extracts state probability formulas from the transitions table for Custom PSM.

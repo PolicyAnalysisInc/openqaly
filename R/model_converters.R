@@ -1,6 +1,6 @@
 #' Model Format Converters
 #'
-#' Functions for converting heRomod2 models between different formats
+#' Functions for converting openqaly models between different formats
 #' (Excel folders, JSON files, and R code).
 #'
 #' @name model_converters
@@ -10,12 +10,12 @@ NULL
 
 #' Write Model to File
 #'
-#' Write a heRomodel object to a file in the specified format.
+#' Write a oq_model object to a file in the specified format.
 #'
 #' For Excel format, the path should be a folder (will be created if needed).
 #' For JSON and R formats, the path should include the filename.
 #'
-#' @param model A heRomodel object
+#' @param model A oq_model object
 #' @param path Character string specifying the output path
 #' @param format Character string specifying the format ("excel", "json", or "r")
 #'
@@ -75,7 +75,7 @@ write_model <- function(model, path, format = c("excel", "json", "r")) {
 #'
 #' Internal function to write a model to Excel folder structure.
 #'
-#' @param model A heRomodel object
+#' @param model A oq_model object
 #' @param path Folder path
 #'
 #' @keywords internal
@@ -186,7 +186,7 @@ write_model_excel <- function(model, path) {
 #' Universal converter function that can detect input format and convert
 #' to the specified output format.
 #'
-#' @param input Either a heRomodel object, a path to a model file/folder, or a JSON string
+#' @param input Either a oq_model object, a path to a model file/folder, or a JSON string
 #' @param output Output path for the converted model
 #' @param from Input format ("auto" to detect, or "excel", "json", "r", "object")
 #' @param to Output format ("auto" to detect from extension, or "excel", "json", "r")
@@ -209,7 +209,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
 
   # Auto-detect input format and load model
   if (from == "auto") {
-    if (inherits(input, "heRomodel")) {
+    if (inherits(input, "oq_model")) {
       # Already a model object
       model <- input
     } else if (is.character(input) && length(input) == 1) {
@@ -231,11 +231,11 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
           # Execute R file to get model
           env <- new.env()
           source(input, local = env)
-          # Find the model object (first heRomodel object found)
+          # Find the model object (first oq_model object found)
           objs <- ls(env)
-          models <- Filter(function(x) inherits(env[[x]], "heRomodel"), objs)
+          models <- Filter(function(x) inherits(env[[x]], "oq_model"), objs)
           if (length(models) == 0) {
-            stop("No heRomodel object found in R file: ", input)
+            stop("No oq_model object found in R file: ", input)
           }
           if (length(models) > 1) {
             warning("Multiple model objects found in R file, using first: ", models[1])
@@ -270,7 +270,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
         env <- new.env()
         source(input, local = env)
         objs <- ls(env)
-        models <- Filter(function(x) inherits(env[[x]], "heRomodel"), objs)
+        models <- Filter(function(x) inherits(env[[x]], "oq_model"), objs)
         if (length(models) == 0) stop("No model found in R file")
         env[[models[1]]]
       },
@@ -308,7 +308,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
 #'
 #' @keywords internal
 detect_model_format <- function(input) {
-  if (inherits(input, "heRomodel")) {
+  if (inherits(input, "oq_model")) {
     return("object")
   }
 

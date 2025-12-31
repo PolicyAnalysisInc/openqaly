@@ -14,6 +14,6 @@ Model results in a JSON-serializable format
 }
 \description{
 Converts model results to a JSON-serializable format by converting
-namespace objects to dataframes and heRoFormula objects to strings.
+namespace objects to dataframes and oq_formula objects to strings.
 This function creates a copy of the results to avoid modifying the original.
 }

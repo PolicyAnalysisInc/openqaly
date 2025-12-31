@@ -33,7 +33,7 @@ prepare_segment_for_sampling <- function(model, segment) {
 #' Handles both univariate distributions (from variables.sampling column) and
 #' multivariate distributions (from model$multivariate_sampling).
 #'
-#' @param model A heRomodel object
+#' @param model An openqaly model object
 #' @param n the number of simulations
 #' @param segments the segments for which resampling will be done (must have eval_vars and uneval_vars columns)
 #' @param seed random seed for reproducibility
@@ -123,10 +123,10 @@ resample <- function(model, n, segments, seed = NULL) {
         seg_ns$env$bc <- seg_ns[var_name]
 
         # Evaluate distribution formula in namespace
-        formula <- as.heRoFormula(var_row$sampling)
+        formula <- as.oq_formula(var_row$sampling)
         dist_fn <- eval_formula(formula, seg_ns)
 
-        if (is_hero_error(dist_fn)) {
+        if (is_oq_error(dist_fn)) {
           stop(glue("Failed to evaluate sampling distribution for parameter '{var_name}': {dist_fn}"), call. = FALSE)
         }
 
@@ -134,7 +134,7 @@ resample <- function(model, n, segments, seed = NULL) {
         u <- runif(n)
         samples <- safe_eval(dist_fn(u))
 
-        if (is_hero_error(samples)) {
+        if (is_oq_error(samples)) {
           stop(glue("Failed to sample parameter '{var_name}': {samples}"), call. = FALSE)
         }
 
@@ -162,17 +162,17 @@ resample <- function(model, n, segments, seed = NULL) {
         # The namespace contains ALL evaluated variables, including:
         # - Variables being sampled (with their base case values)
         # - Helper variables (alpha parameters, SE, correlations, etc.)
-        formula <- as.heRoFormula(mv_spec$distribution)
+        formula <- as.oq_formula(mv_spec$distribution)
         dist_fn <- eval_formula(formula, seg_ns)
 
-        if (is_hero_error(dist_fn)) {
+        if (is_oq_error(dist_fn)) {
           stop(glue("Failed to evaluate multivariate distribution '{mv_spec$name}': {dist_fn}"), call. = FALSE)
         }
 
         # Sample (returns n × k matrix)
         samples_matrix <- safe_eval(dist_fn(n))
 
-        if (is_hero_error(samples_matrix)) {
+        if (is_oq_error(samples_matrix)) {
           stop(glue("Failed to sample multivariate distribution '{mv_spec$name}': {samples_matrix}"), call. = FALSE)
         }
 

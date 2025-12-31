@@ -1,10 +1,10 @@
 # Tests for Trace Output Functions
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("get_trace extracts data in long format", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -42,7 +42,7 @@ test_that("get_trace extracts data in long format", {
 
 
 test_that("get_trace extracts data in wide format", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -66,7 +66,7 @@ test_that("get_trace extracts data in wide format", {
 
 
 test_that("get_trace extracts data in matrix format", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -90,7 +90,7 @@ test_that("get_trace extracts data in matrix format", {
 
 
 test_that("get_trace filters by strategy", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -113,7 +113,7 @@ test_that("get_trace filters by strategy", {
 
 
 test_that("get_trace filters by states", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -140,7 +140,7 @@ test_that("get_trace filters by states", {
 
 
 test_that("get_trace filters by cycles", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -158,7 +158,7 @@ test_that("get_trace filters by cycles", {
 
 
 test_that("trace_plot_area creates a ggplot object", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -178,7 +178,7 @@ test_that("trace_plot_area creates a ggplot object", {
 
 
 test_that("trace_plot_area with faceting creates faceted plot", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -196,7 +196,7 @@ test_that("trace_plot_area with faceting creates faceted plot", {
 
 
 test_that("trace_plot_line creates a ggplot with lines", {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -216,7 +216,7 @@ test_that("trace_plot_line creates a ggplot with lines", {
 test_that("export_trace exports to CSV", {
   skip_on_cran()
 
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -247,7 +247,7 @@ test_that("export_trace exports to Excel", {
   skip_on_cran()
   skip_if_not_installed("openxlsx")
 
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -272,7 +272,7 @@ test_that("export_trace exports to Excel", {
 test_that("export_trace exports to JSON", {
   skip_on_cran()
 
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -302,7 +302,7 @@ test_that("export_trace exports to JSON", {
 test_that("export_trace infers format from extension", {
   skip_on_cran()
 
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }

@@ -20,7 +20,7 @@ get_values(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object (output from run_model)}
+\item{results}{A openqaly model results object (output from run_model)}
 
 \item{format}{Output format: "long" (one row per cycle×value×strategy×group) or
 "wide" (one row per cycle, values as columns)}
@@ -60,7 +60,7 @@ in various formats suitable for visualization and export.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Get overall population outcomes in long format

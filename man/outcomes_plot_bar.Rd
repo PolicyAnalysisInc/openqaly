@@ -14,7 +14,7 @@ outcomes_plot_bar(
 )
 }
 \arguments{
-\item{res}{A heRomod2 model results object (output from run_model)}
+\item{res}{A openqaly model results object (output from run_model)}
 
 \item{outcome}{Name of the outcome summary to plot (e.g., "total_qalys")}
 
@@ -43,7 +43,7 @@ Models containing multiple groups
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Absolute outcome values

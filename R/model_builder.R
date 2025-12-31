@@ -1,6 +1,6 @@
 #' Model Builder Functions
 #'
-#' Functions for building heRomod2 models programmatically using a fluent API
+#' Functions for building openqaly models programmatically using a fluent API
 #' with non-standard evaluation (NSE) for formula expressions.
 #'
 #' @name model_builder
@@ -11,11 +11,11 @@ NULL
 
 #' Define a New Model
 #'
-#' Initialize a new heRomod2 model object with the specified type.
+#' Initialize a new openqaly model object with the specified type.
 #'
 #' @param type Character string specifying the model type ("markov" or "psm")
 #'
-#' @return A heRomodel_builder object that can be piped to other builder functions
+#' @return An oq_model_builder object that can be piped to other builder functions
 #'
 #' @export
 #' @examples
@@ -116,7 +116,7 @@ define_model <- function(type = "markov") {
     dsa_parameters = structure(list(), class = "dsa_parameters")
   )
 
-  class(model) <- c("heRomodel_builder", "heRomodel")
+  class(model) <- c("oq_model_builder", "oq_model")
   model
 }
 
@@ -124,7 +124,7 @@ define_model <- function(type = "markov") {
 #'
 #' Configure model settings such as number of cycles, cycle length, discount rates, etc.
 #'
-#' @param model A heRomodel_builder object
+#' @param model An oq_model_builder object
 #' @param ... Named arguments for settings (e.g., n_cycles = 100)
 #'
 #' @return The modified model object
@@ -188,7 +188,7 @@ set_settings <- function(model, ...) {
 #'
 #' Add one or more states to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param ... State specifications, either as direct arguments or using state() helper
 #'
 #' @return The modified model object
@@ -258,7 +258,7 @@ add_state <- function(model, name, display_name = NULL,
 #'
 #' Add one or more transitions to the model. Uses NSE to capture formula expressions.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param from_state Character string specifying the source state
 #' @param to_state Character string specifying the destination state
 #' @param formula An unquoted R expression for the transition probability
@@ -307,7 +307,7 @@ add_transition <- function(model, from_state, to_state, formula) {
 #'
 #' Add transitions for a PSM (Partitioned Survival Model).
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param endpoint Character string for the endpoint
 #' @param time_unit Character string for the time unit
 #' @param formula An unquoted R expression for the transition
@@ -344,7 +344,7 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
 #'
 #' Add one or more values to the model. Uses NSE to capture formula expressions.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the value name
 #' @param formula An unquoted R expression for the value calculation
 #' @param state Optional state association
@@ -410,7 +410,7 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
 #' of that variable. Mixing custom and auto-generated display names for the same variable will result
 #' in a validation error **immediately** when you call `add_variable()` with the inconsistent definition.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the variable name
 #' @param formula An unquoted R expression for the variable calculation
 #' @param display_name Optional display name. If not provided, will be auto-generated
@@ -509,7 +509,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
 #'
 #' Add one or more strategies to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the strategy name
 #' @param display_name Optional display name
 #' @param description Optional description
@@ -538,7 +538,7 @@ add_strategy <- function(model, name, display_name = NULL,
 #'
 #' Add one or more groups to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the group name
 #' @param display_name Optional display name
 #' @param description Optional description
@@ -570,7 +570,7 @@ add_group <- function(model, name, display_name = NULL,
 #'
 #' Add one or more summaries to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the summary name
 #' @param values Comma-separated string of value names to include
 #' @param display_name Optional display name
@@ -604,7 +604,7 @@ add_summary <- function(model, name, values, display_name = NULL,
 #'
 #' Add a data table to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the table name
 #' @param data A data frame containing the table data
 #' @param description Optional description
@@ -624,7 +624,7 @@ add_table <- function(model, name, data, description = NULL) {
 #'
 #' Add an R script to the model.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string for the script name
 #' @param code Character string containing the R code
 #' @param description Optional description
@@ -642,9 +642,9 @@ add_script <- function(model, name, code, description = NULL) {
 
 #' Convert Model to JSON String
 #'
-#' Convert a heRomodel object to a JSON string representation.
+#' Convert a openqaly model object to a JSON string representation.
 #'
-#' @param model A heRomodel object
+#' @param model A openqaly model object
 #'
 #' @return A JSON string
 #'
@@ -656,9 +656,9 @@ as_json <- function(model) {
 
 #' Convert Model to R Code String
 #'
-#' Convert a heRomodel object to executable R code.
+#' Convert a openqaly model object to executable R code.
 #'
-#' @param model A heRomodel object
+#' @param model A openqaly model object
 #'
 #' @return A character vector of R code lines
 #'
@@ -674,7 +674,7 @@ as_r_code <- function(model) {
 #' This is used for Probabilistic Sensitivity Analysis (PSA) when multiple
 #' parameters need to be sampled together with a specified correlation structure.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param name Character string naming this sampling specification
 #' @param distribution Expression defining the distribution function (uses NSE).
 #'   The distribution should return a function(n) that generates n × k samples.
@@ -795,7 +795,7 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
 #' (e.g., "cost, treatment_a"), DSA parameters will also have unique names. You can optionally
 #' override with custom `display_name` values in either `add_variable()` or `add_dsa_variable()`.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param variable Character string naming the variable to vary (must exist in model$variables)
 #' @param low Expression or numeric value for the low bound of the sensitivity range.
 #'   Can use `bc` keyword to reference the base case value and other model variables.
@@ -861,11 +861,11 @@ add_dsa_variable <- function(model, variable, low, high,
   low_quo <- enquo(low)
   low_expr <- quo_get_expr(low_quo)
 
-  # Convert to heroformula object for evaluation later
+  # Convert to oq_formula object for evaluation later
   if (is.numeric(low_expr)) {
-    low_formula <- as.heRoFormula(as.character(low_expr))
+    low_formula <- as.oq_formula(as.character(low_expr))
   } else {
-    low_formula <- as.heRoFormula(expr_text(low_expr))
+    low_formula <- as.oq_formula(expr_text(low_expr))
   }
 
   # Capture high expression using NSE
@@ -873,17 +873,17 @@ add_dsa_variable <- function(model, variable, low, high,
   high_expr <- quo_get_expr(high_quo)
 
   if (is.numeric(high_expr)) {
-    high_formula <- as.heRoFormula(as.character(high_expr))
+    high_formula <- as.oq_formula(as.character(high_expr))
   } else {
-    high_formula <- as.heRoFormula(expr_text(high_expr))
+    high_formula <- as.oq_formula(expr_text(high_expr))
   }
 
   # Create new DSA parameter specification as a list
   new_param <- list(
     type = "variable",
     name = variable,
-    low = low_formula,      # Store as heroformula object
-    high = high_formula,    # Store as heroformula object
+    low = low_formula,      # Store as oq_formula object
+    high = high_formula,    # Store as oq_formula object
     strategy = as.character(strategy),
     group = as.character(group),
     display_name = display_name
@@ -902,7 +902,7 @@ add_dsa_variable <- function(model, variable, low, high,
 #' Settings include parameters like discount rates, timeframe, and other global
 #' model configuration values that are not part of the variables table.
 #'
-#' @param model A heRomodel_builder object
+#' @param model A oq_model_builder object
 #' @param setting Character string naming the setting to vary
 #'   (e.g., "discount_cost", "discount_outcomes", "timeframe")
 #' @param low Value for the low bound (numeric or character depending on setting)

@@ -18,7 +18,7 @@ calculate_nmb(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object (output from run_model)}
+\item{results}{A openqaly model results object (output from run_model)}
 
 \item{outcome_summary}{Name of the outcome summary (e.g., "total_qalys")}
 
@@ -69,7 +69,7 @@ but can be overridden using the `wtp` parameter.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Calculate NMB with WTP from metadata

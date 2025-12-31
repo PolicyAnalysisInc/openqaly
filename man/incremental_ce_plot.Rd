@@ -14,7 +14,7 @@ incremental_ce_plot(
 )
 }
 \arguments{
-\item{res}{A heRomod2 model results object (output from run_model)}
+\item{res}{A openqaly model results object (output from run_model)}
 
 \item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
 
@@ -48,7 +48,7 @@ When \code{group = NULL}, creates faceted plots for each group and aggregated re
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # CE frontier for aggregated population

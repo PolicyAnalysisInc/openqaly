@@ -1,3 +1,3 @@
 library(testthat)
-library(heRomod2)
-test_check("heRomod2")
+library(openqaly)
+test_check("openqaly")

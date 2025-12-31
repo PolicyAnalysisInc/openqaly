@@ -17,7 +17,7 @@ trace_table(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -51,7 +51,7 @@ PowerPoint, HTML, and PDF documents.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Create table using flextable (default)

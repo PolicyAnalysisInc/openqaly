@@ -18,7 +18,7 @@ prepare_outcomes_table_data(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 

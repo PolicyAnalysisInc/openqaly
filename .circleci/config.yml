@@ -32,7 +32,7 @@ jobs:
             no_output_timeout: 35m
             command: R CMD check --as-cran --no-manual *tar.gz
         - store_artifacts:
-            path: heRomod.Rcheck/
+            path: openqaly.Rcheck/
         - save_cache:
             key: r-pkg-cache-{{ arch }}-{{ .Branch }}
             paths:

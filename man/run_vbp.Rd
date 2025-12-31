@@ -14,7 +14,7 @@ run_vbp(
 )
 }
 \arguments{
-\item{model}{A heRomodel object or heRomodel_builder object}
+\item{model}{An openqaly model object or oq_model_builder object}
 
 \item{price_variable}{Name of the variable representing the intervention's price}
 
@@ -55,7 +55,7 @@ the weighted average of group equations.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/checkimab", package = "heRomod2"))
+model <- read_model(system.file("models/checkimab", package = "openqaly"))
 
 vbp_results <- run_vbp(
   model,

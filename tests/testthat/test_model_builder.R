@@ -1,7 +1,7 @@
 # Test Model Builder Functions
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("Model builder creates valid model structure", {
   model <- define_model("markov") |>
@@ -10,7 +10,7 @@ test_that("Model builder creates valid model structure", {
     add_state("sick", initial_prob = 0) |>
     add_state("dead", initial_prob = 0)
 
-  expect_s3_class(model, "heRomodel")
+  expect_s3_class(model, "oq_model")
   expect_equal(model$settings$model_type, "markov")
   expect_equal(nrow(model$states), 3)
   expect_equal(model$states$name, c("healthy", "sick", "dead"))
@@ -144,7 +144,7 @@ test_that("Complete PSM model can be built and executed", {
     add_value("cost", c_drug, type = "cost")
 
   # Verify model structure
-  expect_s3_class(model, "heRomodel")
+  expect_s3_class(model, "oq_model")
   expect_equal(tolower(model$settings$model_type), "psm")
   expect_equal(nrow(model$states), 3)
   expect_equal(nrow(model$strategies), 2)
@@ -237,7 +237,7 @@ test_that("Variable display names are validated - R builder format", {
   )
 
   # Should work without error
-  expect_no_error(heRomod2:::normalize_and_validate_model(valid_model1))
+  expect_no_error(openqaly:::normalize_and_validate_model(valid_model1))
 
   # Valid: No display names (all auto-generated)
   valid_model2 <- list(
@@ -254,7 +254,7 @@ test_that("Variable display names are validated - R builder format", {
     settings = list(model_type = "markov")
   )
 
-  expect_no_error(heRomod2:::normalize_and_validate_model(valid_model2))
+  expect_no_error(openqaly:::normalize_and_validate_model(valid_model2))
 
   # Invalid: Only one strategy has display name
   invalid_model <- list(
@@ -272,7 +272,7 @@ test_that("Variable display names are validated - R builder format", {
   )
 
   expect_error(
-    heRomod2:::normalize_and_validate_model(invalid_model),
+    openqaly:::normalize_and_validate_model(invalid_model),
     "Variable 'cost'.*display_name must be provided for ALL definitions or NONE"
   )
 })
@@ -322,8 +322,8 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
     sampling = c("", "")
   )
 
-  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'heRomod2'))
-  expect_no_error(heRomod2:::check_tbl(valid_vars1, spec, "Variables"))
+  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'openqaly'))
+  expect_no_error(openqaly:::check_tbl(valid_vars1, spec, "Variables"))
 
   # Valid: No display names (will be auto-generated)
   valid_vars2 <- tibble(
@@ -337,7 +337,7 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
     sampling = c("", "")
   )
 
-  expect_no_error(heRomod2:::check_tbl(valid_vars2, spec, "Variables"))
+  expect_no_error(openqaly:::check_tbl(valid_vars2, spec, "Variables"))
 
   # Invalid: Partial display names for strategy-specific variable
   invalid_vars1 <- tibble(
@@ -352,7 +352,7 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
   )
 
   expect_error(
-    heRomod2:::check_tbl(invalid_vars1, spec, "Variables"),
+    openqaly:::check_tbl(invalid_vars1, spec, "Variables"),
     "Variable 'cost'.*display_name must be provided for ALL definitions or NONE"
   )
 
@@ -369,7 +369,7 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
   )
 
   expect_error(
-    heRomod2:::check_tbl(invalid_vars2, spec, "Variables"),
+    openqaly:::check_tbl(invalid_vars2, spec, "Variables"),
     "Variable 'utility'.*display_name must be provided for ALL definitions or NONE"
   )
 
@@ -386,7 +386,7 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
   )
 
   expect_error(
-    heRomod2:::check_tbl(invalid_vars3, spec, "Variables"),
+    openqaly:::check_tbl(invalid_vars3, spec, "Variables"),
     "Variable 'param'.*display_name must be provided for ALL definitions or NONE"
   )
 })
@@ -394,7 +394,7 @@ test_that("Variable display names are validated - Direct dataframe (simulating E
 test_that("Variable display names validation - edge cases", {
   library(tibble)
 
-  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'heRomod2'))
+  spec <- read.csv(system.file('model_input_specs/variables.csv', package = 'openqaly'))
 
   # Valid: Single variable (no consistency check needed)
   single_var <- tibble(
@@ -408,7 +408,7 @@ test_that("Variable display names validation - edge cases", {
     sampling = ""
   )
 
-  expect_no_error(heRomod2:::check_tbl(single_var, spec, "Variables"))
+  expect_no_error(openqaly:::check_tbl(single_var, spec, "Variables"))
 
   # Valid: Multiple different variables, each with consistent display names
   multi_vars <- tibble(
@@ -422,7 +422,7 @@ test_that("Variable display names validation - edge cases", {
     sampling = c("", "", "", "")
   )
 
-  expect_no_error(heRomod2:::check_tbl(multi_vars, spec, "Variables"))
+  expect_no_error(openqaly:::check_tbl(multi_vars, spec, "Variables"))
 
   # Valid: NA display names (treated as missing)
   na_vars <- tibble(
@@ -436,5 +436,5 @@ test_that("Variable display names validation - edge cases", {
     sampling = c("", "")
   )
 
-  expect_no_error(heRomod2:::check_tbl(na_vars, spec, "Variables"))
+  expect_no_error(openqaly:::check_tbl(na_vars, spec, "Variables"))
 })

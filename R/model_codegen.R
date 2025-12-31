@@ -1,6 +1,6 @@
 #' Model Code Generation
 #'
-#' Functions for generating executable R code from heRomod2 models.
+#' Functions for generating executable R code from openqaly models.
 #'
 #' @name model_codegen
 #' @importFrom glue glue
@@ -9,9 +9,9 @@ NULL
 
 #' Convert Model to R Code
 #'
-#' Generate executable R code that recreates a heRomod2 model.
+#' Generate executable R code that recreates a openqaly model.
 #'
-#' @param model A heRomodel object
+#' @param model A oq_model object
 #' @param file Optional file path to write the code to
 #'
 #' @return A character vector containing the R code lines
@@ -30,10 +30,10 @@ model_to_r_code <- function(model, file = NULL) {
 
   # Header
   code <- c(code,
-    "# Generated heRomod2 model code",
+    "# Generated openqaly model code",
     "# Created: " %&% Sys.Date(),
     "",
-    "library(heRomod2)",
+    "library(openqaly)",
     ""
   )
 
@@ -651,7 +651,7 @@ generate_trees_code <- function(model, trees) {
     return(character(0))
   }
 
-  # Trees in heRomod2 are typically parsed into variables via decision_tree()
+  # Trees in openqaly are typically parsed into variables via decision_tree()
   # rather than being added directly. The tree parsing happens automatically
   # when the model is read from Excel/JSON. For now, we'll just add a comment
   # indicating that trees are present but handled internally.

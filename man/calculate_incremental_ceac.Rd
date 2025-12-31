@@ -15,7 +15,7 @@ calculate_incremental_ceac(
 )
 }
 \arguments{
-\item{results}{A heRomod2 PSA results object (from run_psa)}
+\item{results}{A openqaly PSA results object (from run_psa)}
 
 \item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
 
@@ -64,7 +64,7 @@ corresponds to.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
 # Calculate incremental CEAC

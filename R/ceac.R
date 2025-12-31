@@ -5,7 +5,7 @@
 #' sensitivity analysis results. This performs incremental (multi-way) comparison
 #' where all strategies are compared simultaneously.
 #'
-#' @param results A heRomod2 PSA results object (from run_psa)
+#' @param results A openqaly PSA results object (from run_psa)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param wtp Numeric vector of WTP thresholds to evaluate. Default is
@@ -41,7 +41,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Calculate incremental CEAC
@@ -322,7 +322,7 @@ extract_psa_summaries <- function(source_data,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Calculate frontier
@@ -444,7 +444,7 @@ calculate_incremental_ceac_frontier <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Comparator perspective: How do other strategies compare to control?
@@ -642,7 +642,7 @@ calculate_pairwise_ceac <- function(results,
 #' eliminating all parameter uncertainty - the maximum amount a decision-maker
 #' should be willing to pay for perfect information about all uncertain parameters.
 #'
-#' @param results A heRomod2 PSA results object (from run_psa)
+#' @param results A openqaly PSA results object (from run_psa)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param wtp Numeric vector of WTP thresholds to evaluate. Default is
@@ -679,7 +679,7 @@ calculate_pairwise_ceac <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Calculate EVPI
@@ -789,7 +789,7 @@ calculate_evpi <- function(results,
 #' Extracts sampled input parameter values from PSA results, handling
 #' strategy/group-specific variables with appropriate labeling.
 #'
-#' @param results A heRomod2 PSA results object (from run_psa)
+#' @param results A openqaly PSA results object (from run_psa)
 #' @param variables Character vector of variable names to extract (NULL for all)
 #' @param group Group selection with three modes:
 #'   \itemize{
@@ -818,7 +818,7 @@ calculate_evpi <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example", package = "heRomod2"))
+#' model <- read_model(system.file("models/example", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
 #' # Extract all sampled parameters

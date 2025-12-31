@@ -1,4 +1,4 @@
-# Validation Helper Functions for heRomod2
+# Validation Helper Functions for openqaly
 # These functions ensure type safety before passing data to C++ functions
 
 #' Validate that a value is numeric

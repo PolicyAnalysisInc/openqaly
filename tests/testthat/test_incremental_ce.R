@@ -1,7 +1,7 @@
 context("Incremental Cost-Effectiveness Analysis")
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 library(dplyr)
 
 # ============================================================================
@@ -10,7 +10,7 @@ library(dplyr)
 
 # Helper function to get example model results
 get_example_results <- function() {
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
   }
@@ -79,7 +79,7 @@ create_mock_results <- function(strategies_data) {
   # Also add empty segments for completeness
   results$segments <- tibble()
 
-  class(results) <- c("heRomod2_results", class(results))
+  class(results) <- c("openqaly_results", class(results))
   results
 }
 
@@ -661,10 +661,10 @@ test_that("incremental_ce_table() filters strategies", {
 # ============================================================================
 
 test_that("Full incremental CE workflow with example model", {
-  skip_if_not_installed("heRomod2")
+  skip_if_not_installed("openqaly")
 
   # 1. Load example model
-  model_path <- system.file("models/example_psm", package = "heRomod2")
+  model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     skip("Example model not found")
   }

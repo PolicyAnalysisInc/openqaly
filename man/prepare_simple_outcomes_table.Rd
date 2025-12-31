@@ -17,7 +17,7 @@ prepare_simple_outcomes_table(
 )
 }
 \arguments{
-\item{results}{heRomod2 results object}
+\item{results}{openqaly results object}
 
 \item{summary_name}{Name of summary to display}
 

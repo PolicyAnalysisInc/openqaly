@@ -1,6 +1,6 @@
 context("Markov Models")
 
-model <- system.file("models", "checkimab_simple", package = "heRomod2") %>%
+model <- system.file("models", "checkimab_simple", package = "openqaly") %>%
   read_model()
 
 test_that('markov trace calculations work success case', {
@@ -139,7 +139,7 @@ test_that('markov trace calculations work with complement error', {
   empty_model_start_values <- data.frame(values_list=I(list()))
   empty_value_names <- character(0)
 
-  res <- heRomod2:::cppMarkovTransitionsAndTrace(
+  res <- openqaly:::cppMarkovTransitionsAndTrace(
     mat1,                   # transitions
     empty_transitional_values,
     empty_residency_values,
@@ -217,7 +217,7 @@ test_that('markov trace calculations work with bounds error', {
   empty_model_start_values <- data.frame(values_list=I(list()))
   empty_value_names <- character(0)
 
-  res <- heRomod2:::cppMarkovTransitionsAndTrace(
+  res <- openqaly:::cppMarkovTransitionsAndTrace(
     mat1,                   # transitions
     empty_transitional_values,
     empty_residency_values,
@@ -295,7 +295,7 @@ test_that('markov trace calculations work with sum error', {
   empty_model_start_values <- data.frame(values_list=I(list()))
   empty_value_names <- character(0)
 
-  res <- heRomod2:::cppMarkovTransitionsAndTrace(
+  res <- openqaly:::cppMarkovTransitionsAndTrace(
     mat1,                   # transitions
     empty_transitional_values,
     empty_residency_values,
@@ -373,7 +373,7 @@ test_that('markov trace calculations work with NA/NaN error', {
   empty_model_start_values <- data.frame(values_list=I(list()))
   empty_value_names <- character(0)
 
-  res <- heRomod2:::cppMarkovTransitionsAndTrace(
+  res <- openqaly:::cppMarkovTransitionsAndTrace(
     mat1,                   # transitions
     empty_transitional_values,
     empty_residency_values,

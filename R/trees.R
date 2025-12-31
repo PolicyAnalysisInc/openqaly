@@ -41,20 +41,20 @@ parse_tree_vars <- function(trees) {
         vars <- unique(flatten_chr(map(vars_by_node, ~.$depends)))
         
         # Define a variable which will create the decision tree object.
-        hero_var <- define_formula(glue('decision_tree(.trees, "{x}", cycle)'))
+        oq_var <- define_formula(glue('decision_tree(.trees, "{x}", cycle)'))
         
         # Ensure tree is evaluated after all variables it references
-        hero_var$after <- vars
+        oq_var$after <- vars
         
         # Track dependencies by node for inheritance by node references
-        hero_var$node_depends <- vars_by_node
+        oq_var$node_depends <- vars_by_node
         
         # Return the row
         tibble(
           name = x,
           display_name = x,
           description = x,
-          formula = list(hero_var)
+          formula = list(oq_var)
         )
       }) %>%
       bind_rows()

@@ -17,7 +17,7 @@ add_variable(
 )
 }
 \arguments{
-\item{model}{A heRomodel_builder object}
+\item{model}{A oq_model_builder object}
 
 \item{name}{Character string for the variable name}
 

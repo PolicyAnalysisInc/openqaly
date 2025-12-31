@@ -2,7 +2,7 @@
 # Tests that PSM models properly validate inputs and configurations
 
 library(testthat)
-library(heRomod2)
+library(openqaly)
 
 test_that("PSM models require exactly 3 states", {
   # Test with 2 states (too few) - need complete model to reach validation

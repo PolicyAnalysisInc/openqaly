@@ -9,7 +9,7 @@ select_source_data(groups, results)
 \arguments{
 \item{groups}{The groups argument value}
 
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 }
 \value{
 Tibble with combined data from requested groups

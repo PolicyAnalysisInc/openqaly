@@ -306,8 +306,8 @@ test_that("PSM model respects half-cycle method", {
     state = c("PFS", "Progressed"),
     destination = c(NA, NA),
     formula = I(list(
-      as.heRoFormula("0.8"),
-      as.heRoFormula("0.6")
+      as.oq_formula("0.8"),
+      as.oq_formula("0.6")
     )),
     type = c("outcome", "outcome")
   )

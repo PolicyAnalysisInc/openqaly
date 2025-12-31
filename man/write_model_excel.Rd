@@ -7,7 +7,7 @@
 write_model_excel(model, path)
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{A oq_model object}
 
 \item{path}{Folder path}
 }

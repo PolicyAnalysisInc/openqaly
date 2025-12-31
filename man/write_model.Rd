@@ -7,7 +7,7 @@
 write_model(model, path, format = c("excel", "json", "r"))
 }
 \arguments{
-\item{model}{A heRomodel object}
+\item{model}{A oq_model object}
 
 \item{path}{Character string specifying the output path}
 
@@ -17,7 +17,7 @@ write_model(model, path, format = c("excel", "json", "r"))
 Invisibly returns the path
 }
 \description{
-Write a heRomodel object to a file in the specified format.
+Write a oq_model object to a file in the specified format.
 }
 \details{
 For Excel format, the path should be a folder (will be created if needed).

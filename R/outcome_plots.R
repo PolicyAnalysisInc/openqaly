@@ -6,7 +6,7 @@
 #' Displays each outcome component as a separate line, plus a total line.
 #' Can display absolute values or differences between strategies.
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #'   (all groups plus aggregated)
@@ -37,7 +37,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Cumulative outcome values over time
@@ -186,7 +186,7 @@ outcomes_plot_line <- function(res, outcome,
 #' Creates a bar chart showing Net Monetary Benefit (NMB) by strategy comparison and group.
 #' NMB = (Difference in Outcomes × WTP) - Difference in Costs
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
@@ -209,7 +209,7 @@ outcomes_plot_line <- function(res, outcome,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # NMB with WTP from metadata (comparator perspective)
@@ -330,7 +330,7 @@ nmb_plot_bar <- function(res,
 #'
 #' Creates a line chart showing cumulative or per-cycle Net Monetary Benefit over time.
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
@@ -355,7 +355,7 @@ nmb_plot_bar <- function(res,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Cumulative NMB over time
@@ -525,7 +525,7 @@ nmb_plot_line <- function(res,
 #' Creates a cost-effectiveness plane showing all strategies as points with line
 #' segments connecting strategies on the efficiency frontier.
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
@@ -546,7 +546,7 @@ nmb_plot_line <- function(res,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # CE frontier for aggregated population
@@ -645,7 +645,7 @@ incremental_ce_plot <- function(res,
 #' reference strategy. Uses delta axes (incremental cost vs. incremental outcome)
 #' with the reference strategy at the origin.
 #'
-#' @param res A heRomod2 model results object (output from run_model)
+#' @param res A openqaly model results object (output from run_model)
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)
@@ -678,7 +678,7 @@ incremental_ce_plot <- function(res,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
 #' # Pairwise CE plane vs control (comparator perspective)

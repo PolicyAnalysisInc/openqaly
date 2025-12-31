@@ -19,7 +19,7 @@ pairwise_ce_table(
 )
 }
 \arguments{
-\item{results}{A heRomod2 model results object}
+\item{results}{A openqaly model results object}
 
 \item{outcome_summary}{Name of the outcome summary}
 
@@ -51,7 +51,7 @@ comparisons.
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example_psm", package = "heRomod2"))
+model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Pairwise CE table vs control

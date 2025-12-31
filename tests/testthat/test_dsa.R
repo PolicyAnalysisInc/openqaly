@@ -14,20 +14,20 @@ test_that("add_dsa_variable adds variable specification", {
   expect_equal(length(model$dsa_parameters), 1)
   expect_equal(model$dsa_parameters[[1]]$type, "variable")
   expect_equal(model$dsa_parameters[[1]]$name, "p_disease")
-  # Low/high are now heroformula objects
-  expect_s3_class(model$dsa_parameters[[1]]$low, "heRoFormula")
-  expect_s3_class(model$dsa_parameters[[1]]$high, "heRoFormula")
+  # Low/high are now oq_formula objects
+  expect_s3_class(model$dsa_parameters[[1]]$low, "oq_formula")
+  expect_s3_class(model$dsa_parameters[[1]]$high, "oq_formula")
 })
 
 test_that("add_dsa_variable validates inputs", {
   model <- define_model("markov")
 
-  # Note: With NSE, these expressions are stored as heroformulas and validated during evaluation
+  # Note: With NSE, these expressions are stored as oq_formulas and validated during evaluation
   # So these should NOT error during model building
   model_ok <- add_dsa_variable(model, "p_disease", low = 0.05, high = 0.01)
   expect_equal(length(model_ok$dsa_parameters), 1)
 
-  # String literals are also stored as heroformulas
+  # String literals are also stored as oq_formulas
   model_ok2 <- add_dsa_variable(model, "p_disease", low = "not_numeric", high = 0.05)
   expect_equal(length(model_ok2$dsa_parameters), 1)
 })
@@ -157,10 +157,10 @@ test_that("build_dsa_segments and metadata generation work correctly", {
   parsed_model <- parse_model(model)
 
   # Build DSA segments
-  segments <- heRomod2:::build_dsa_segments(parsed_model)
+  segments <- openqaly:::build_dsa_segments(parsed_model)
 
   # Generate metadata
-  dsa_metadata <- heRomod2:::generate_dsa_metadata_from_segments(parsed_model, segments)
+  dsa_metadata <- openqaly:::generate_dsa_metadata_from_segments(parsed_model, segments)
 
   # Should have 1 base + 2 variable runs + 2 setting runs = 5 total
   expect_equal(nrow(dsa_metadata), 5)
@@ -245,8 +245,8 @@ test_that("add_dsa_variable backward compatible with literals", {
   expect_equal(length(model$dsa_parameters), 1)
   expect_equal(model$dsa_parameters[[1]]$type, "variable")
   expect_equal(model$dsa_parameters[[1]]$name, "p_disease")
-  expect_s3_class(model$dsa_parameters[[1]]$low, "heRoFormula")
-  expect_s3_class(model$dsa_parameters[[1]]$high, "heRoFormula")
+  expect_s3_class(model$dsa_parameters[[1]]$low, "oq_formula")
+  expect_s3_class(model$dsa_parameters[[1]]$high, "oq_formula")
 })
 
 test_that("build_dsa_segments evaluates bc correctly", {
@@ -262,7 +262,7 @@ test_that("build_dsa_segments evaluates bc correctly", {
     add_strategy("standard")
 
   parsed_model <- parse_model(model)
-  segments <- heRomod2:::build_dsa_segments(parsed_model)
+  segments <- openqaly:::build_dsa_segments(parsed_model)
 
   # Should have: base case (run_id=1) + low (run_id=2) + high (run_id=3)
   expect_true(1 %in% segments$run_id)  # base
@@ -292,7 +292,7 @@ test_that("build_dsa_segments can reference other variables", {
     add_strategy("standard")
 
   parsed_model <- parse_model(model)
-  segments <- heRomod2:::build_dsa_segments(parsed_model)
+  segments <- openqaly:::build_dsa_segments(parsed_model)
 
   # Check parameter overrides for low run
   low_seg <- segments %>% filter(run_id == 2) %>% slice(1)
@@ -318,7 +318,7 @@ test_that("build_dsa_segments validates low < high after evaluation", {
   parsed_model <- parse_model(model)
 
   expect_error(
-    heRomod2:::build_dsa_segments(parsed_model),
+    openqaly:::build_dsa_segments(parsed_model),
     "low.*must be less than high"
   )
 })
@@ -461,8 +461,8 @@ test_that("DSA timeframe override works for PSM models", {
     add_state("pfs", display_name = "Progression Free") %>%
     add_state("progressed", display_name = "Progressed") %>%
     add_state("dead", display_name = "Dead") %>%
-    add_variable("pfs_dist", herosurv::define_surv_param(dist = "exp", rate = 0.1)) %>%
-    add_variable("os_dist", herosurv::define_surv_param(dist = "exp", rate = 0.05)) %>%
+    add_variable("pfs_dist", define_surv_param(dist = "exp", rate = 0.1)) %>%
+    add_variable("os_dist", define_surv_param(dist = "exp", rate = 0.05)) %>%
     add_psm_transition("PFS", "months", pfs_dist) %>%
     add_psm_transition("OS", "months", os_dist) %>%
     add_value("qaly_pfs", 0.9, state = "pfs") %>%
