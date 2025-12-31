@@ -16,6 +16,8 @@ jobs:
             command: |
               mkdir -p ~/R/Library
               Rscript -e 'install.packages("devtools", repos = "https://cran.case.edu")'
+              Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalytools")'
+              Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalysurv")'
               Rscript -e 'install.packages("remotes", repos = "https://cran.case.edu")'
               Rscript -e 'remotes::install_deps(dependencies = TRUE, repos = "https://cran.case.edu")'
         - run:
@@ -53,6 +55,8 @@ jobs:
           command: |
             mkdir -p ~/R/Library
             Rscript -e 'install.packages("devtools", repos = "https://cran.case.edu")'
+            Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalytools")'
+            Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalysurv")'
             Rscript -e 'install.packages("remotes", repos = "https://cran.case.edu")'
             Rscript -e 'remotes::install_deps(dependencies = TRUE, repos = "https://cran.case.edu")'
       - run:
