@@ -41,7 +41,8 @@ Suggests:
     rmarkdown,
     flextable,
     officer,
-    GGally
+    GGally,
+    kableExtra
 VignetteBuilder: knitr
 RoxygenNote: 7.3.2
 LinkingTo: 
