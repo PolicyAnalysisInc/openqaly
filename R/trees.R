@@ -1,4 +1,12 @@
 #' Define Decision Trees
+#'
+#' Parses a decision tree specification dataframe into variable definitions.
+#'
+#' @param trees A dataframe containing decision tree specifications with columns
+#'   name, node, parent, formula, and tags
+#'
+#' @return A tibble of variable definitions for the decision trees
+#' @keywords internal
 parse_tree_vars <- function(trees) {
 
   # Make and return a variables list containing the decision trees
@@ -135,6 +143,23 @@ check_tree_df <- function(df) {
   
 }
 
+#' Evaluate a Decision Tree
+#'
+#' Calculates conditional and joint probabilities for all nodes in a decision tree
+#' based on the tree definition dataframe.
+#'
+#' @param df A dataframe containing all decision tree definitions with columns
+#'   `name`, `node`, `parent`, `formula`, and `tags`.
+#' @param name The name of the specific decision tree to evaluate.
+#' @param cycle The current cycle number for time-dependent probability calculations.
+#'
+#' @return An `eval_decision_tree` object containing:
+#'   \item{df}{The original tree definition dataframe.}
+#'   \item{terminal_nodes}{A list of terminal nodes with their probabilities and tags.}
+#'   \item{cond_prob}{A dataframe of conditional probabilities for each node.}
+#'   \item{subtrees}{Named list of subtrees indexed by tag names.}
+#'   \item{all}{A subtree containing all terminal nodes.}
+#'
 #' @export
 decision_tree <- function(df, name, cycle) {
   
@@ -218,6 +243,18 @@ decision_tree <- function(df, name, cycle) {
   )
 }
 
+#' Calculate Probability from Decision Tree
+#'
+#' Evaluates a probability statement against an evaluated decision tree,
+#' supporting conditional probabilities and set operations on subtrees.
+#'
+#' @param statement An unevaluated expression specifying the probability to calculate.
+#'   Supports operators: `|` (given/conditional), `\%and\%` (intersection),
+#'   `\%or\%` (union), and `-` (complement/not).
+#' @param tree An `eval_decision_tree` object created by [decision_tree()].
+#'
+#' @return A numeric vector of probabilities.
+#'
 #' @export
 p <- function(statement, tree) {
 
@@ -312,16 +349,27 @@ not <- function(a) {
   define_object_(complement, 'subtree')
 }
 
+#' Extract Probability from Decision Tree Objects
+#'
+#' S3 generic function that extracts probability values from decision tree
+#' result objects such as subtrees and conditional probability objects.
+#'
+#' @param x A `subtree` or `cond_prob` object.
+#'
+#' @return A numeric vector of probabilities.
+#'
 #' @export
 get_prob <- function(x) {
   UseMethod('get_prob', x)
 }
 
+#' @rdname get_prob
 #' @export
 get_prob.subtree <- function(x) {
   map(x, ~.$prob) %>% reduce(., `+`)
 }
 
+#' @rdname get_prob
 #' @export
 get_prob.cond_prob <- function(x) {
   get_prob(x$numerator) / get_prob(x$denominator)

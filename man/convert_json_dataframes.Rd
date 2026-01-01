@@ -8,6 +8,8 @@ convert_json_dataframes(model, values_spec = NULL)
 }
 \arguments{
 \item{model}{The model list parsed from JSON}
+
+\item{values_spec}{Optional values specification list}
 }
 \value{
 The model with properly formatted data frames

@@ -36,11 +36,9 @@ or NULL to use default colors}
 \item{collapsed}{Logical. Use aggregated traces (TRUE, default) or segment
 traces (FALSE)}
 
-\item{strategy_name_field}{Which strategy name field to use for facet labels:
-"name", "display_name", or "abbreviation". Default is "name".}
+\item{use_display_names}{Logical. If TRUE, use display names for entities}
 
-\item{state_name_field}{Which state name field to use for legend labels:
-"name", "display_name", or "abbreviation". Default is "name".}
+\item{time_unit}{Time unit for output: "cycle" (default), "day", "week", "month", "year"}
 }
 \value{
 A ggplot2 object

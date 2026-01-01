@@ -1,4 +1,11 @@
 #' Convert a longform table to a multi-dimensional array
+#'
+#' @param df A data frame in long format
+#' @param dimcols Character vector of column names to use as dimensions
+#' @param value Name of the column containing values
+#'
+#' @return A multi-dimensional array
+#' @keywords internal
 lf_to_arr <- function(df, dimcols, value) {
   # # Try to use C++ version if available
   # cpp_available <- tryCatch({
@@ -41,6 +48,12 @@ lf_to_arr <- function(df, dimcols, value) {
 }
 
 #' Determine the last index containing a unique value
+#'
+#' @param mat A multi-dimensional array
+#' @param dim_index Index of the dimension to check
+#'
+#' @return Integer index of the last unique value
+#' @keywords internal
 arr_last_unique <- function(mat, dim_index) {
   dims <- dim(mat)
   n_dim <- length(dims)

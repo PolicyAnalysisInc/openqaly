@@ -10,6 +10,10 @@ define_namespace(env, df, additional = NULL, ...)
 \item{env}{An environment of pre-existing values}
 
 \item{df}{A data frame of pre-existing parameter values}
+
+\item{additional}{Optional additional data frame to merge}
+
+\item{...}{Additional data frames to merge}
 }
 \description{
 A namespace object stores evaluated parameters by combining

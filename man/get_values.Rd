@@ -50,6 +50,10 @@ use undiscounted values}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for all entities
 (strategies, groups, values). If FALSE, use technical names.}
+
+\item{interventions}{Character vector of intervention strategy names (optional filter)}
+
+\item{comparators}{Character vector of comparator strategy names (optional filter)}
 }
 \value{
 A data frame in the requested format

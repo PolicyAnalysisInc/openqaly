@@ -29,6 +29,10 @@ pairwise_ce_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective}
+
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
@@ -36,10 +40,6 @@ pairwise_ce_table(
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
-
-\item{intervention}{Single reference strategy for intervention perspective}
-
-\item{comparator}{Single reference strategy for comparator perspective}
 }
 \value{
 A table object (flextable or kable depending on table_format)

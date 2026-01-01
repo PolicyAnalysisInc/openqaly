@@ -26,13 +26,13 @@ calculate_pairwise_ce(
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
 }
 \value{
 A tibble with columns:

@@ -6,6 +6,14 @@
 \usage{
 parse_tree_vars(trees)
 }
-\description{
-Define Decision Trees
+\arguments{
+\item{trees}{A dataframe containing decision tree specifications with columns
+name, node, parent, formula, and tags}
 }
+\value{
+A tibble of variable definitions for the decision trees
+}
+\description{
+Parses a decision tree specification dataframe into variable definitions.
+}
+\keyword{internal}

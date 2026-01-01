@@ -6,6 +6,13 @@
 \usage{
 calc_compl_probs(mat)
 }
+\arguments{
+\item{mat}{A transition matrix array}
+}
+\value{
+The matrix with complementary probabilities calculated
+}
 \description{
 Calculate complementary probabilities in an evaluated transition matrix
 }
+\keyword{internal}

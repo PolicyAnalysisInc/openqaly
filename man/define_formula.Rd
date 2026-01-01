@@ -7,7 +7,7 @@
 define_formula(string)
 }
 \arguments{
-\item{text}{An atomic character vector containing an R-expression.}
+\item{string}{An atomic character vector containing an R-expression.}
 }
 \value{
 An oq_formula object representing the given R-expression.

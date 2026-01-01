@@ -5,7 +5,7 @@
 #' The first cycle (t=0) has a discount factor of 1 (no discounting).
 #'
 #' @param n_cycles Number of cycles
-#' @param discount_rate Annual discount rate (e.g., 0.035 for 3.5%)
+#' @param discount_rate Annual discount rate (e.g., 0.035 for 3.5\%)
 #' @param cycle_length_years Length of each cycle in years (e.g., 1/12 for monthly, 1/52 for weekly)
 #'
 #' @return Vector of discount factors for each cycle

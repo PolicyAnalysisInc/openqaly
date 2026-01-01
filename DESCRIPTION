@@ -42,7 +42,8 @@ Suggests:
     flextable,
     officer,
     GGally,
-    kableExtra
+    kableExtra,
+    MASS
 VignetteBuilder: knitr
 RoxygenNote: 7.3.2
 LinkingTo: 

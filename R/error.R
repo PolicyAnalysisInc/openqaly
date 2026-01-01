@@ -70,11 +70,29 @@ modify_error_msg <- function(x) {
   return(final_fallback)
 }
 
+#' Check if Object is an openqaly Error
+#'
+#' Tests whether an object inherits from the `oq_error` class.
+#'
+#' @param x An object to test.
+#'
+#' @return Logical; `TRUE` if `x` is an `oq_error`, `FALSE` otherwise.
+#'
 #' @export
 is_oq_error <- function(x) {
   inherits(x, 'oq_error') # Use inherits for class hierarchy check
 }
 
+#' Check if Object is an openqaly Dependency Error
+#'
+#' Tests whether an object inherits from the `oq_dependency_error` class.
+#' Dependency errors are a subclass of `oq_error` that indicate failures
+#' caused by missing or invalid dependencies.
+#'
+#' @param x An object to test.
+#'
+#' @return Logical; `TRUE` if `x` is an `oq_dependency_error`, `FALSE` otherwise.
+#'
 #' @export
 is_oq_dependency_error <- function(x) {
   inherits(x, 'oq_dependency_error')

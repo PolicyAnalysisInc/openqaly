@@ -40,6 +40,10 @@ results$aggregated. If FALSE, use segment-level traces from results$segments}
 \item{states}{Character vector of state names to include (NULL for all)}
 
 \item{cycles}{Integer vector of cycles to include (NULL for all)}
+
+\item{time_unit}{Time unit for output: "cycle" (default), "day", "week", "month", "year"}
+
+\item{use_display_names}{Logical. If TRUE (default), use display names for entities}
 }
 \value{
 A data frame (format = "long" or "wide") or list of matrices (format = "matrix")

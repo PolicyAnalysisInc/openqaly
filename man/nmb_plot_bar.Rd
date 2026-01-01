@@ -26,29 +26,23 @@ nmb_plot_bar(
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
+\item{interventions}{Character vector of intervention strategies (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of comparator strategies (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{discounted}{Logical. Use discounted values?}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
-
-\item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name"}
-
-\item{summary_name_field}{Field to use for summary labels}
 }
 \value{
 A ggplot2 object
 }
 \description{
 Creates a bar chart showing Net Monetary Benefit (NMB) by strategy comparison and group.
-NMB = (Difference in Outcomes × WTP) - Difference in Costs
+NMB = (Difference in Outcomes * WTP) - Difference in Costs
 }
 \details{
-Either `intervention` or `comparator` must be specified (one is mandatory).
+Either `interventions` or `comparators` must be specified (one is mandatory).
 WTP is automatically extracted from the health outcome summary metadata if available,
 but can be overridden using the `wtp` parameter.
 }

@@ -28,15 +28,15 @@ prepare_pairwise_ce_table_data(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective}
+
 \item{decimals}{Number of decimal places}
 
 \item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering}
-
-\item{intervention}{Single reference strategy for intervention perspective}
-
-\item{comparator}{Single reference strategy for comparator perspective}
 }
 \value{
 List with prepared data and metadata for render_table()

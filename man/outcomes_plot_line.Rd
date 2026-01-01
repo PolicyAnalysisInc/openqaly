@@ -24,24 +24,20 @@ outcomes_plot_line(
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL
 (all groups plus aggregated)}
 
+\item{strategies}{Character vector of strategy names to include (NULL for all)}
+
+\item{interventions}{Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{time_unit}{Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"}
 
 \item{cumulative}{Logical. If TRUE (default), shows cumulative outcomes over time.
 If FALSE, shows per-cycle outcomes.}
 
-\item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name"}
-
-\item{value_name_field}{Field to use for outcome component names}
-
-\item{summary_name_field}{Field to use for the outcome label}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
+\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A ggplot2 object
@@ -56,11 +52,11 @@ When neither intervention nor comparator is specified, shows absolute outcome va
 
 When intervention is specified (intervention perspective):
 - Creates N-1 comparisons showing (intervention - each_other_strategy)
-- Example with 3 strategies {A, B, C} and intervention=A: shows "A vs. B" and "A vs. C"
+- Example with 3 strategies (A, B, C) and intervention=A: shows "A vs. B" and "A vs. C"
 
 When comparator is specified (comparator perspective):
 - Creates N-1 comparisons showing (each_other_strategy - comparator)
-- Example with 3 strategies {A, B, C} and comparator=C: shows "A vs. C" and "B vs. C"
+- Example with 3 strategies (A, B, C) and comparator=C: shows "A vs. C" and "B vs. C"
 }
 \examples{
 \dontrun{

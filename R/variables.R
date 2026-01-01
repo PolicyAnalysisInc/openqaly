@@ -260,6 +260,7 @@ as.variables <- function(x) {
 as.variables.variables <- function(x) {
   x
 }
+#' @export
 as.variables.data.frame <- function(x) {
   class(x) <- c('variables', class(x))
   x

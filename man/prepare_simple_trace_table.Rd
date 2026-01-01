@@ -34,10 +34,6 @@ prepare_simple_trace_table(
 \item{time_unit}{Time unit to display}
 
 \item{font_size}{Font size in points}
-
-\item{strategy_name_field}{Field to use for strategy names}
-
-\item{group_name_field}{Field to use for group names}
 }
 \value{
 A simple table specification

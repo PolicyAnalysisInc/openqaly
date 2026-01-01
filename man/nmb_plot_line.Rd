@@ -28,26 +28,18 @@ nmb_plot_line(
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
+\item{interventions}{Character vector of intervention strategies (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of comparator strategies (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{time_unit}{Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"}
 
 \item{cumulative}{Logical. If TRUE (default), shows cumulative NMB over time.
 If FALSE, shows per-cycle NMB.}
 
 \item{discounted}{Logical. Use discounted values?}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
-
-\item{strategy_name_field}{Field to use for strategy names: "name" or "display_name"}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name"}
-
-\item{value_name_field}{Field to use for value names}
-
-\item{summary_name_field}{Field to use for summary labels}
 }
 \value{
 A ggplot2 object
@@ -56,7 +48,7 @@ A ggplot2 object
 Creates a line chart showing cumulative or per-cycle Net Monetary Benefit over time.
 }
 \details{
-Either `intervention` or `comparator` must be specified (one is mandatory).
+Either `interventions` or `comparators` must be specified (one is mandatory).
 }
 \examples{
 \dontrun{
@@ -64,10 +56,13 @@ model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Cumulative NMB over time
-nmb_plot_line(results, "total_qalys", "total_cost", comparator = "control")
+nmb_plot_line(results, "total_qalys", "total_cost", comparators = "control")
 
 # Per-cycle NMB
-nmb_plot_line(results, "total_qalys", "total_cost", intervention = "new_treatment", cumulative = FALSE)
+nmb_plot_line(
+  results, "total_qalys", "total_cost",
+  interventions = "new_treatment", cumulative = FALSE
+)
 }
 
 }

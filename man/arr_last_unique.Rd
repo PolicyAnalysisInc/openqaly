@@ -6,6 +6,15 @@
 \usage{
 arr_last_unique(mat, dim_index)
 }
+\arguments{
+\item{mat}{A multi-dimensional array}
+
+\item{dim_index}{Index of the dimension to check}
+}
+\value{
+Integer index of the last unique value
+}
 \description{
 Determine the last index containing a unique value
 }
+\keyword{internal}

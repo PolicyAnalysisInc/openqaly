@@ -7,9 +7,12 @@
 #' @param outcome Name of outcome to display (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row?
 #' @param decimals Number of decimal places
 #' @param discounted Logical. Use discounted values?
+#' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -295,9 +298,12 @@ prepare_outcomes_table_data <- function(results,
 #' @param outcome Name of outcome to display (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
 #' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
+#' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
@@ -362,12 +368,12 @@ outcomes_table <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay
-#' @param intervention Single reference strategy for intervention perspective.
-#' @param comparator Single reference strategy for comparator perspective.
-#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
+#' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -692,12 +698,12 @@ prepare_nmb_table_data <- function(results,
 #' @param cost_outcome Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay
-#' @param intervention Single reference strategy for intervention perspective.
-#' @param comparator Single reference strategy for comparator perspective.
-#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
+#' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
@@ -980,8 +986,8 @@ incremental_ce_table <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param intervention Single reference strategy for intervention perspective
-#' @param comparator Single reference strategy for comparator perspective
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param decimals Number of decimal places
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering
@@ -1224,8 +1230,8 @@ prepare_pairwise_ce_table_data <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param intervention Single reference strategy for intervention perspective
-#' @param comparator Single reference strategy for comparator perspective
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
 #' @param decimals Number of decimal places (default: 2)
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering (default: 11)

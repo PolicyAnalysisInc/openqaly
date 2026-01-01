@@ -68,7 +68,7 @@ A probability > 50% indicates higher likelihood of being cost-effective
 in the comparison.
 
 When multiple groups are present, the table includes a group column showing
-results in a hierarchical structure (group → strategy → probabilities).
+results in a hierarchical structure (group -> strategy -> probabilities).
 }
 \examples{
 \dontrun{

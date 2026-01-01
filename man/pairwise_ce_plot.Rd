@@ -26,19 +26,13 @@ pairwise_ce_plot(
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
+\item{interventions}{Character vector of intervention strategies (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of comparator strategies (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
-
-\item{strategy_name_field}{Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name" (default: "display_name")}
-
-\item{summary_name_field}{Field to use for summary labels: "name" or "display_name" (default: "display_name")}
 }
 \value{
 A ggplot2 object
@@ -52,12 +46,12 @@ with the reference strategy at the origin.
 The cost-effectiveness plane plots incremental outcome (x-axis) vs. incremental cost (y-axis).
 The origin (0,0) represents the reference strategy.
 
-When comparator is specified:
+When comparators is specified:
 - All other strategies are plotted as points showing their incremental values vs. comparator
 - Lines connect origin to each point, with slope representing ICER
 - Single plot (or faceted by group if group=NULL)
 
-When intervention is specified:
+When interventions is specified:
 - Each comparison gets its own facet panel showing intervention vs. one other strategy
 - One point per panel at the intervention's incremental position
 - Line shows ICER slope from origin
@@ -69,14 +63,14 @@ model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Pairwise CE plane vs control (comparator perspective)
-pairwise_ce_plot(results, "total_qalys", "total_cost", comparator = "control")
+pairwise_ce_plot(results, "total_qalys", "total_cost", comparators = "control")
 
 # New treatment vs others (intervention perspective)
-pairwise_ce_plot(results, "total_qalys", "total_cost", intervention = "new_treatment")
+pairwise_ce_plot(results, "total_qalys", "total_cost", interventions = "new_treatment")
 
 # For all groups
 pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,
-                 comparator = "control")
+                 comparators = "control")
 }
 
 }

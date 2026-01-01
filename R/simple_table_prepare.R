@@ -13,8 +13,6 @@
 #' @param states Character vector of states to include
 #' @param cycles Integer vector of cycles to display
 #' @param decimals Number of decimal places
-#' @param strategy_name_field Field to use for strategy names
-#' @param group_name_field Field to use for group names
 #' @param state_name_field Field to use for state names
 #' @param time_unit Time unit to display
 #' @param font_size Font size in points
@@ -222,8 +220,6 @@ prepare_simple_trace_table <- function(results,
 #' @param decimals Number of decimal places
 #' @param discounted Use discounted values
 #' @param value_name_field Field to use for value names
-#' @param strategy_name_field Field to use for strategy names
-#' @param group_name_field Field to use for group names
 #' @param font_size Font size in points
 #'
 #' @return A simple table specification

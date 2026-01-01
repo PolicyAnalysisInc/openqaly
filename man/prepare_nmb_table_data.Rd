@@ -29,17 +29,17 @@ prepare_nmb_table_data(
 
 \item{wtp}{Optional override for willingness-to-pay}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective}
+
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
 
-\item{intervention}{Single reference strategy for intervention perspective.}
-
-\item{comparator}{Single reference strategy for comparator perspective.}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
+\item{font_size}{Font size for rendering}
 }
 \value{
 List with prepared data and metadata for render_table()

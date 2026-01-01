@@ -189,7 +189,14 @@ set_settings <- function(model, ...) {
 #' Add one or more states to the model.
 #'
 #' @param model A oq_model_builder object
-#' @param ... State specifications, either as direct arguments or using state() helper
+#' @param name Character string for the state name
+#' @param display_name Optional display name for the state
+#' @param description Optional description of the state
+#' @param state_group Optional state group for grouping related states
+#' @param share_state_time Logical indicating whether to share state time with other states in the group
+#' @param state_cycle_limit Optional limit on the number of cycles in this state
+#' @param state_cycle_limit_unit Unit for the cycle limit (default: "cycles")
+#' @param initial_prob Optional initial probability for this state
 #'
 #' @return The modified model object
 #'
@@ -438,10 +445,10 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
 #'
 #' # Or provide custom display names if preferred
 #' model <- model |>
-#'   add_variable("cost_med", display_name = "Treatment A Cost",
-#'                strategy = "treatment_a", formula = 5000) |>
-#'   add_variable("cost_med", display_name = "Treatment B Cost",
-#'                strategy = "treatment_b", formula = 3000)
+#'   add_variable("cost_admin", display_name = "Admin Cost (Treatment A)",
+#'                strategy = "treatment_a", formula = 500) |>
+#'   add_variable("cost_admin", display_name = "Admin Cost (Treatment B)",
+#'                strategy = "treatment_b", formula = 300)
 add_variable <- function(model, name, formula, display_name = NULL,
                         description = NULL, strategy = "", group = "",
                         source = "", sampling) {
@@ -513,6 +520,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
 #' @param name Character string for the strategy name
 #' @param display_name Optional display name
 #' @param description Optional description
+#' @param enabled Numeric indicating if strategy is enabled (default: 1)
 #'
 #' @return The modified model object
 #'

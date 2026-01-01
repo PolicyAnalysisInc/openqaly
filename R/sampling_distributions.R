@@ -185,16 +185,10 @@ triangular <- function(min, mode, max) {
   }
 
   function(x) {
-    # Use extraDistr::qtriang if available, otherwise implement manually
-    if (requireNamespace("extraDistr", quietly = TRUE)) {
-      extraDistr::qtriang(x, a = min, b = max, c = mode)
-    } else {
-      # Manual implementation of triangular quantile function
-      fc <- (mode - min) / (max - min)
-      ifelse(x < fc,
-             min + sqrt(x * (max - min) * (mode - min)),
-             max - sqrt((1 - x) * (max - min) * (max - mode)))
-    }
+    fc <- (mode - min) / (max - min)
+    ifelse(x < fc,
+           min + sqrt(x * (max - min) * (mode - min)),
+           max - sqrt((1 - x) * (max - min) * (max - mode)))
   }
 }
 

@@ -25,12 +25,6 @@ incremental_ce_plot(
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
-
-\item{strategy_name_field}{Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")}
-
-\item{group_name_field}{Field to use for group names: "name" or "display_name" (default: "display_name")}
-
-\item{summary_name_field}{Field to use for summary labels: "name" or "display_name" (default: "display_name")}
 }
 \value{
 A ggplot2 object

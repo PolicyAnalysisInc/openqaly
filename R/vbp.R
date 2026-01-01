@@ -40,7 +40,7 @@ NULL
 #'   \item Running the model at three price points (0, 1, 2)
 #'   \item Verifying that price affects only costs (not outcomes)
 #'   \item Calculating the linear relationship between price and incremental costs
-#'   \item Deriving the VBP equation: Price = (ΔOutcome/cost_slope) * WTP - (cost_intercept/cost_slope)
+#'   \item Deriving the VBP equation: Price = (Delta Outcome/cost_slope) * WTP - (cost_intercept/cost_slope)
 #' }
 #'
 #' For models with groups, VBP equations are calculated for each group separately
@@ -155,8 +155,8 @@ build_vbp_segments <- function(model, vbp_spec) {
           is_intervention <- (s == vbp_spec$intervention_strategy)
 
           if (is_intervention) {
-            list(setNames(list(vbp_spec$price_values[i]),
-                         vbp_spec$price_variable))
+            setNames(list(vbp_spec$price_values[i]),
+                     vbp_spec$price_variable)
           } else {
             list()
           }
@@ -443,120 +443,6 @@ validate_vbp_spec <- function(model, vbp_spec) {
   metadata_for_check <- list(summaries = model$summaries)
   check_summary_exists(vbp_spec$outcome_summary, metadata_for_check)
   check_summary_exists(vbp_spec$cost_summary, metadata_for_check)
-
-  TRUE
-}
-
-#' Test VBP NMB Consistency
-#'
-#' Tests that VBP calculations are correct by verifying that at the calculated
-#' VBP price, the Net Monetary Benefit (NMB) equals zero (i.e., the intervention
-#' is exactly cost-effective at the given WTP threshold).
-#'
-#' @return TRUE if all tests pass
-#'
-#' @examples
-#' \dontrun{
-#' test_vbp_nmb_consistency()
-#' }
-#'
-#' @export
-test_vbp_nmb_consistency <- function() {
-  library(testthat)
-  library(openqaly)
-
-  # Step 1: Run VBP for checkimab model
-  model <- read_model(system.file("models", "checkimab", package = "openqaly"))
-
-  vbp_results <- run_vbp(
-    model,
-    price_variable = "med_cost_per_month",
-    intervention_strategy = "check",
-    outcome_summary = "qalys",
-    cost_summary = "costs"
-  )
-
-  # Test 1: Overall VBP consistency
-  wtp_test <- 50000
-  comparator_test <- "chemo"
-
-  vbp_price_overall <- calculate_vbp_price(vbp_results, comparator_test, wtp_test, "overall")
-
-  # Run base case with calculated VBP price
-  model_at_vbp <- model
-  model_at_vbp$variables <- model_at_vbp$variables %>%
-    mutate(formula = ifelse(
-      name == "med_cost_per_month" & strategy == "check",
-      as.character(vbp_price_overall),
-      formula
-    ))
-
-  results_at_vbp <- run_model(model_at_vbp)
-
-  # Calculate NMB for overall
-  nmb_results <- calculate_nmb(
-    results_at_vbp,
-    outcome_summary = "qalys",
-    cost_summary = "costs",
-    interventions = "check",
-    comparators = "chemo",
-    wtp = wtp_test,
-    groups = "overall"
-  )
-
-  total_nmb <- nmb_results %>%
-    filter(grepl("check.*chemo", strategy)) %>%
-    pull(amount) %>%
-    sum()
-
-  expect_true(
-    abs(total_nmb) < 1e-6,
-    info = sprintf("Overall NMB should be ~0 at VBP price, got: %f", total_nmb)
-  )
-
-  message(sprintf("✓ Overall VBP test passed: NMB = %.2e (effectively zero)", total_nmb))
-
-  # Test 2: Group-level VBP consistency (if groups exist)
-  if (nrow(model$groups) > 1) {
-    # Test first group
-    first_group <- model$groups$name[1]
-
-    vbp_price_group <- calculate_vbp_price(vbp_results, comparator_test, wtp_test, first_group)
-
-    # Run model with group-specific VBP price
-    model_at_vbp_group <- model
-    model_at_vbp_group$variables <- model_at_vbp_group$variables %>%
-      mutate(formula = ifelse(
-        name == "med_cost_per_month" & strategy == "check",
-        as.character(vbp_price_group),
-        formula
-      ))
-
-    results_at_vbp_group <- run_model(model_at_vbp_group)
-
-    # Calculate NMB for specific group
-    nmb_results_group <- calculate_nmb(
-      results_at_vbp_group,
-      outcome_summary = "qalys",
-      cost_summary = "costs",
-      interventions = "check",
-      comparators = "chemo",
-      wtp = wtp_test,
-      groups = first_group
-    )
-
-    group_nmb <- nmb_results_group %>%
-      filter(grepl("check.*chemo", strategy)) %>%
-      pull(amount) %>%
-      sum()
-
-    expect_true(
-      abs(group_nmb) < 1e-6,
-      info = sprintf("Group %s NMB should be ~0 at VBP price, got: %f", first_group, group_nmb)
-    )
-
-    message(sprintf("✓ Group '%s' VBP test passed: NMB = %.2e (effectively zero)", first_group, group_nmb))
-  }
 
   TRUE
 }

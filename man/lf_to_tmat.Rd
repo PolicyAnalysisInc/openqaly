@@ -2,10 +2,17 @@
 % Please edit documentation in R/markov.r
 \name{lf_to_tmat}
 \alias{lf_to_tmat}
-\title{Convert Lonform Transitions Table to Matrix}
+\title{Convert Longform Transitions Table to Transition Matrix}
 \usage{
 lf_to_tmat(df)
 }
-\description{
-Convert Lonform Transitions Table to Matrix
+\arguments{
+\item{df}{A data frame with transition data}
 }
+\value{
+A transition matrix array
+}
+\description{
+Convert Longform Transitions Table to Transition Matrix
+}
+\keyword{internal}

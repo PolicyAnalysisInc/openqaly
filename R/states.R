@@ -140,6 +140,7 @@ as.states <- function(x) {
 as.states.states <- function(x) {
   x
 }
+#' @export
 as.states.data.frame <- function(x) {
   class(x) <- c('states', class(x))
   x

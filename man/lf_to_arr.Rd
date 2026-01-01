@@ -6,6 +6,17 @@
 \usage{
 lf_to_arr(df, dimcols, value)
 }
+\arguments{
+\item{df}{A data frame in long format}
+
+\item{dimcols}{Character vector of column names to use as dimensions}
+
+\item{value}{Name of the column containing values}
+}
+\value{
+A multi-dimensional array
+}
 \description{
 Convert a longform table to a multi-dimensional array
 }
+\keyword{internal}

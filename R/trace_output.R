@@ -72,6 +72,8 @@ map_names <- function(names, metadata, field = "name") {
 #'   }
 #' @param states Character vector of state names to include (NULL for all)
 #' @param cycles Integer vector of cycles to include (NULL for all)
+#' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
+#' @param use_display_names Logical. If TRUE (default), use display names for entities
 #'
 #' @return A data frame (format = "long" or "wide") or list of matrices (format = "matrix")
 #'
@@ -380,10 +382,8 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #' @param show_legend Logical. Show legend?
 #' @param collapsed Logical. Use aggregated traces (TRUE, default) or segment
 #'   traces (FALSE)
-#' @param strategy_name_field Which strategy name field to use for facet labels:
-#'   "name", "display_name", or "abbreviation". Default is "name".
-#' @param state_name_field Which state name field to use for legend labels:
-#'   "name", "display_name", or "abbreviation". Default is "name".
+#' @param use_display_names Logical. If TRUE, use display names for entities
+#' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
 #'
 #' @return A ggplot2 object
 #'
@@ -524,10 +524,6 @@ trace_plot_area <- function(results,
 #' Alternative to stacked area charts for easier comparison of individual states.
 #'
 #' @inheritParams trace_plot_area
-#' @param strategy_name_field Which strategy name field to use for facet labels:
-#'   "name", "display_name", or "abbreviation". Default is "name".
-#' @param state_name_field Which state name field to use for legend labels:
-#'   "name", "display_name", or "abbreviation". Default is "name".
 #'
 #' @return A ggplot2 object
 #'

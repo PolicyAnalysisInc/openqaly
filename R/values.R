@@ -165,6 +165,23 @@ format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_p
   glue("{message_prefix}\n\n{table_string}")
 }
 
+#' Evaluate Value Formulas by State
+#'
+#' Evaluates value formulas defined in a model within a namespace context,
+#' computing values for each state over all cycles.
+#'
+#' @param df An unevaluated values dataframe containing value definitions
+#'   with formula specifications.
+#' @param ns A namespace object containing evaluated variables and model context.
+#' @param value_names Character vector of value names to evaluate.
+#' @param state_names Character vector of state names for ordering results.
+#' @param simplify Logical; if `TRUE`, returns a simplified structure.
+#'   Default is `FALSE`.
+#'
+#' @return A tibble with evaluated values organized by state, containing columns
+#'   for state, destination, maximum state time, state cycle, and a list column
+#'   of evaluated values.
+#'
 #' @export
 evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) {
 

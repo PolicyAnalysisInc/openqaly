@@ -2,10 +2,19 @@
 % Please edit documentation in R/markov.r
 \name{lf_to_lf_mat}
 \alias{lf_to_lf_mat}
-\title{Convert Lonform Transitions Table to Matrix}
+\title{Convert Longform Transitions Table to Matrix}
 \usage{
 lf_to_lf_mat(df, state_names)
 }
-\description{
-Convert Lonform Transitions Table to Matrix
+\arguments{
+\item{df}{A data frame with transition data}
+
+\item{state_names}{Character vector of state names}
 }
+\value{
+A matrix of transitions
+}
+\description{
+Convert Longform Transitions Table to Matrix
+}
+\keyword{internal}

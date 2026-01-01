@@ -274,7 +274,7 @@ prepare_incremental_ceac_table_data <- function(results,
 #' all strategies at each WTP threshold.
 #'
 #' When multiple groups are present, the table includes a group column showing
-#' results in a hierarchical structure (group → strategy → probabilities).
+#' results in a hierarchical structure (group -> strategy -> probabilities).
 #'
 #' @examples
 #' \dontrun{
@@ -496,7 +496,7 @@ prepare_psa_summary_table_data <- function(results,
   # Add WTP rows
   for (wtp_val in pce_wtp) {
     wtp_id <- paste0("pce_", wtp_val)
-    wtp_label <- paste0("λ = $", format(wtp_val, big.mark = ",", scientific = FALSE))
+    wtp_label <- paste0("\u03bb = $", format(wtp_val, big.mark = ",", scientific = FALSE))
     row_labels_ordered <- c(row_labels_ordered, wtp_id)
     row_labels_display <- c(row_labels_display, wtp_label)
   }
@@ -1084,7 +1084,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 #' in the comparison.
 #'
 #' When multiple groups are present, the table includes a group column showing
-#' results in a hierarchical structure (group → strategy → probabilities).
+#' results in a hierarchical structure (group -> strategy -> probabilities).
 #'
 #' @examples
 #' \dontrun{

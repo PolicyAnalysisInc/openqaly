@@ -19,7 +19,21 @@ add_state(
 \arguments{
 \item{model}{A oq_model_builder object}
 
-\item{...}{State specifications, either as direct arguments or using state() helper}
+\item{name}{Character string for the state name}
+
+\item{display_name}{Optional display name for the state}
+
+\item{description}{Optional description of the state}
+
+\item{state_group}{Optional state group for grouping related states}
+
+\item{share_state_time}{Logical indicating whether to share state time with other states in the group}
+
+\item{state_cycle_limit}{Optional limit on the number of cycles in this state}
+
+\item{state_cycle_limit_unit}{Unit for the cycle limit (default: "cycles")}
+
+\item{initial_prob}{Optional initial probability for this state}
 }
 \value{
 The modified model object

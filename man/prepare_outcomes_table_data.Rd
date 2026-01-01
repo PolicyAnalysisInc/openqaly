@@ -26,11 +26,17 @@ prepare_outcomes_table_data(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective}
+
 \item{show_total}{Logical. Show TOTAL row?}
 
 \item{decimals}{Number of decimal places}
 
 \item{discounted}{Logical. Use discounted values?}
+
+\item{font_size}{Font size for rendering}
 }
 \value{
 List with prepared data and metadata for render_table()

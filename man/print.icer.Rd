@@ -2,19 +2,20 @@
 % Please edit documentation in R/ce.r
 \name{print.icer}
 \alias{print.icer}
-\title{Printing for ICER vectors
-Formats values as:
-  +number = more costly/more effective (ICER)
-  -number = less costly/less effective (prints as opposite with asterisk)
-  0       = "Dominant"
-  Inf     = "Dominated"
-  NaN     = "Equivalent"
-  NA      = "" (blank - reference strategy with no comparison)}
+\title{Printing for ICER vectors}
 \usage{
 \method{print}{icer}(x, digits = 3, big.mark = ",", ...)
 }
+\arguments{
+\item{x}{An icer vector to print}
+
+\item{digits}{Number of digits for rounding (default: 3)}
+
+\item{big.mark}{Character for thousands separator (default: ",")}
+
+\item{...}{Additional arguments (ignored)}
+}
 \description{
-Printing for ICER vectors
 Formats values as:
   +number = more costly/more effective (ICER)
   -number = less costly/less effective (prints as opposite with asterisk)

@@ -1,3 +1,13 @@
+#' Read a Model from Directory
+#'
+#' Reads a complete openqaly model from a directory structure containing
+#' an Excel workbook (`model.xlsx`), optional data CSVs, and optional R scripts.
+#'
+#' @param path Path to the model directory containing `model.xlsx` and
+#'   optional `data/` and `scripts/` subdirectories.
+#'
+#' @return A normalized and validated `oq_model` object.
+#'
 #' @export
 read_model <- function(path) {
 
@@ -422,18 +432,6 @@ is_faslsy_chr <- function(x) {
   is.na(x) | x == ''
 }
 
-
-#' Check Table
-#' 
-#' Check a model inputs dataframe based on a given specification dataframe. Specification
-#' dataframes are used to check input dataframes, ensure that required columns are present
-#' and impute missing values for non-required columns.
-#'
-#' @param df The input dataframe to be checked
-#' @param spec The specification dataframe
-#' @param context A string used in error messages to indicate the type of input dataframe
-#'
-#' @return The input dataframe with missing values imputed
 
 #' Auto-Generate Display Names for Variables
 #'
@@ -1198,6 +1196,7 @@ read_model_json <- function(json_string) {
 #' Ensures that data frames in the model are properly formatted
 #' 
 #' @param model The model list parsed from JSON
+#' @param values_spec Optional values specification list
 #' @return The model with properly formatted data frames
 convert_json_dataframes <- function(model, values_spec = NULL) {
   # Load all specs if not provided
@@ -1693,4 +1692,86 @@ select_source_data <- function(groups, results) {
   }
 
   bind_rows(parts)
+}
+
+# =============================================================================
+# Override Application Functions
+# =============================================================================
+
+#' Apply Setting Overrides to Model
+#'
+#' Checks segment for setting_overrides column and applies them to the model.
+#' This helper is called from within run_segment methods to modify model
+#' settings before creating the namespace.
+#'
+#' @param segment Segment tibble (single row)
+#' @param model Model object
+#' @return Modified model object (or original if no overrides)
+#' @keywords internal
+apply_setting_overrides <- function(segment, model) {
+  # Check if segment has setting_overrides column
+  if (!"setting_overrides" %in% names(segment)) {
+    return(model)
+  }
+
+  # Get overrides (handle both list column and direct list)
+  overrides <- if (is.list(segment$setting_overrides)) {
+    segment$setting_overrides[[1]]
+  } else {
+    segment$setting_overrides
+  }
+
+  # If no overrides, return original model
+  if (is.null(overrides) || length(overrides) == 0) {
+    return(model)
+  }
+
+  # Clone model to avoid modifying original
+  modified_model <- model
+
+  # Apply each override
+  for (setting_name in names(overrides)) {
+    override_value <- overrides[[setting_name]]
+
+    # Apply to model settings
+    modified_model$settings[[setting_name]] <- override_value
+
+    # Note: cycle_length_days and n_cycles are recalculated in run_segment
+    # after this function returns, ensuring correct values with overrides
+  }
+
+  modified_model
+}
+
+#' Apply Parameter Overrides to Namespace
+#'
+#' Applies parameter overrides from a segment to the namespace and filters
+#' unevaluated variables to exclude overridden ones. This is the counterpart
+#' to apply_setting_overrides() for variable-level overrides.
+#'
+#' @param segment Segment containing parameter_overrides column
+#' @param ns Namespace object
+#' @param uneval_vars Unevaluated variables tibble
+#' @return List with ns (modified namespace) and uneval_vars (filtered)
+#' @keywords internal
+apply_parameter_overrides <- function(segment, ns, uneval_vars) {
+  if (!"parameter_overrides" %in% names(segment)) {
+    return(list(ns = ns, uneval_vars = uneval_vars))
+  }
+
+  override_vals <- segment$parameter_overrides[[1]]
+
+  if (is.null(override_vals) || length(override_vals) == 0) {
+    return(list(ns = ns, uneval_vars = uneval_vars))
+  }
+
+  for (var_name in names(override_vals)) {
+    val <- override_vals[[var_name]]
+    assign(var_name, val, envir = ns$env)
+  }
+
+  uneval_vars <- uneval_vars %>%
+    filter(!(name %in% names(override_vals)))
+
+  list(ns = ns, uneval_vars = uneval_vars)
 }

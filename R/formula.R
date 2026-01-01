@@ -4,7 +4,7 @@
 #' object. If the resulting R-expression is invalid, it will be replaced
 #' with an expression that evaluates to an error string.
 #'
-#' @param text An atomic character vector containing an R-expression.
+#' @param string An atomic character vector containing an R-expression.
 #' @return An oq_formula object representing the given R-expression.
 #' 
 #' @keywords internal

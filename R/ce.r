@@ -96,6 +96,7 @@ format.icer <- function(x, digits = 2, big.mark = ",", ...) {
 }
 
 #' Printing for ICER vectors
+#'
 #' Formats values as:
 #'   +number = more costly/more effective (ICER)
 #'   -number = less costly/less effective (prints as opposite with asterisk)
@@ -103,6 +104,11 @@ format.icer <- function(x, digits = 2, big.mark = ",", ...) {
 #'   Inf     = "Dominated"
 #'   NaN     = "Equivalent"
 #'   NA      = "" (blank - reference strategy with no comparison)
+#'
+#' @param x An icer vector to print
+#' @param digits Number of digits for rounding (default: 3)
+#' @param big.mark Character for thousands separator (default: ",")
+#' @param ... Additional arguments (ignored)
 #' @export
 print.icer <- function(x, digits = 3, big.mark = ",", ...) {
   fmt_num <- function(v) {
@@ -345,10 +351,10 @@ calculate_incremental_ce <- function(results,
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
+#' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A tibble with columns:

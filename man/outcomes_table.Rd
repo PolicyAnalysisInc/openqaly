@@ -27,11 +27,17 @@ outcomes_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective}
+
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: 2)}
 
 \item{discounted}{Logical. Use discounted values?}
+
+\item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }

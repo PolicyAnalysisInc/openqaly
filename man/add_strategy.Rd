@@ -14,6 +14,8 @@ add_strategy(model, name, display_name = NULL, description = NULL, enabled = 1)
 \item{display_name}{Optional display name}
 
 \item{description}{Optional description}
+
+\item{enabled}{Numeric indicating if strategy is enabled (default: 1)}
 }
 \value{
 The modified model object

@@ -2,24 +2,21 @@
 % Please edit documentation in R/misc.R
 \name{auto_generate_display_name_variables}
 \alias{auto_generate_display_name_variables}
-\title{Check Table}
+\title{Auto-Generate Display Names for Variables}
 \usage{
 auto_generate_display_name_variables(df)
 }
 \arguments{
 \item{df}{A dataframe with columns: name, display_name, strategy (optional), group (optional)}
-
-\item{spec}{The specification dataframe}
-
-\item{context}{A string used in error messages to indicate the type of input dataframe}
 }
 \value{
-The input dataframe with missing values imputed
-Auto-Generate Display Names for Variables
-
+The dataframe with auto-generated display names where missing
+}
+\description{
 Generates display names for variables based on name, strategy, and group.
 Only fills in missing display_name values, preserving any user-provided names.
-
+}
+\details{
 Format:
 - No strategy/group: "var_name"
 - Strategy only: "var_name, strategy_name"
@@ -29,12 +26,5 @@ Format:
 This function is called after \code{\link{validate_variable_display_names}} to ensure
 consistency. Variables with multiple rows (strategy/group specific) must have display
 names provided for either all rows or no rows.
-
-The dataframe with auto-generated display names where missing
-}
-\description{
-Check a model inputs dataframe based on a given specification dataframe. Specification
-dataframes are used to check input dataframes, ensure that required columns are present
-and impute missing values for non-required columns.
 }
 \keyword{internal}

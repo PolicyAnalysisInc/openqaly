@@ -254,51 +254,6 @@ build_dsa_segments <- function(model) {
   bind_rows(all_segments)
 }
 
-#' Apply Setting Overrides to Model
-#'
-#' Checks segment for setting_overrides column and applies them to the model.
-#' This helper is called from within run_segment methods to modify model
-#' settings before creating the namespace.
-#'
-#' @param segment Segment tibble (single row)
-#' @param model Model object
-#' @return Modified model object (or original if no overrides)
-#' @keywords internal
-apply_setting_overrides <- function(segment, model) {
-  # Check if segment has setting_overrides column
-  if (!"setting_overrides" %in% names(segment)) {
-    return(model)
-  }
-
-  # Get overrides (handle both list column and direct list)
-  overrides <- if (is.list(segment$setting_overrides)) {
-    segment$setting_overrides[[1]]
-  } else {
-    segment$setting_overrides
-  }
-
-  # If no overrides, return original model
-  if (is.null(overrides) || length(overrides) == 0) {
-    return(model)
-  }
-
-  # Clone model to avoid modifying original
-  modified_model <- model
-
-  # Apply each override
-  for (setting_name in names(overrides)) {
-    override_value <- overrides[[setting_name]]
-
-    # Apply to model settings
-    modified_model$settings[[setting_name]] <- override_value
-
-    # Note: cycle_length_days and n_cycles are recalculated in run_segment
-    # after this function returns, ensuring correct values with overrides
-  }
-
-  modified_model
-}
-
 #' Generate DSA Metadata from Segments
 #'
 #' Creates metadata tibble describing each DSA run for use in analysis functions.

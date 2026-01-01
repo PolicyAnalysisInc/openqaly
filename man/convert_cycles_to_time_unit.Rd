@@ -2,7 +2,7 @@
 % Please edit documentation in R/psm.R
 \name{convert_cycles_to_time_unit}
 \alias{convert_cycles_to_time_unit}
-\title{Calculate PSM Values}
+\title{Convert Cycles to Time Unit}
 \usage{
 convert_cycles_to_time_unit(cycles, time_unit, namespace)
 }
@@ -12,42 +12,11 @@ convert_cycles_to_time_unit(cycles, time_unit, namespace)
 \item{time_unit}{The target time unit (days/weeks/months/years)}
 
 \item{namespace}{The namespace containing time variables}
-
-\item{uneval_values}{Unevaluated values specifications}
-
-\item{trace}{State occupancy trace matrix}
-
-\item{trans_pfs_to_pp}{Transition probabilities from PFS to post-progression}
-
-\item{trans_pp_to_dead}{Transition probabilities from post-progression to dead}
-
-\item{value_names}{Vector of value names}
-
-\item{state_names}{Vector of state names}
-
-\item{n_cycles}{Number of cycles}
 }
 \value{
-A matrix of calculated values
-
 Vector of times in the specified unit
 }
 \description{
-Calculates residency and transitional values for PSM models.
+Converts cycle numbers to the appropriate time unit for survival distributions.
 }
-\keyword{Convert}
-\keyword{Converts}
-\keyword{Cycles}
-\keyword{Time}
-\keyword{Unit}
-\keyword{appropriate}
-\keyword{cycle}
-\keyword{distributions.}
-\keyword{for}
 \keyword{internal}
-\keyword{numbers}
-\keyword{survival}
-\keyword{the}
-\keyword{time}
-\keyword{to}
-\keyword{unit}

@@ -6,6 +6,17 @@
 \usage{
 eval_trans_markov_lf(df, ns, simplify = FALSE)
 }
+\arguments{
+\item{df}{A data frame with transition specifications}
+
+\item{ns}{A namespace environment containing evaluated variables}
+
+\item{simplify}{Logical indicating whether to simplify the result}
+}
+\value{
+A data frame with evaluated transitions
+}
 \description{
 Evaluate a Longform Transition Matrix
 }
+\keyword{internal}

@@ -1,12 +1,13 @@
 
 #' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone
 #' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
-#' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr
+#' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr openqalysurv
+#' @importFrom Rcpp sourceCpp
 #' @importFrom purrr map map_chr map_lgl map_dfr map2_dfr set_names flatten_chr flatten keep discard iwalk walk2 reduce
 #' @importFrom dplyr select mutate group_by summarize left_join
 #' @importFrom openxlsx readWorkbook getSheetNames createWorkbook addWorksheet writeData saveWorkbook write.xlsx
 #' @importFrom tidyr separate_rows pivot_longer pivot_wider
-#' @importFrom jsonlite fromJSON toJSON asJSON write_json validate
+#' @importFrom jsonlite fromJSON toJSON write_json validate
 #' @importFrom tibble rownames_to_column tibble as_tibble
 #' @importFrom stringr str_split_fixed
 #' @importFrom utils capture.output write.csv
@@ -18,9 +19,6 @@
 #' @importFrom furrr future_map
 #' @importFrom future plan multisession
 #' @importFrom scales comma dollar dollar_format
-#' @importFrom flextable flextable colformat_double add_header_row merge_at compose as_paragraph bg bold align border_remove hline hline_top hline_bottom width void border autofit
-#' @importFrom officer fp_border
-#' @importFrom knitr kable
 NULL
 
 ## usethis namespace: start
@@ -49,6 +47,13 @@ error_codes <- list(
   invalid_expression = '#ERR: Invalid Expression'
 )
 
+#' Complementary Probability Sentinel
+#'
+#' A sentinel value used in decision tree probability calculations to indicate
+#' that a node's probability should be computed as the complement of the sum
+#' of its sibling probabilities (i.e., 1 minus the sum of other probabilities
+#' at the same level).
+#'
 #' @export
 C <- -pi
 strat_var_code <- 'strategy'

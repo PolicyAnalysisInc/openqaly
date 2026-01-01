@@ -20,8 +20,10 @@ create_namespace <- function(model, segment) {
 #' a data frame for vector parameters with an environment
 #' for non-vector parameters.
 #'
-#' @param df A data frame of pre-existing parameter values
 #' @param env An environment of pre-existing values
+#' @param df A data frame of pre-existing parameter values
+#' @param additional Optional additional data frame to merge
+#' @param ... Additional data frames to merge
 #'
 #' @export
 define_namespace <- function(env, df, additional = NULL, ...) {

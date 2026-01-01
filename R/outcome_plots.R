@@ -10,17 +10,15 @@
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #'   (all groups plus aggregated)
-#' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
-#' @param group_name_field Field to use for group names: "name" or "display_name"
-#' @param value_name_field Field to use for outcome component names
-#' @param summary_name_field Field to use for the outcome label
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param time_unit Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"
 #' @param cumulative Logical. If TRUE (default), shows cumulative outcomes over time.
 #'   If FALSE, shows per-cycle outcomes.
+#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -29,11 +27,11 @@
 #'
 #' When intervention is specified (intervention perspective):
 #' - Creates N-1 comparisons showing (intervention - each_other_strategy)
-#' - Example with 3 strategies {A, B, C} and intervention=A: shows "A vs. B" and "A vs. C"
+#' - Example with 3 strategies (A, B, C) and intervention=A: shows "A vs. B" and "A vs. C"
 #'
 #' When comparator is specified (comparator perspective):
 #' - Creates N-1 comparisons showing (each_other_strategy - comparator)
-#' - Example with 3 strategies {A, B, C} and comparator=C: shows "A vs. C" and "B vs. C"
+#' - Example with 3 strategies (A, B, C) and comparator=C: shows "A vs. C" and "B vs. C"
 #'
 #' @examples
 #' \dontrun{
@@ -184,26 +182,23 @@ outcomes_plot_line <- function(res, outcome,
 #' Plot Net Monetary Benefit as Bar Chart
 #'
 #' Creates a bar chart showing Net Monetary Benefit (NMB) by strategy comparison and group.
-#' NMB = (Difference in Outcomes × WTP) - Difference in Costs
+#' NMB = (Difference in Outcomes * WTP) - Difference in Costs
 #'
 #' @param res A openqaly model results object (output from run_model)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
-#' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
-#' @param group_name_field Field to use for group names: "name" or "display_name"
-#' @param summary_name_field Field to use for summary labels
+#' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of comparator strategies (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param discounted Logical. Use discounted values?
 #'
 #' @return A ggplot2 object
 #'
 #' @details
-#' Either `intervention` or `comparator` must be specified (one is mandatory).
+#' Either `interventions` or `comparators` must be specified (one is mandatory).
 #' WTP is automatically extracted from the health outcome summary metadata if available,
 #' but can be overridden using the `wtp` parameter.
 #'
@@ -298,7 +293,7 @@ nmb_plot_bar <- function(res,
   outcome_label <- map_names(health_outcome, res$metadata$summaries, "display_name")
   cost_label <- map_names(cost_outcome, res$metadata$summaries, "display_name")
   wtp_formatted <- format(wtp, big.mark = ",")
-  nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, λ = {wtp_formatted})")
+  nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   n_groups <- length(unique(nmb_data$group))
   n_strategies <- length(unique(nmb_data$strategy))
@@ -335,14 +330,10 @@ nmb_plot_bar <- function(res,
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
-#' @param strategy_name_field Field to use for strategy names: "name" or "display_name"
-#' @param group_name_field Field to use for group names: "name" or "display_name"
-#' @param value_name_field Field to use for value names
-#' @param summary_name_field Field to use for summary labels
+#' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of comparator strategies (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param time_unit Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"
 #' @param cumulative Logical. If TRUE (default), shows cumulative NMB over time.
 #'   If FALSE, shows per-cycle NMB.
@@ -351,7 +342,7 @@ nmb_plot_bar <- function(res,
 #' @return A ggplot2 object
 #'
 #' @details
-#' Either `intervention` or `comparator` must be specified (one is mandatory).
+#' Either `interventions` or `comparators` must be specified (one is mandatory).
 #'
 #' @examples
 #' \dontrun{
@@ -359,10 +350,13 @@ nmb_plot_bar <- function(res,
 #' results <- run_model(model)
 #'
 #' # Cumulative NMB over time
-#' nmb_plot_line(results, "total_qalys", "total_cost", comparator = "control")
+#' nmb_plot_line(results, "total_qalys", "total_cost", comparators = "control")
 #'
 #' # Per-cycle NMB
-#' nmb_plot_line(results, "total_qalys", "total_cost", intervention = "new_treatment", cumulative = FALSE)
+#' nmb_plot_line(
+#'   results, "total_qalys", "total_cost",
+#'   interventions = "new_treatment", cumulative = FALSE
+#' )
 #' }
 #'
 #' @export
@@ -477,7 +471,7 @@ nmb_plot_line <- function(res,
                           "display_name")
   wtp_formatted <- format(wtp, big.mark = ",")
   nmb_label <- glue(
-    "Net Monetary Benefit ({cost_label}, {outcome_label}, λ = {wtp_formatted})"
+    "Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})"
   )
 
   # Determine faceting (like outcomes_plot_time)
@@ -531,9 +525,6 @@ nmb_plot_line <- function(res,
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
-#' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
-#' @param group_name_field Field to use for group names: "name" or "display_name" (default: "display_name")
-#' @param summary_name_field Field to use for summary labels: "name" or "display_name" (default: "display_name")
 #'
 #' @return A ggplot2 object
 #'
@@ -650,14 +641,11 @@ incremental_ce_plot <- function(res,
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
+#' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of comparator strategies (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param discounted Logical. Use discounted values? (default: FALSE)
-#' @param strategy_name_field Field to use for strategy names: "name", "display_name", or "abbreviation" (default: "display_name")
-#' @param group_name_field Field to use for group names: "name" or "display_name" (default: "display_name")
-#' @param summary_name_field Field to use for summary labels: "name" or "display_name" (default: "display_name")
 #'
 #' @return A ggplot2 object
 #'
@@ -665,12 +653,12 @@ incremental_ce_plot <- function(res,
 #' The cost-effectiveness plane plots incremental outcome (x-axis) vs. incremental cost (y-axis).
 #' The origin (0,0) represents the reference strategy.
 #'
-#' When comparator is specified:
+#' When comparators is specified:
 #' - All other strategies are plotted as points showing their incremental values vs. comparator
 #' - Lines connect origin to each point, with slope representing ICER
 #' - Single plot (or faceted by group if group=NULL)
 #'
-#' When intervention is specified:
+#' When interventions is specified:
 #' - Each comparison gets its own facet panel showing intervention vs. one other strategy
 #' - One point per panel at the intervention's incremental position
 #' - Line shows ICER slope from origin
@@ -682,14 +670,14 @@ incremental_ce_plot <- function(res,
 #' results <- run_model(model)
 #'
 #' # Pairwise CE plane vs control (comparator perspective)
-#' pairwise_ce_plot(results, "total_qalys", "total_cost", comparator = "control")
+#' pairwise_ce_plot(results, "total_qalys", "total_cost", comparators = "control")
 #'
 #' # New treatment vs others (intervention perspective)
-#' pairwise_ce_plot(results, "total_qalys", "total_cost", intervention = "new_treatment")
+#' pairwise_ce_plot(results, "total_qalys", "total_cost", interventions = "new_treatment")
 #'
 #' # For all groups
 #' pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,
-#'                  comparator = "control")
+#'                  comparators = "control")
 #' }
 #'
 #' @export

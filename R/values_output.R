@@ -106,6 +106,8 @@ map_value_names <- function(names, metadata, field = "name") {
 #' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
 #' @param use_display_names Logical. If TRUE (default), use display names for all entities
 #'   (strategies, groups, values). If FALSE, use technical names.
+#' @param interventions Character vector of intervention strategy names (optional filter)
+#' @param comparators Character vector of comparator strategy names (optional filter)
 #'
 #' @return A data frame in the requested format
 #'
@@ -765,18 +767,15 @@ get_summaries <- function(results,
 #' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#' @param intervention Single reference strategy for intervention perspective (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.
-#' @param comparator Single reference strategy for comparator perspective (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.
+#' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
+#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param wtp Optional override for willingness-to-pay value. If NULL, attempts to extract from
 #'   outcome summary metadata. Must be numeric and positive.
 #' @param discounted Logical. If TRUE, use discounted values. If FALSE (default),
 #'   use undiscounted values
-#' @param strategy_name_field Which strategy name field to use: "name" or "display_name"
-#' @param group_name_field Which group name field to use: "name" or "display_name"
-#' @param value_name_field Which value name field to use
-#' @param summary_name_field Which summary name field to use
+#' @param use_display_names Logical. If TRUE (default), use display names for entities
 #' @param return_components Logical. If TRUE, returns breakdown of Outcome Benefit,
 #'   Cost Difference, and Total. If FALSE (default), returns only total NMB.
 #'

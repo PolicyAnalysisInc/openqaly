@@ -40,6 +40,7 @@ parse_psm <- function(model) {
   define_object_(model, class = 'psm')
 }
 
+#' @export
 run_segment.psm <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
@@ -82,23 +83,10 @@ run_segment.psm <- function(segment, model, env, ...) {
   # Create a namespace which will contain evaluated variables
   ns <- create_namespace(model, segment)
 
-  # Check if parameter overrides provided (PSA or DSA mode)
-  if ("parameter_overrides" %in% names(segment)) {
-    # Extract the list of parameter overrides for this run
-    override_vals <- segment$parameter_overrides[[1]]
-
-    # Inject override values into namespace
-    for (var_name in names(override_vals)) {
-      val <- override_vals[[var_name]]
-      # Assign to environment (override values are scalar parameters)
-      assign(var_name, val, envir = ns$env)
-    }
-
-    # Filter uneval_vars to exclude overridden variables
-    # (they already have values, skip formula evaluation)
-    uneval_vars <- uneval_vars %>%
-      filter(!(name %in% names(override_vals)))
-  }
+  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
+  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
+  ns <- override_result$ns
+  uneval_vars <- override_result$uneval_vars
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
@@ -449,21 +437,6 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   list(trace = trace, values = values_matrix)
 }
 
-#' Calculate PSM Values
-#'
-#' Calculates residency and transitional values for PSM models.
-#'
-#' @param uneval_values Unevaluated values specifications
-#' @param namespace Evaluated variables namespace
-#' @param trace State occupancy trace matrix
-#' @param trans_pfs_to_pp Transition probabilities from PFS to post-progression
-#' @param trans_pp_to_dead Transition probabilities from post-progression to dead
-#' @param value_names Vector of value names
-#' @param state_names Vector of state names
-#' @param n_cycles Number of cycles
-#'
-#' @return A matrix of calculated values
-#' @keywords internal
 #' Convert Cycles to Time Unit
 #'
 #' Converts cycle numbers to the appropriate time unit for survival distributions.
@@ -750,23 +723,10 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   # Create a namespace which will contain evaluated variables
   ns <- create_namespace(model, segment)
 
-  # Check if parameter overrides provided (PSA or DSA mode)
-  if ("parameter_overrides" %in% names(segment)) {
-    # Extract the list of parameter overrides for this run
-    override_vals <- segment$parameter_overrides[[1]]
-
-    # Inject override values into namespace
-    for (var_name in names(override_vals)) {
-      val <- override_vals[[var_name]]
-      # Assign to environment (override values are scalar parameters)
-      assign(var_name, val, envir = ns$env)
-    }
-
-    # Filter uneval_vars to exclude overridden variables
-    # (they already have values, skip formula evaluation)
-    uneval_vars <- uneval_vars %>%
-      filter(!(name %in% names(override_vals)))
-  }
+  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
+  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
+  ns <- override_result$ns
+  uneval_vars <- override_result$uneval_vars
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)

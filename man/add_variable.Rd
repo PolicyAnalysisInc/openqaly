@@ -72,8 +72,8 @@ model <- model |>
 
 # Or provide custom display names if preferred
 model <- model |>
-  add_variable("cost_med", display_name = "Treatment A Cost",
-               strategy = "treatment_a", formula = 5000) |>
-  add_variable("cost_med", display_name = "Treatment B Cost",
-               strategy = "treatment_b", formula = 3000)
+  add_variable("cost_admin", display_name = "Admin Cost (Treatment A)",
+               strategy = "treatment_a", formula = 500) |>
+  add_variable("cost_admin", display_name = "Admin Cost (Treatment B)",
+               strategy = "treatment_b", formula = 300)
 }

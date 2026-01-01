@@ -1,3 +1,14 @@
+#' Plot a Decision Tree
+#'
+#' Creates a visualization of a decision tree structure using ggraph,
+#' displaying nodes and edges with formula labels.
+#'
+#' @param x A decision tree object containing a `df` component with columns
+#'   `node`, `parent`, and `formula`.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return A ggplot2/ggraph object displaying the tree structure.
+#'
 #' @export
 plot_decision_tree <- function(x, ...) {
   nodes <- rbind(data.frame(node = 'root'), x$df %>% select(node))

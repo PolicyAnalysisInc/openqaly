@@ -34,10 +34,6 @@ prepare_simple_outcomes_table(
 \item{value_name_field}{Field to use for value names}
 
 \item{font_size}{Font size in points}
-
-\item{strategy_name_field}{Field to use for strategy names}
-
-\item{group_name_field}{Field to use for group names}
 }
 \value{
 A simple table specification

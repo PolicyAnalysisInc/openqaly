@@ -58,7 +58,7 @@ where all strategies are compared simultaneously. Probabilities sum to 1 across
 all strategies at each WTP threshold.
 
 When multiple groups are present, the table includes a group column showing
-results in a hierarchical structure (group → strategy → probabilities).
+results in a hierarchical structure (group -> strategy -> probabilities).
 }
 \examples{
 \dontrun{

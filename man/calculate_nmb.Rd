@@ -26,28 +26,22 @@ calculate_nmb(
 
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
+\item{interventions}{Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+
+\item{comparators}{Character vector of reference strategies for comparator perspective (e.g., "control").
+If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
 \item{wtp}{Optional override for willingness-to-pay value. If NULL, attempts to extract from
 outcome summary metadata. Must be numeric and positive.}
 
 \item{discounted}{Logical. If TRUE, use discounted values. If FALSE (default),
 use undiscounted values}
 
+\item{use_display_names}{Logical. If TRUE (default), use display names for entities}
+
 \item{return_components}{Logical. If TRUE, returns breakdown of Outcome Benefit,
 Cost Difference, and Total. If FALSE (default), returns only total NMB.}
-
-\item{intervention}{Single reference strategy for intervention perspective (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparator.}
-
-\item{comparator}{Single reference strategy for comparator perspective (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with intervention.}
-
-\item{strategy_name_field}{Which strategy name field to use: "name" or "display_name"}
-
-\item{group_name_field}{Which group name field to use: "name" or "display_name"}
-
-\item{value_name_field}{Which value name field to use}
-
-\item{summary_name_field}{Which summary name field to use}
 }
 \value{
 A data frame with columns:

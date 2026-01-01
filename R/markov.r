@@ -91,6 +91,7 @@ calculate_segment_weight <- function(segment, model, namespace) {
   return(evaluate_group_weight(group_row, namespace))
 }
 
+#' @export
 run_segment.markov <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
@@ -148,23 +149,10 @@ run_segment.markov <- function(segment, model, env, ...) {
   # variables so that they can be referenced.
   ns <- create_namespace(model, segment)
 
-  # Check if parameter overrides provided (PSA or DSA mode)
-  if ("parameter_overrides" %in% names(segment)) {
-    # Extract the list of parameter overrides for this run
-    override_vals <- segment$parameter_overrides[[1]]
-
-    # Inject override values into namespace
-    for (var_name in names(override_vals)) {
-      val <- override_vals[[var_name]]
-      # Assign to environment (override values are scalar parameters)
-      assign(var_name, val, envir = ns$env)
-    }
-
-    # Filter uneval_vars to exclude overridden variables
-    # (they already have values, skip formula evaluation)
-    uneval_vars <- uneval_vars %>%
-      filter(!(name %in% names(override_vals)))
-  }
+  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
+  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
+  ns <- override_result$ns
+  uneval_vars <- override_result$uneval_vars
 
   # Evaluate variables, initial state probabilities, transitions,
   # values, & summaries.
@@ -542,7 +530,7 @@ parse_trans_markov <- function(x, states, vars) {
 
   # Construct the transitions object
   x$formula <- map(x$formula, as.oq_formula)
-  x$name <- glue("{x$from_state}→{x$to_state}")
+  x$name <- glue("{x$from_state}\u2192{x$to_state}")
 
   res <- sort_variables(x, vars) %>%
     select(name, from_state, to_state, formula) %>%
@@ -598,7 +586,7 @@ check_trans_markov <- function(x, state_names) {
   }
 
   # Check that no transitions are duplicated
-  trans_names <- glue("{x$from_state}→{x$to_state}")
+  trans_names <- glue("{x$from_state}\u2192{x$to_state}")
   dupe <- duplicated(trans_names)
   if (any(dupe)) {
     dupe_names <- unique(trans_names[dupe])
@@ -612,7 +600,7 @@ check_trans_markov <- function(x, state_names) {
   blank_index <- which(any(x$formula == '' | is.na(x$formula)))
   if (length(blank_index) > 0) {
     plural <- if (length(blank_index) > 1) 's' else ''
-    blank_names <- glue("{x$from_state[blank_index]}→{x$to_state[blank_index]}")
+    blank_names <- glue("{x$from_state[blank_index]}\u2192{x$to_state[blank_index]}")
     blank_msg <- paste(blank_names, collapse = ', ')
     error_msg <- glue('Transitions definition contained blank formula for transitions{plural}: {blank_msg}.')
     stop(error_msg, call. = F)
@@ -667,6 +655,13 @@ limit_state_time <- function(df, state_time_limits) {
 }
 
 #' Evaluate a Longform Transition Matrix
+#'
+#' @param df A data frame with transition specifications
+#' @param ns A namespace environment containing evaluated variables
+#' @param simplify Logical indicating whether to simplify the result
+#'
+#' @return A data frame with evaluated transitions
+#' @keywords internal
 eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
 
   # Loop through each row in transitions, evaluate, then
@@ -799,7 +794,13 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
   res
 }
 
-#' Convert Lonform Transitions Table to Matrix
+#' Convert Longform Transitions Table to Matrix
+#'
+#' @param df A data frame with transition data
+#' @param state_names Character vector of state names
+#'
+#' @return A matrix of transitions
+#' @keywords internal
 lf_to_lf_mat <- function(df, state_names) {
 
   df <- arrange(
@@ -820,7 +821,12 @@ lf_to_lf_mat <- function(df, state_names) {
 }
 
 
-#' Convert Lonform Transitions Table to Matrix
+#' Convert Longform Transitions Table to Transition Matrix
+#'
+#' @param df A data frame with transition data
+#'
+#' @return A transition matrix array
+#' @keywords internal
 lf_to_tmat <- function(df) {
   df <- df %>%
     group_by(from_state) %>%
@@ -854,6 +860,11 @@ lf_to_tmat <- function(df) {
 }
 
 #' Calculate complementary probabilities in an evaluated transition matrix
+#'
+#' @param mat A transition matrix array
+#'
+#' @return The matrix with complementary probabilities calculated
+#' @keywords internal
 calc_compl_probs <- function(mat) {
   posC <- mat == C
   c_counts <- rowSums(posC, dims = 2)
@@ -896,17 +907,25 @@ check_matrix_probs <- function(mat) {
   
 }
 
-# Type coercion methods
+#' Coerce to Long-Format Markov Transitions
+#'
+#' S3 generic function that coerces objects to the `lf_markov_trans` class,
+#' which represents Markov transition definitions in long format.
+#'
+#' @param x An object to coerce.
+#'
+#' @return An object of class `lf_markov_trans`.
+#'
 #' @export
 as.lf_markov_trans <- function(x) {
   UseMethod('as.lf_markov_trans', x)
 }
 
-# lf_markov_trans => lf_markov_trans
+#' @rdname as.lf_markov_trans
 #' @export
 as.lf_markov_trans.lf_markov_trans <- function(x) x
 
-# data.frame => lf_markov_trans
+#' @rdname as.lf_markov_trans
 #' @export
 as.lf_markov_trans.data.frame <- function(x) {
   class(x) <- c('lf_markov_trans', class(x))

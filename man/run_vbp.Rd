@@ -46,7 +46,7 @@ VBP analysis works by:
   \item Running the model at three price points (0, 1, 2)
   \item Verifying that price affects only costs (not outcomes)
   \item Calculating the linear relationship between price and incremental costs
-  \item Deriving the VBP equation: Price = (ΔOutcome/cost_slope) * WTP - (cost_intercept/cost_slope)
+  \item Deriving the VBP equation: Price = (Delta Outcome/cost_slope) * WTP - (cost_intercept/cost_slope)
 }
 
 For models with groups, VBP equations are calculated for each group separately
