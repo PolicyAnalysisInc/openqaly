@@ -41,11 +41,11 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
     n_groups <- length(unique(tornado_data$group))
     n_strategies <- length(unique(tornado_data$strategy))
 
-    facet_component <- facet_grid(rows = vars(group), cols = vars(strategy), scales = "free")
+    facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy), scales = "free")
     if ((n_groups > 1) && (n_strategies == 1)) {
-      facet_component <- facet_wrap(~ group, scales = "free")
+      facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free")
     } else if ((n_strategies > 1) && (n_groups == 1)) {
-      facet_component <- facet_wrap(~ strategy, scales = "free", ncol = 1)
+      facet_component <- facet_wrap(ggplot2::vars(.data$strategy), scales = "free", ncol = 1)
     } else if ((n_strategies == 1) && (n_groups == 1)) {
       facet_component <- NULL
     }
@@ -54,45 +54,45 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   # Reshape to long format for two bars per parameter
   tornado_long <- tornado_data %>%
     pivot_longer(
-      cols = c(low, high),
+      cols = c("low", "high"),
       names_to = "variation",
       values_to = "value"
     ) %>%
     # Reverse factor levels so highest impact is at top
     mutate(
-      parameter_display_name = factor(parameter_display_name, levels = rev(levels(parameter_display_name))),
-      variation = factor(variation, levels = c("low", "high"),
+      parameter_display_name = factor(.data$parameter_display_name, levels = rev(levels(.data$parameter_display_name))),
+      variation = factor(.data$variation, levels = c("low", "high"),
                         labels = c("Low", "High"))
     ) %>%
     # Detect if both bars are on same side of base case
-    group_by(parameter_display_name, strategy, group) %>%
+    group_by(.data$parameter_display_name, .data$strategy, .data$group) %>%
     mutate(
-      same_side = (min(value) > unique(base)) | (max(value) < unique(base)),
-      stack_pos = if_else(same_side,
-                         if_else(variation == "Low", "bottom", "top"),
+      same_side = (min(.data$value) > unique(.data$base)) | (max(.data$value) < unique(.data$base)),
+      stack_pos = if_else(.data$same_side,
+                         if_else(.data$variation == "Low", "bottom", "top"),
                          "full")
     ) %>%
     ungroup() %>%
     # Calculate bar positions for geom_rect
     mutate(
-      param_position = as.numeric(parameter_display_name),
+      param_position = as.numeric(.data$parameter_display_name),
       ymin = case_when(
-        stack_pos == "full" ~ param_position - 0.45,
-        stack_pos == "bottom" ~ param_position - 0.45,
-        stack_pos == "top" ~ param_position + 0.05
+        .data$stack_pos == "full" ~ .data$param_position - 0.45,
+        .data$stack_pos == "bottom" ~ .data$param_position - 0.45,
+        .data$stack_pos == "top" ~ .data$param_position + 0.05
       ),
       ymax = case_when(
-        stack_pos == "full" ~ param_position + 0.45,
-        stack_pos == "bottom" ~ param_position - 0.05,
-        stack_pos == "top" ~ param_position + 0.45
+        .data$stack_pos == "full" ~ .data$param_position + 0.45,
+        .data$stack_pos == "bottom" ~ .data$param_position - 0.05,
+        .data$stack_pos == "top" ~ .data$param_position + 0.45
       ),
-      xmin = pmin(base, value),
-      xmax = pmax(base, value)
+      xmin = pmin(.data$base, .data$value),
+      xmax = pmax(.data$base, .data$value)
     )
 
   # Create base case data for vertical lines (one per strategy-group combination)
   base_case_data <- tornado_long %>%
-    distinct(strategy, group, base)
+    distinct(.data$strategy, .data$group, .data$base)
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
   breaks_fn <- scales::pretty_breaks(n = 5)
@@ -101,10 +101,10 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   x_limits <- range(x_breaks)
 
   # Create tornado plot with bars
-  p <- ggplot(tornado_long, aes(y = parameter_display_name, fill = variation)) +
-    geom_rect(aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+  p <- ggplot(tornado_long, aes(y = .data$parameter_display_name, fill = .data$variation)) +
+    geom_rect(aes(xmin = .data$xmin, xmax = .data$xmax, ymin = .data$ymin, ymax = .data$ymax),
               color = "black", linewidth = 0.2) +
-    geom_vline(data = base_case_data, aes(xintercept = base), linewidth = 0.2) +
+    geom_vline(data = base_case_data, aes(xintercept = .data$base), linewidth = 0.2) +
     scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +
     labs(y = NULL, x = summary_label, fill = "Parameter Value") +
     theme_bw() +
@@ -137,7 +137,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
 extract_parameter_values <- function(results, tornado_data, interventions, comparators) {
   # Get unique parameter-strategy-group combinations
   param_combos <- tornado_data %>%
-    distinct(parameter, strategy, group)
+    distinct(.data$parameter, .data$strategy, .data$group)
 
   # Extract parameter values for each combination
   param_values_list <- list()
@@ -149,15 +149,15 @@ extract_parameter_values <- function(results, tornado_data, interventions, compa
 
     # Get the parameter info from dsa_metadata
     param_info <- results$dsa_metadata %>%
-      filter(parameter == param_name)
+      filter(.data$parameter == param_name)
 
     if (nrow(param_info) == 0) {
       next  # Skip if parameter not found
     }
 
     # Get run_ids for low and high variations
-    low_run_id <- param_info %>% filter(variation == "low") %>% pull(run_id)
-    high_run_id <- param_info %>% filter(variation == "high") %>% pull(run_id)
+    low_run_id <- param_info %>% filter(.data$variation == "low") %>% pull(.data$run_id)
+    high_run_id <- param_info %>% filter(.data$variation == "high") %>% pull(.data$run_id)
 
     if (length(low_run_id) == 0 || length(high_run_id) == 0) {
       next  # Skip if run_ids not found
@@ -186,29 +186,29 @@ extract_parameter_values <- function(results, tornado_data, interventions, compa
     if (search_group %in% c("_aggregated", "Aggregated")) {
       # Just get any segment for this strategy and run_id
       low_segment <- results$segments %>%
-        filter(run_id == low_run_id, strategy == extract_strategy) %>%
+        filter(.data$run_id == low_run_id, .data$strategy == extract_strategy) %>%
         slice(1)
       high_segment <- results$segments %>%
-        filter(run_id == high_run_id, strategy == extract_strategy) %>%
+        filter(.data$run_id == high_run_id, .data$strategy == extract_strategy) %>%
         slice(1)
     } else {
       # For specific groups, try to match the group
       low_segment <- results$segments %>%
-        filter(run_id == low_run_id, strategy == extract_strategy, group == search_group) %>%
+        filter(.data$run_id == low_run_id, .data$strategy == extract_strategy, .data$group == search_group) %>%
         slice(1)
       high_segment <- results$segments %>%
-        filter(run_id == high_run_id, strategy == extract_strategy, group == search_group) %>%
+        filter(.data$run_id == high_run_id, .data$strategy == extract_strategy, .data$group == search_group) %>%
         slice(1)
 
       # If segments not found with group filter, try without
       if (nrow(low_segment) == 0) {
         low_segment <- results$segments %>%
-          filter(run_id == low_run_id, strategy == extract_strategy) %>%
+          filter(.data$run_id == low_run_id, .data$strategy == extract_strategy) %>%
           slice(1)
       }
       if (nrow(high_segment) == 0) {
         high_segment <- results$segments %>%
-          filter(run_id == high_run_id, strategy == extract_strategy) %>%
+          filter(.data$run_id == high_run_id, .data$strategy == extract_strategy) %>%
           slice(1)
       }
     }
@@ -312,23 +312,23 @@ prepare_dsa_tornado_data <- function(results,
 
   # Separate base case (run_id = 1) from variations
   base_data <- dsa_data %>%
-    filter(run_id == 1) %>%
-    select(strategy, group, base = amount)
+    filter(.data$run_id == 1) %>%
+    select("strategy", "group", base = "amount")
 
   # Separate low and high variations
   low_data <- dsa_data %>%
-    filter(variation == "low") %>%
-    select(strategy, group, parameter, parameter_display_name, low = amount)
+    filter(.data$variation == "low") %>%
+    select("strategy", "group", "parameter", "parameter_display_name", low = "amount")
 
   high_data <- dsa_data %>%
-    filter(variation == "high") %>%
-    select(strategy, group, parameter, parameter_display_name, high = amount)
+    filter(.data$variation == "high") %>%
+    select("strategy", "group", "parameter", "parameter_display_name", high = "amount")
 
   # Combine into tornado format
   tornado_data <- low_data %>%
     inner_join(high_data, by = c("strategy", "group", "parameter", "parameter_display_name")) %>%
     inner_join(base_data, by = c("strategy", "group")) %>%
-    mutate(range = abs(high - low))
+    mutate(range = abs(.data$high - .data$low))
 
   # Calculate differences if interventions/comparators provided
   differences_created <- FALSE
@@ -337,9 +337,9 @@ prepare_dsa_tornado_data <- function(results,
     # Pivot to get strategies as columns
     tornado_wide <- tornado_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = c(low, base, high, range),
-        id_cols = c(group, parameter, parameter_display_name)
+        names_from = "strategy",
+        values_from = c("low", "base", "high", "range"),
+        id_cols = c("group", "parameter", "parameter_display_name")
       )
 
     # Get all strategies in model definition order (from metadata)
@@ -427,9 +427,9 @@ prepare_dsa_tornado_data <- function(results,
           low = !!sym(low_int_col) - !!sym(low_comp_col),
           base = !!sym(base_int_col) - !!sym(base_comp_col),
           high = !!sym(high_int_col) - !!sym(high_comp_col),
-          range = abs(high - low)
+          range = abs(.data$high - .data$low)
         ) %>%
-        select(group, parameter, parameter_display_name, strategy, low, base, high, range)
+        select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high", "range")
 
       diff_data[[i]] <- diff_df
     }
@@ -481,24 +481,24 @@ prepare_dsa_tornado_data <- function(results,
     tornado_data <- tornado_data %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(param_low_value) & !is.na(param_high_value),
+          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
           sprintf("%s (%s - %s)",
-                  parameter_display_name,
-                  format_param_value(param_low_value),
-                  format_param_value(param_high_value)),
-          parameter_display_name
+                  .data$parameter_display_name,
+                  format_param_value(.data$param_low_value),
+                  format_param_value(.data$param_high_value)),
+          .data$parameter_display_name
         )
       ) %>%
-      select(-param_low_value, -param_high_value)
+      select(-"param_low_value", -"param_high_value")
   }
 
   # Sort by range (largest impact first) within each strategy-group
   # Use .by_group = TRUE to ensure sorting happens within groups, not globally
   # This preserves the strategy order while sorting parameters within each strategy
   tornado_data <- tornado_data %>%
-    group_by(strategy, group) %>%
-    arrange(desc(range), .by_group = TRUE) %>%
-    mutate(parameter_display_name = factor(parameter_display_name, levels = unique(parameter_display_name))) %>%
+    group_by(.data$strategy, .data$group) %>%
+    arrange(desc(.data$range), .by_group = TRUE) %>%
+    mutate(parameter_display_name = factor(.data$parameter_display_name, levels = unique(.data$parameter_display_name))) %>%
     ungroup()
 
   # Attach strategy_order as an attribute to preserve correct ordering
@@ -616,7 +616,7 @@ dsa_outcomes_plot <- function(results,
   if (drop_zero_impact) {
     n_params_before <- nrow(tornado_data)
     tornado_data <- tornado_data %>%
-      filter(abs(range) > .Machine$double.eps * 100) %>%
+      filter(abs(.data$range) > .Machine$double.eps * 100) %>%
       droplevels()  # Drop unused factor levels
 
     if (nrow(tornado_data) == 0) {
@@ -634,8 +634,8 @@ dsa_outcomes_plot <- function(results,
 
   tornado_data <- tornado_data %>%
     mutate(
-      strategy = factor(strategy, levels = strategy_levels),
-      group = factor(group, levels = unique(group))
+      strategy = factor(.data$strategy, levels = strategy_levels),
+      group = factor(.data$group, levels = unique(.data$group))
     )
 
   # Map summary name for axis label
@@ -749,11 +749,11 @@ dsa_nmb_plot <- function(results,
       stop("Cannot extract WTP from metadata. Metadata not available. Provide explicit wtp parameter.")
     }
     outcome_meta <- results$metadata$summaries %>%
-      filter(name == health_outcome)
+      filter(.data$name == health_outcome)
     if (nrow(outcome_meta) == 0) {
       stop(sprintf("Health outcome '%s' not found in metadata", health_outcome))
     }
-    wtp <- outcome_meta$wtp[1]
+    wtp <- outcome_meta[["wtp"]][1]
     if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for health outcome '%s'. Provide explicit wtp parameter.", health_outcome))
     }
@@ -777,10 +777,10 @@ dsa_nmb_plot <- function(results,
   # Multiply by WTP
   outcome_tornado <- outcome_tornado %>%
     mutate(
-      low = low * wtp,
-      base = base * wtp,
-      high = high * wtp,
-      range = abs(high - low)
+      low = .data$low * wtp,
+      base = .data$base * wtp,
+      high = .data$high * wtp,
+      range = abs(.data$high - .data$low)
     )
 
   # Prepare tornado data for costs
@@ -798,10 +798,10 @@ dsa_nmb_plot <- function(results,
   # Negate costs (we subtract them)
   cost_tornado <- cost_tornado %>%
     mutate(
-      low = -low,
-      base = -base,
-      high = -high,
-      range = abs(high - low)
+      low = -.data$low,
+      base = -.data$base,
+      high = -.data$high,
+      range = abs(.data$high - .data$low)
     )
 
   # Combine outcomes and costs to get NMB
@@ -816,19 +816,19 @@ dsa_nmb_plot <- function(results,
     ) %>%
     mutate(
       # Replace NA with 0 for missing outcome or cost components
-      low_outcome = replace_na(low_outcome, 0),
-      base_outcome = replace_na(base_outcome, 0),
-      high_outcome = replace_na(high_outcome, 0),
-      low_cost = replace_na(low_cost, 0),
-      base_cost = replace_na(base_cost, 0),
-      high_cost = replace_na(high_cost, 0),
+      low_outcome = replace_na(.data$low_outcome, 0),
+      base_outcome = replace_na(.data$base_outcome, 0),
+      high_outcome = replace_na(.data$high_outcome, 0),
+      low_cost = replace_na(.data$low_cost, 0),
+      base_cost = replace_na(.data$base_cost, 0),
+      high_cost = replace_na(.data$high_cost, 0),
       # Calculate NMB
-      low = low_outcome + low_cost,
-      base = base_outcome + base_cost,
-      high = high_outcome + high_cost,
-      range = abs(high - low)
+      low = .data$low_outcome + .data$low_cost,
+      base = .data$base_outcome + .data$base_cost,
+      high = .data$high_outcome + .data$high_cost,
+      range = abs(.data$high - .data$low)
     ) %>%
-    select(strategy, group, parameter, parameter_display_name, low, base, high, range)
+    select("strategy", "group", "parameter", "parameter_display_name", "low", "base", "high", "range")
 
   # Add parameter values to labels if requested
   if (show_parameter_values) {
@@ -838,15 +838,15 @@ dsa_nmb_plot <- function(results,
       left_join(param_values, by = c("parameter", "strategy", "group")) %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(param_low_value) & !is.na(param_high_value),
+          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
           sprintf("%s (%s - %s)",
-                  parameter_display_name,
-                  format_param_value(param_low_value),
-                  format_param_value(param_high_value)),
-          parameter_display_name
+                  .data$parameter_display_name,
+                  format_param_value(.data$param_low_value),
+                  format_param_value(.data$param_high_value)),
+          .data$parameter_display_name
         )
       ) %>%
-      select(-param_low_value, -param_high_value)
+      select(-"param_low_value", -"param_high_value")
   }
 
   # Check if data is valid
@@ -858,7 +858,7 @@ dsa_nmb_plot <- function(results,
   if (drop_zero_impact) {
     n_params_before <- nrow(nmb_tornado)
     nmb_tornado <- nmb_tornado %>%
-      filter(abs(range) > .Machine$double.eps * 100)
+      filter(abs(.data$range) > .Machine$double.eps * 100)
 
     if (nrow(nmb_tornado) == 0) {
       stop(sprintf("All %d parameters have zero impact on NMB. No data to plot.",
@@ -868,9 +868,9 @@ dsa_nmb_plot <- function(results,
 
   # Sort by range (largest impact first) within each strategy-group
   nmb_tornado <- nmb_tornado %>%
-    group_by(strategy, group) %>%
-    arrange(desc(range)) %>%
-    mutate(parameter_display_name = factor(parameter_display_name, levels = unique(parameter_display_name))) %>%
+    group_by(.data$strategy, .data$group) %>%
+    arrange(desc(.data$range)) %>%
+    mutate(parameter_display_name = factor(.data$parameter_display_name, levels = unique(.data$parameter_display_name))) %>%
     ungroup()
 
   # Factorize for proper ordering
@@ -882,8 +882,8 @@ dsa_nmb_plot <- function(results,
 
   nmb_tornado <- nmb_tornado %>%
     mutate(
-      strategy = factor(strategy, levels = strategy_levels_nmb),
-      group = factor(group, levels = unique(group))
+      strategy = factor(.data$strategy, levels = strategy_levels_nmb),
+      group = factor(.data$group, levels = unique(.data$group))
     )
 
   # Create NMB label with display names

@@ -60,8 +60,8 @@ outcomes_plot_bar <- function(res, outcome,
 
   summaries <- summaries %>%
     mutate(
-      strategy = factor(strategy, levels = unique(strategy)),
-      group = factor(group, levels = unique(group))
+      strategy = factor(.data$strategy, levels = unique(.data$strategy)),
+      group = factor(.data$group, levels = unique(.data$group))
     )
 
   # Map summary name for axis label
@@ -78,24 +78,24 @@ outcomes_plot_bar <- function(res, outcome,
   n_groups <- length(unique(summaries$group))
   n_strategies <- length(unique(summaries$strategy))
 
-  facet_component <- facet_grid(rows = vars(group), cols = vars(strategy))
+  facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy))
   if ((n_groups > 1) && (n_strategies == 1)) {
-    facet_component <- facet_wrap(~ group)
+    facet_component <- facet_wrap(ggplot2::vars(.data$group))
   } else if ((n_strategies > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(~ strategy)
+    facet_component <- facet_wrap(ggplot2::vars(.data$strategy))
   } else if ((n_strategies == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   totals <- summaries %>%
-    group_by(strategy, group) %>%
-    summarize(amount = sum(amount), .groups = 'drop') %>%
+    group_by(.data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount), .groups = 'drop') %>%
     mutate(value = "Total")
 
   summaries_with_total <- bind_rows(summaries, totals) %>%
     mutate(
-      value = factor(value, levels = rev(unique(value))),
-      .pos_or_neg = ifelse(amount >= 0, "Positive", "Negative")
+      value = factor(.data$value, levels = rev(unique(.data$value))),
+      .pos_or_neg = ifelse(.data$amount >= 0, "Positive", "Negative")
     )
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
@@ -105,7 +105,7 @@ outcomes_plot_bar <- function(res, outcome,
   x_limits <- range(x_breaks)
 
   summaries_with_total %>%
-    ggplot(aes(fill=.pos_or_neg, x=amount, y=value)) +
+    ggplot(aes(fill=.data$.pos_or_neg, x=.data$amount, y=.data$value)) +
     geom_bar(stat="identity", position = "dodge") +
     facet_component +
     scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +

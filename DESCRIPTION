@@ -28,7 +28,8 @@ Imports:
     tidygraph,
     Rcpp,
     jsonlite,
-    scales
+    scales,
+    methods
 Depends:
     openqalysurv
 License: AGPL-3

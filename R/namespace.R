@@ -119,23 +119,24 @@ summary.namespace <- function(object, ...) {
         summary = NA
       ) %>%
       select(
-        name,
-        cycle,
-        state_cycle,
-        value,
-        print,
-        summary
+        "name",
+        "cycle",
+        "state_cycle",
+        "value",
+        "print",
+        "summary"
       )
   } else {
     res_df <- data.frame()
   }
-  res_env <- tibble(
-    name = env_names,
-    cycle = NA,
-    state_cycle = NA,
-    value = NA,
-    summary = NA,
-    print = NA
+  n_env <- length(env_names)
+  na_vec <- rep(NA, n_env)
+  res_env <- as.data.frame(
+    setNames(
+      list(env_names, na_vec, na_vec, na_vec, na_vec, na_vec),
+      c("name", "cycle", "state_cycle", "value", "summary", "print")
+    ),
+    stringsAsFactors = FALSE
   )
   for (i in seq_len(length(env_names))) {
     name <- env_names[i]
@@ -154,12 +155,12 @@ summary.namespace <- function(object, ...) {
 
   res_env <- select(
     res_env,
-    name,
-    cycle,
-    state_cycle,
-    value,
-    print,
-    summary
+    "name",
+    "cycle",
+    "state_cycle",
+    "value",
+    "print",
+    "summary"
   )
   res <- rbind(res_df, res_env)
   res

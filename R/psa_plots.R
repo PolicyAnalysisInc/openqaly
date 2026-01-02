@@ -97,11 +97,11 @@ incremental_ceac_plot <- function(results,
     # Validate strategies exist using helper
     check_strategies_exist(strategies, results$metadata)
     ceac_data <- ceac_data %>%
-      filter(strategy %in% strategies)
+      filter(.data$strategy %in% strategies)
   }
 
   # Create base plot
-  p <- ggplot(ceac_data, aes(x = wtp, y = probability, color = strategy)) +
+  p <- ggplot(ceac_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
     scale_x_continuous(labels = scales::comma) +
@@ -132,7 +132,7 @@ incremental_ceac_plot <- function(results,
       p <- p +
         geom_point(
           data = frontier_data,
-          aes(x = wtp, y = probability),
+          aes(x = .data$wtp, y = .data$probability),
           color = "black",
           size = 2,
           shape = 16
@@ -220,24 +220,24 @@ incremental_ceac_frontier_plot <- function(results,
 
   # Identify strategy transitions
   frontier_data <- frontier_data %>%
-    group_by(group) %>%
+    group_by(.data$group) %>%
     mutate(
-      strategy_change = optimal_strategy != lag(optimal_strategy, default = first(optimal_strategy))
+      strategy_change = .data$optimal_strategy != lag(.data$optimal_strategy, default = first(.data$optimal_strategy))
     ) %>%
     ungroup()
 
   # Create base plot
   if (show_probability) {
     # Show probability as alpha or size
-    p <- ggplot(frontier_data, aes(x = wtp, y = optimal_strategy)) +
-      geom_line(aes(alpha = probability, group = group), linewidth = 2) +
-      geom_point(aes(alpha = probability), size = 1) +
+    p <- ggplot(frontier_data, aes(x = .data$wtp, y = .data$optimal_strategy)) +
+      geom_line(aes(alpha = .data$probability, group = .data$group), linewidth = 2) +
+      geom_point(aes(alpha = .data$probability), size = 1) +
       scale_alpha_continuous(range = c(0.3, 1), name = "Probability")
   } else {
     # Simple step plot
-    p <- ggplot(frontier_data, aes(x = wtp, y = optimal_strategy)) +
-      geom_step(aes(group = group), linewidth = 1.5, color = "darkblue") +
-      geom_point(data = frontier_data %>% filter(strategy_change),
+    p <- ggplot(frontier_data, aes(x = .data$wtp, y = .data$optimal_strategy)) +
+      geom_step(aes(group = .data$group), linewidth = 1.5, color = "darkblue") +
+      geom_point(data = frontier_data %>% filter(.data$strategy_change),
                 size = 3, color = "red")
   }
 
@@ -252,8 +252,8 @@ incremental_ceac_frontier_plot <- function(results,
 
   # Add vertical lines at transitions
   transition_points <- frontier_data %>%
-    filter(strategy_change) %>%
-    pull(wtp)
+    filter(.data$strategy_change) %>%
+    pull(.data$wtp)
 
   if (length(transition_points) > 0) {
     p <- p +
@@ -334,7 +334,7 @@ psa_scatter_plot <- function(results,
   if (is.null(xlab)) {
     xlab <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(name == outcome_summary)
+        filter(.data$name == outcome_summary)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
@@ -348,7 +348,7 @@ psa_scatter_plot <- function(results,
   if (is.null(ylab)) {
     ylab <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(name == cost_summary)
+        filter(.data$name == cost_summary)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
@@ -370,7 +370,7 @@ psa_scatter_plot <- function(results,
 
   # Create base scatter plot
   # Note: scatter points use color but are hidden from legend (show.legend = FALSE)
-  p <- ggplot(psa_data, aes(x = outcome, y = cost, color = strategy)) +
+  p <- ggplot(psa_data, aes(x = .data$outcome, y = .data$cost, color = .data$strategy)) +
     geom_point(alpha = alpha, size = 1, show.legend = FALSE) +
     scale_y_continuous(
       breaks = y_breaks,
@@ -394,17 +394,17 @@ psa_scatter_plot <- function(results,
   # Add mean points with enhanced visibility
   if (show_means) {
     mean_data <- psa_data %>%
-      group_by(strategy, group) %>%
+      group_by(.data$strategy, .data$group) %>%
       summarize(
-        mean_outcome = mean(outcome, na.rm = TRUE),
-        mean_cost = mean(cost, na.rm = TRUE),
+        mean_outcome = mean(.data$outcome, na.rm = TRUE),
+        mean_cost = mean(.data$cost, na.rm = TRUE),
         .groups = "drop"
       )
 
     p <- p +
       geom_point(
         data = mean_data,
-        aes(x = mean_outcome, y = mean_cost, fill = strategy),
+        aes(x = .data$mean_outcome, y = .data$mean_cost, fill = .data$strategy),
         size = 3,
         shape = 21,
         color = "black",
@@ -508,7 +508,7 @@ pairwise_ceac_plot <- function(results,
   }
 
   # Create plot
-  p <- ggplot(pairwise_data, aes(x = wtp, y = probability, color = strategy)) +
+  p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
     scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
@@ -667,7 +667,7 @@ psa_parameter_scatter_matrix <- function(results,
 
   # Remove simulation column for plotting
   plot_data <- param_data %>%
-    select(-simulation)
+    select(-"simulation")
 
   # Check we have at least 2 variables
   if (ncol(plot_data) < 2) {
@@ -841,12 +841,12 @@ evpi_plot <- function(results,
   # Create base plot
   # For multiple groups, color by group; otherwise use default styling
   if (n_groups > 1) {
-    p <- ggplot(evpi_data, aes(x = wtp, y = evpi, color = group, group = group)) +
+    p <- ggplot(evpi_data, aes(x = .data$wtp, y = .data$evpi, color = .data$group, group = .data$group)) +
       geom_line(linewidth = 1) +
       geom_point(size = 2) +
       labs(color = "Group")
   } else {
-    p <- ggplot(evpi_data, aes(x = wtp, y = evpi)) +
+    p <- ggplot(evpi_data, aes(x = .data$wtp, y = .data$evpi)) +
       geom_line(linewidth = 1) +
       geom_point(size = 2)
   }
@@ -1034,16 +1034,16 @@ pairwise_psa_scatter_plot <- function(results,
 
   # Join with fixed strategy data
   fixed_data <- psa_data %>%
-    filter(strategy == fixed_strategy) %>%
-    select(simulation, group, cost_fixed = cost, outcome_fixed = outcome)
+    filter(.data$strategy == fixed_strategy) %>%
+    select("simulation", "group", cost_fixed = "cost", outcome_fixed = "outcome")
 
   comparison_data <- comparison_grid %>%
     left_join(fixed_data, by = c("simulation", "group"))
 
   # Join with other strategies data
   other_data <- psa_data %>%
-    filter(strategy != fixed_strategy) %>%
-    select(simulation, group, strategy, cost_other = cost, outcome_other = outcome)
+    filter(.data$strategy != fixed_strategy) %>%
+    select("simulation", "group", "strategy", cost_other = "cost", outcome_other = "outcome")
 
   comparison_data <- comparison_data %>%
     left_join(other_data, by = c("simulation", "group", "other_strategy" = "strategy"))
@@ -1053,22 +1053,22 @@ pairwise_psa_scatter_plot <- function(results,
     # Intervention mode: intervention - comparator (fixed - other)
     incremental_data <- comparison_data %>%
       mutate(
-        doutcome = outcome_fixed - outcome_other,
-        dcost = cost_fixed - cost_other,
-        strategy = other_strategy
+        doutcome = .data$outcome_fixed - .data$outcome_other,
+        dcost = .data$cost_fixed - .data$cost_other,
+        strategy = .data$other_strategy
       )
   } else {
     # Comparator mode: intervention - comparator (other - fixed)
     incremental_data <- comparison_data %>%
       mutate(
-        doutcome = outcome_other - outcome_fixed,
-        dcost = cost_other - cost_fixed,
-        strategy = other_strategy
+        doutcome = .data$outcome_other - .data$outcome_fixed,
+        dcost = .data$cost_other - .data$cost_fixed,
+        strategy = .data$other_strategy
       )
   }
 
   incremental_data <- incremental_data %>%
-    select(simulation, group, strategy, doutcome, dcost)
+    select("simulation", "group", "strategy", "doutcome", "dcost")
 
   # Strategy and group names are already display names from get_psa_simulations
   # Store fixed strategy for labeling
@@ -1078,20 +1078,20 @@ pairwise_psa_scatter_plot <- function(results,
   if (use_intervention) {
     # Intervention mode: "Intervention vs. Strategy"
     incremental_data <- incremental_data %>%
-      mutate(comparison = paste(fixed_strategy_display, "vs.", strategy))
+      mutate(comparison = paste(fixed_strategy_display, "vs.", .data$strategy))
   } else {
     # Comparator mode: "Strategy vs. Comparator"
     incremental_data <- incremental_data %>%
-      mutate(comparison = paste(strategy, "vs.", fixed_strategy_display))
+      mutate(comparison = paste(.data$strategy, "vs.", fixed_strategy_display))
   }
 
   # 4. Calculate cost-effectiveness if wtp provided
   if (!is.null(wtp)) {
     incremental_data <- incremental_data %>%
       mutate(
-        nmb = doutcome * wtp - dcost,
+        nmb = .data$doutcome * wtp - .data$dcost,
         cost_effective = factor(
-          ifelse(nmb > 0, "Cost-Effective", "Not Cost-Effective"),
+          ifelse(.data$nmb > 0, "Cost-Effective", "Not Cost-Effective"),
           levels = c("Cost-Effective", "Not Cost-Effective")
         )
       )
@@ -1101,7 +1101,7 @@ pairwise_psa_scatter_plot <- function(results,
   if (is.null(xlab)) {
     outcome_label <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(name == outcome_summary)
+        filter(.data$name == outcome_summary)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
@@ -1116,7 +1116,7 @@ pairwise_psa_scatter_plot <- function(results,
   if (is.null(ylab)) {
     cost_label <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(name == cost_summary)
+        filter(.data$name == cost_summary)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
@@ -1140,10 +1140,10 @@ pairwise_psa_scatter_plot <- function(results,
   # 7. Unified Plot Construction
   if (!is.null(wtp)) {
     # With WTP: color by cost-effectiveness
-    p <- ggplot(incremental_data, aes(x = doutcome, y = dcost, color = cost_effective))
+    p <- ggplot(incremental_data, aes(x = .data$doutcome, y = .data$dcost, color = .data$cost_effective))
   } else {
     # Without WTP: single color
-    p <- ggplot(incremental_data, aes(x = doutcome, y = dcost))
+    p <- ggplot(incremental_data, aes(x = .data$doutcome, y = .data$dcost))
   }
 
   p <- p +

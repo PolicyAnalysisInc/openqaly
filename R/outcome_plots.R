@@ -68,8 +68,8 @@ outcomes_plot_line <- function(res, outcome,
 
   # Get values for the specified outcome summary
   summary_values <- res$metadata$summaries |>
-    filter(name == outcome) |>
-    pull(values) |>
+    filter(.data$name == outcome) |>
+    pull(.data$values) |>
     stringr::str_split(pattern = "[,\\s]+") |>
     unlist()
 
@@ -114,16 +114,16 @@ outcomes_plot_line <- function(res, outcome,
   # Calculate cumulative if requested
   if (cumulative) {
     values_data <- values_data %>%
-      group_by(strategy, group, value_name) %>%
-      arrange(!!sym(time_col)) %>%
-      mutate(amount = cumsum(amount)) %>%
+      group_by(.data$strategy, .data$group, .data$value_name) %>%
+      arrange(!!rlang::sym(time_col)) %>%
+      mutate(amount = cumsum(.data$amount)) %>%
       ungroup()
   }
 
   # Calculate totals for each strategy-group-time combination
   totals <- values_data %>%
-    group_by(!!sym(time_col), strategy, group) %>%
-    summarize(amount = sum(amount, na.rm = TRUE), .groups = 'drop') %>%
+    group_by(!!rlang::sym(time_col), .data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = 'drop') %>%
     mutate(value_name = "Total")
 
   # Combine values with totals
@@ -145,18 +145,18 @@ outcomes_plot_line <- function(res, outcome,
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
 
-  facet_component <- facet_grid(rows = vars(value_name), cols = vars(group), scales = "free_y")
+  facet_component <- facet_grid(rows = ggplot2::vars(.data$value_name), cols = ggplot2::vars(.data$group), scales = "free_y")
   if ((n_groups > 1) && (n_value_names == 1)) {
-    facet_component <- facet_wrap(~ group, scales = "free_y")
+    facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free_y")
   } else if ((n_value_names > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(~ value_name, scales = "free_y")
+    facet_component <- facet_wrap(ggplot2::vars(.data$value_name), scales = "free_y")
   } else if ((n_value_names == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   # Create the plot
   p <- ggplot(values_with_total,
-              aes(x = !!sym(time_col), y = amount, color = strategy)) +
+              aes(x = !!rlang::sym(time_col), y = .data$amount, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     scale_y_continuous(labels = comma) +
     theme_bw() +
@@ -235,7 +235,7 @@ nmb_plot_bar <- function(res,
       stop("Cannot extract WTP from metadata. Metadata not available.")
     }
     outcome_meta <- res$metadata$summaries %>%
-      filter(name == health_outcome)
+      filter(.data$name == health_outcome)
     if (nrow(outcome_meta) == 0) {
       stop(sprintf("Health outcome '%s' not found in metadata", health_outcome))
     }
@@ -256,7 +256,7 @@ nmb_plot_bar <- function(res,
     comparators = comparators,
     use_display_names = TRUE
   ) %>%
-    mutate(amount = amount * wtp)  # Multiply by WTP
+    mutate(amount = .data$amount * wtp)  # Multiply by WTP
 
   # Get cost components with differences
   cost_components <- get_summaries(
@@ -269,24 +269,24 @@ nmb_plot_bar <- function(res,
     comparators = comparators,
     use_display_names = TRUE
   ) %>%
-    mutate(amount = -amount)  # Negate costs (we subtract them)
+    mutate(amount = -.data$amount)  # Negate costs (we subtract them)
 
   # Combine outcome and cost components
   all_components <- bind_rows(outcome_components, cost_components)
 
   # Calculate total (like outcomes_plot lines 93-96)
   totals <- all_components %>%
-    group_by(strategy, group) %>%
-    summarize(amount = sum(amount), .groups = 'drop') %>%
+    group_by(.data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount), .groups = 'drop') %>%
     mutate(value = "Total")
 
   # Combine with totals (like outcomes_plot line 98)
   nmb_data <- bind_rows(all_components, totals) %>%
     mutate(
-      strategy = factor(strategy, levels = unique(strategy)),
-      group = factor(group, levels = unique(group)),
-      value = factor(value, levels = rev(unique(value))),
-      .pos_or_neg = ifelse(amount >= 0, "Positive", "Negative")
+      strategy = factor(.data$strategy, levels = unique(c(all_components$strategy, totals$strategy))),
+      group = factor(.data$group, levels = unique(c(all_components$group, totals$group))),
+      value = factor(.data$value, levels = rev(unique(c(all_components$value, totals$value)))),
+      .pos_or_neg = ifelse(.data$amount >= 0, "Positive", "Negative")
     )
 
   # Create outcome label with display names
@@ -298,18 +298,18 @@ nmb_plot_bar <- function(res,
   n_groups <- length(unique(nmb_data$group))
   n_strategies <- length(unique(nmb_data$strategy))
 
-  facet_component <- facet_grid(rows = vars(group), cols = vars(strategy))
+  facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy))
   if ((n_groups > 1) && (n_strategies == 1)) {
-    facet_component <- facet_wrap(~ group)
+    facet_component <- facet_wrap(ggplot2::vars(.data$group))
   } else if ((n_strategies > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(~ strategy)
+    facet_component <- facet_wrap(ggplot2::vars(.data$strategy))
   } else if ((n_strategies == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   # Create the plot (exactly like outcomes_plot, lines 104-111)
   nmb_data %>%
-    ggplot(aes(fill = .pos_or_neg, x = amount, y = value)) +
+    ggplot(aes(fill = .data$.pos_or_neg, x = .data$amount, y = .data$value)) +
     geom_bar(stat = "identity", position = "dodge") +
     annotate("segment", x = 0, xend = 0, y = -Inf, yend = Inf,
              linetype = "dashed", color = "black") +
@@ -382,7 +382,7 @@ nmb_plot_line <- function(res,
       stop("Cannot extract WTP from metadata. Metadata not available.")
     }
     outcome_meta <- res$metadata$summaries %>%
-      filter(name == health_outcome)
+      filter(.data$name == health_outcome)
     if (nrow(outcome_meta) == 0) {
       stop(sprintf("Health outcome '%s' not found in metadata", health_outcome))
     }
@@ -404,7 +404,7 @@ nmb_plot_line <- function(res,
     comparators = comparators,
     use_display_names = TRUE
   ) %>%
-    mutate(amount = amount * wtp)  # Multiply by WTP
+    mutate(amount = .data$amount * wtp)  # Multiply by WTP
 
   # Get cost components with differences
   cost_components <- get_values(
@@ -418,7 +418,7 @@ nmb_plot_line <- function(res,
     comparators = comparators,
     use_display_names = TRUE
   ) %>%
-    mutate(amount = -amount)  # Negate costs (we subtract them)
+    mutate(amount = -.data$amount)  # Negate costs (we subtract them)
 
   # Get time column name
   time_cols <- c("cycle", "day", "week", "month", "year")
@@ -449,16 +449,16 @@ nmb_plot_line <- function(res,
   # Calculate cumulative if requested
   if (cumulative) {
     all_components <- all_components %>%
-      group_by(strategy, group, value_name) %>%
-      arrange(!!sym(time_col)) %>%
-      mutate(amount = cumsum(amount)) %>%
+      group_by(.data$strategy, .data$group, .data$value_name) %>%
+      arrange(!!rlang::sym(time_col)) %>%
+      mutate(amount = cumsum(.data$amount)) %>%
       ungroup()
   }
 
   # Add Total line (like outcomes_plot_time)
   totals <- all_components %>%
-    group_by(!!sym(time_col), strategy, group) %>%
-    summarize(amount = sum(amount, na.rm = TRUE), .groups = 'drop') %>%
+    group_by(!!rlang::sym(time_col), .data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = 'drop') %>%
     mutate(value_name = "Total")
 
   # Combine with totals
@@ -478,18 +478,18 @@ nmb_plot_line <- function(res,
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
 
-  facet_component <- facet_grid(rows = vars(value_name), cols = vars(group), scales = "free_y")
+  facet_component <- facet_grid(rows = ggplot2::vars(.data$value_name), cols = ggplot2::vars(.data$group), scales = "free_y")
   if ((n_groups > 1) && (n_value_names == 1)) {
-    facet_component <- facet_wrap(~ group, scales = "free_y")
+    facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free_y")
   } else if ((n_value_names > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(~ value_name, scales = "free_y")
+    facet_component <- facet_wrap(ggplot2::vars(.data$value_name), scales = "free_y")
   } else if ((n_value_names == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   # Create the plot (like outcomes_plot_time)
   p <- ggplot(values_with_total,
-              aes(x = !!sym(time_col), y = amount, color = strategy)) +
+              aes(x = !!rlang::sym(time_col), y = .data$amount, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     annotate("segment", x = -Inf, xend = Inf, y = 0, yend = 0,
              linetype = "dashed", color = "black") +
@@ -569,18 +569,18 @@ incremental_ce_plot <- function(res,
   ce_data <- ce_data %>%
     mutate(
       status = case_when(
-        strictly_dominated ~ "Dominated",
-        extendedly_dominated ~ "Extended Dominated",
-        on_frontier ~ "On Frontier",
+        .data$strictly_dominated ~ "Dominated",
+        .data$extendedly_dominated ~ "Extended Dominated",
+        .data$on_frontier ~ "On Frontier",
         TRUE ~ "Other"
       ),
-      status = factor(status, levels = c("On Frontier", "Extended Dominated", "Dominated", "Other"))
+      status = factor(.data$status, levels = c("On Frontier", "Extended Dominated", "Dominated", "Other"))
     )
 
   # Get frontier data for line segments
   frontier_data <- ce_data %>%
-    filter(on_frontier) %>%
-    arrange(group, cost)
+    filter(.data$on_frontier) %>%
+    arrange(.data$group, .data$cost)
 
   # Map summary names for axis labels
   outcome_label <- outcome_summary
@@ -607,9 +607,9 @@ incremental_ce_plot <- function(res,
   y_limits <- range(y_breaks)
 
   # Create the plot
-  p <- ggplot(ce_data, aes(x = outcome, y = cost)) +
-    geom_point(aes(color = strategy)) +
-    geom_line(data = frontier_data, aes(group = group)) +
+  p <- ggplot(ce_data, aes(x = .data$outcome, y = .data$cost)) +
+    geom_point(aes(color = .data$strategy)) +
+    geom_line(data = frontier_data, aes(group = .data$group)) +
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits
@@ -721,14 +721,14 @@ pairwise_ce_plot <- function(res,
 
   # Create comparison label
   ce_data <- ce_data %>%
-    mutate(comparison = paste(strategy, "vs.", comparator))
+    mutate(comparison = paste(.data$strategy, "vs.", .data$comparator))
 
   # Determine plot mode based on number of comparisons
   if (n_comparisons <= 5) {
     # Few comparisons: all on one plot with color by comparison
-    p <- ggplot(ce_data, aes(x = doutcome, y = dcost)) +
-      geom_point(aes(color = comparison), size = 3) +
-      geom_segment(aes(xend = doutcome, yend = dcost, color = comparison),
+    p <- ggplot(ce_data, aes(x = .data$doutcome, y = .data$dcost)) +
+      geom_point(aes(color = .data$comparison), size = 3) +
+      geom_segment(aes(xend = .data$doutcome, yend = .data$dcost, color = .data$comparison),
                    x = 0, y = 0, alpha = 0.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
@@ -746,9 +746,9 @@ pairwise_ce_plot <- function(res,
 
   } else {
     # Many comparisons: separate panel per comparison
-    p <- ggplot(ce_data, aes(x = doutcome, y = dcost)) +
+    p <- ggplot(ce_data, aes(x = .data$doutcome, y = .data$dcost)) +
       geom_point(color = "blue", size = 3) +
-      geom_segment(aes(xend = doutcome, yend = dcost),
+      geom_segment(aes(xend = .data$doutcome, yend = .data$dcost),
                    x = 0, y = 0, color = "gray50", alpha = 0.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +

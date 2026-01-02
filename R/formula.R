@@ -57,7 +57,7 @@ eval_formula <- function(x, ns, max_st = NULL) {
 
   df <- ns$df
   if (!is.null(max_st)) {
-    df <- filter(df, state_cycle <= max_st)
+    df <- filter(df, .data$state_cycle <= max_st)
   }
 
   # Evaluate with data masking

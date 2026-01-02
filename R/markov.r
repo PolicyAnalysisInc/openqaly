@@ -79,7 +79,7 @@ calculate_segment_weight <- function(segment, model, namespace) {
   
   # Find the group row for this segment
   group_row <- model$groups %>%
-    filter(name == segment$group) %>%
+    filter(.data$name == segment$group) %>%
     slice(1)
   
   if (nrow(group_row) == 0) {
@@ -334,26 +334,26 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
     left_join(state_time_use, by = "state") %>%
     mutate(
       # If uses_st is FALSE or NA, set max_st to 1 (no expansion)
-      max_st = ifelse(is.na(uses_st) | !uses_st, 1, max_st)
+      max_st = ifelse(is.na(.data$uses_st) | !.data$uses_st, 1, .data$max_st)
     ) %>%
-    select(state, max_st)
+    select("state", "max_st")
 
   # Expand initial state probabilities to include tunnel states
   expand_init <- expand_init_states(init, st_maxes)
   state_names <- colnames(expand_init)
 
   # Filter transition probabilities to only include required tunnel states
-  eval_trans_limited <- select(transitions, -max_st) %>%
+  eval_trans_limited <- select(transitions, -"max_st") %>%
     left_join(st_maxes, by = c('from_state' = 'state')) %>%
-    filter(state_cycle <= max_st)
+    filter(.data$state_cycle <= .data$max_st)
 
   expanded_transitions <- eval_trans_limited %>%
-    group_by(from_state) %>%
-    mutate(.max_st = max(state_cycle)) %>%
+    group_by(.data$from_state) %>%
+    mutate(.max_st = max(.data$state_cycle)) %>%
     ungroup() %>%
     mutate(
-      .end = state_cycle == .max_st,
-      .from_e = expand_state_name(from_state, state_cycle)
+      .end = .data$state_cycle == .data$.max_st,
+      .from_e = expand_state_name(.data$from_state, .data$state_cycle)
     )
     lv_sg_i <- (!expanded_transitions$share_state_time) | (expanded_transitions$from_state_group != expanded_transitions$to_state_group)
     lv_i <- expanded_transitions$from_state != expanded_transitions$to_state & lv_sg_i
@@ -369,25 +369,25 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
   # Create the mapping of original state names to their actual expanded names used
   expanded_state_map <- expanded_transitions %>%
-    select(from_state, .from_e) %>%
+    select("from_state", ".from_e") %>%
     distinct()
 
   expand_trans_first_cycle <- select(
-    filter(expanded_transitions, cycle == 1),
-    from_state, to_state, .to_e, state_cycle
+    filter(expanded_transitions, .data$cycle == 1),
+    "from_state", "to_state", ".to_e", "state_cycle"
   )
 
-  model_start_values <- filter(values, is.na(state), is.na(destination), state_cycle == 1)
+  model_start_values <- filter(values, is.na(.data$state), is.na(.data$destination), .data$state_cycle == 1)
 
   # Filter values to only include required tunnel states
-  values_expanded <- select(values, -max_st) %>%
+  values_expanded <- select(values, -"max_st") %>%
     left_join(st_maxes, by = c('state' = 'state')) %>%
     filter(
-      state_cycle <= max_st,
-      !(is.na(state) & is.na(destination) & state_cycle > 1)
+      .data$state_cycle <= .data$max_st,
+      !(is.na(.data$state) & is.na(.data$destination) & .data$state_cycle > 1)
     ) %>%
     mutate(
-      .state_e = expand_state_name(state, state_cycle)
+      .state_e = expand_state_name(.data$state, .data$state_cycle)
     ) %>%
     left_join(
       expand_trans_first_cycle,
@@ -398,10 +398,10 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
       )
     ) %>%
     transmute(
-      state = .state_e,
-      destination = .to_e,
-      max_st,
-      values_list
+      state = .data$.state_e,
+      destination = .data$.to_e,
+      max_st = .data$max_st,
+      values_list = .data$values_list
     ) %>%
     bind_rows(model_start_values)
 
@@ -494,17 +494,17 @@ get_st_max <- function(trans, values, n_cycles) {
 
   # Combine transitions and values into a single data frame
   combined_transitions_and_values <- rbind(
-    rename(trans[ , c('from_state', 'max_st')], state = from_state),
-    filter(values, !is.na(state))[ , c('state', 'max_st')]
+    rename(trans[ , c('from_state', 'max_st')], state = "from_state"),
+    filter(values, !is.na(.data$state))[ , c('state', 'max_st')]
   )
-  
+
   # Group by state and get the maximum state time. For any
   # states where the maximum is infinite, set it to the
   # maximum number of cycles
   st_maxes <- combined_transitions_and_values %>%
-    group_by(state) %>%
-    summarize(max_st = max(max_st)) %>%
-    mutate(max_st = ifelse(is.infinite(max_st), n_cycles, max_st))
+    group_by(.data$state) %>%
+    summarize(max_st = max(.data$max_st)) %>%
+    mutate(max_st = ifelse(is.infinite(.data$max_st), n_cycles, .data$max_st))
 
   st_maxes
 }
@@ -533,21 +533,21 @@ parse_trans_markov <- function(x, states, vars) {
   x$name <- glue("{x$from_state}\u2192{x$to_state}")
 
   res <- sort_variables(x, vars) %>%
-    select(name, from_state, to_state, formula) %>%
+    select("name", "from_state", "to_state", "formula") %>%
     left_join(
       transmute(
-        states, name = name,
-        from_state_group = state_group,
-        share_state_time = share_state_time,
-        max_st = ifelse(max_state_time == 0, Inf, max_state_time)
+        states, name = .data$name,
+        from_state_group = .data$state_group,
+        share_state_time = .data$share_state_time,
+        max_st = ifelse(.data$max_state_time == 0, Inf, .data$max_state_time)
       ),
       by = c('from_state' = 'name')
     ) %>%
     left_join(
       transmute(
         states,
-        name = name,
-        to_state_group = state_group
+        name = .data$name,
+        to_state_group = .data$state_group
       ),
       by = c('to_state' = 'name')
     )
@@ -651,7 +651,7 @@ limit_state_time <- function(df, state_time_limits) {
   # Join data with state time limit
   left_join(df, state_time_limits, by = "state") %>%
     # Filter to state cycle limit
-    filter(state_cycle <= st_limit)
+    filter(.data$state_cycle <= .data$st_limit)
 }
 
 #' Evaluate a Longform Transition Matrix
@@ -671,7 +671,7 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
 
   for (i in seq_len(n_transitions)) {
       row <- df[i, ]
-      time_df <- filter(ns$df[ ,c('cycle', 'state_cycle')], state_cycle <= row$max_st)
+      time_df <- filter(ns$df[ ,c('cycle', 'state_cycle')], .data$state_cycle <= row$max_st)
       time_df$from_state <- row$from_state
       time_df$to_state <- row$to_state
       time_df$from_state_group <- row$from_state_group
@@ -806,14 +806,14 @@ lf_to_lf_mat <- function(df, state_names) {
   df <- arrange(
     mutate(
       df,
-      from = as.integer(factor(.from_e, levels = state_names)),
-      to = as.integer(factor(.to_e, levels  = state_names))
+      from = as.integer(factor(.data$.from_e, levels = state_names)),
+      to = as.integer(factor(.data$.to_e, levels  = state_names))
     ),
-    cycle,
-    from,
-    -value
+    .data$cycle,
+    .data$from,
+    -.data$value
   ) %>% select(
-    cycle, from, to, value
+    "cycle", "from", "to", "value"
   )
   mat <- as.matrix(df)
 
@@ -829,12 +829,12 @@ lf_to_lf_mat <- function(df, state_names) {
 #' @keywords internal
 lf_to_tmat <- function(df) {
   df <- df %>%
-    group_by(from_state) %>%
-    mutate(.max_st = max(state_cycle)) %>%
+    group_by(.data$from_state) %>%
+    mutate(.max_st = max(.data$state_cycle)) %>%
     ungroup() %>%
     mutate(
-      .end = state_cycle == .max_st,
-      .from_e = expand_state_name(from_state, state_cycle)
+      .end = .data$state_cycle == .data$.max_st,
+      .from_e = expand_state_name(.data$from_state, .data$state_cycle)
     )
   lv_sg_i <- (!df$share_state_time) | (df$from_state_group != df$to_state_group)
   lv_i <- df$from_state != df$to_state & lv_sg_i
@@ -958,9 +958,9 @@ calculate_summaries <- function(parsed_summaries, values_df) {
   # This should be safe even if parsed_summaries has 0 rows (though caught above now),
   # or if a row in parsed_summaries has an empty list in its parsed_values cell.
   expanded_summaries <- parsed_summaries %>%
-    dplyr::select(summary_col = name, pv = parsed_values) %>%
-    tidyr::unnest(cols = pv) %>%
-    dplyr::rename(summary = summary_col, value = pv)
+    dplyr::select(summary_col = "name", pv = "parsed_values") %>%
+    tidyr::unnest(cols = c("pv")) %>%
+    dplyr::rename(summary = "summary_col", value = "pv")
 
   # If after unnesting, there are no value mappings, return empty result.
   if (nrow(expanded_summaries) == 0) {
@@ -993,8 +993,8 @@ calculate_summaries <- function(parsed_summaries, values_df) {
           names_to = "value",
           values_to = "amount"
         ) %>%
-        dplyr::group_by(value) %>%
-        dplyr::summarize(amount = sum(amount, na.rm = TRUE), .groups = "drop")
+        dplyr::group_by(.data$value) %>%
+        dplyr::summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = "drop")
     } else if (length(cols_to_pivot) == 0 && nrow(values_df) > 0) {
       # Handle case where values_df has rows but only a cycle column (no actual values)
       # value_amounts remains an empty tibble, which is correct.
@@ -1004,8 +1004,8 @@ calculate_summaries <- function(parsed_summaries, values_df) {
   # Join the expanded summaries with the value amounts
   result <- expanded_summaries %>%
     dplyr::left_join(value_amounts, by = "value") %>%
-    dplyr::mutate(amount = ifelse(is.na(amount), 0, amount)) %>%
-    dplyr::select(summary, value, amount)
+    dplyr::mutate(amount = ifelse(is.na(.data$amount), 0, .data$amount)) %>%
+    dplyr::select("summary", "value", "amount")
   
   return(result)
 }
@@ -1036,7 +1036,7 @@ parse_summaries <- function(summaries, model_values) {
   # Parse the comma-separated values in the 'values' column
   parsed_s <- summaries %>%
     dplyr::mutate(
-      parsed_values = purrr::map(values, function(val_str) {
+      parsed_values = purrr::map(.data$values, function(val_str) {
         if (is.na(val_str) || val_str == "") {
           return(character(0)) # Return empty character vector for empty/NA strings
         }

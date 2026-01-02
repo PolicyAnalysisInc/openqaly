@@ -20,7 +20,7 @@ parse_tree_vars <- function(trees) {
       set_names(.) %>%
       map(function(x) {
         # Subset the master tree list to the entries for the given tree.
-        tree_df <- filter(trees, name == x)
+        tree_df <- filter(trees, .data$name == x)
         
         # Extract the dependencies for each node
         vars_by_node <- tree_df %>%
@@ -32,7 +32,7 @@ parse_tree_vars <- function(trees) {
             # If a node variable references C, effectively its dependencies include
             # the dependencies of all other nodes at with the same parent in the tree.
             if ('C' %in% vars) {
-              vars <- filter(tree_df, parent == y$parent) %>%
+              vars <- filter(tree_df, .data$parent == y$parent) %>%
                 .$formula %>%
                 map(~all.vars(parse(text = .), functions = T)) %>%
                 flatten_chr() %>%
@@ -72,7 +72,7 @@ parse_tree_vars <- function(trees) {
 }
 
 check_trees_df <- function(trees) {
-  
+
   # Check that it has the right columns
   tree_colnames <- colnames(trees)
   missing <- setdiff(tree_def_columns, tree_colnames)
@@ -85,8 +85,8 @@ check_trees_df <- function(trees) {
     )
     stop(error_msg, call. = F)
   }
-  
-  group_by(trees, name) %>%
+
+  group_by(trees, .data$name) %>%
     group_split() %>%
     map(check_tree_df)
 }
@@ -162,10 +162,10 @@ check_tree_df <- function(df) {
 #'
 #' @export
 decision_tree <- function(df, name, cycle) {
-  
+
   the_env <- parent.frame()
   # Pull out tree from trees df
-  tree_df <- filter(df, name == name)
+  tree_df <- filter(df, .data$name == name)
   tree_df$parent <- ifelse(is.na(tree_df$parent), '', tree_df$parent)
   
   parent_names <- unique(tree_df$parent)
@@ -176,10 +176,10 @@ decision_tree <- function(df, name, cycle) {
     lapply(function(x) {
 
       # Get the subtree
-      subtree <- filter(tree_df, parent == x)
+      subtree <- filter(tree_df, .data$parent == x)
       # Parse subtree as variables
       subtree_vars <- subtree %>%
-        mutate(name = node, display_name = node, description = node) %>%
+        mutate(name = .data$node, display_name = .data$node, description = .data$node) %>%
         parse_variables()
       
       # Create a namespace from parent environment
@@ -205,7 +205,7 @@ decision_tree <- function(df, name, cycle) {
     do.call(data.frame, .)
 
   # Isolate to the terminal nodes
-  terminal_nodes <- filter(tree_df, !node %in% parent) %>%
+  terminal_nodes <- filter(tree_df, !.data$node %in% .data$parent) %>%
     rowwise() %>%
     group_split() %>%
     map(function(x) {

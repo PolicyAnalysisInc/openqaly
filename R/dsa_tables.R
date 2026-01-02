@@ -39,16 +39,16 @@ prepare_dsa_outcomes_table_data <- function(results,
   # Separate base case from variations
   # Note: base case has parameter="base" for all rows, so we don't join on parameter
   base_data <- dsa_data %>%
-    filter(run_id == 1) %>%
-    select(strategy, group, base = amount)
+    filter(.data$run_id == 1) %>%
+    select("strategy", "group", base = "amount")
 
   low_data <- dsa_data %>%
-    filter(variation == "low") %>%
-    select(strategy, group, parameter, parameter_display_name, low = amount)
+    filter(.data$variation == "low") %>%
+    select("strategy", "group", "parameter", "parameter_display_name", low = "amount")
 
   high_data <- dsa_data %>%
-    filter(variation == "high") %>%
-    select(strategy, group, parameter, parameter_display_name, high = amount)
+    filter(.data$variation == "high") %>%
+    select("strategy", "group", "parameter", "parameter_display_name", high = "amount")
 
   # Combine data (join base only on strategy/group, not parameter)
   combined_data <- low_data %>%
@@ -63,9 +63,9 @@ prepare_dsa_outcomes_table_data <- function(results,
     # Pivot to get strategies as columns
     data_wide <- combined_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = c(low, base, high),
-        id_cols = c(group, parameter, parameter_display_name)
+        names_from = "strategy",
+        values_from = c("low", "base", "high"),
+        id_cols = c("group", "parameter", "parameter_display_name")
       )
 
     # Get all strategies
@@ -78,7 +78,7 @@ prepare_dsa_outcomes_table_data <- function(results,
     other_mapped <- map_names(other_strategies, results$metadata$strategies, "display_name")
 
     # Create comparison labels
-    if (!is.null(intervention)) {
+    if (!is.null(interventions)) {
       comparison_labels <- paste0(intervention_mapped, " vs. ", other_mapped)
     } else {
       comparison_labels <- paste0(other_mapped, " vs. ", intervention_mapped)
@@ -97,7 +97,7 @@ prepare_dsa_outcomes_table_data <- function(results,
       high_int_col <- paste0("high_", intervention_strategy)
       high_other_col <- paste0("high_", other)
 
-      if (!is.null(intervention)) {
+      if (!is.null(interventions)) {
         diff_df <- data_wide %>%
           mutate(
             strategy = comp_label,
@@ -105,7 +105,7 @@ prepare_dsa_outcomes_table_data <- function(results,
             base = !!sym(base_int_col) - !!sym(base_other_col),
             high = !!sym(high_int_col) - !!sym(high_other_col)
           ) %>%
-          select(group, parameter, parameter_display_name, strategy, low, base, high)
+          select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high")
       } else {
         diff_df <- data_wide %>%
           mutate(
@@ -114,7 +114,7 @@ prepare_dsa_outcomes_table_data <- function(results,
             base = !!sym(base_other_col) - !!sym(base_int_col),
             high = !!sym(high_other_col) - !!sym(high_int_col)
           ) %>%
-          select(group, parameter, parameter_display_name, strategy, low, base, high)
+          select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high")
       }
 
       diff_data[[i]] <- diff_df
@@ -154,14 +154,14 @@ prepare_dsa_outcomes_table_data <- function(results,
     # Single group: pivot to wide format with strategy columns
     # Each strategy gets 3 columns: Low, Base, High
     result_data <- combined_data %>%
-      arrange(parameter_display_name) %>%
-      select(parameter_display_name, strategy, low, base, high)
+      arrange(.data$parameter_display_name) %>%
+      select("parameter_display_name", "strategy", "low", "base", "high")
 
     # Pivot wider to get strategy columns
     result_data <- result_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = c(low, base, high),
+        names_from = "strategy",
+        values_from = c("low", "base", "high"),
         names_glue = "{strategy}_{.value}"
       )
 
@@ -233,13 +233,13 @@ prepare_dsa_outcomes_table_data <- function(results,
 
       # Parameter rows for this group
       grp_data <- combined_data %>%
-        filter(group == grp) %>%
-        arrange(parameter_display_name) %>%
-        mutate(parameter_display_name = paste0("  ", parameter_display_name)) %>%
-        select(parameter_display_name, strategy, low, base, high) %>%
+        filter(.data$group == grp) %>%
+        arrange(.data$parameter_display_name) %>%
+        mutate(parameter_display_name = paste0("  ", .data$parameter_display_name)) %>%
+        select("parameter_display_name", "strategy", "low", "base", "high") %>%
         pivot_wider(
-          names_from = strategy,
-          values_from = c(low, base, high),
+          names_from = "strategy",
+          values_from = c("low", "base", "high"),
           names_glue = "{strategy}_{.value}"
         )
 

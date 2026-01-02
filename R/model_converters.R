@@ -134,7 +134,7 @@ write_model_excel <- function(model, path) {
           if (!"group" %in% names(vars_df)) vars_df$group <- ""
           # Reorder columns
           vars_df <- vars_df %>%
-            select(sampling_name, variable, strategy, group)
+            select("sampling_name", "variable", "strategy", "group")
         } else if (is.character(vars_df)) {
           # Convert character vector to dataframe
           vars_df <- tibble(

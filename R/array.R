@@ -24,7 +24,7 @@ lf_to_arr <- function(df, dimcols, value) {
   uniques <- vector(mode = 'list', length = n_dims)
   factors <- vector(mode = 'list', length = n_dims)
   for (i in seq_len(n_dims)) {
-    if (class(df[[dimcols[i]]]) == 'factor') {
+    if (inherits(df[[dimcols[i]]], 'factor')) {
       factors[[i]] <- df[[dimcols[[i]]]]
       lengths[[i]] <- length(levels(df[[dimcols[[i]]]]))
     } else {

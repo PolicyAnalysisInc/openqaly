@@ -64,39 +64,39 @@ prepare_incremental_ceac_table_data <- function(results,
   if (has_multiple_groups) {
     # Multiple groups: pivot with group_strategy columns
     pivot_data <- ceac_data %>%
-      mutate(probability_pct = probability * 100) %>%
+      mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
-        id_cols = wtp,
-        names_from = c(group, strategy),
+        id_cols = "wtp",
+        names_from = c("group", "strategy"),
         names_sep = "_",
-        values_from = probability_pct
+        values_from = "probability_pct"
       ) %>%
-      arrange(wtp)
+      arrange(.data$wtp)
   } else {
     # Single group: simple structure
     pivot_data <- ceac_data %>%
-      mutate(probability_pct = probability * 100) %>%
+      mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
-        id_cols = wtp,
-        names_from = strategy,
-        values_from = probability_pct
+        id_cols = "wtp",
+        names_from = "strategy",
+        values_from = "probability_pct"
       ) %>%
-      arrange(wtp)
+      arrange(.data$wtp)
   }
 
   # Identify optimal strategies if requested
   optimal_strategies <- NULL
   if (show_optimal) {
     optimal_strategies <- ceac_data %>%
-      group_by(group, wtp) %>%
-      slice_max(probability, n = 1, with_ties = FALSE) %>%
+      group_by(.data$group, .data$wtp) %>%
+      slice_max(.data$probability, n = 1, with_ties = FALSE) %>%
       ungroup() %>%
-      select(group, wtp, strategy)
+      select("group", "wtp", "strategy")
   }
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(wtp))
+    mutate(wtp_display = scales::dollar(.data$wtp))
 
   # Format probability columns as percentage strings
   strategy_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
@@ -133,7 +133,7 @@ prepare_incremental_ceac_table_data <- function(results,
   } else {
     # Simple mode: [WTP] [Strategy columns]
     result_cols <- pivot_data %>%
-      select(wtp_display, all_of(strategies_display))
+      select("wtp_display", all_of(strategies_display))
     colnames(result_cols)[1] <- "WTP"
   }
 
@@ -364,29 +364,29 @@ prepare_psa_summary_table_data <- function(results,
 
   # Calculate summary statistics (expanded to include median, IQR, min, max)
   summary_stats <- psa_data %>%
-    group_by(strategy, group) %>%
+    group_by(.data$strategy, .data$group) %>%
     summarize(
       # Cost statistics
-      mean_cost = mean(cost, na.rm = TRUE),
-      sd_cost = sd(cost, na.rm = TRUE),
-      ci_lower_cost = quantile(cost, 0.025, na.rm = TRUE),
-      ci_upper_cost = quantile(cost, 0.975, na.rm = TRUE),
-      median_cost = median(cost, na.rm = TRUE),
-      q25_cost = quantile(cost, 0.25, na.rm = TRUE),
-      q75_cost = quantile(cost, 0.75, na.rm = TRUE),
-      min_cost = min(cost, na.rm = TRUE),
-      max_cost = max(cost, na.rm = TRUE),
+      mean_cost = mean(.data$cost, na.rm = TRUE),
+      sd_cost = stats::sd(.data$cost, na.rm = TRUE),
+      ci_lower_cost = stats::quantile(.data$cost, 0.025, na.rm = TRUE),
+      ci_upper_cost = stats::quantile(.data$cost, 0.975, na.rm = TRUE),
+      median_cost = stats::median(.data$cost, na.rm = TRUE),
+      q25_cost = stats::quantile(.data$cost, 0.25, na.rm = TRUE),
+      q75_cost = stats::quantile(.data$cost, 0.75, na.rm = TRUE),
+      min_cost = min(.data$cost, na.rm = TRUE),
+      max_cost = max(.data$cost, na.rm = TRUE),
 
       # Outcome statistics
-      mean_outcome = mean(outcome, na.rm = TRUE),
-      sd_outcome = sd(outcome, na.rm = TRUE),
-      ci_lower_outcome = quantile(outcome, 0.025, na.rm = TRUE),
-      ci_upper_outcome = quantile(outcome, 0.975, na.rm = TRUE),
-      median_outcome = median(outcome, na.rm = TRUE),
-      q25_outcome = quantile(outcome, 0.25, na.rm = TRUE),
-      q75_outcome = quantile(outcome, 0.75, na.rm = TRUE),
-      min_outcome = min(outcome, na.rm = TRUE),
-      max_outcome = max(outcome, na.rm = TRUE),
+      mean_outcome = mean(.data$outcome, na.rm = TRUE),
+      sd_outcome = stats::sd(.data$outcome, na.rm = TRUE),
+      ci_lower_outcome = stats::quantile(.data$outcome, 0.025, na.rm = TRUE),
+      ci_upper_outcome = stats::quantile(.data$outcome, 0.975, na.rm = TRUE),
+      median_outcome = stats::median(.data$outcome, na.rm = TRUE),
+      q25_outcome = stats::quantile(.data$outcome, 0.25, na.rm = TRUE),
+      q75_outcome = stats::quantile(.data$outcome, 0.75, na.rm = TRUE),
+      min_outcome = min(.data$outcome, na.rm = TRUE),
+      max_outcome = max(.data$outcome, na.rm = TRUE),
 
       .groups = "drop"
     )
@@ -404,7 +404,7 @@ prepare_psa_summary_table_data <- function(results,
       discounted = discounted
     ) %>%
       mutate(wtp = wtp_val) %>%
-      select(strategy, group, wtp, probability)
+      select("strategy", "group", "wtp", "probability")
 
     pce_results[[length(pce_results) + 1]] <- ceac_at_wtp
   }
@@ -508,7 +508,7 @@ prepare_psa_summary_table_data <- function(results,
   for (strat in strategies_display) {
     for (grp in groups_display) {
       stat_row <- summary_stats %>%
-        filter(strategy == strat, group == grp)
+        filter(.data$strategy == strat, .data$group == grp)
 
       if (nrow(stat_row) == 0) next
       stat_row <- stat_row[1, ]
@@ -542,8 +542,8 @@ prepare_psa_summary_table_data <- function(results,
       # Add P(CE) values for each WTP
       for (wtp_val in pce_wtp) {
         prob_val <- pce_data %>%
-          filter(strategy == strat, group == grp, wtp == wtp_val) %>%
-          pull(probability)
+          filter(.data$strategy == strat, .data$group == grp, .data$wtp == wtp_val) %>%
+          pull(.data$probability)
 
         if (length(prob_val) == 0) prob_val <- NA
 
@@ -576,13 +576,13 @@ prepare_psa_summary_table_data <- function(results,
     # Pivot to wide format
     pivot_data <- row_data_long %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = value,
-        id_cols = row_label
+        names_from = "strategy",
+        values_from = "value",
+        id_cols = "row_label"
       ) %>%
-      mutate(row_label = factor(row_label, levels = row_labels_ordered)) %>%
-      arrange(row_label) %>%
-      mutate(row_label = as.character(row_label))
+      mutate(row_label = factor(.data$row_label, levels = row_labels_ordered)) %>%
+      arrange(.data$row_label) %>%
+      mutate(row_label = as.character(.data$row_label))
 
     # Map row labels to display labels
     label_mapping <- tibble(
@@ -591,7 +591,7 @@ prepare_psa_summary_table_data <- function(results,
     )
     pivot_data <- pivot_data %>%
       left_join(label_mapping, by = "row_label") %>%
-      select(display_label, all_of(strategies_display))
+      select("display_label", all_of(strategies_display))
 
     colnames(pivot_data)[1] <- " "
 
@@ -634,11 +634,11 @@ prepare_psa_summary_table_data <- function(results,
       grp <- groups_display[i]
       for (strat in strategies_display) {
         strat_data <- row_data_long %>%
-          filter(strategy == strat, group == grp) %>%
-          mutate(row_label = factor(row_label, levels = row_labels_ordered)) %>%
-          arrange(row_label) %>%
-          select(value) %>%
-          pull(value)
+          filter(.data$strategy == strat, .data$group == grp) %>%
+          mutate(row_label = factor(.data$row_label, levels = row_labels_ordered)) %>%
+          arrange(.data$row_label) %>%
+          select("value") %>%
+          pull(.data$value)
 
         if (length(strat_data) == 0) {
           strat_data <- rep("", length(row_labels_ordered))
@@ -909,29 +909,29 @@ prepare_pairwise_ceac_table_data <- function(results,
   if (has_multiple_groups) {
     # Multiple groups: pivot with group_comparison columns
     pivot_data <- ceac_data %>%
-      mutate(probability_pct = probability * 100) %>%
+      mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
-        id_cols = wtp,
-        names_from = c(group, strategy),
+        id_cols = "wtp",
+        names_from = c("group", "strategy"),
         names_sep = "_",
-        values_from = probability_pct
+        values_from = "probability_pct"
       ) %>%
-      arrange(wtp)
+      arrange(.data$wtp)
   } else {
     # Single group: simple structure
     pivot_data <- ceac_data %>%
-      mutate(probability_pct = probability * 100) %>%
+      mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
-        id_cols = wtp,
-        names_from = strategy,
-        values_from = probability_pct
+        id_cols = "wtp",
+        names_from = "strategy",
+        values_from = "probability_pct"
       ) %>%
-      arrange(wtp)
+      arrange(.data$wtp)
   }
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(wtp))
+    mutate(wtp_display = scales::dollar(.data$wtp))
 
   # Format probability columns as percentage strings
   comparison_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
@@ -968,7 +968,7 @@ prepare_pairwise_ceac_table_data <- function(results,
   } else {
     # Simple mode: [WTP] [Comparison columns]
     result_cols <- pivot_data %>%
-      select(wtp_display, all_of(comparisons_display))
+      select("wtp_display", all_of(comparisons_display))
     colnames(result_cols)[1] <- "WTP"
   }
 
@@ -1198,21 +1198,21 @@ prepare_evpi_table_data <- function(results,
     # Multiple groups: pivot with group columns
     pivot_data <- evpi_data %>%
       pivot_wider(
-        id_cols = wtp,
-        names_from = group,
-        values_from = evpi
+        id_cols = "wtp",
+        names_from = "group",
+        values_from = "evpi"
       ) %>%
-      arrange(wtp)
+      arrange(.data$wtp)
   } else {
     # Single group: simple structure
     pivot_data <- evpi_data %>%
-      select(wtp, evpi) %>%
-      arrange(wtp)
+      select("wtp", "evpi") %>%
+      arrange(.data$wtp)
   }
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(wtp))
+    mutate(wtp_display = scales::dollar(.data$wtp))
 
   # Format EVPI columns with proper decimals and dollar formatting
   evpi_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
@@ -1229,12 +1229,12 @@ prepare_evpi_table_data <- function(results,
   if (has_multiple_groups) {
     # Build with group columns: [WTP] [Group1] [Group2] ...
     result_cols <- pivot_data %>%
-      select(wtp_display, all_of(groups_display))
+      select("wtp_display", all_of(groups_display))
     colnames(result_cols)[1] <- "WTP"
   } else {
     # Simple mode: [WTP] [EVPI]
     result_cols <- pivot_data %>%
-      select(wtp_display, evpi)
+      select("wtp_display", "evpi")
     colnames(result_cols) <- c("WTP", "EVPI")
   }
 

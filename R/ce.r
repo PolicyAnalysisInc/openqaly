@@ -207,8 +207,8 @@ calculate_incremental_ce <- function(results,
     value_type = "cost",
     discounted = discounted
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(cost = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Get outcome summaries
   outcome_data <- get_summaries(
@@ -219,8 +219,8 @@ calculate_incremental_ce <- function(results,
     value_type = "outcome",
     discounted = discounted
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(outcome = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Combine cost and outcome data
   combined_data <- cost_data %>%
@@ -228,12 +228,12 @@ calculate_incremental_ce <- function(results,
 
   # Perform incremental CE analysis for each group separately
   result_list <- combined_data %>%
-    group_by(group) %>%
+    group_by(.data$group) %>%
     group_split() %>%
     lapply(function(grp_data) {
       # Step 1: Sort by cost
       grp_data <- grp_data %>%
-        arrange(cost, outcome)
+        arrange(.data$cost, .data$outcome)
 
       n_strategies <- nrow(grp_data)
 
@@ -334,8 +334,8 @@ calculate_incremental_ce <- function(results,
 
   # Return with proper column order
   result %>%
-    select(group, strategy, comparator, cost, outcome, dcost, doutcome, icer,
-           on_frontier, dominated, strictly_dominated, extendedly_dominated)
+    select("group", "strategy", "comparator", "cost", "outcome", "dcost", "doutcome", "icer",
+           "on_frontier", "dominated", "strictly_dominated", "extendedly_dominated")
 }
 
 
@@ -415,12 +415,10 @@ calculate_pairwise_ce <- function(results,
     summaries = cost_summary,
     value_type = "cost",
     discounted = discounted,
-    strategy_name_field = "name",  # Use technical names internally
-    group_name_field = "name",  # Use technical names internally
-    value_name_field = "name"  # We don't need value names, just totals
+    use_display_names = FALSE  # Use technical names internally
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(cost = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Get outcome summaries (use technical names internally for matching)
   outcome_data <- get_summaries(
@@ -430,12 +428,10 @@ calculate_pairwise_ce <- function(results,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = "name",  # Use technical names internally
-    group_name_field = "name",  # Use technical names internally
-    value_name_field = "name"
+    use_display_names = FALSE  # Use technical names internally
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(outcome = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Combine cost and outcome data
   combined_data <- cost_data %>%
@@ -497,7 +493,7 @@ calculate_pairwise_ce <- function(results,
 
   # Perform pairwise comparisons for each group separately
   result_list <- combined_data %>%
-    group_by(group) %>%
+    group_by(.data$group) %>%
     group_split() %>%
     lapply(function(grp_data) {
       comparisons_list <- list()
@@ -508,8 +504,8 @@ calculate_pairwise_ce <- function(results,
         comp_strat <- pair$comparator
 
         # Get data for intervention and comparator
-        int_data <- grp_data %>% filter(strategy == int_strat)
-        comp_data <- grp_data %>% filter(strategy == comp_strat)
+        int_data <- grp_data %>% filter(.data$strategy == int_strat)
+        comp_data <- grp_data %>% filter(.data$strategy == comp_strat)
 
         if (nrow(int_data) == 0 || nrow(comp_data) == 0) {
           next  # Skip if either strategy not found in this group
@@ -554,5 +550,5 @@ calculate_pairwise_ce <- function(results,
 
   # Return with proper column order
   result %>%
-    select(group, strategy, comparator, cost, outcome, dcost, doutcome, icer)
+    select("group", "strategy", "comparator", "cost", "outcome", "dcost", "doutcome", "icer")
 }

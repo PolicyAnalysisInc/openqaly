@@ -14,7 +14,7 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
     type_desc <- if (is.character(value)) {
       # Show the actual string value for clarity
       if (length(value) > 0) {
-        val_str <- head(value, 1)
+        val_str <- utils::head(value, 1)
         # If the value matches the formula text, it's likely an undefined variable
         # Guard against character(0) formula_text which would return logical(0) in comparison
         if (!is.null(formula_text) && length(formula_text) > 0 && val_str == formula_text) {
@@ -26,7 +26,7 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
         "empty character vector"
       }
     } else if (is.logical(value)) {
-      glue("logical value '{head(value, 1)}'")
+      glue("logical value '{utils::head(value, 1)}'")
     } else if (is.list(value)) {
       "list object"
     } else {

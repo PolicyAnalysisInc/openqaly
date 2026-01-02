@@ -32,8 +32,8 @@ filter_by_value_type <- function(column_names, metadata, value_type = "all") {
 
   # Get values that match the requested type
   matching_values <- metadata$values %>%
-    filter(type == value_type) %>%
-    pull(name)
+    filter(.data$type == value_type) %>%
+    pull(.data$name)
 
   # Return intersection of column names and matching values
   intersect(column_names, matching_values)
@@ -177,7 +177,7 @@ get_values <- function(results,
   if (!is.null(strategies)) {
     # Validate strategies exist using helper
     check_strategies_exist(strategies, results$metadata)
-    source_data <- source_data %>% filter(strategy %in% strategies)
+    source_data <- source_data %>% filter(.data$strategy %in% strategies)
   }
 
   if (nrow(source_data) == 0) {
@@ -284,8 +284,8 @@ get_values <- function(results,
       # For long format: pivot, calculate, pivot back
       result_wide <- result %>%
         pivot_wider(
-          names_from = strategy,
-          values_from = amount,
+          names_from = "strategy",
+          values_from = "amount",
           values_fill = NA
         )
 
@@ -310,7 +310,7 @@ get_values <- function(results,
       time_col_present <- intersect(time_cols, colnames(result_wide))
 
       result <- result_wide %>%
-        select(group, all_of(time_col_present), value_name, all_of(unlist(diff_data))) %>%
+        select("group", all_of(time_col_present), "value_name", all_of(unlist(diff_data))) %>%
         pivot_longer(
           cols = all_of(unlist(diff_data)),
           names_to = "strategy",
@@ -483,7 +483,7 @@ extract_values_long <- function(source_data, values_field, values_filter,
     # Reshape to long
     df_long <- pivot_longer(
       df,
-      cols = -c(strategy, group, time),
+      cols = -c("strategy", "group", "time"),
       names_to = "value_name",
       values_to = "amount"
     )
@@ -585,7 +585,7 @@ get_summaries <- function(results,
   if (!is.null(strategies)) {
     # Validate strategies exist using helper
     check_strategies_exist(strategies, results$metadata)
-    source_data <- source_data %>% filter(strategy %in% strategies)
+    source_data <- source_data %>% filter(.data$strategy %in% strategies)
   }
 
   if (nrow(source_data) == 0) {
@@ -634,8 +634,8 @@ get_summaries <- function(results,
     # Get values that match the type
     if (!is.null(results$metadata) && !is.null(results$metadata$values)) {
       matching_values <- results$metadata$values %>%
-        filter(type == value_type) %>%
-        pull(name)
+        filter(.data$type == value_type) %>%
+        pull(.data$name)
 
       combined <- combined %>% filter(value %in% matching_values)
     } else {
@@ -657,7 +657,7 @@ get_summaries <- function(results,
 
   # Reorder columns
   combined <- combined %>%
-    select(strategy, group, summary, value, amount)
+    select("strategy", "group", "summary", "value", "amount")
 
   # Calculate differences if interventions/comparators provided
   differences_created <- FALSE
@@ -710,7 +710,7 @@ get_summaries <- function(results,
 
     # Pivot to wide format (strategies as columns with technical names)
     combined_wide <- combined %>%
-      pivot_wider(names_from = strategy, values_from = amount, values_fill = NA)
+      pivot_wider(names_from = "strategy", values_from = "amount", values_fill = NA)
 
     # Calculate differences for each comparison pair
     diff_cols <- character()
@@ -731,7 +731,7 @@ get_summaries <- function(results,
 
     # Keep only difference columns and pivot back
     combined <- combined_wide %>%
-      select(group, summary, value, all_of(diff_cols)) %>%
+      select("group", "summary", "value", all_of(diff_cols)) %>%
       pivot_longer(cols = all_of(diff_cols),
                    names_to = "strategy",
                    values_to = "amount")
@@ -854,12 +854,12 @@ calculate_nmb <- function(results,
   # Aggregate outcome and cost by strategy and group (sum across value components)
   # NOTE: outcome_data and cost_data have technical names in strategy column
   outcome_agg <- outcome_data %>%
-    group_by(strategy, group) %>%
-    summarize(outcome_total = sum(amount, na.rm = TRUE), .groups = 'drop')
+    group_by(.data$strategy, .data$group) %>%
+    summarize(outcome_total = sum(.data$amount, na.rm = TRUE), .groups = 'drop')
 
   cost_agg <- cost_data %>%
-    group_by(strategy, group) %>%
-    summarize(cost_total = sum(amount, na.rm = TRUE), .groups = 'drop')
+    group_by(.data$strategy, .data$group) %>%
+    summarize(cost_total = sum(.data$amount, na.rm = TRUE), .groups = 'drop')
 
   # Get WTP value
   if (is.null(wtp)) {
@@ -872,7 +872,7 @@ calculate_nmb <- function(results,
     check_summary_exists(outcome_summary, results$metadata)
 
     outcome_meta <- results$metadata$summaries %>%
-      filter(name == outcome_summary)
+      filter(.data$name == outcome_summary)
 
     wtp <- outcome_meta$wtp[1]
 
@@ -888,10 +888,10 @@ calculate_nmb <- function(results,
 
   # Pivot to wide format using TECHNICAL names
   outcome_wide <- outcome_agg %>%
-    pivot_wider(names_from = strategy, values_from = outcome_total, values_fill = NA)
+    pivot_wider(names_from = "strategy", values_from = "outcome_total", values_fill = NA)
 
   cost_wide <- cost_agg %>%
-    pivot_wider(names_from = strategy, values_from = cost_total, values_fill = NA)
+    pivot_wider(names_from = "strategy", values_from = "cost_total", values_fill = NA)
 
   # Get all strategies (technical names from combined data)
   all_strategies <- unique(c(unique(outcome_agg$strategy), unique(cost_agg$strategy)))
@@ -974,20 +974,20 @@ calculate_nmb <- function(results,
     for (grp in unique(outcome_wide$group)) {
       # Access outcome values using technical names
       outcome_int <- outcome_wide %>%
-        filter(group == grp) %>%
+        filter(.data$group == grp) %>%
         pull(!!int_strat)
 
       outcome_comp <- outcome_wide %>%
-        filter(group == grp) %>%
+        filter(.data$group == grp) %>%
         pull(!!comp_strat)
 
       # Access cost values using technical names
       cost_int <- cost_wide %>%
-        filter(group == grp) %>%
+        filter(.data$group == grp) %>%
         pull(!!int_strat)
 
       cost_comp <- cost_wide %>%
-        filter(group == grp) %>%
+        filter(.data$group == grp) %>%
         pull(!!comp_strat)
 
       # Handle empty results
@@ -1057,7 +1057,7 @@ calculate_nmb <- function(results,
   # Factor component column if returning components
   if (return_components) {
     nmb_results <- nmb_results %>%
-      mutate(component = factor(component, levels = c("Outcome Benefit", "Cost Difference", "Total")))
+      mutate(component = factor(.data$component, levels = c("Outcome Benefit", "Cost Difference", "Total")))
   }
 
   as_tibble(nmb_results)

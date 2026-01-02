@@ -11,7 +11,7 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
     # No initial_probability, no tunnel states
     # Just pass through as states object (no sorting needed - no formulas)
     parsed_states <- states %>%
-      select(name, display_name, description)
+      select("name", "display_name", "description")
 
     return(as.states(parsed_states))
   }
@@ -50,21 +50,21 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
     mutate(
-      formula = map(initial_probability, as.oq_formula),
+      formula = map(.data$initial_probability, as.oq_formula),
       max_state_time = ceiling(
-        ceiling(days_per_unit(state_cycle_limit_unit, cycle_length_days, days_per_year) * state_cycle_limit / cycle_length_days)
+        ceiling(days_per_unit(.data$state_cycle_limit_unit, cycle_length_days, days_per_year) * .data$state_cycle_limit / cycle_length_days)
       ),
-      state_group = ifelse(is.na(state_group), glue(".{name}"), state_group),
-      share_state_time = ifelse(is.na(share_state_time), F, share_state_time)
+      state_group = ifelse(is.na(.data$state_group), glue(".{name}"), .data$state_group),
+      share_state_time = ifelse(is.na(.data$share_state_time), F, .data$share_state_time)
     ) %>%
     select(
-      name,
-      display_name,
-      description,
-      formula,
-      state_group,
-      share_state_time,
-      max_state_time
+      "name",
+      "display_name",
+      "description",
+      "formula",
+      "state_group",
+      "share_state_time",
+      "max_state_time"
     ) %>%
     sort_variables()
 

@@ -88,7 +88,7 @@ calculate_incremental_ceac <- function(results,
   # Process each group
   for (grp in groups) {
     grp_data <- psa_data %>%
-      filter(group == grp)
+      filter(.data$group == grp)
 
     # Get simulations for this group
     simulations <- unique(grp_data$simulation)
@@ -106,13 +106,13 @@ calculate_incremental_ceac <- function(results,
 
       # Calculate NMB for each strategy in each simulation
       nmb_data <- grp_data %>%
-        mutate(nmb = outcome * wtp_val - cost) %>%
-        select(simulation, strategy, nmb)
+        mutate(nmb = .data$outcome * wtp_val - .data$cost) %>%
+        select("simulation", "strategy", nmb = "nmb")
 
       # Find strategy with max NMB in each simulation
       max_nmb <- nmb_data %>%
-        group_by(simulation) %>%
-        slice_max(nmb, n = 1, with_ties = FALSE) %>%
+        group_by(.data$simulation) %>%
+        slice_max(.data$nmb, n = 1, with_ties = FALSE) %>%
         ungroup()
 
       # Count wins for each strategy
@@ -143,8 +143,8 @@ calculate_incremental_ceac <- function(results,
 
   # Combine results
   bind_rows(ceac_results) %>%
-    select(wtp, strategy, probability, group) %>%
-    arrange(group, wtp, desc(probability))
+    select("wtp", "strategy", "probability", "group") %>%
+    arrange(.data$group, .data$wtp, desc(.data$probability))
 }
 
 
@@ -184,7 +184,7 @@ get_psa_simulations <- function(results,
     if (!is.null(results$segments) && nrow(results$segments) > 0) {
       # Use technical names for filtering
       source_data <- results$segments %>%
-        filter(group %in% group)
+        filter(.data$group %in% group)
     } else {
       # Groups were validated to exist, but no segments data
       stop(sprintf("No segment data available for groups: %s", paste(group, collapse = ", ")))
@@ -196,7 +196,7 @@ get_psa_simulations <- function(results,
     # Validate strategies exist using helper
     check_strategies_exist(strategies, results$metadata)
     source_data <- source_data %>%
-      filter(strategy %in% strategies)
+      filter(.data$strategy %in% !!strategies)
   }
 
   # Check for simulation column
@@ -211,7 +211,7 @@ get_psa_simulations <- function(results,
     value_type = "cost",
     discounted = discounted
   ) %>%
-    rename(cost = amount)
+    rename(cost = "amount")
 
   # Extract outcome summaries
   outcome_data <- extract_psa_summaries(
@@ -220,7 +220,7 @@ get_psa_simulations <- function(results,
     value_type = "outcome",
     discounted = discounted
   ) %>%
-    rename(outcome = amount)
+    rename(outcome = "amount")
 
   # Combine cost and outcome data
   psa_data <- cost_data %>%
@@ -277,20 +277,20 @@ extract_psa_summaries <- function(source_data,
 
   # Vectorized extraction and aggregation
   result <- source_data %>%
-    select(simulation, strategy, group, summary_data = !!sym(summary_col)) %>%
-    unnest(summary_data, keep_empty = TRUE) %>%
-    filter(summary == summary_name | is.na(summary)) %>%
-    group_by(simulation, strategy, group) %>%
-    summarize(amount = sum(amount, na.rm = TRUE), .groups = "drop")
+    select("simulation", "strategy", "group", summary_data = summary_col) %>%
+    unnest("summary_data", keep_empty = TRUE) %>%
+    filter(.data$summary == summary_name | is.na(.data$summary)) %>%
+    group_by(.data$simulation, .data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Handle rows where summary wasn't found
   # If a (simulation, strategy, group) combo is missing, fill with NA
   all_combos <- source_data %>%
-    distinct(simulation, strategy, group)
+    distinct(.data$simulation, .data$strategy, .data$group)
 
   result <- all_combos %>%
     left_join(result, by = c("simulation", "strategy", "group")) %>%
-    mutate(amount = if_else(is.na(amount), NA_real_, amount))
+    mutate(amount = if_else(is.na(.data$amount), NA_real_, .data$amount))
 
   result
 }
@@ -361,10 +361,10 @@ calculate_incremental_ceac_frontier <- function(results,
 
   # Calculate expected costs and outcomes
   expected_values <- psa_data %>%
-    group_by(strategy, group) %>%
+    group_by(.data$strategy, .data$group) %>%
     summarize(
-      expected_cost = mean(cost, na.rm = TRUE),
-      expected_outcome = mean(outcome, na.rm = TRUE),
+      expected_cost = mean(.data$cost, na.rm = TRUE),
+      expected_outcome = mean(.data$outcome, na.rm = TRUE),
       .groups = "drop"
     )
 
@@ -373,15 +373,15 @@ calculate_incremental_ceac_frontier <- function(results,
   groups <- unique(ceac$group)
 
   for (grp in groups) {
-    grp_ceac <- ceac %>% filter(group == grp)
-    grp_expected <- expected_values %>% filter(group == grp)
+    grp_ceac <- ceac %>% filter(.data$group == grp)
+    grp_expected <- expected_values %>% filter(.data$group == grp)
 
     # For each WTP, find optimal strategy
     grp_frontier <- lapply(wtp, function(w) {
       # Calculate expected NMB for each strategy
       nmb_values <- grp_expected %>%
-        mutate(expected_nmb = expected_outcome * w - expected_cost) %>%
-        arrange(desc(expected_nmb))
+        mutate(expected_nmb = .data$expected_outcome * w - .data$expected_cost) %>%
+        arrange(desc(.data$expected_nmb))
 
       # Get optimal strategy
       optimal_strat <- nmb_values$strategy[1]
@@ -389,8 +389,8 @@ calculate_incremental_ceac_frontier <- function(results,
 
       # Get probability from CEAC
       prob <- grp_ceac %>%
-        filter(wtp == w, strategy == optimal_strat) %>%
-        pull(probability)
+        filter(.data$wtp == w, .data$strategy == optimal_strat) %>%
+        pull(.data$probability)
 
       tibble(
         wtp = w,
@@ -538,16 +538,16 @@ calculate_pairwise_ceac <- function(results,
 
   # Join with fixed strategy data
   fixed_data <- psa_data %>%
-    filter(strategy == fixed_strategy) %>%
-    select(simulation, group, cost_fixed = cost, outcome_fixed = outcome)
+    filter(.data$strategy == fixed_strategy) %>%
+    select("simulation", "group", cost_fixed = "cost", outcome_fixed = "outcome")
 
   comparison_data <- comparison_grid %>%
     left_join(fixed_data, by = c("simulation", "group"))
 
   # Join with other strategies data
   other_data <- psa_data %>%
-    filter(strategy != fixed_strategy) %>%
-    select(simulation, group, strategy, cost_other = cost, outcome_other = outcome)
+    filter(.data$strategy != fixed_strategy) %>%
+    select("simulation", "group", "strategy", cost_other = "cost", outcome_other = "outcome")
 
   comparison_data <- comparison_data %>%
     left_join(other_data, by = c("simulation", "group", "other_strategy" = "strategy"))
@@ -556,23 +556,23 @@ calculate_pairwise_ceac <- function(results,
   if (use_intervention) {
     comparison_data <- comparison_data %>%
       mutate(
-        cost_intervention = cost_fixed,
-        cost_comp = cost_other,
-        outcome_intervention = outcome_fixed,
-        outcome_comp = outcome_other
+        cost_intervention = .data$cost_fixed,
+        cost_comp = .data$cost_other,
+        outcome_intervention = .data$outcome_fixed,
+        outcome_comp = .data$outcome_other
       )
   } else {
     comparison_data <- comparison_data %>%
       mutate(
-        cost_intervention = cost_other,
-        cost_comp = cost_fixed,
-        outcome_intervention = outcome_other,
-        outcome_comp = outcome_fixed
+        cost_intervention = .data$cost_other,
+        cost_comp = .data$cost_fixed,
+        outcome_intervention = .data$outcome_other,
+        outcome_comp = .data$outcome_fixed
       )
   }
 
   comparison_data <- comparison_data %>%
-    arrange(simulation, group, other_strategy)
+    arrange(.data$simulation, .data$group, .data$other_strategy)
 
   # Reshape to matrices for vectorized calculation
   n_cols <- n_groups * n_comparisons
@@ -591,19 +591,19 @@ calculate_pairwise_ceac <- function(results,
 
   # Convert back to tibble with proper labels
   comparison_labels <- comparison_grid %>%
-    distinct(group, other_strategy) %>%
-    arrange(group, other_strategy)
+    distinct(.data$group, .data$other_strategy) %>%
+    arrange(.data$group, .data$other_strategy)
 
   # Expand to include all WTP values with correct probability extraction
   result <- comparison_labels %>%
     mutate(row_id = row_number()) %>%
     crossing(tibble(wtp = wtp, wtp_idx = seq_along(wtp))) %>%
-    mutate(probability = probs_matrix[cbind(row_id, wtp_idx)]) %>%
+    mutate(probability = probs_matrix[cbind(.data$row_id, .data$wtp_idx)]) %>%
     transmute(
-      wtp = wtp,
-      strategy = other_strategy,
-      probability = probability,
-      group = group,
+      wtp = .data$wtp,
+      strategy = .data$other_strategy,
+      probability = .data$probability,
+      group = .data$group,
       comparator = fixed_strategy
     )
 
@@ -630,7 +630,7 @@ calculate_pairwise_ceac <- function(results,
   }
 
   result %>%
-    select(wtp, strategy, probability, group, comparator)
+    select("wtp", "strategy", "probability", "group", "comparator")
 }
 
 
@@ -725,7 +725,7 @@ calculate_evpi <- function(results,
   # Process each group
   for (grp in groups) {
     grp_data <- psa_data %>%
-      filter(group == grp)
+      filter(.data$group == grp)
 
     # Get simulations for this group
     simulations <- unique(grp_data$simulation)
@@ -735,32 +735,32 @@ calculate_evpi <- function(results,
     evpi_values <- sapply(wtp, function(wtp_val) {
       # Calculate NMB for each strategy in each simulation
       nmb_data <- grp_data %>%
-        mutate(nmb = outcome * wtp_val - cost) %>%
-        select(simulation, strategy, nmb)
+        mutate(nmb = .data$outcome * wtp_val - .data$cost) %>%
+        select("simulation", "strategy", nmb = "nmb")
 
       # Calculate expected NMB for each strategy (mean across simulations)
       expected_nmb <- nmb_data %>%
-        group_by(strategy) %>%
-        summarize(expected_nmb = mean(nmb, na.rm = TRUE), .groups = "drop")
+        group_by(.data$strategy) %>%
+        summarize(expected_nmb = mean(.data$nmb, na.rm = TRUE), .groups = "drop")
 
       # Identify overall optimal strategy (highest expected NMB)
       overall_optimal_strategy <- expected_nmb %>%
-        slice_max(expected_nmb, n = 1, with_ties = FALSE) %>%
-        pull(strategy)
+        slice_max(.data$expected_nmb, n = 1, with_ties = FALSE) %>%
+        pull(.data$strategy)
 
       # For each simulation, calculate opportunity loss
       opportunity_loss <- nmb_data %>%
-        group_by(simulation) %>%
+        group_by(.data$simulation) %>%
         summarize(
           # NMB of best strategy in this simulation
-          max_nmb = max(nmb, na.rm = TRUE),
+          max_nmb = max(.data$nmb, na.rm = TRUE),
           # NMB of overall optimal strategy in this simulation
-          overall_optimal_nmb = nmb[strategy == overall_optimal_strategy][1],
+          overall_optimal_nmb = .data$nmb[.data$strategy == overall_optimal_strategy][1],
           .groups = "drop"
         ) %>%
         mutate(
           # Opportunity loss is the difference (cannot be negative)
-          loss = pmax(0, max_nmb - overall_optimal_nmb)
+          loss = pmax(0, .data$max_nmb - .data$overall_optimal_nmb)
         )
 
       # EVPI is the mean opportunity loss
@@ -779,8 +779,8 @@ calculate_evpi <- function(results,
 
   # Combine results
   bind_rows(evpi_results) %>%
-    select(wtp, evpi, group) %>%
-    arrange(group, wtp)
+    select("wtp", "evpi", "group") %>%
+    arrange(.data$group, .data$wtp)
 }
 
 
@@ -916,13 +916,13 @@ get_sampled_parameters <- function(results,
 
       # Filter to specific group(s)
       source_data <- source_data %>%
-        filter(group %in% !!group)
+        filter(.data$group %in% !!group)
     }
 
     # Filter strategies if specified
     if (!is.null(strategies)) {
       source_data <- source_data %>%
-        filter(strategy %in% strategies)
+        filter(.data$strategy %in% !!strategies)
 
       if (nrow(source_data) == 0) {
         stop("No data found for specified strategies")
@@ -935,34 +935,34 @@ get_sampled_parameters <- function(results,
   metadata <- results$metadata
 
   # Create name mapping functions
-  map_var_name <- function(name) {
+  map_var_name <- function(var_name) {
     if (!is.null(metadata$variables)) {
-      var_meta <- metadata$variables %>% filter(name == !!name)
+      var_meta <- metadata$variables %>% filter(.data$name == var_name)
       if (nrow(var_meta) > 0 && !is.na(var_meta$display_name[1])) {
         return(var_meta$display_name[1])
       }
     }
-    return(name)
+    return(var_name)
   }
 
-  map_strategy_name <- function(name) {
+  map_strategy_name <- function(strat_name) {
     if (!is.null(metadata$strategies)) {
-      strat_meta <- metadata$strategies %>% filter(name == !!name)
+      strat_meta <- metadata$strategies %>% filter(.data$name == strat_name)
       if (nrow(strat_meta) > 0 && !is.na(strat_meta[["display_name"]][1])) {
         return(strat_meta[["display_name"]][1])
       }
     }
-    return(name)
+    return(strat_name)
   }
 
-  map_group_name <- function(name) {
+  map_group_name <- function(grp_name) {
     if (!is.null(metadata$groups)) {
-      group_meta <- metadata$groups %>% filter(name == !!name)
+      group_meta <- metadata$groups %>% filter(.data$name == grp_name)
       if (nrow(group_meta) > 0 && !is.na(group_meta[["display_name"]][1])) {
         return(group_meta[["display_name"]][1])
       }
     }
-    return(name)
+    return(grp_name)
   }
 
   # Extract all sampled values and create properly labeled columns
@@ -987,9 +987,9 @@ get_sampled_parameters <- function(results,
         # Check if this (variable, strategy, group) tuple is in desired_tuples
         matching_tuple <- desired_tuples %>%
           filter(
-            variable == var_name,
-            (is.na(strategy) | strategy == strat),
-            (is.na(group) | group == grp)
+            .data$variable == var_name,
+            (is.na(.data$strategy) | .data$strategy == strat),
+            (is.na(.data$group) | .data$group == grp)
           )
 
         if (nrow(matching_tuple) == 0) next  # Skip this combination

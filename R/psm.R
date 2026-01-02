@@ -242,9 +242,9 @@ parse_and_eval_psm_transitions <- function(transitions, segment, namespace) {
   
   # Extract PFS and OS definitions
   pfs_def <- transitions %>%
-    filter(toupper(endpoint) == "PFS")
+    filter(toupper(.data$endpoint) == "PFS")
   os_def <- transitions %>%
-    filter(toupper(endpoint) == "OS")
+    filter(toupper(.data$endpoint) == "OS")
   
   # Validate we have exactly one PFS and one OS definition
   if (nrow(pfs_def) == 0) {
@@ -645,7 +645,7 @@ parse_psm_custom <- function(model) {
   # Validate values: no transitional values allowed
   if (!is.null(model$values) && nrow(model$values) > 0) {
     transitional_values <- model$values %>%
-      filter(!is.na(state) & !is.na(destination))
+      filter(!is.na(.data$state) & !is.na(.data$destination))
 
     if (nrow(transitional_values) > 0) {
       invalid_names <- unique(transitional_values$name)

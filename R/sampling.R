@@ -89,7 +89,7 @@ resample <- function(model, n, segments, seed = NULL) {
     # PART 1: Univariate sampling from variables.sampling
     if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
       univ_vars <- model$variables %>%
-        filter(!is.na(sampling) & sampling != "")
+        filter(!is.na(.data$sampling) & .data$sampling != "")
 
       for (i in seq_len(nrow(univ_vars))) {
         var_row <- univ_vars[i, ]
@@ -131,7 +131,7 @@ resample <- function(model, n, segments, seed = NULL) {
         }
 
         # Sample using inverse CDF approach
-        u <- runif(n)
+        u <- stats::runif(n)
         samples <- safe_eval(dist_fn(u))
 
         if (is_oq_error(samples)) {
@@ -152,8 +152,8 @@ resample <- function(model, n, segments, seed = NULL) {
         # Filter variables for this segment (NA-safe)
         relevant_vars <- mv_spec$variables %>%
           filter(
-            (is.na(strategy) | strategy == "" | strategy == "all" | strategy == seg_strategy) &
-            (is.na(group) | group == "" | group == "all" | group == seg_group)
+            (is.na(.data$strategy) | .data$strategy == "" | .data$strategy == "all" | .data$strategy == seg_strategy) &
+            (is.na(.data$group) | .data$group == "" | .data$group == "all" | .data$group == seg_group)
           )
 
         if (nrow(relevant_vars) == 0) next
@@ -202,12 +202,18 @@ resample <- function(model, n, segments, seed = NULL) {
       override_list <- purrr::transpose(parameter_overrides)
     }
 
-    seg_result <- tibble(
-      strategy = segment$strategy,
-      group = segment$group,
-      simulation = 1:n,
-      parameter_overrides = override_list  # List column containing parameter overrides
+    strat_name <- segment$strategy
+    grp_name <- segment$group
+    strat_vec <- rep(strat_name, n)
+    grp_vec <- rep(grp_name, n)
+    seg_result <- as.data.frame(
+      setNames(
+        list(strat_vec, grp_vec, 1:n),
+        c("strategy", "group", "simulation")
+      ),
+      stringsAsFactors = FALSE
     )
+    seg_result$parameter_overrides <- override_list  # List column containing parameter overrides
 
     results <- bind_rows(results, seg_result)
   }
@@ -231,8 +237,8 @@ validate_sampling_spec <- function(model) {
   univ_vars <- character()
   if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
     univ_vars <- model$variables %>%
-      filter(!is.na(sampling) & sampling != "") %>%
-      pull(name)
+      filter(!is.na(.data$sampling) & .data$sampling != "") %>%
+      pull("name")
   }
 
   # Get multivariate sampled variables

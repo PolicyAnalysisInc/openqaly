@@ -64,13 +64,13 @@ validate_dsa_spec <- function(model) {
         effective_name <- param$display_name
       } else {
         # Get from variable definition, filtering by strategy/group
-        var_row <- model$variables %>% filter(name == param$name)
+        var_row <- model$variables %>% filter(.data$name == param$name)
 
         if (!is.na(param$strategy) && param$strategy != "") {
-          var_row <- var_row %>% filter(strategy == param$strategy)
+          var_row <- var_row %>% filter(.data$strategy == param$strategy)
         }
         if (!is.na(param$group) && param$group != "") {
-          var_row <- var_row %>% filter(group == param$group)
+          var_row <- var_row %>% filter(.data$group == param$group)
         }
 
         var_row <- var_row %>% slice(1)
@@ -287,7 +287,7 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
       )
     } else {
       # Find a segment with this run_id to inspect overrides
-      seg <- segments %>% filter(run_id == rid) %>% slice(1)
+      seg <- segments %>% filter(.data$run_id == rid) %>% slice(1)
 
       # Check if it has parameter_overrides or setting_overrides
       param_overrides <- seg$parameter_overrides[[1]]
@@ -317,16 +317,16 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 
         # If not, get from model variable, filtering by strategy/group if specified
         if (is.null(display_name)) {
-          var_row <- model$variables %>% filter(name == param_name)
+          var_row <- model$variables %>% filter(.data$name == param_name)
 
           # Filter by strategy if specified in param_spec
           if (!is.null(param_spec) && !is.na(param_spec$strategy) && param_spec$strategy != "") {
-            var_row <- var_row %>% filter(strategy == param_spec$strategy)
+            var_row <- var_row %>% filter(.data$strategy == param_spec$strategy)
           }
 
           # Filter by group if specified in param_spec
           if (!is.null(param_spec) && !is.na(param_spec$group) && param_spec$group != "") {
-            var_row <- var_row %>% filter(group == param_spec$group)
+            var_row <- var_row %>% filter(.data$group == param_spec$group)
           }
 
           var_row <- var_row %>% slice(1)
@@ -546,7 +546,7 @@ extract_dsa_summaries <- function(results,
     check_group_exists(group, results)
     if (!is.null(results$segments) && nrow(results$segments) > 0) {
       source_data <- results$segments %>%
-        filter(group == !!group)
+        filter(.data$group == !!group)
     } else {
       # Group was validated to exist, but no segments data
       stop(sprintf("No segment data available for group '%s'", group))
@@ -608,7 +608,7 @@ extract_dsa_summaries <- function(results,
     # Validate strategies exist using helper
     check_strategies_exist(strategies_to_include, results$metadata)
     source_data <- source_data %>%
-      filter(strategy %in% strategies_to_include)
+      filter(.data$strategy %in% strategies_to_include)
   }
 
   # Check for run_id column
@@ -631,25 +631,25 @@ extract_dsa_summaries <- function(results,
 
   # Vectorized extraction and aggregation (like extract_psa_summaries)
   result <- source_data %>%
-    select(run_id, strategy, group, summary_data = !!sym(summary_col)) %>%
-    unnest(summary_data, keep_empty = TRUE) %>%
-    filter(summary == summary_name | is.na(summary))
+    select("run_id", "strategy", "group", summary_data = summary_col) %>%
+    unnest("summary_data", keep_empty = TRUE) %>%
+    filter(.data$summary == summary_name | is.na(.data$summary))
 
   # Filter by value type if specified
   if (value_type != "all") {
     if (!is.null(results$metadata) && !is.null(results$metadata$values)) {
       matching_values <- results$metadata$values %>%
-        filter(type == value_type) %>%
-        pull(name)
+        filter(.data$type == value_type) %>%
+        pull(.data$name)
       result <- result %>%
-        filter(value %in% matching_values | is.na(value))
+        filter(.data$value %in% matching_values | is.na(.data$value))
     }
   }
 
   # Aggregate by run_id, strategy, group
   result <- result %>%
-    group_by(run_id, strategy, group) %>%
-    summarize(amount = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$run_id, .data$strategy, .data$group) %>%
+    summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   # Join with DSA metadata to add parameter info
   # Note: We do NOT filter by strategy/group match here because:
@@ -659,9 +659,9 @@ extract_dsa_summaries <- function(results,
   if (!is.null(results$dsa_metadata)) {
     result <- result %>%
       left_join(results$dsa_metadata, by = "run_id") %>%
-      select(run_id, strategy = strategy.x, group = group.x, parameter,
-             parameter_display_name, parameter_type, variation, amount,
-             param_strategy = strategy.y, param_group = group.y)
+      select("run_id", strategy = "strategy.x", group = "group.x", "parameter",
+             "parameter_display_name", "parameter_type", "variation", "amount",
+             param_strategy = "strategy.y", param_group = "group.y")
   } else {
     # If no metadata, add placeholder columns
     result <- result %>%

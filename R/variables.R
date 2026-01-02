@@ -15,12 +15,12 @@ parse_seg_variables <- function(x, segment = NULL, trees = NULL,
   df <- x %>%
     mutate_all(~as.character(.)) %>%
     filter(
-      is_in_segment(segment, strat = strategy, grp = group),
-      !name %in% names(segment)
+      is_in_segment(segment, strat = .data$strategy, grp = .data$group),
+      !.data$name %in% names(segment)
     ) %>%
     mutate(
-      .is_ss = !(is.na(strategy) | strategy == '' | is.null(strategy)),
-      .is_gs = !(is.na(group) | group == ''  | is.null(group))
+      .is_ss = !(is.na(.data$strategy) | .data$strategy == '' | is.null(.data$strategy)),
+      .is_gs = !(is.na(.data$group) | .data$group == ''  | is.null(.data$group))
     )
   
   # Check that variables definition is valid
@@ -71,9 +71,9 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
       var
     }) %>%
     bind_rows() %>%
-    select(name, display_name, description, !!enquo(formula_column)) %>%
+    select("name", "display_name", "description", !!enquo(formula_column)) %>%
     rbind(extras) %>%
-    {try({sort_variables(.)}, silent = T)}
+    {try({sort_variables(.)}, silent = TRUE)}
   
   if (class(vars)[1] == 'try-error') {
     stop(

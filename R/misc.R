@@ -39,7 +39,7 @@ read_model <- function(path) {
             ""
           },
           variables = vars %>%
-            select(variable, strategy, group) %>%
+            select("variable", "strategy", "group") %>%
             as_tibble()
         )
       }) %>%
@@ -76,7 +76,7 @@ read_model <- function(path) {
 }
 
 convert_settings_from_df <- function(settings_df) {
-  settings <- map(setNames(settings_df$value, settings_df$setting), function(x) {
+  settings <- map(stats::setNames(settings_df$value, settings_df$setting), function(x) {
     num <- suppressWarnings(as.numeric(x))
     if (!is.na(num)) return(num)
     tolower(x)
@@ -209,13 +209,13 @@ get_segments <- function(model) {
   enabled_strategies <- model$strategies
   if ("enabled" %in% colnames(model$strategies)) {
     enabled_strategies <- enabled_strategies %>%
-      filter(is.na(enabled) | enabled == 1 | enabled == TRUE | enabled != 0)
+      filter(is.na(.data$enabled) | .data$enabled == 1 | .data$enabled == TRUE | .data$enabled != 0)
   }
 
   enabled_groups <- model$groups
   if ("enabled" %in% colnames(model$groups)) {
     enabled_groups <- enabled_groups %>%
-      filter(is.na(enabled) | enabled == 1 | enabled == TRUE | enabled != 0)
+      filter(is.na(.data$enabled) | .data$enabled == 1 | .data$enabled == TRUE | .data$enabled != 0)
   }
 
   # Create segments only from enabled strategy × group combinations
@@ -274,7 +274,7 @@ vswitch <- function(x, ...) {
   
   first_val <- Filter(Negate(is.null), args)
   na_val <- if (length(first_val) > 0) { 
-      as(NA, class(first_val[[1]]))
+      methods::as(NA, class(first_val[[1]]))
   } else { 
       NA
   } 
@@ -377,23 +377,23 @@ check_state_time <- function(vars, states, transitions, values) {
 
   # Combine values & transitions, group by state, and identify
   # references to state time or variables referencing state time
-  st_df <- select(transitions, from_state, formula) %>%
-    rename(state = from_state) %>%
+  st_df <- select(transitions, "from_state", "formula") %>%
+    rename(state = "from_state") %>%
     rbind(
-      select(values, state, formula)
+      select(values, "state", "formula")
     ) %>%
-    filter(!is.na(state)) %>%
-    group_by(state) %>%
+    filter(!is.na(.data$state)) %>%
+    group_by(.data$state) %>%
     do({
       tibble(
         state = .$state[1],
         uses_st = any(map_lgl(.$formula, ~has_st_dependency(., extras = st_vars)))
       )
     }) %>%
-    left_join(select(states, name, max_state_time), by = c('state' = 'name')) %>%
+    left_join(select(states, "name", "max_state_time"), by = c('state' = 'name')) %>%
     transmute(
-      state,
-      uses_st = ifelse((max_state_time > 1 | max_state_time == 0) && uses_st, TRUE, FALSE)
+      state = .data$state,
+      uses_st = ifelse((.data$max_state_time > 1 | .data$max_state_time == 0) && .data$uses_st, TRUE, FALSE)
     )
   
   st_df
@@ -1684,7 +1684,7 @@ select_source_data <- function(groups, results) {
 
   if (length(resolved$include_groups) > 0) {
     parts[[length(parts) + 1]] <- results$segments %>%
-      filter(group %in% resolved$include_groups)
+      filter(.data$group %in% resolved$include_groups)
   }
 
   if (length(parts) == 0) {
@@ -1771,7 +1771,7 @@ apply_parameter_overrides <- function(segment, ns, uneval_vars) {
   }
 
   uneval_vars <- uneval_vars %>%
-    filter(!(name %in% names(override_vals)))
+    filter(!.data$name %in% names(override_vals))
 
   list(ns = ns, uneval_vars = uneval_vars)
 }

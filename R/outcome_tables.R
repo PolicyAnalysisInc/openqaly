@@ -58,18 +58,18 @@ prepare_outcomes_table_data <- function(results,
     # Mode 3: Group > Strategy columns
     pivot_data <- summary_data %>%
       pivot_wider(
-        names_from = c(group, strategy),
-        values_from = amount,
+        names_from = c("group", "strategy"),
+        values_from = "amount",
         names_sep = "_",
-        id_cols = value_display
+        id_cols = "value_display"
       )
   } else {
     # Mode 1 or 2: Strategy columns only
     pivot_data <- summary_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = amount,
-        id_cols = value_display
+        names_from = "strategy",
+        values_from = "amount",
+        id_cols = "value_display"
       )
   }
 
@@ -402,7 +402,7 @@ prepare_nmb_table_data <- function(results,
     # Check if outcome summary exists using validation helper
     check_summary_exists(outcome_summary, results$metadata)
     outcome_meta <- results$metadata$summaries %>%
-      filter(name == outcome_summary)
+      filter(.data$name == outcome_summary)
     wtp <- outcome_meta$wtp[1]
     if (length(wtp) == 0 || is.na(wtp)) {
       stop(sprintf("WTP not found for outcome summary '%s'. Provide explicit wtp parameter.", outcome_summary))
@@ -434,15 +434,15 @@ prepare_nmb_table_data <- function(results,
 
   # Transform outcome data: multiply by WTP
   outcome_data <- outcome_data %>%
-    mutate(amount = amount * wtp)
+    mutate(amount = .data$amount * wtp)
 
   # Transform cost data: negate
   cost_data <- cost_data %>%
-    mutate(amount = -amount)
+    mutate(amount = -.data$amount)
 
   # Combine outcome and cost data
   combined_data <- bind_rows(outcome_data, cost_data) %>%
-    select(strategy, group, value, amount)
+    select("strategy", "group", "value", "amount")
 
   # Get unique strategies, groups, values
   strategies_display <- unique(combined_data$strategy)
@@ -459,18 +459,18 @@ prepare_nmb_table_data <- function(results,
     # Mode 3: Group > Strategy columns
     pivot_data <- combined_data %>%
       pivot_wider(
-        names_from = c(group, strategy),
-        values_from = amount,
+        names_from = c("group", "strategy"),
+        values_from = "amount",
         names_sep = "_",
-        id_cols = value
+        id_cols = "value"
       )
   } else{
     # Mode 1 or 2: Strategy columns only
     pivot_data <- combined_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = amount,
-        id_cols = value
+        names_from = "strategy",
+        values_from = "amount",
+        id_cols = "value"
       )
   }
 
@@ -828,8 +828,8 @@ prepare_incremental_ce_table_data <- function(results,
 
   # Create data for table - each strategy is already a row (no pivot needed!)
   table_data <- ce_data %>%
-    arrange(group, cost) %>%
-    select(strategy, group, cost, outcome, dcost, doutcome, icer, comparator)
+    arrange(.data$group, .data$cost) %>%
+    select("strategy", "group", "cost", "outcome", "dcost", "doutcome", "icer", "comparator")
 
   # Format columns to character
   # Format numeric columns with proper handling for NA
@@ -846,19 +846,19 @@ prepare_incremental_ce_table_data <- function(results,
   # Format the ICER column using the format_icer helper (vectorized)
   formatted_data <- table_data %>%
     mutate(
-      cost = format_numeric_col(cost, decimals),
-      outcome = format_numeric_col(outcome, decimals),
-      dcost = format_numeric_col(dcost, decimals),
-      doutcome = format_numeric_col(doutcome, decimals),
-      icer = format_icer(icer, decimals),
-      comparator = ifelse(is.na(comparator), "", comparator)
+      cost = format_numeric_col(.data$cost, decimals),
+      outcome = format_numeric_col(.data$outcome, decimals),
+      dcost = format_numeric_col(.data$dcost, decimals),
+      doutcome = format_numeric_col(.data$doutcome, decimals),
+      icer = format_icer(.data$icer, decimals),
+      comparator = ifelse(is.na(.data$comparator), "", .data$comparator)
     )
 
   # Prepare final table structure based on mode
   if (mode == "single_group") {
     # Single group: simple table with strategy column + metric columns
     result_cols <- formatted_data %>%
-      select(strategy, comparator, cost, outcome, dcost, doutcome, icer)
+      select("strategy", "comparator", "cost", "outcome", "dcost", "doutcome", "icer")
 
     # Rename columns (use HTML entity &#916; for Delta symbol)
     names(result_cols) <- c("Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
@@ -882,7 +882,7 @@ prepare_incremental_ce_table_data <- function(results,
   } else {
     # Multi-group mode: add group column and potentially use group headers
     result_cols <- formatted_data %>%
-      select(group, strategy, comparator, cost, outcome, dcost, doutcome, icer)
+      select("group", "strategy", "comparator", "cost", "outcome", "dcost", "doutcome", "icer")
 
     # Rename columns (use HTML entity &#916; for Delta symbol)
     names(result_cols) <- c("Group", "Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
@@ -1014,8 +1014,7 @@ prepare_pairwise_ce_table_data <- function(results,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,
-    discounted = discounted,
-    use_display_names = TRUE
+    discounted = discounted
   )
 
   # Get absolute values for all strategies
@@ -1028,8 +1027,8 @@ prepare_pairwise_ce_table_data <- function(results,
     discounted = discounted,
     use_display_names = TRUE
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(cost = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(cost = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   outcome_data <- get_summaries(
     results,
@@ -1040,8 +1039,8 @@ prepare_pairwise_ce_table_data <- function(results,
     discounted = discounted,
     use_display_names = TRUE
   ) %>%
-    group_by(strategy, group) %>%
-    summarize(outcome = sum(amount, na.rm = TRUE), .groups = "drop")
+    group_by(.data$strategy, .data$group) %>%
+    summarize(outcome = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
   absolute_data <- cost_data %>%
     inner_join(outcome_data, by = c("strategy", "group"))
@@ -1097,24 +1096,24 @@ prepare_pairwise_ce_table_data <- function(results,
     # Single group: simple table
     # Strategy rows
     strategy_rows <- absolute_data %>%
-      arrange(cost) %>%
+      arrange(.data$cost) %>%
       mutate(
-        row_label = strategy,
-        cost_fmt = format_numeric_col(cost, decimals),
-        outcome_fmt = format_numeric_col(outcome, decimals),
+        row_label = .data$strategy,
+        cost_fmt = format_numeric_col(.data$cost, decimals),
+        outcome_fmt = format_numeric_col(.data$outcome, decimals),
         icer_fmt = ""
       ) %>%
-      select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+      select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
     # Comparison rows
     comparison_rows <- ce_data %>%
       mutate(
-        row_label = paste(strategy, "vs.", comparator),
-        cost_fmt = format_numeric_col(dcost, decimals),
-        outcome_fmt = format_numeric_col(doutcome, decimals),
-        icer_fmt = format_icer(icer, decimals)
+        row_label = paste(.data$strategy, "vs.", .data$comparator),
+        cost_fmt = format_numeric_col(.data$dcost, decimals),
+        outcome_fmt = format_numeric_col(.data$doutcome, decimals),
+        icer_fmt = format_icer(.data$icer, decimals)
       ) %>%
-      select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+      select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
     # Combine
     result_data <- bind_rows(strategy_rows, comparison_rows)
@@ -1156,29 +1155,29 @@ prepare_pairwise_ce_table_data <- function(results,
 
       # Strategy rows for this group
       grp_strategies <- absolute_data %>%
-        filter(group == grp) %>%
-        arrange(cost) %>%
+        filter(.data$group == grp) %>%
+        arrange(.data$cost) %>%
         mutate(
-          row_label = paste0("  ", strategy),
-          cost_fmt = format_numeric_col(cost, decimals),
-          outcome_fmt = format_numeric_col(outcome, decimals),
+          row_label = paste0("  ", .data$strategy),
+          cost_fmt = format_numeric_col(.data$cost, decimals),
+          outcome_fmt = format_numeric_col(.data$outcome, decimals),
           icer_fmt = ""
         ) %>%
-        select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+        select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
       result_data <- bind_rows(result_data, grp_strategies)
       current_row <- current_row + nrow(grp_strategies)
 
       # Comparison rows for this group
       grp_comparisons <- ce_data %>%
-        filter(group == grp) %>%
+        filter(.data$group == grp) %>%
         mutate(
-          row_label = paste0("  ", strategy, " vs. ", comparator),
-          cost_fmt = format_numeric_col(dcost, decimals),
-          outcome_fmt = format_numeric_col(doutcome, decimals),
-          icer_fmt = format_icer(icer, decimals)
+          row_label = paste0("  ", .data$strategy, " vs. ", .data$comparator),
+          cost_fmt = format_numeric_col(.data$dcost, decimals),
+          outcome_fmt = format_numeric_col(.data$doutcome, decimals),
+          icer_fmt = format_icer(.data$icer, decimals)
         ) %>%
-        select(row_label, cost_fmt, outcome_fmt, icer_fmt)
+        select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
       result_data <- bind_rows(result_data, grp_comparisons)
       current_row <- current_row + nrow(grp_comparisons)

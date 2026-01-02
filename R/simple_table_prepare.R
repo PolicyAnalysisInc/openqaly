@@ -39,9 +39,7 @@ prepare_simple_trace_table <- function(results,
     states = states,
     cycles = cycles,
     time_unit = time_unit,
-    strategy_name_field = "display_name",
-    group_name_field = "display_name",
-    state_name_field = state_name_field
+    use_display_names = TRUE
   )
 
   # Extract unique values
@@ -66,10 +64,10 @@ prepare_simple_trace_table <- function(results,
   if (has_groups) {
     trace_data <- trace_long %>%
       select(all_of(c("group", time_col_name, "strategy", "state", "probability"))) %>%
-      arrange(group, !!sym(time_col_name)) %>%
+      arrange(.data$group, !!rlang::sym(time_col_name)) %>%
       pivot_wider(
-        names_from = c(strategy, state),
-        values_from = probability,
+        names_from = c("strategy", "state"),
+        values_from = "probability",
         names_sep = "_",
         id_cols = c("group", all_of(time_col_name))
       )
@@ -77,8 +75,8 @@ prepare_simple_trace_table <- function(results,
     trace_data <- trace_long %>%
       select(all_of(c(time_col_name, "strategy", "state", "probability"))) %>%
       pivot_wider(
-        names_from = c(strategy, state),
-        values_from = probability,
+        names_from = c("strategy", "state"),
+        values_from = "probability",
         names_sep = "_",
         id_cols = all_of(time_col_name)
       )
@@ -237,14 +235,12 @@ prepare_simple_outcomes_table <- function(results,
   # Get summary data
   summary_data <- get_summaries(
     results,
-    group = group,
+    groups = group,
     strategies = strategies,
     summaries = summary_name,
     value_type = "outcome",
     discounted = discounted,
-    strategy_name_field = "display_name",
-    group_name_field = "display_name",
-    value_name_field = value_name_field
+    use_display_names = TRUE
   )
 
   # Extract unique values
@@ -259,17 +255,17 @@ prepare_simple_outcomes_table <- function(results,
   if (has_multiple_groups) {
     pivot_data <- summary_data %>%
       pivot_wider(
-        names_from = c(strategy, group),
-        values_from = amount,
+        names_from = c("strategy", "group"),
+        values_from = "amount",
         names_sep = "_",
-        id_cols = value
+        id_cols = "value"
       )
   } else {
     pivot_data <- summary_data %>%
       pivot_wider(
-        names_from = strategy,
-        values_from = amount,
-        id_cols = value
+        names_from = "strategy",
+        values_from = "amount",
+        id_cols = "value"
       )
   }
 

@@ -763,7 +763,7 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
       variables_df$group <- NA_character_
     }
     # Select only the required columns in the correct order
-    variables_df <- variables_df %>% select(variable, strategy, group)
+    variables_df <- variables_df %>% select("variable", "strategy", "group")
   } else {
     stop("variables must be either a character vector or a tibble/data.frame")
   }

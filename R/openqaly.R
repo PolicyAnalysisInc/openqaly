@@ -10,10 +10,11 @@
 #' @importFrom jsonlite fromJSON toJSON write_json validate
 #' @importFrom tibble rownames_to_column tibble as_tibble
 #' @importFrom stringr str_split_fixed
-#' @importFrom utils capture.output write.csv
+#' @importFrom utils capture.output write.csv head
+#' @importFrom methods as
 #' @importFrom readr read_csv read_file
 #' @importFrom glue glue
-#' @importFrom stats qnorm qlnorm pnorm
+#' @importFrom stats qnorm qlnorm pnorm qbeta qgamma qunif rgamma setNames
 #' @importFrom tools file_ext
 #' @importFrom mvnfast rmvn
 #' @importFrom furrr future_map

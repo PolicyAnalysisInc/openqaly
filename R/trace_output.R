@@ -309,7 +309,7 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
     # Reshape to long
     df_long <- pivot_longer(
       df_states,
-      cols = -c(strategy, group, time),
+      cols = -c("strategy", "group", "time"),
       names_to = "state",
       values_to = "probability"
     )
@@ -431,8 +431,8 @@ trace_plot_area <- function(results,
   # Convert to percentage if requested
   if (proportional) {
     trace_data <- trace_data %>%
-      group_by(strategy, group, cycle) %>%
-      mutate(probability = probability * 100) %>%
+      group_by(.data$strategy, .data$group, .data$cycle) %>%
+      mutate(probability = .data$probability * 100) %>%
       ungroup()
   }
 
@@ -477,7 +477,7 @@ trace_plot_area <- function(results,
   }
 
   # Create base plot using the appropriate time column
-  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = probability, fill = state)) +
+  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability, fill = .data$state)) +
     geom_area(position = "stack") +
     scale_x_continuous(expand = c(0, 0, 0, 0)) +
     scale_y_continuous(expand = c(0, 0, 0, 0)) +
@@ -568,8 +568,8 @@ trace_plot_line <- function(results,
   # Convert to percentage if requested
   if (proportional) {
     trace_data <- trace_data %>%
-      group_by(strategy, group, cycle) %>%
-      mutate(probability = probability * 100) %>%
+      group_by(.data$strategy, .data$group, .data$cycle) %>%
+      mutate(probability = .data$probability * 100) %>%
       ungroup()
   }
 
@@ -614,7 +614,7 @@ trace_plot_line <- function(results,
   }
 
   # Create base plot using the appropriate time column
-  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = probability, color = state)) +
+  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability, color = .data$state)) +
     geom_line(linewidth = 1) +
     theme_bw() +
     labs(
@@ -709,7 +709,7 @@ export_trace <- function(results,
   } else if (format == "html") {
     trace_data <- get_trace(results, format = "wide", collapsed = collapsed)
     # Simple HTML table
-    html_content <- kable(trace_data, format = "html", ...)
+    html_content <- knitr::kable(trace_data, format = "html", ...)
     writeLines(as.character(html_content), file)
   } else if (format == "json") {
     trace_data <- get_trace(results, format = "long", collapsed = collapsed)

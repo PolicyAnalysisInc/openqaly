@@ -60,13 +60,13 @@ prepare_trace_table_data <- function(results,
     # Multiple groups: keep group column and use it as an id column
     trace_for_pivot <- trace_long %>%
       select(all_of(c("group", time_col_name, "strategy", "state", "probability"))) %>%
-      arrange(group, !!sym(time_col_name))  # Ensure group-first ordering
+      arrange(.data$group, !!rlang::sym(time_col_name))  # Ensure group-first ordering
 
     # Pivot wider: strategies and states become columns, group and time are row identifiers
     trace_data <- trace_for_pivot %>%
       pivot_wider(
-        names_from = c(strategy, state),
-        values_from = probability,
+        names_from = c("strategy", "state"),
+        values_from = "probability",
         names_sep = "_",
         id_cols = c("group", all_of(time_col_name))
       )
@@ -78,8 +78,8 @@ prepare_trace_table_data <- function(results,
     # Pivot wider: strategies and states become columns
     trace_data <- trace_for_pivot %>%
       pivot_wider(
-        names_from = c(strategy, state),
-        values_from = probability,
+        names_from = c("strategy", "state"),
+        values_from = "probability",
         names_sep = "_",
         id_cols = all_of(time_col_name)
       )

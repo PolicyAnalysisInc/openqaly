@@ -63,21 +63,21 @@ bootstrap <- function(x, id = NULL, strata = NULL, weight = NULL) {
       do({
 
         # Get the set of unique observations
-        unique <- distinct(x, !!sym(id))
-        n_unique <- nrow(unique)
+        unique_df <- distinct(x, !!sym(id))
+        n_unique <- nrow(unique_df)
 
         # Handle the weights if provided
         if (is.null(weight)) {
           prob <- NULL
         } else {
-          prob <- unique[[weight]]
+          prob <- unique_df[[weight]]
         }
 
         # Resample data frame
-        sampled_indices <- sample(seq_len(n_unique), n * n_unique, replace = T, prob = prob)
-        sampled_df <- slice(unique, sampled_indices) %>%
+        sampled_indices <- sample(seq_len(n_unique), n * n_unique, replace = TRUE, prob = prob)
+        sampled_df <- slice(unique_df, sampled_indices) %>%
           mutate(.sim = rep(seq_len(n), each = n_unique)) %>%
-          select(!!c(".sim", id)) %>%
+          select(c(".sim", id)) %>%
           left_join(x, by = id, relationship = 'many-to-many')
 
         sampled_df
@@ -85,7 +85,7 @@ bootstrap <- function(x, id = NULL, strata = NULL, weight = NULL) {
       ungroup()
 
     sim_index <- resampled_df$.sim
-    select(resampled_df, -.sim) %>%
+    select(resampled_df, -".sim") %>%
       split(sim_index)
   }
 }
@@ -329,7 +329,7 @@ multinomial <- function(size, prob) {
     k <- length(prob)
     result <- matrix(nrow = n, ncol = k)
     for (i in 1:n) {
-      result[i, ] <- rmultinom(1, size = size, prob = prob)
+      result[i, ] <- stats::rmultinom(1, size = size, prob = prob)
     }
     result
   }

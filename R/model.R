@@ -190,7 +190,7 @@ aggregate_segments <- function(segments, parsed_model) {
     aggregated_results <- map_dfr(simulations, function(sim) {
       # Get segments for this simulation
       sim_segments <- segments %>%
-        filter(simulation == sim)
+        filter(.data$simulation == sim)
 
       # Get unique strategies for this simulation
       strategies <- unique(sim_segments$strategy)
@@ -199,7 +199,7 @@ aggregate_segments <- function(segments, parsed_model) {
       map_dfr(strategies, function(strat) {
         # Get segments for this strategy
         strat_segments <- sim_segments %>%
-          filter(strategy == strat)
+          filter(.data$strategy == strat)
 
         # Perform standard aggregation
         result <- aggregate_strategy_segments(strat_segments, parsed_model)
@@ -222,7 +222,7 @@ aggregate_segments <- function(segments, parsed_model) {
     aggregated_results <- map_dfr(run_ids, function(run) {
       # Get segments for this run
       run_segments <- segments %>%
-        filter(run_id == run)
+        filter(.data$run_id == run)
 
       # Get unique strategies for this run
       strategies <- unique(run_segments$strategy)
@@ -231,7 +231,7 @@ aggregate_segments <- function(segments, parsed_model) {
       map_dfr(strategies, function(strat) {
         # Get segments for this strategy
         strat_segments <- run_segments %>%
-          filter(strategy == strat)
+          filter(.data$strategy == strat)
 
         # Perform standard aggregation
         result <- aggregate_strategy_segments(strat_segments, parsed_model)
@@ -253,7 +253,7 @@ aggregate_segments <- function(segments, parsed_model) {
   aggregated_results <- map_dfr(strategies, function(strat) {
     # Get segments for this strategy
     strat_segments <- segments %>%
-      filter(strategy == strat)
+      filter(.data$strategy == strat)
 
     aggregate_strategy_segments(strat_segments, parsed_model)
   })
@@ -299,7 +299,7 @@ aggregate_strategy_segments <- function(strat_segments, parsed_model) {
 
   # Normalize weights
   strat_segments <- strat_segments %>%
-    mutate(normalized_weight = weight / total_weight)
+    mutate(normalized_weight = .data$weight / total_weight)
 
   # Aggregate collapsed trace
   aggregated_trace <- aggregate_trace(strat_segments)
@@ -607,7 +607,7 @@ aggregate_summaries <- function(segments) {
       }
 
       summary_df %>%
-        mutate(weight = weight)
+        mutate(weight = !!weight)
     })
 
     # If no valid summaries were found, return empty result
@@ -617,16 +617,16 @@ aggregate_summaries <- function(segments) {
 
     # Calculate weighted average by grouping by summary and value
     combined_summaries %>%
-      group_by(summary, value) %>%
+      group_by(.data$summary, .data$value) %>%
       summarize(
-        weighted_sum = sum(amount * weight, na.rm = TRUE),
-        weight_sum = sum(weight, na.rm = TRUE),
+        weighted_sum = sum(.data$amount * .data$weight, na.rm = TRUE),
+        weight_sum = sum(.data$weight, na.rm = TRUE),
         .groups = "drop"
       ) %>%
       mutate(
-        amount = weighted_sum / weight_sum
+        amount = .data$weighted_sum / .data$weight_sum
       ) %>%
-      select(summary, value, amount)
+      select("summary", "value", "amount")
   }
 
   weights <- segments$normalized_weight

@@ -28,13 +28,13 @@ parse_values <- function(x, states, extra_vars) {
   
   # Check for duplicate values by name, state, and destination
   duplicates <- x %>%
-    group_by(name, state, destination) %>%
+    group_by(.data$name, .data$state, .data$destination) %>%
     filter(n() > 1) %>%
     ungroup()
-  
+
   if (nrow(duplicates) > 0) {
     dup_values <- duplicates %>%
-      select(name, state, destination) %>%
+      select("name", "state", "destination") %>%
       distinct() %>%
       mutate(combined = glue("name: {name}, state: {state}, destination: {destination}"))
     
@@ -44,11 +44,11 @@ parse_values <- function(x, states, extra_vars) {
 
   # Parse values and sort
   vars <- x %>%
-    group_by(state, destination) %>%
+    group_by(.data$state, .data$destination) %>%
     do({
       as.data.frame(.) %>%
-        select(name, display_name, description, state, destination, formula, type) %>%
-        mutate(formula = map(formula, as.oq_formula)) %>%
+        select("name", "display_name", "description", "state", "destination", "formula", "type") %>%
+        mutate(formula = map(.data$formula, as.oq_formula)) %>%
         sort_variables(extra_vars)
     }) %>%
     ungroup()
@@ -57,8 +57,8 @@ parse_values <- function(x, states, extra_vars) {
   # For PSM models, states don't have max_state_time, so set max_st = 1
   if ("max_state_time" %in% names(states)) {
     vars <- vars %>%
-      left_join(select(states, name, max_st_from_state = max_state_time), by = c('state' = 'name')) %>%
-      mutate(max_st = ifelse(is.na(max_st_from_state), 1, ifelse(max_st_from_state == 0, Inf, max_st_from_state)))
+      left_join(select(states, "name", max_st_from_state = "max_state_time"), by = c('state' = 'name')) %>%
+      mutate(max_st = ifelse(is.na(.data$max_st_from_state), 1, ifelse(.data$max_st_from_state == 0, Inf, .data$max_st_from_state)))
   } else {
     vars <- vars %>%
       mutate(max_st = 1)
@@ -98,7 +98,7 @@ format_ranges_for_eval_values <- function(numbers) {
   if (is.null(numbers) || length(numbers) == 0 || all(is.na(numbers))) {
     return("N/A")
   }
-  unique_sorted_numbers <- sort(unique(as.integer(na.omit(numbers))))
+  unique_sorted_numbers <- sort(unique(as.integer(stats::na.omit(numbers))))
   if (length(unique_sorted_numbers) == 0) {
     return("N/A")
   }
@@ -135,7 +135,7 @@ format_na_table_to_markdown_for_eval_values <- function(table_data_df, message_p
 
   # Ensure 'Destination' is character for consistent formatting if it contains actual NAs
   if ("Destination" %in% colnames(table_data_df)) {
-    table_data_df <- mutate(table_data_df, Destination = as.character(Destination))
+    table_data_df <- mutate(table_data_df, Destination = as.character(.data$Destination))
   }
   
   # Format NA values as "N/A" for display purposes
@@ -202,14 +202,14 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
 
     # The arrange step on a 0-row tibble with a 'state' column is valid.
     # factor(character(0), levels=state_names) results in factor(0 levels=...)
-    return(arrange(empty_evaluated_values, factor(state, levels = state_names)))
+    return(arrange(empty_evaluated_values, factor(.data$state, levels = state_names)))
   }
 
   # Existing logic for when df has rows:
-  
+
   # The list of tibbles, one for each group of (state, destination)
   grouped_df_list <- df %>%
-    group_by(state, destination) %>% # destination can be NA
+    group_by(.data$state, .data$destination) %>% # destination can be NA
     group_split()
 
   # Process each group and collect NA information
@@ -294,7 +294,7 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       }
       
       expanded_state_res_list <- state_res %>%
-        group_by(state_cycle) %>%
+        group_by(.data$state_cycle) %>%
         group_split()
 
       inner_mapped_rows <- map(expanded_state_res_list, function(state_cycle_df) {
@@ -329,18 +329,18 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   if (nrow(all_na_df) > 0) {
     # Consolidate NA report
     consolidated_na_summary <- all_na_df %>%
-      group_by(value_name, state, destination) %>%
+      group_by(.data$value_name, .data$state, .data$destination) %>%
       summarise(
-        Cycles = format_ranges_for_eval_values(cycle),
-        State_Cycles = format_ranges_for_eval_values(state_cycle),
+        Cycles = format_ranges_for_eval_values(.data$cycle),
+        State_Cycles = format_ranges_for_eval_values(.data$state_cycle),
         .groups = 'drop'
       ) %>%
       select(
-        `Value Name` = value_name,
-        State = state,
-        Destination = destination, # This column might contain NA_character_
-        Cycles,
-        `State Cycles` = State_Cycles
+        `Value Name` = "value_name",
+        State = "state",
+        Destination = "destination", # This column might contain NA_character_
+        "Cycles",
+        `State Cycles` = "State_Cycles"
       )
 
     # Always use checkpoint behavior for NA value errors
@@ -354,15 +354,15 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   
   # Combine results from all groups (original logic)
   final_evaluated_values <- bind_rows(mapped_results_list)
-  
-  arrange(final_evaluated_values, factor(state, levels = state_names))
+
+  arrange(final_evaluated_values, factor(.data$state, levels = state_names))
 }
 
 values_to_vmat <- function(df, state_names) {
   value_names <- setdiff(colnames(df), c('state', 'cycle', 'state_cycle', 'max_st'))
   lf <-  df %>%
     pivot_longer(names_to = "variable", values_to = "value", all_of(value_names)) %>%
-    mutate(e_state = factor(expand_state_name(state, state_cycle), levels = state_names))
+    mutate(e_state = factor(expand_state_name(.data$state, .data$state_cycle), levels = state_names))
   mat <- lf_to_arr(lf, c('cycle', 'e_state', 'variable'), 'value')
   dimnames(mat) <- list(
     unique(df$cycle),

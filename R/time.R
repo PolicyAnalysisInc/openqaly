@@ -91,30 +91,40 @@ time_variables <- function(settings, states) {
   } else {
     st_cycles <- n_cycles
   }
+  # Create vectors for model time variables
+  cycle_vec <- rep(seq_len(n_cycles), times = st_cycles)
+  day_vec <- cycle_vec * cl
+  day_lag_vec <- day_vec - cl
+
+  # Create vectors for state time variables
+  state_cycle_vec <- rep(seq_len(st_cycles), each = n_cycles)
+  state_day_vec <- state_cycle_vec * cl
+  state_day_lag_vec <- state_day_vec - cl
+
   # Create a table of model & state time variables
   tibble(
     # Model time variables (i.e. time since start of model)
-    cycle = rep(seq_len(n_cycles), times = st_cycles),
-    day = cycle * cl,
-    week = convert_time(day, from = 'Days', to = 'Weeks', settings),
-    month = convert_time(day, from = 'Days', to = 'Months', settings),
-    year = convert_time(day, from = 'Days', to = 'Years', settings),
-    cycle_lag = cycle - 1,
-    day_lag = day - cl,
-    week_lag = convert_time(day_lag, from = 'Days', to = 'Weeks', settings),
-    month_lag = convert_time(day_lag, from = 'Days', to = 'Months', settings),
-    year_lag = convert_time(day_lag, from = 'Days', to = 'Years', settings),
+    cycle = cycle_vec,
+    day = day_vec,
+    week = convert_time(day_vec, from = 'Days', to = 'Weeks', settings),
+    month = convert_time(day_vec, from = 'Days', to = 'Months', settings),
+    year = convert_time(day_vec, from = 'Days', to = 'Years', settings),
+    cycle_lag = cycle_vec - 1,
+    day_lag = day_lag_vec,
+    week_lag = convert_time(day_lag_vec, from = 'Days', to = 'Weeks', settings),
+    month_lag = convert_time(day_lag_vec, from = 'Days', to = 'Months', settings),
+    year_lag = convert_time(day_lag_vec, from = 'Days', to = 'Years', settings),
     # State time variables (i.e. time since entering state)
-    state_cycle = rep(seq_len(st_cycles), each = n_cycles),
-    state_day = state_cycle * cl,
-    state_week = convert_time(state_day, from = 'Days', to = 'Weeks', settings),
-    state_month = convert_time(state_day, from = 'Days', to = 'Months', settings),
-    state_year = convert_time(state_day, from = 'Days', to = 'Years', settings),
-    state_cycle_lag = state_cycle - 1,
-    state_day_lag = state_day - cl,
-    state_week_lag = convert_time(state_day_lag, from = 'Days', to = 'Weeks', settings),
-    state_month_lag = convert_time(state_day_lag, from = 'Days', to = 'Months', settings),
-    state_year_lag = convert_time(state_day_lag, from = 'Days', to = 'Years', settings),
+    state_cycle = state_cycle_vec,
+    state_day = state_day_vec,
+    state_week = convert_time(state_day_vec, from = 'Days', to = 'Weeks', settings),
+    state_month = convert_time(state_day_vec, from = 'Days', to = 'Months', settings),
+    state_year = convert_time(state_day_vec, from = 'Days', to = 'Years', settings),
+    state_cycle_lag = state_cycle_vec - 1,
+    state_day_lag = state_day_lag_vec,
+    state_week_lag = convert_time(state_day_lag_vec, from = 'Days', to = 'Weeks', settings),
+    state_month_lag = convert_time(state_day_lag_vec, from = 'Days', to = 'Months', settings),
+    state_year_lag = convert_time(state_day_lag_vec, from = 'Days', to = 'Years', settings),
   )
 }
 

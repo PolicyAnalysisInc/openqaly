@@ -149,13 +149,13 @@ build_vbp_segments <- function(model, vbp_spec) {
         run_id = i,  # Use run_id to leverage existing aggregation logic
         price_level = i,
         price_value = vbp_spec$price_values[i],
-        parameter_overrides = purrr::map2(strategy, group, function(s, g) {
+        parameter_overrides = purrr::map2(.data$strategy, .data$group, function(s, g) {
           # Check if this is the intervention strategy
           # Note: price applies to all groups of the intervention strategy
           is_intervention <- (s == vbp_spec$intervention_strategy)
 
           if (is_intervention) {
-            setNames(list(vbp_spec$price_values[i]),
+            stats::setNames(list(vbp_spec$price_values[i]),
                      vbp_spec$price_variable)
           } else {
             list()
@@ -197,14 +197,14 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
     for (comparator in comparators) {
       # Extract group-specific results for each price point
       intervention_data <- segments %>%
-        filter(strategy == vbp_spec$intervention_strategy,
-               group == grp) %>%
-        arrange(price_level)
+        filter(.data$strategy == vbp_spec$intervention_strategy,
+               .data$group == grp) %>%
+        arrange(.data$price_level)
 
       comparator_data <- segments %>%
-        filter(strategy == comparator,
-               group == grp) %>%
-        arrange(price_level)
+        filter(.data$strategy == comparator,
+               .data$group == grp) %>%
+        arrange(.data$price_level)
 
       # Skip if no data for this group
       if (nrow(intervention_data) == 0 || nrow(comparator_data) == 0) {
@@ -275,12 +275,12 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
   for (comparator in comparators) {
     # Extract aggregated results for each price point
     intervention_data <- aggregated %>%
-      filter(strategy == vbp_spec$intervention_strategy) %>%
-      arrange(run_id)
+      filter(.data$strategy == vbp_spec$intervention_strategy) %>%
+      arrange(.data$run_id)
 
     comparator_data <- aggregated %>%
-      filter(strategy == comparator) %>%
-      arrange(run_id)
+      filter(.data$strategy == comparator) %>%
+      arrange(.data$run_id)
 
     # Extract aggregated costs and outcomes
     int_costs <- extract_summary_values(intervention_data, vbp_spec$cost_summary)
@@ -348,14 +348,14 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
 #' @keywords internal
 extract_segment_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = purrr::map_dbl(summaries, function(s) {
+    mutate(total = purrr::map_dbl(.data$summaries, function(s) {
       if (is.null(s)) return(NA_real_)
       s %>%
-        filter(summary == summary_name) %>%
-        pull(amount) %>%
+        filter(.data$summary == summary_name) %>%
+        pull(.data$amount) %>%
         sum()
     })) %>%
-    pull(total)
+    pull(.data$total)
 }
 
 #' Extract Summary Values from Aggregated Data
@@ -369,13 +369,13 @@ extract_segment_summary_values <- function(data, summary_name) {
 #' @keywords internal
 extract_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = purrr::map_dbl(summaries, function(s) {
+    mutate(total = purrr::map_dbl(.data$summaries, function(s) {
       s %>%
-        filter(summary == summary_name) %>%
-        pull(amount) %>%
+        filter(.data$summary == summary_name) %>%
+        pull(.data$amount) %>%
         sum()
     })) %>%
-    pull(total)
+    pull(.data$total)
 }
 
 #' Calculate VBP Price at Given WTP
@@ -402,10 +402,10 @@ extract_summary_values <- function(data, summary_name) {
 calculate_vbp_price <- function(vbp_results, comparator, wtp, group = "overall") {
   if (group == "overall") {
     equation <- vbp_results$vbp_equations %>%
-      filter(comparator == !!comparator)
+      filter(.data$comparator == !!comparator)
   } else {
     equation <- vbp_results$vbp_equations_by_group %>%
-      filter(comparator == !!comparator, group == !!group)
+      filter(.data$comparator == !!comparator, .data$group == !!group)
   }
 
   if (nrow(equation) == 0) {
