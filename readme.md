@@ -2,9 +2,9 @@
 <!-- badges: start -->
 
 [![CircleCI build
-status](https://circleci.com/gh/policyanalysisinc/openqaly.svg?style=svg)](https://circleci.com/gh/jrdnmdhl/openqaly)
+status](https://circleci.com/gh/policyanalysisinc/openqaly.svg?style=svg)](https://circleci.com/gh/policyanalysisinc/openqaly)
 [![Codecov test
-coverage](https://codecov.io/gh/policyanalysisinc/openqaly/branch/master/graph/badge.svg)](https://app.codecov.io/gh/jrdnmdhl/openqaly?branch=master)
+coverage](https://codecov.io/gh/policyanalysisinc/openqaly/branch/master/graph/badge.svg)](https://app.codecov.io/gh/policyanalysisinc/openqaly?branch=master)
 <!-- badges: end -->
 
 # openqaly
