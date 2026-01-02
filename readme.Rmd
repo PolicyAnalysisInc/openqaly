@@ -4,7 +4,7 @@ output: github_document
 
 <!-- badges: start -->
 
-[![CircleCI build status](https://circleci.com/gh/policyanalysisinc/openqaly.svg?style=svg)](https://circleci.com/gh/policyanalysisinc/openqaly)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/jrdnmdhl/openqaly.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/jrdnmdhl/openqaly)
 [![Codecov test coverage](https://codecov.io/gh/policyanalysisinc/openqaly/branch/master/graph/badge.svg)](https://app.codecov.io/gh/policyanalysisinc/openqaly?branch=master)
 <!-- badges: end -->
 
