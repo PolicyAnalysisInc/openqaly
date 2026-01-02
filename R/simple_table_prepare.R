@@ -64,7 +64,7 @@ prepare_simple_trace_table <- function(results,
   if (has_groups) {
     trace_data <- trace_long %>%
       select(all_of(c("group", time_col_name, "strategy", "state", "probability"))) %>%
-      arrange(.data$group, !!rlang::sym(time_col_name)) %>%
+      arrange(.data$group, !!sym(time_col_name)) %>%
       pivot_wider(
         names_from = c("strategy", "state"),
         values_from = "probability",

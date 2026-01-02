@@ -41,11 +41,11 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
     n_groups <- length(unique(tornado_data$group))
     n_strategies <- length(unique(tornado_data$strategy))
 
-    facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy), scales = "free")
+    facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$strategy), scales = "free")
     if ((n_groups > 1) && (n_strategies == 1)) {
-      facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free")
+      facet_component <- facet_wrap(vars(.data$group), scales = "free")
     } else if ((n_strategies > 1) && (n_groups == 1)) {
-      facet_component <- facet_wrap(ggplot2::vars(.data$strategy), scales = "free", ncol = 1)
+      facet_component <- facet_wrap(vars(.data$strategy), scales = "free", ncol = 1)
     } else if ((n_strategies == 1) && (n_groups == 1)) {
       facet_component <- NULL
     }
@@ -95,7 +95,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
     distinct(.data$strategy, .data$group, .data$base)
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, tornado_long$xmin, tornado_long$xmax))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)

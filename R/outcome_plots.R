@@ -70,7 +70,7 @@ outcomes_plot_line <- function(res, outcome,
   summary_values <- res$metadata$summaries |>
     filter(.data$name == outcome) |>
     pull(.data$values) |>
-    stringr::str_split(pattern = "[,\\s]+") |>
+    str_split(pattern = "[,\\s]+") |>
     unlist()
 
   # Get time-series data for the values in this summary
@@ -115,14 +115,14 @@ outcomes_plot_line <- function(res, outcome,
   if (cumulative) {
     values_data <- values_data %>%
       group_by(.data$strategy, .data$group, .data$value_name) %>%
-      arrange(!!rlang::sym(time_col)) %>%
+      arrange(!!sym(time_col)) %>%
       mutate(amount = cumsum(.data$amount)) %>%
       ungroup()
   }
 
   # Calculate totals for each strategy-group-time combination
   totals <- values_data %>%
-    group_by(!!rlang::sym(time_col), .data$strategy, .data$group) %>%
+    group_by(!!sym(time_col), .data$strategy, .data$group) %>%
     summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = 'drop') %>%
     mutate(value_name = "Total")
 
@@ -145,18 +145,18 @@ outcomes_plot_line <- function(res, outcome,
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
 
-  facet_component <- facet_grid(rows = ggplot2::vars(.data$value_name), cols = ggplot2::vars(.data$group), scales = "free_y")
+  facet_component <- facet_grid(rows = vars(.data$value_name), cols = vars(.data$group), scales = "free_y")
   if ((n_groups > 1) && (n_value_names == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$group), scales = "free_y")
   } else if ((n_value_names > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$value_name), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$value_name), scales = "free_y")
   } else if ((n_value_names == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   # Create the plot
   p <- ggplot(values_with_total,
-              aes(x = !!rlang::sym(time_col), y = .data$amount, color = .data$strategy)) +
+              aes(x = !!sym(time_col), y = .data$amount, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     scale_y_continuous(labels = comma) +
     theme_bw() +
@@ -298,11 +298,11 @@ nmb_plot_bar <- function(res,
   n_groups <- length(unique(nmb_data$group))
   n_strategies <- length(unique(nmb_data$strategy))
 
-  facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy))
+  facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$strategy))
   if ((n_groups > 1) && (n_strategies == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$group))
+    facet_component <- facet_wrap(vars(.data$group))
   } else if ((n_strategies > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$strategy))
+    facet_component <- facet_wrap(vars(.data$strategy))
   } else if ((n_strategies == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
@@ -450,14 +450,14 @@ nmb_plot_line <- function(res,
   if (cumulative) {
     all_components <- all_components %>%
       group_by(.data$strategy, .data$group, .data$value_name) %>%
-      arrange(!!rlang::sym(time_col)) %>%
+      arrange(!!sym(time_col)) %>%
       mutate(amount = cumsum(.data$amount)) %>%
       ungroup()
   }
 
   # Add Total line (like outcomes_plot_time)
   totals <- all_components %>%
-    group_by(!!rlang::sym(time_col), .data$strategy, .data$group) %>%
+    group_by(!!sym(time_col), .data$strategy, .data$group) %>%
     summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = 'drop') %>%
     mutate(value_name = "Total")
 
@@ -478,18 +478,18 @@ nmb_plot_line <- function(res,
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
 
-  facet_component <- facet_grid(rows = ggplot2::vars(.data$value_name), cols = ggplot2::vars(.data$group), scales = "free_y")
+  facet_component <- facet_grid(rows = vars(.data$value_name), cols = vars(.data$group), scales = "free_y")
   if ((n_groups > 1) && (n_value_names == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$group), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$group), scales = "free_y")
   } else if ((n_value_names > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$value_name), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$value_name), scales = "free_y")
   } else if ((n_value_names == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
 
   # Create the plot (like outcomes_plot_time)
   p <- ggplot(values_with_total,
-              aes(x = !!rlang::sym(time_col), y = .data$amount, color = .data$strategy)) +
+              aes(x = !!sym(time_col), y = .data$amount, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     annotate("segment", x = -Inf, xend = Inf, y = 0, yend = 0,
              linetype = "dashed", color = "black") +
@@ -598,7 +598,7 @@ incremental_ce_plot <- function(res,
     facet_component <- facet_wrap(~ group, scales = "free")
   }
 
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, ce_data$outcome))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)

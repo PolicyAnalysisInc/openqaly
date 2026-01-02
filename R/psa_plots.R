@@ -103,8 +103,8 @@ incremental_ceac_plot <- function(results,
   # Create base plot
   p <- ggplot(ceac_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
     geom_line(linewidth = 1) +
-    scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-    scale_x_continuous(labels = scales::comma) +
+    scale_y_continuous(limits = c(0, 1), labels = percent) +
+    scale_x_continuous(labels = comma) +
     theme_bw() +
     labs(
       title = title,
@@ -242,7 +242,7 @@ incremental_ceac_frontier_plot <- function(results,
   }
 
   p <- p +
-    scale_x_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = comma) +
     theme_bw() +
     labs(
       title = title,
@@ -360,7 +360,7 @@ psa_scatter_plot <- function(results,
   }
 
   # Calculate axis breaks and limits to include 0,0 and extend beyond data
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, psa_data$outcome))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)
@@ -375,12 +375,12 @@ psa_scatter_plot <- function(results,
     scale_y_continuous(
       breaks = y_breaks,
       limits = y_limits,
-      labels = scales::comma
+      labels = comma
     ) +
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = scales::number
+      labels = number
     ) +
     theme_bw() +
     labs(
@@ -511,8 +511,8 @@ pairwise_ceac_plot <- function(results,
   p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
     geom_line(linewidth = 1) +
     geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
-    scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-    scale_x_continuous(labels = scales::comma) +
+    scale_y_continuous(limits = c(0, 1), labels = percent) +
+    scale_x_continuous(labels = comma) +
     theme_bw() +
     labs(
       title = title,
@@ -694,7 +694,7 @@ psa_parameter_scatter_matrix <- function(results,
     p <- GGally::ggpairs(
       plot_data,
       columnLabels = wrapped_labels,
-      labeller = ggplot2::label_wrap_gen(width = label_wrap_width),
+      labeller = label_wrap_gen(width = label_wrap_width),
       upper = upper,
       lower = lower,
       diag = diag,
@@ -715,13 +715,13 @@ psa_parameter_scatter_matrix <- function(results,
 
   # Adjust alpha for scatter plots if points are in lower triangle
   if (!is.null(lower$continuous) && lower$continuous == "points") {
-    p <- p + ggplot2::theme_bw()
+    p <- p + theme_bw()
 
     # Apply alpha to scatter plots in lower triangle
     for (i in 2:ncol(plot_data)) {
       for (j in 1:(i-1)) {
         p[i, j] <- p[i, j] +
-          ggplot2::geom_point(alpha = alpha, size = 0.5)
+          geom_point(alpha = alpha, size = 0.5)
       }
     }
   }
@@ -827,7 +827,7 @@ evpi_plot <- function(results,
   }
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, evpi_data$wtp))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)
@@ -855,12 +855,12 @@ evpi_plot <- function(results,
     scale_y_continuous(
       breaks = y_breaks,
       limits = y_limits,
-      labels = scales::comma
+      labels = comma
     ) +
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = scales::comma
+      labels = comma
     ) +
     theme_bw() +
     labs(
@@ -1129,7 +1129,7 @@ pairwise_psa_scatter_plot <- function(results,
   }
 
   # 6. Axis Limits and Breaks
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, incremental_data$doutcome), na.rm = TRUE)
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)
@@ -1162,7 +1162,7 @@ pairwise_psa_scatter_plot <- function(results,
       geom_point(alpha = alpha, size = 1) +
       scale_color_manual(
         values = c("Cost-Effective" = "#00BA38", "Not Cost-Effective" = "#F8766D"),
-        name = paste0("Cost-Effective\nat \u03BB = ", scales::dollar(wtp, scale = 1/1000, suffix = "K"))
+        name = paste0("Cost-Effective\nat \u03BB = ", dollar(wtp, scale = 1/1000, suffix = "K"))
       )
   } else {
     p <- p +
@@ -1171,8 +1171,8 @@ pairwise_psa_scatter_plot <- function(results,
 
   # Add scales and theme
   p <- p +
-    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = scales::number) +
-    scale_y_continuous(breaks = y_breaks, limits = y_limits, labels = scales::comma) +
+    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = number) +
+    scale_y_continuous(breaks = y_breaks, limits = y_limits, labels = comma) +
     theme_bw() +
     labs(
       title = title,

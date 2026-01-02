@@ -78,11 +78,11 @@ outcomes_plot_bar <- function(res, outcome,
   n_groups <- length(unique(summaries$group))
   n_strategies <- length(unique(summaries$strategy))
 
-  facet_component <- facet_grid(rows = ggplot2::vars(.data$group), cols = ggplot2::vars(.data$strategy))
+  facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$strategy))
   if ((n_groups > 1) && (n_strategies == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$group))
+    facet_component <- facet_wrap(vars(.data$group))
   } else if ((n_strategies > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(ggplot2::vars(.data$strategy))
+    facet_component <- facet_wrap(vars(.data$strategy))
   } else if ((n_strategies == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
@@ -99,7 +99,7 @@ outcomes_plot_bar <- function(res, outcome,
     )
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
-  breaks_fn <- scales::pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 5)
   x_range <- range(c(0, summaries_with_total$amount))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)

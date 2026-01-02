@@ -329,7 +329,7 @@ multinomial <- function(size, prob) {
     k <- length(prob)
     result <- matrix(nrow = n, ncol = k)
     for (i in 1:n) {
-      result[i, ] <- stats::rmultinom(1, size = size, prob = prob)
+      result[i, ] <- rmultinom(1, size = size, prob = prob)
     }
     result
   }

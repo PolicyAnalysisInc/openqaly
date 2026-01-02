@@ -96,7 +96,7 @@ prepare_incremental_ceac_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(.data$wtp))
+    mutate(wtp_display = dollar(.data$wtp))
 
   # Format probability columns as percentage strings
   strategy_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
@@ -368,23 +368,23 @@ prepare_psa_summary_table_data <- function(results,
     summarize(
       # Cost statistics
       mean_cost = mean(.data$cost, na.rm = TRUE),
-      sd_cost = stats::sd(.data$cost, na.rm = TRUE),
-      ci_lower_cost = stats::quantile(.data$cost, 0.025, na.rm = TRUE),
-      ci_upper_cost = stats::quantile(.data$cost, 0.975, na.rm = TRUE),
-      median_cost = stats::median(.data$cost, na.rm = TRUE),
-      q25_cost = stats::quantile(.data$cost, 0.25, na.rm = TRUE),
-      q75_cost = stats::quantile(.data$cost, 0.75, na.rm = TRUE),
+      sd_cost = sd(.data$cost, na.rm = TRUE),
+      ci_lower_cost = quantile(.data$cost, 0.025, na.rm = TRUE),
+      ci_upper_cost = quantile(.data$cost, 0.975, na.rm = TRUE),
+      median_cost = median(.data$cost, na.rm = TRUE),
+      q25_cost = quantile(.data$cost, 0.25, na.rm = TRUE),
+      q75_cost = quantile(.data$cost, 0.75, na.rm = TRUE),
       min_cost = min(.data$cost, na.rm = TRUE),
       max_cost = max(.data$cost, na.rm = TRUE),
 
       # Outcome statistics
       mean_outcome = mean(.data$outcome, na.rm = TRUE),
-      sd_outcome = stats::sd(.data$outcome, na.rm = TRUE),
-      ci_lower_outcome = stats::quantile(.data$outcome, 0.025, na.rm = TRUE),
-      ci_upper_outcome = stats::quantile(.data$outcome, 0.975, na.rm = TRUE),
-      median_outcome = stats::median(.data$outcome, na.rm = TRUE),
-      q25_outcome = stats::quantile(.data$outcome, 0.25, na.rm = TRUE),
-      q75_outcome = stats::quantile(.data$outcome, 0.75, na.rm = TRUE),
+      sd_outcome = sd(.data$outcome, na.rm = TRUE),
+      ci_lower_outcome = quantile(.data$outcome, 0.025, na.rm = TRUE),
+      ci_upper_outcome = quantile(.data$outcome, 0.975, na.rm = TRUE),
+      median_outcome = median(.data$outcome, na.rm = TRUE),
+      q25_outcome = quantile(.data$outcome, 0.25, na.rm = TRUE),
+      q75_outcome = quantile(.data$outcome, 0.75, na.rm = TRUE),
       min_outcome = min(.data$outcome, na.rm = TRUE),
       max_outcome = max(.data$outcome, na.rm = TRUE),
 
@@ -931,7 +931,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(.data$wtp))
+    mutate(wtp_display = dollar(.data$wtp))
 
   # Format probability columns as percentage strings
   comparison_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
@@ -1212,13 +1212,13 @@ prepare_evpi_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = scales::dollar(.data$wtp))
+    mutate(wtp_display = dollar(.data$wtp))
 
   # Format EVPI columns with proper decimals and dollar formatting
   evpi_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
   for (col in evpi_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- scales::dollar(
+      pivot_data[[col]] <- dollar(
         round(pivot_data[[col]], decimals),
         accuracy = 10^(-decimals)
       )

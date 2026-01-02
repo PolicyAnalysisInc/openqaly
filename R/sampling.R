@@ -131,7 +131,7 @@ resample <- function(model, n, segments, seed = NULL) {
         }
 
         # Sample using inverse CDF approach
-        u <- stats::runif(n)
+        u <- runif(n)
         samples <- safe_eval(dist_fn(u))
 
         if (is_oq_error(samples)) {
@@ -199,7 +199,7 @@ resample <- function(model, n, segments, seed = NULL) {
       # No sampling for this segment - use empty lists (base case values will be used)
       override_list <- rep(list(list()), n)
     } else {
-      override_list <- purrr::transpose(parameter_overrides)
+      override_list <- transpose(parameter_overrides)
     }
 
     strat_name <- segment$strategy

@@ -103,8 +103,8 @@ run_vbp <- function(model,
   segment_results <- vbp_segments %>%
     rowwise() %>%
     group_split() %>%
-    furrr::future_map(function(segment) run_segment(segment, parsed_model, ...),
-               .progress = TRUE, .options = furrr::furrr_options(seed = 1)) %>%
+    future_map(function(segment) run_segment(segment, parsed_model, ...),
+               .progress = TRUE, .options = furrr_options(seed = 1)) %>%
     bind_rows()
 
   # Aggregate by price_level + strategy
@@ -149,13 +149,13 @@ build_vbp_segments <- function(model, vbp_spec) {
         run_id = i,  # Use run_id to leverage existing aggregation logic
         price_level = i,
         price_value = vbp_spec$price_values[i],
-        parameter_overrides = purrr::map2(.data$strategy, .data$group, function(s, g) {
+        parameter_overrides = map2(.data$strategy, .data$group, function(s, g) {
           # Check if this is the intervention strategy
           # Note: price applies to all groups of the intervention strategy
           is_intervention <- (s == vbp_spec$intervention_strategy)
 
           if (is_intervention) {
-            stats::setNames(list(vbp_spec$price_values[i]),
+            setNames(list(vbp_spec$price_values[i]),
                      vbp_spec$price_variable)
           } else {
             list()
@@ -348,7 +348,7 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
 #' @keywords internal
 extract_segment_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = purrr::map_dbl(.data$summaries, function(s) {
+    mutate(total = map_dbl(.data$summaries, function(s) {
       if (is.null(s)) return(NA_real_)
       s %>%
         filter(.data$summary == summary_name) %>%
@@ -369,7 +369,7 @@ extract_segment_summary_values <- function(data, summary_name) {
 #' @keywords internal
 extract_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = purrr::map_dbl(.data$summaries, function(s) {
+    mutate(total = map_dbl(.data$summaries, function(s) {
       s %>%
         filter(.data$summary == summary_name) %>%
         pull(.data$amount) %>%

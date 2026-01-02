@@ -98,7 +98,7 @@ format_ranges_for_eval_values <- function(numbers) {
   if (is.null(numbers) || length(numbers) == 0 || all(is.na(numbers))) {
     return("N/A")
   }
-  unique_sorted_numbers <- sort(unique(as.integer(stats::na.omit(numbers))))
+  unique_sorted_numbers <- sort(unique(as.integer(na.omit(numbers))))
   if (length(unique_sorted_numbers) == 0) {
     return("N/A")
   }

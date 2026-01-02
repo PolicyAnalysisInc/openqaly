@@ -3,23 +3,23 @@
 #' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
 #' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr openqalysurv
 #' @importFrom Rcpp sourceCpp
-#' @importFrom purrr map map_chr map_lgl map_dfr map2_dfr set_names flatten_chr flatten keep discard iwalk walk2 reduce
-#' @importFrom dplyr select mutate group_by summarize left_join
+#' @importFrom purrr map map_chr map_lgl map_dfr map2_dfr set_names flatten_chr flatten keep discard iwalk walk2 reduce transpose map2 map_dbl
+#' @importFrom dplyr select mutate group_by summarize left_join all_of bind_rows rename
 #' @importFrom openxlsx readWorkbook getSheetNames createWorkbook addWorksheet writeData saveWorkbook write.xlsx
-#' @importFrom tidyr separate_rows pivot_longer pivot_wider
+#' @importFrom tidyr separate_rows pivot_longer pivot_wider unnest
 #' @importFrom jsonlite fromJSON toJSON write_json validate
-#' @importFrom tibble rownames_to_column tibble as_tibble
-#' @importFrom stringr str_split_fixed
+#' @importFrom tibble rownames_to_column tibble as_tibble tribble
+#' @importFrom stringr str_split_fixed str_split
 #' @importFrom utils capture.output write.csv head
 #' @importFrom methods as
 #' @importFrom readr read_csv read_file
 #' @importFrom glue glue
-#' @importFrom stats qnorm qlnorm pnorm qbeta qgamma qunif rgamma setNames
+#' @importFrom stats qnorm qlnorm pnorm qbeta qgamma qunif rgamma setNames sd quantile median runif rmultinom na.omit
 #' @importFrom tools file_ext
 #' @importFrom mvnfast rmvn
-#' @importFrom furrr future_map
+#' @importFrom furrr future_map furrr_options
 #' @importFrom future plan multisession
-#' @importFrom scales comma dollar dollar_format
+#' @importFrom scales comma dollar dollar_format percent number pretty_breaks
 NULL
 
 ## usethis namespace: start

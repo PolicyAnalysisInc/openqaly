@@ -76,7 +76,7 @@ read_model <- function(path) {
 }
 
 convert_settings_from_df <- function(settings_df) {
-  settings <- map(stats::setNames(settings_df$value, settings_df$setting), function(x) {
+  settings <- map(setNames(settings_df$value, settings_df$setting), function(x) {
     num <- suppressWarnings(as.numeric(x))
     if (!is.na(num)) return(num)
     tolower(x)
@@ -274,7 +274,7 @@ vswitch <- function(x, ...) {
   
   first_val <- Filter(Negate(is.null), args)
   na_val <- if (length(first_val) > 0) { 
-      methods::as(NA, class(first_val[[1]]))
+      as(NA, class(first_val[[1]]))
   } else { 
       NA
   } 

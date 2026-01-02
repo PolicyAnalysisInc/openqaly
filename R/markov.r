@@ -126,7 +126,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     parsed_summaries <- parse_summaries(model$summaries, model_value_names) 
   } else {
     # Create an empty structured tibble for summaries, including the parsed_values column
-    parsed_summaries <- tibble::tibble(
+    parsed_summaries <- tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
@@ -307,7 +307,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   } else {
     # Fallback: ensure summaries field exists as an empty list or tibble
     # This path should ideally not be taken if parsed_summaries is always initialized properly.
-    empty_summary <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
@@ -886,7 +886,7 @@ calc_compl_probs <- function(mat) {
         stringsAsFactors = F
       )
     }) %>%
-      dplyr::bind_rows() %>%
+      bind_rows() %>%
       as.data.frame()
     
     message <- paste0(
@@ -936,7 +936,7 @@ as.lf_markov_trans.data.frame <- function(x) {
 # For this edit, assuming it might not be directly available and defining a local version for safety.
 # If R/misc.R is always sourced/loaded first, this redefinition is not strictly needed here.
 create_empty_summaries_stubs_with_parsed <- function() {
-  tibble::tibble(
+  tibble(
     name = character(0),
     display_name = character(0),
     description = character(0),
@@ -947,7 +947,7 @@ create_empty_summaries_stubs_with_parsed <- function() {
 
 # Function to Calculate Summaries
 calculate_summaries <- function(parsed_summaries, values_df) {
-  empty_summary_result <- tibble::tibble(summary = character(), value = character(), amount = numeric())
+  empty_summary_result <- tibble(summary = character(), value = character(), amount = numeric())
 
   # If parsed_summaries is empty (0 rows), no summaries to calculate.
   if (nrow(parsed_summaries) == 0) {
@@ -958,9 +958,9 @@ calculate_summaries <- function(parsed_summaries, values_df) {
   # This should be safe even if parsed_summaries has 0 rows (though caught above now),
   # or if a row in parsed_summaries has an empty list in its parsed_values cell.
   expanded_summaries <- parsed_summaries %>%
-    dplyr::select(summary_col = "name", pv = "parsed_values") %>%
-    tidyr::unnest(cols = c("pv")) %>%
-    dplyr::rename(summary = "summary_col", value = "pv")
+    select(summary_col = "name", pv = "parsed_values") %>%
+    unnest(cols = c("pv")) %>%
+    rename(summary = "summary_col", value = "pv")
 
   # If after unnesting, there are no value mappings, return empty result.
   if (nrow(expanded_summaries) == 0) {
@@ -972,7 +972,7 @@ calculate_summaries <- function(parsed_summaries, values_df) {
     values_df <- as.data.frame(values_df)
   }
   
-  value_amounts <- tibble::tibble(value = character(0), amount = numeric(0))
+  value_amounts <- tibble(value = character(0), amount = numeric(0))
 
   # Check if values_df has columns to pivot (besides a potential 'cycle' column)
   if (ncol(values_df) > 0) {
@@ -981,20 +981,20 @@ calculate_summaries <- function(parsed_summaries, values_df) {
     # For safety, ensure 'cycle' exists if we expect it or handle its absence.
     # The original code just did rownames_to_column.
     if (nrow(values_df) > 0 && !("cycle" %in% colnames(values_df))) {
-        values_df <- tibble::rownames_to_column(values_df, "cycle")
+        values_df <- rownames_to_column(values_df, "cycle")
     }
 
     cols_to_pivot <- setdiff(colnames(values_df), "cycle")
 
     if (length(cols_to_pivot) > 0 && nrow(values_df) > 0) {
       value_amounts <- values_df %>%
-        tidyr::pivot_longer(
-          cols = dplyr::all_of(cols_to_pivot),
+        pivot_longer(
+          cols = all_of(cols_to_pivot),
           names_to = "value",
           values_to = "amount"
         ) %>%
-        dplyr::group_by(.data$value) %>%
-        dplyr::summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = "drop")
+        group_by(.data$value) %>%
+        summarize(amount = sum(.data$amount, na.rm = TRUE), .groups = "drop")
     } else if (length(cols_to_pivot) == 0 && nrow(values_df) > 0) {
       # Handle case where values_df has rows but only a cycle column (no actual values)
       # value_amounts remains an empty tibble, which is correct.
@@ -1003,9 +1003,9 @@ calculate_summaries <- function(parsed_summaries, values_df) {
   
   # Join the expanded summaries with the value amounts
   result <- expanded_summaries %>%
-    dplyr::left_join(value_amounts, by = "value") %>%
-    dplyr::mutate(amount = ifelse(is.na(.data$amount), 0, .data$amount)) %>%
-    dplyr::select("summary", "value", "amount")
+    left_join(value_amounts, by = "value") %>%
+    mutate(amount = ifelse(is.na(.data$amount), 0, .data$amount)) %>%
+    select("summary", "value", "amount")
   
   return(result)
 }
@@ -1035,8 +1035,8 @@ parse_summaries <- function(summaries, model_values) {
   
   # Parse the comma-separated values in the 'values' column
   parsed_s <- summaries %>%
-    dplyr::mutate(
-      parsed_values = purrr::map(.data$values, function(val_str) {
+    mutate(
+      parsed_values = map(.data$values, function(val_str) {
         if (is.na(val_str) || val_str == "") {
           return(character(0)) # Return empty character vector for empty/NA strings
         }
