@@ -1,3 +1,5 @@
+context("DSA")
+
 test_that("DSA data structures are initialized in define_model", {
   model <- define_model("markov")
 

@@ -131,10 +131,12 @@ run_segment.markov <- function(segment, model, env, ...) {
       display_name = character(0),
       description = character(0),
       values = character(0),
+      type = character(0),
+      wtp = numeric(0),
       parsed_values = list() # parse_summaries adds this, so we ensure it exists
     )
   }
-  
+
   # Check inside the variables, transitions, & values for
   # any state-time dependency since this will inform the
   # creation of tunnel states
@@ -609,50 +611,7 @@ check_trans_markov <- function(x, state_names) {
 }
 
 
-# Helpers --------------------------------------------------------------
 
-# Helper function to format sorted numbers into comma-separated strings with ranges
-format_ranges <- function(numbers) {
-  if (is.null(numbers) || length(numbers) == 0) {
-    return("N/A")
-  }
-  unique_sorted_numbers <- sort(unique(as.integer(numbers)))
-  if (length(unique_sorted_numbers) == 0) {
-    return("N/A")
-  }
-  
-  range_strings <- c()
-  if (length(unique_sorted_numbers) == 0) return("N/A") # Defensive
-
-  current_block_start <- unique_sorted_numbers[1]
-  
-  for (i in seq_along(unique_sorted_numbers)) {
-    is_last_element <- (i == length(unique_sorted_numbers))
-    is_discontinuity <- FALSE
-    if (!is_last_element) {
-      is_discontinuity <- (unique_sorted_numbers[i+1] != unique_sorted_numbers[i] + 1)
-    }
-
-    if (is_last_element || is_discontinuity) {
-      if (current_block_start == unique_sorted_numbers[i]) {
-        range_strings <- c(range_strings, as.character(current_block_start))
-      } else {
-        range_strings <- c(range_strings, glue("{current_block_start}-{unique_sorted_numbers[i]}"))
-      }
-      if (!is_last_element && is_discontinuity) {
-        current_block_start <- unique_sorted_numbers[i+1]
-      }
-    }
-  }
-  return(paste(range_strings, collapse = ", "))
-}
-
-limit_state_time <- function(df, state_time_limits) {
-  # Join data with state time limit
-  left_join(df, state_time_limits, by = "state") %>%
-    # Filter to state cycle limit
-    filter(.data$state_cycle <= .data$st_limit)
-}
 
 #' Evaluate a Longform Transition Matrix
 #'
@@ -821,43 +780,6 @@ lf_to_lf_mat <- function(df, state_names) {
 }
 
 
-#' Convert Longform Transitions Table to Transition Matrix
-#'
-#' @param df A data frame with transition data
-#'
-#' @return A transition matrix array
-#' @keywords internal
-lf_to_tmat <- function(df) {
-  df <- df %>%
-    group_by(.data$from_state) %>%
-    mutate(.max_st = max(.data$state_cycle)) %>%
-    ungroup() %>%
-    mutate(
-      .end = .data$state_cycle == .data$.max_st,
-      .from_e = expand_state_name(.data$from_state, .data$state_cycle)
-    )
-  lv_sg_i <- (!df$share_state_time) | (df$from_state_group != df$to_state_group)
-  lv_i <- df$from_state != df$to_state & lv_sg_i
-  ls_i <- df$.end & !lv_i
-  nx_i <- !(lv_i | ls_i)
-  df$.to_e <- NA
-  df$.to_e[lv_i] <- expand_state_name(df$to_state[lv_i], 1)
-  df$.to_e[ls_i] <- expand_state_name(df$to_state[ls_i], df$.max_st[ls_i])
-  df$.to_e[nx_i] <- expand_state_name(df$to_state[nx_i], df$state_cycle[nx_i] + 1)
-  e_state_names <- unique(df$.from_e)
-  df$to_state <- factor(df$.to_e, levels = e_state_names)
-  df$from_state <- factor(df$.from_e, levels  = e_state_names)
-  df <- df[, c('cycle', 'state_cycle', 'from_state', 'to_state', 'value')]
-  mat <- lf_to_arr(df, c('cycle', 'from_state', 'to_state'), 'value')
-  dimnames(mat) <- list(
-    unique(df$cycle),
-    e_state_names,
-    e_state_names
-  )
-  
-  # Calculate complementary probabilities
-  calc_compl_probs(mat)
-}
 
 #' Calculate complementary probabilities in an evaluated transition matrix
 #'
@@ -903,9 +825,6 @@ calc_compl_probs <- function(mat) {
   mat
 }
 
-check_matrix_probs <- function(mat) {
-  
-}
 
 #' Coerce to Long-Format Markov Transitions
 #'
@@ -941,6 +860,8 @@ create_empty_summaries_stubs_with_parsed <- function() {
     display_name = character(0),
     description = character(0),
     values = character(0),
+    type = character(0),
+    wtp = numeric(0),
     parsed_values = list() # Key addition for parse_summaries output consistency
   )
 }

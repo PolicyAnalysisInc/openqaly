@@ -1,4 +1,4 @@
-context("Lookup")
+context("Lookup tables")
 
 test_that("Basic Lookups", {
   

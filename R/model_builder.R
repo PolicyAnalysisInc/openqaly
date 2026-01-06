@@ -107,6 +107,7 @@ define_model <- function(type = "markov") {
       values = character(0),
       display_name = character(0),
       description = character(0),
+      type = character(0),
       wtp = numeric(0)
     ),
     tables = list(),
@@ -583,24 +584,37 @@ add_group <- function(model, name, display_name = NULL,
 #' @param values Comma-separated string of value names to include
 #' @param display_name Optional display name
 #' @param description Optional description
-#' @param wtp Optional willingness-to-pay value (numeric). Only used for outcome summaries
-#'   in net monetary benefit calculations. Leave NULL for cost summaries.
+#' @param type Summary type: "outcome" (default) for health outcomes or "cost" for costs.
+#'   WTP can only be specified for outcome summaries.
+#' @param wtp Optional willingness-to-pay value (numeric). Only valid for outcome summaries
+#'   in net monetary benefit calculations. Must be NULL for cost summaries.
 #'
 #' @return The modified model object
 #'
 #' @export
 #' @examples
 #' model <- define_model("markov") |>
-#'   add_summary("total_cost", "cost1,cost2,cost3") |>
-#'   add_summary("total_qalys", "qaly1,qaly2", wtp = 50000)
+#'   add_summary("total_cost", "cost1,cost2,cost3", type = "cost") |>
+#'   add_summary("total_qalys", "qaly1,qaly2", type = "outcome", wtp = 50000)
 add_summary <- function(model, name, values, display_name = NULL,
-                       description = NULL, wtp = NULL) {
+                       description = NULL, type = "outcome", wtp = NULL) {
+
+  # Validate type
+ if (!type %in% c("outcome", "cost")) {
+    stop("Summary type must be 'outcome' or 'cost'")
+  }
+
+  # Validate that WTP is not specified for cost summaries
+  if (type == "cost" && !is.null(wtp)) {
+    stop(sprintf("WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.", name))
+  }
 
   new_summary <- tibble(
     name = name,
     values = values,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
+    type = type,
     wtp = wtp %||% NA_real_
   )
 

@@ -1,4 +1,4 @@
-# Test Model Builder Functions
+context("Model builder")
 
 library(testthat)
 library(openqaly)

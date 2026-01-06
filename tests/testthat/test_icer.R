@@ -1,4 +1,4 @@
-context("ICER Calculation and Printing")
+context("ICER calculation")
 
 # ============================================================================
 # Tests for icer() function
@@ -302,7 +302,10 @@ test_that("print.icer() returns original object invisibly", {
   x <- icer(dcost = 100, deffect = 1)
 
   # Capture return value (invisible returns can be captured with withVisible)
-  result <- withVisible(print(x))
+  # Must wrap in capture.output to suppress the cat() output from print.icer()
+  capture.output({
+    result <- withVisible(print(x))
+  })
 
   expect_false(result$visible)
   expect_identical(result$value, x)

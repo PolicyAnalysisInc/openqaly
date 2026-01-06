@@ -277,7 +277,7 @@ extract_psa_summaries <- function(source_data,
 
   # Vectorized extraction and aggregation
   result <- source_data %>%
-    select("simulation", "strategy", "group", summary_data = summary_col) %>%
+    select("simulation", "strategy", "group", summary_data = all_of(summary_col)) %>%
     unnest("summary_data", keep_empty = TRUE) %>%
     filter(.data$summary == summary_name | is.na(.data$summary)) %>%
     group_by(.data$simulation, .data$strategy, .data$group) %>%
@@ -583,11 +583,17 @@ calculate_pairwise_ceac <- function(results,
 
   # Vectorized probability calculation across all WTP values
   # Result: matrix with rows = (group, comparison) pairs, columns = WTP values
-  probs_matrix <- sapply(wtp, function(w) {
+  # Use lapply + do.call(cbind) to avoid sapply simplifying to a vector when n_cols = 1
+  probs_list <- lapply(wtp, function(w) {
     # Calculate incremental NMB: P(intervention > comparator)
     delta_nmb <- (outcome_intervention_mat - outcome_comp_mat) * w - (cost_intervention_mat - cost_comp_mat)
     colMeans(delta_nmb > 0)
   })
+  probs_matrix <- do.call(cbind, probs_list)
+  # Ensure matrix even with single row (when only 1 comparison)
+  if (!is.matrix(probs_matrix)) {
+    probs_matrix <- matrix(probs_matrix, nrow = 1)
+  }
 
   # Convert back to tibble with proper labels
   comparison_labels <- comparison_grid %>%

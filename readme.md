@@ -2,7 +2,6 @@
 <!-- badges: start -->
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/PolicyAnalysisInc/openqaly/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/PolicyAnalysisInc/openqaly/tree/master)
-
 [![Codecov test
 coverage](https://codecov.io/gh/policyanalysisinc/openqaly/branch/master/graph/badge.svg)](https://app.codecov.io/gh/policyanalysisinc/openqaly?branch=master)
 <!-- badges: end -->

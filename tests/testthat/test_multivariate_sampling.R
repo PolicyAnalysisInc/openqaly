@@ -1,4 +1,4 @@
-context("Multivariate Sampling")
+context("Multivariate sampling")
 suppressMessages(library(dplyr))
 suppressMessages(library(tidyr))
 suppressMessages(library(purrr))

@@ -10,6 +10,7 @@ add_summary(
   values,
   display_name = NULL,
   description = NULL,
+  type = "outcome",
   wtp = NULL
 )
 }
@@ -24,8 +25,11 @@ add_summary(
 
 \item{description}{Optional description}
 
-\item{wtp}{Optional willingness-to-pay value (numeric). Only used for outcome summaries
-in net monetary benefit calculations. Leave NULL for cost summaries.}
+\item{type}{Summary type: "outcome" (default) for health outcomes or "cost" for costs.
+WTP can only be specified for outcome summaries.}
+
+\item{wtp}{Optional willingness-to-pay value (numeric). Only valid for outcome summaries
+in net monetary benefit calculations. Must be NULL for cost summaries.}
 }
 \value{
 The modified model object
@@ -35,6 +39,6 @@ Add one or more summaries to the model.
 }
 \examples{
 model <- define_model("markov") |>
-  add_summary("total_cost", "cost1,cost2,cost3") |>
-  add_summary("total_qalys", "qaly1,qaly2", wtp = 50000)
+  add_summary("total_cost", "cost1,cost2,cost3", type = "cost") |>
+  add_summary("total_qalys", "qaly1,qaly2", type = "outcome", wtp = 50000)
 }

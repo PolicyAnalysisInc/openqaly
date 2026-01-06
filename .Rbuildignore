@@ -10,3 +10,4 @@
 ^scratch$
 ^todo$
 ^src/.*\.tmp$
+^.*\.tar\.gz$

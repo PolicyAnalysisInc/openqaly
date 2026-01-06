@@ -1043,6 +1043,19 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
 
   if (!is.null(model$summaries) && is.data.frame(model$summaries) && nrow(model$summaries) > 0) {
     model$summaries <- check_tbl(model$summaries, specs$summaries, "Summaries")
+
+    # Validate that WTP is not specified for cost summaries
+    if ("type" %in% names(model$summaries) && "wtp" %in% names(model$summaries)) {
+      invalid_summaries <- model$summaries %>%
+        filter(.data$type == "cost", !is.na(.data$wtp))
+
+      if (nrow(invalid_summaries) > 0) {
+        stop(paste0(
+          "WTP cannot be specified for cost summaries. Invalid summaries: ",
+          paste(invalid_summaries$name, collapse = ", ")
+        ))
+      }
+    }
   }
 
   # Ensure empty components have correct structure
@@ -1342,7 +1355,9 @@ create_empty_summaries_stubs <- function() {
     name = character(0),
     display_name = character(0),
     description = character(0),
-    values = character(0)
+    values = character(0),
+    type = character(0),
+    wtp = numeric(0)
   )
 }
 

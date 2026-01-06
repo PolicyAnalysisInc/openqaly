@@ -141,7 +141,7 @@ parse_model <- function(model, ...) {
     groups = if (nrow(model$groups) > 0) model$groups %>%
       select(any_of(c("name", "display_name", "description", "abbreviation"))) else tibble(),
     summaries = if (nrow(model$summaries) > 0) model$summaries %>%
-      select(any_of(c("name", "display_name", "description", "wtp", "values"))) else tibble(),
+      select(any_of(c("name", "display_name", "description", "type", "wtp", "values"))) else tibble(),
     values = if (nrow(model$values) > 0) model$values %>%
       select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) else tibble(),
     variables = if (nrow(model$variables) > 0) model$variables %>%

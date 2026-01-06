@@ -1,3 +1,5 @@
+context("Excel to JSON conversion")
+
 # Load required functions if testing locally
 tryCatch({
   # Try to load from installed package first

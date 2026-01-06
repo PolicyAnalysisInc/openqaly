@@ -1,4 +1,4 @@
-context("Error Checkpoints")
+context("Error checkpoints")
 
 library(testthat)
 library(tibble)

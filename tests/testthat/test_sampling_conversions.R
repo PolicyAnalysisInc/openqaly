@@ -1,4 +1,4 @@
-context("Sampling Conversions")
+context("Sampling conversions")
 suppressMessages(library(dplyr))
 
 # Helper function to create a model with both univariate and multivariate sampling

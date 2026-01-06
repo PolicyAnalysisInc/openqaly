@@ -1,4 +1,4 @@
-context("Decision Trees")
+context("Decision trees")
 
 # Prep data for test cases
 tree_tests <- system.file("test_cases", "test_trees.xlsx", package = "openqaly") %>%

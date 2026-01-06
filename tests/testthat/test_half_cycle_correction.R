@@ -1,3 +1,5 @@
+context("Half-cycle correction")
+
 test_that("Half-cycle correction methods produce different results", {
   # Create a simple 2-state Markov model for testing
   # State 1 (Alive) -> State 2 (Dead) with fixed transition probability

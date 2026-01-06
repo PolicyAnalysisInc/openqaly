@@ -76,10 +76,12 @@ run_segment.psm <- function(segment, model, env, ...) {
       display_name = character(0),
       description = character(0),
       values = character(0),
+      type = character(0),
+      wtp = numeric(0),
       parsed_values = list()
     )
   }
-  
+
   # Create a namespace which will contain evaluated variables
   ns <- create_namespace(model, segment)
 
@@ -716,6 +718,8 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
       display_name = character(0),
       description = character(0),
       values = character(0),
+      type = character(0),
+      wtp = numeric(0),
       parsed_values = list()
     )
   }

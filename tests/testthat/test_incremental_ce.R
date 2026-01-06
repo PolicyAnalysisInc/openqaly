@@ -1,4 +1,4 @@
-context("Incremental Cost-Effectiveness Analysis")
+context("Incremental CE")
 
 library(testthat)
 library(openqaly)

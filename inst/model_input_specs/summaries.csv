@@ -3,4 +3,5 @@ name,TRUE,character,,
 display_name,FALSE,character,,name
 description,FALSE,character,,display_name
 values,TRUE,character,,
+type,FALSE,character,outcome,
 wtp,FALSE,numeric,,

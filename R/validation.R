@@ -276,6 +276,10 @@ check_summary_exists <- function(summary_name, metadata) {
         table_df$Description <- available_summaries$description
       }
 
+      if ("type" %in% names(available_summaries)) {
+        table_df$Type <- available_summaries$type
+      }
+
       if ("wtp" %in% names(available_summaries)) {
         # Format WTP, showing "NA" for NA values
         table_df$WTP <- ifelse(is.na(available_summaries$wtp),
