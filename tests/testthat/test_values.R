@@ -1,8 +1,5 @@
 context("Values output")
 
-library(testthat)
-library(openqaly)
-
 # =============================================================================
 # Values Extraction Tests
 # =============================================================================
@@ -331,6 +328,21 @@ test_that("check_values_df validates business logic correctly", {
   expect_silent(check_values_df(values_with_na))
 })
 
+test_that("check_values_df passes when all names are NA", {
+  # Edge case: all names are NA (should pass since we only validate non-NA names)
+  values_all_na_names <- tibble::tibble(
+    name = c(NA_character_, NA_character_),
+    display_name = c("Value 1", "Value 2"),
+    description = c("Desc 1", "Desc 2"),
+    state = c("s1", "s2"),
+    destination = c(NA_character_, NA_character_),
+    formula = c("1", "2")
+  )
+
+  # Should not error (we only validate non-NA names)
+  expect_silent(check_values_df(values_all_na_names))
+})
+
 test_that("read_model enforces values type safety", {
   skip_if_not_installed("openxlsx")
 
@@ -472,4 +484,427 @@ test_that("read_model_json enforces values type safety", {
   # Check fallback values worked
   expect_equal(model$values$display_name, c("1", "2"))  # fallback to name
   expect_equal(model$values$description, c("1", "2"))   # fallback to display_name
+})
+
+# =============================================================================
+# Helper Function Tests: format_ranges_for_eval_values
+# =============================================================================
+
+test_that("format_ranges_for_eval_values handles NULL and empty inputs", {
+  expect_equal(openqaly:::format_ranges_for_eval_values(NULL), "N/A")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c()), "N/A")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(NA, NA)), "N/A")
+})
+
+test_that("format_ranges_for_eval_values formats single numbers", {
+  expect_equal(openqaly:::format_ranges_for_eval_values(5), "5")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(5)), "5")
+})
+
+test_that("format_ranges_for_eval_values formats consecutive ranges", {
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(1, 2, 3, 4, 5)), "1-5")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(10, 11, 12)), "10-12")
+})
+
+test_that("format_ranges_for_eval_values formats non-consecutive numbers with gaps", {
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(1, 2, 5, 6, 7)), "1-2, 5-7")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(1, 3, 5, 6, 7, 10)), "1, 3, 5-7, 10")
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(1, 3, 5)), "1, 3, 5")
+})
+
+test_that("format_ranges_for_eval_values handles duplicates and unsorted input", {
+  # Duplicates should be deduplicated
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(1, 1, 2, 2, 3)), "1-3")
+  # Unsorted input should be sorted
+  expect_equal(openqaly:::format_ranges_for_eval_values(c(5, 3, 1, 2, 4)), "1-5")
+})
+
+# =============================================================================
+# Helper Function Tests: format_na_table_to_markdown_for_eval_values
+# =============================================================================
+
+test_that("format_na_table_to_markdown_for_eval_values returns empty string for empty df", {
+  empty_df <- tibble::tibble(
+    `Value Name` = character(0),
+    State = character(0),
+    Destination = character(0),
+    Cycles = character(0),
+    `State Cycles` = character(0)
+  )
+  result <- openqaly:::format_na_table_to_markdown_for_eval_values(empty_df, "Test prefix")
+  expect_equal(result, "")
+})
+
+test_that("format_na_table_to_markdown_for_eval_values formats single row correctly", {
+  single_row_df <- tibble::tibble(
+    `Value Name` = "cost",
+    State = "sick",
+    Destination = "dead",
+    Cycles = "1-5",
+    `State Cycles` = "1-5"
+  )
+  result <- openqaly:::format_na_table_to_markdown_for_eval_values(single_row_df, "Test prefix:")
+
+  # Check that result contains expected components
+
+  expect_true(grepl("Test prefix:", result))
+  expect_true(grepl("Value Name", result))
+  expect_true(grepl("State", result))
+  expect_true(grepl("Destination", result))
+  expect_true(grepl("cost", result))
+  expect_true(grepl("sick", result))
+  expect_true(grepl("dead", result))
+  # Check markdown table structure (header separator)
+  expect_true(grepl("\\|[-]+", result))
+})
+
+test_that("format_na_table_to_markdown_for_eval_values displays NA as N/A", {
+  df_with_na <- tibble::tibble(
+    `Value Name` = "cost",
+    State = "sick",
+    Destination = NA_character_,
+    Cycles = "1-5",
+    `State Cycles` = "1-5"
+  )
+  result <- openqaly:::format_na_table_to_markdown_for_eval_values(df_with_na, "Prefix")
+
+  # NA should be displayed as "N/A"
+  expect_true(grepl("N/A", result))
+})
+
+# =============================================================================
+# parse_values Tests
+# =============================================================================
+
+test_that("parse_values returns empty tibble for NULL input", {
+  # Create minimal states structure with max_state_time (Markov-style)
+  states <- tibble::tibble(
+    name = c("healthy", "sick"),
+    display_name = c("Healthy", "Sick"),
+    description = c("Healthy state", "Sick state"),
+    formula = list(openqaly:::as.oq_formula("1"), openqaly:::as.oq_formula("0")),
+    state_group = c(".healthy", ".sick"),
+    share_state_time = c(FALSE, FALSE),
+    max_state_time = c(Inf, Inf)
+  )
+
+  # Empty extra_vars
+  extra_vars <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = list()
+  )
+
+  result <- openqaly:::parse_values(NULL, states, extra_vars)
+
+  expect_equal(nrow(result), 0)
+  expect_true("name" %in% colnames(result))
+  expect_true("formula" %in% colnames(result))
+  expect_true("max_st" %in% colnames(result))
+})
+
+test_that("parse_values returns empty tibble for empty tibble input", {
+  states <- tibble::tibble(
+    name = c("healthy", "sick"),
+    display_name = c("Healthy", "Sick"),
+    description = c("Healthy state", "Sick state"),
+    formula = list(openqaly:::as.oq_formula("1"), openqaly:::as.oq_formula("0")),
+    state_group = c(".healthy", ".sick"),
+    share_state_time = c(FALSE, FALSE),
+    max_state_time = c(Inf, Inf)
+  )
+
+  extra_vars <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = list()
+  )
+
+  empty_values <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    state = character(0),
+    destination = character(0),
+    formula = character(0),
+    type = character(0)
+  )
+
+  result <- openqaly:::parse_values(empty_values, states, extra_vars)
+
+  expect_equal(nrow(result), 0)
+})
+
+test_that("parse_values detects duplicate values", {
+  states <- tibble::tibble(
+    name = c("healthy", "sick"),
+    display_name = c("Healthy", "Sick"),
+    description = c("Healthy state", "Sick state"),
+    formula = list(openqaly:::as.oq_formula("1"), openqaly:::as.oq_formula("0")),
+    state_group = c(".healthy", ".sick"),
+    share_state_time = c(FALSE, FALSE),
+    max_state_time = c(Inf, Inf)
+  )
+
+  extra_vars <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = list()
+  )
+
+  # Duplicate values: same name, state, destination
+  duplicate_values <- tibble::tibble(
+    name = c("cost", "cost"),
+    display_name = c("Cost", "Cost"),
+    description = c("Cost 1", "Cost 2"),
+    state = c("healthy", "healthy"),
+    destination = c(NA_character_, NA_character_),
+    formula = c("100", "200"),
+    type = c("cost", "cost")
+  )
+
+  expect_error(
+    openqaly:::parse_values(duplicate_values, states, extra_vars),
+    "Duplicate values found"
+  )
+})
+
+test_that("parse_values calculates max_st from states max_state_time", {
+  # States with specific max_state_time values
+  states <- tibble::tibble(
+    name = c("healthy", "sick"),
+    display_name = c("Healthy", "Sick"),
+    description = c("Healthy state", "Sick state"),
+    formula = list(openqaly:::as.oq_formula("1"), openqaly:::as.oq_formula("0")),
+    state_group = c(".healthy", ".sick"),
+    share_state_time = c(FALSE, FALSE),
+    max_state_time = c(5, 10)  # healthy has max_st=5, sick has max_st=10
+  )
+
+  extra_vars <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = list()
+  )
+
+  values <- tibble::tibble(
+    name = c("cost_healthy", "cost_sick"),
+    display_name = c("Healthy Cost", "Sick Cost"),
+    description = c("Cost in healthy", "Cost in sick"),
+    state = c("healthy", "sick"),
+    destination = c(NA_character_, NA_character_),
+    formula = c("100", "200"),
+    type = c("cost", "cost")
+  )
+
+  result <- openqaly:::parse_values(values, states, extra_vars)
+
+  # Check max_st is calculated correctly from states
+  healthy_row <- result[result$state == "healthy", ]
+  sick_row <- result[result$state == "sick", ]
+
+  expect_equal(healthy_row$max_st, 5)
+  expect_equal(sick_row$max_st, 10)
+})
+
+test_that("parse_values defaults max_st to 1 without max_state_time (PSM)", {
+  # States without max_state_time (PSM-style)
+  states <- tibble::tibble(
+    name = c("pf", "pp", "dead"),
+    display_name = c("PF", "PP", "Dead"),
+    description = c("PF state", "PP state", "Dead state")
+  )
+
+  extra_vars <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    formula = list()
+  )
+
+  values <- tibble::tibble(
+    name = c("cost_pf", "cost_pp"),
+    display_name = c("PF Cost", "PP Cost"),
+    description = c("Cost in PF", "Cost in PP"),
+    state = c("pf", "pp"),
+    destination = c(NA_character_, NA_character_),
+    formula = c("100", "200"),
+    type = c("cost", "cost")
+  )
+
+  result <- openqaly:::parse_values(values, states, extra_vars)
+
+  # All max_st should be 1 when states don't have max_state_time
+  expect_true(all(result$max_st == 1))
+})
+
+# =============================================================================
+# evaluate_values Tests
+# =============================================================================
+
+test_that("evaluate_values returns empty tibble for empty input", {
+  # Create empty parsed values tibble with expected structure
+  empty_parsed_values <- tibble::tibble(
+    name = character(0),
+    display_name = character(0),
+    description = character(0),
+    state = character(0),
+    destination = character(0),
+    formula = list(),
+    type = character(0),
+    max_st = numeric(0)
+  )
+
+  # Create minimal namespace using test helper pattern
+  mock_segment <- tibble::tibble(strategy = "S1", group = "G1")
+  minimal_model <- list(
+    settings = list(
+      timeframe = 1,
+      timeframe_unit = "Years",
+      cycle_length = 1,
+      cycle_length_unit = "Months",
+      days_per_year = 365
+    ),
+    states = tibble::tibble(
+      name = "StateA",
+      state_cycle_limit = Inf,
+      state_cycle_limit_unit = "cycles",
+      initial_probability = 1
+    ),
+    env = new.env(parent = baseenv())
+  )
+  minimal_model$settings$cycle_length_days <- openqaly:::get_cycle_length_days(minimal_model$settings)
+  ns <- openqaly:::create_namespace(model = minimal_model, segment = mock_segment)
+
+  result <- openqaly:::evaluate_values(
+    empty_parsed_values,
+    ns,
+    value_names = character(0),
+    state_names = c("StateA")
+  )
+
+  expect_equal(nrow(result), 0)
+  expect_true("state" %in% colnames(result))
+  expect_true("destination" %in% colnames(result))
+  expect_true("max_st" %in% colnames(result))
+  expect_true("state_cycle" %in% colnames(result))
+  expect_true("values_list" %in% colnames(result))
+})
+
+test_that("evaluate_values evaluates simple formulas correctly", {
+  # Build a simple model using the fluent API
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 5,
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("standard") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_variable("x", 5) |>
+    add_transition("healthy", "healthy", "0.9") |>
+    add_transition("healthy", "sick", "0.1") |>
+    add_transition("sick", "sick", "1") |>
+    add_value("cost", "10", state = "healthy") |>
+    add_value("cost", "x * 2", state = "sick")  # Should evaluate to 10
+
+  # Run the model to get results
+  results <- run_model(model)
+
+  # Get values and check they were evaluated correctly
+  values <- get_values(results, format = "long")
+
+  # Filter to cost values
+  cost_values <- values[values$value_name == "cost", ]
+
+  # The values should be numeric (10 in both states based on formulas)
+  expect_true(is.numeric(cost_values$amount))
+  expect_true(all(!is.na(cost_values$amount)))
+})
+
+test_that("evaluate_values allows NA values to pass through", {
+  # Note: The evaluate_values function allows NA values to pass through
+  # rather than erroring. This test documents this current behavior.
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 3,
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("standard") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_transition("healthy", "healthy", "0.9") |>
+    add_transition("healthy", "sick", "0.1") |>
+    add_transition("sick", "sick", "1") |>
+    # Use NA_real_ directly to create NA
+    add_value("bad_cost", "NA_real_", state = "healthy")
+
+  # Model should run without error (NA values are allowed)
+  results <- run_model(model)
+  values <- get_values(results, format = "long")
+
+  # Values should contain NA amounts
+  bad_cost_values <- values[values$value_name == "bad_cost", ]
+  expect_true(all(is.na(bad_cost_values$amount)))
+})
+
+test_that("validate_value_result catches non-numeric values", {
+  # Test the validation function directly rather than through the full model
+  # This avoids issues with C++ crashes when type validation is bypassed
+
+  # Character value should error with context info
+  err <- expect_error(
+    validate_value_result("not_a_number", "test_cost", state = "healthy", formula_text = "x")
+  )
+  expect_match(err$message, "Value 'test_cost'")
+  expect_match(err$message, "in state 'healthy'")
+  expect_match(err$message, "character string")
+
+  # Valid numeric should pass through unchanged
+  expect_equal(
+    validate_value_result(100, "test_cost", state = "healthy"),
+    100
+  )
+})
+
+test_that("evaluate_values processes multiple states correctly", {
+  # Build a model with multiple states - test that all states get processed
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 3,
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("standard") |>
+    add_state("zeta", initial_prob = 0.5) |>
+    add_state("alpha", initial_prob = 0.3) |>
+    add_state("beta", initial_prob = 0.2) |>
+    add_transition("zeta", "zeta", "0.9") |>
+    add_transition("zeta", "alpha", "0.1") |>
+    add_transition("alpha", "alpha", "0.9") |>
+    add_transition("alpha", "beta", "0.1") |>
+    add_transition("beta", "beta", "1") |>
+    add_value("cost", "100", state = "zeta") |>
+    add_value("cost", "200", state = "alpha") |>
+    add_value("cost", "300", state = "beta")
+
+  # Run and get values
+  results <- run_model(model)
+  values <- get_values(results, format = "long")
+
+  # Verify the model ran and produced values
+  expect_true(nrow(values) > 0)
+  expect_true("cost" %in% values$value_name)
+
+  # Values should be weighted by state occupancy across cycles
+  # The total cost should reflect contributions from all states
+  cost_values <- values[values$value_name == "cost", ]
+  expect_true(all(!is.na(cost_values$amount)))
+  expect_true(all(cost_values$amount >= 0))
 })

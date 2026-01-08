@@ -21,8 +21,8 @@ get_accumulated_errors <- function() {
 
 # Core error definitions
 define_error <- function(x) {
-  define_object(
-    message = modify_error_msg(as.character(x)),
+  define_object_(
+    list(message = modify_error_msg(as.character(x))),
     class = 'oq_error'
   )
 }
@@ -104,8 +104,8 @@ print.oq_error <- function(x, ...) {
 }
 
 define_dependency_error <- function(msg) {
-  define_object(
-    message = msg,
+  define_object_(
+    list(message = msg),
     class = c('oq_dependency_error', 'oq_error')
   )
 }

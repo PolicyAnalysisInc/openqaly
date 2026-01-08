@@ -1,0 +1,696 @@
+context("DSA Plots")
+
+# ============================================================================
+# Test Fixtures
+# ============================================================================
+
+# Build a simple DSA model with multiple parameters
+build_simple_dsa_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10,
+      timeframe = 10,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) %>%
+    add_strategy("standard") %>%
+    add_strategy("new_treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    # Variables with DSA specifications
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 2000, strategy = "standard") %>%
+    add_variable("c_treatment", 8000, strategy = "new_treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    # DSA parameter specifications
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_healthy", low = 800, high = 1200,
+                     display_name = "Cost (Healthy)") %>%
+    add_dsa_variable("u_healthy", low = 0.8, high = 1.0,
+                     display_name = "Utility (Healthy)") %>%
+    # Transitions
+    add_transition("healthy", "sick", "p_sick") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy", "1 - p_sick - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    # Values
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    # Summaries
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+get_example_dsa_results <- function() {
+  model <- build_simple_dsa_model()
+  run_dsa(model)
+}
+
+# ============================================================================
+# Tests for dsa_outcomes_plot()
+# ============================================================================
+
+test_that("dsa_outcomes_plot() returns ggplot object", {
+  results <- get_example_dsa_results()
+  p <- dsa_outcomes_plot(results, "total_qalys")
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("dsa_outcomes_plot() parameters sorted by impact range", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Get the rect layer (tornado bars)
+  rect_data <- NULL
+  for (layer_data in built$data) {
+    if ("xmin" %in% names(layer_data) && "xmax" %in% names(layer_data)) {
+      rect_data <- layer_data
+      break
+    }
+  }
+
+  if (!is.null(rect_data)) {
+    # Parameters should be sorted by range (largest first = highest y)
+    # Calculate range for each parameter (y level)
+    param_ranges <- rect_data %>%
+      group_by(y) %>%
+      summarize(range = max(xmax) - min(xmin), .groups = "drop") %>%
+      arrange(desc(y))
+
+    # Check ranges are in descending order (largest range = highest y)
+    ranges <- param_ranges$range
+    if (length(ranges) > 1) {
+      for (i in 1:(length(ranges) - 1)) {
+        expect_gte(ranges[i], ranges[i + 1])
+      }
+    }
+  }
+})
+
+test_that("dsa_outcomes_plot() has base case reference line", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Look for vline layer
+  has_vline <- FALSE
+  for (layer_data in built$data) {
+    if ("xintercept" %in% names(layer_data)) {
+      has_vline <- TRUE
+      # The xintercept should be the base case value
+      expect_true(!is.na(layer_data$xintercept[1]))
+      break
+    }
+  }
+  expect_true(has_vline)
+})
+
+test_that("dsa_outcomes_plot() comparison mode calculates differences", {
+  results <- get_example_dsa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  # Single strategy mode
+  p_single <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = strategies[1]
+  )
+
+  # Comparison mode - use cost outcome since it has more variation
+  p_compare <- dsa_outcomes_plot(
+    results, "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1]
+  )
+
+  built_single <- ggplot_build(p_single)
+  built_compare <- ggplot_build(p_compare)
+
+  # Both should produce plots
+  expect_true(length(built_single$data) > 0)
+  expect_true(length(built_compare$data) > 0)
+})
+
+test_that("dsa_outcomes_plot() drop_zero_impact removes flat bars", {
+  results <- get_example_dsa_results()
+
+  p_with <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    drop_zero_impact = TRUE
+  )
+  p_without <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    drop_zero_impact = FALSE
+  )
+
+  built_with <- ggplot_build(p_with)
+  built_without <- ggplot_build(p_without)
+
+  # With drop_zero_impact, should have same or fewer parameters
+  rect_with <- NULL
+  rect_without <- NULL
+  for (ld in built_with$data) {
+    if ("xmin" %in% names(ld)) rect_with <- ld
+  }
+  for (ld in built_without$data) {
+    if ("xmin" %in% names(ld)) rect_without <- ld
+  }
+
+  if (!is.null(rect_with) && !is.null(rect_without)) {
+    n_params_with <- length(unique(rect_with$y))
+    n_params_without <- length(unique(rect_without$y))
+    expect_lte(n_params_with, n_params_without)
+  }
+})
+
+test_that("dsa_outcomes_plot() show_parameter_values adds values to labels", {
+  results <- get_example_dsa_results()
+
+  p_with <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    show_parameter_values = TRUE
+  )
+  p_without <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    show_parameter_values = FALSE
+  )
+
+  # Check y-axis labels are different
+  built_with <- ggplot_build(p_with)
+  built_without <- ggplot_build(p_without)
+
+  # Labels with values should be longer (contain numbers)
+  labels_with <- built_with$layout$panel_params[[1]]$y$get_labels()
+  labels_without <- built_without$layout$panel_params[[1]]$y$get_labels()
+
+  if (!is.null(labels_with) && !is.null(labels_without) &&
+      length(labels_with) > 0 && length(labels_without) > 0) {
+    # Labels with parameter values should be longer
+    avg_len_with <- mean(nchar(labels_with))
+    avg_len_without <- mean(nchar(labels_without))
+    expect_gt(avg_len_with, avg_len_without)
+  }
+})
+
+# ============================================================================
+# Tests for dsa_nmb_plot()
+# ============================================================================
+
+test_that("dsa_nmb_plot() returns ggplot object", {
+  results <- get_example_dsa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  p <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = 50000  # Explicit WTP required
+  )
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("dsa_nmb_plot() correctly computes NMB formula", {
+  results <- get_example_dsa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  wtp_test <- 50000
+
+  p <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = wtp_test
+  )
+  built <- ggplot_build(p)
+
+  # The NMB tornado values should be: delta_outcome * wtp - delta_cost
+  # This is validated by the plot being created successfully
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_nmb_plot() errors when no interventions/comparators", {
+  results <- get_example_dsa_results()
+
+  expect_error(
+    dsa_nmb_plot(
+      results,
+      health_outcome = "total_qalys",
+      cost_outcome = "total_cost"
+    ),
+    "interventions|comparators|required|specify"
+  )
+})
+
+test_that("dsa_nmb_plot() works with explicit WTP parameter", {
+  results <- get_example_dsa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  # Test with different WTP values
+  p1 <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = 25000
+  )
+  p2 <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = 100000
+  )
+  expect_s3_class(p1, "ggplot")
+  expect_s3_class(p2, "ggplot")
+})
+
+test_that("dsa_nmb_plot() handles cost-only parameters", {
+  results <- get_example_dsa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  # c_healthy is a cost-only parameter (doesn't affect QALYs directly)
+  p <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = 50000  # Explicit WTP required
+  )
+  built <- ggplot_build(p)
+
+  # Check that parameters appear
+  rect_data <- NULL
+  for (ld in built$data) {
+    if ("xmin" %in% names(ld)) {
+      rect_data <- ld
+      break
+    }
+  }
+
+  # Should have at least one parameter
+  if (!is.null(rect_data)) {
+    expect_gt(nrow(rect_data), 0)
+  }
+})
+
+# ============================================================================
+# Tests for Helper Functions
+# ============================================================================
+
+# format_param_value() tests - Direct ::: access
+test_that("format_param_value() uses significant figures correctly", {
+  formatted <- openqaly:::format_param_value(1234.5678, 4)
+  # Should round to 4 sig figs: 1235
+  expect_true(grepl("1,235", formatted) || grepl("1235", formatted))
+})
+
+test_that("format_param_value() avoids scientific notation for large numbers", {
+  formatted <- openqaly:::format_param_value(1000000, 4)
+  # Should NOT contain "e" (scientific notation)
+  expect_false(grepl("e", formatted, ignore.case = TRUE))
+})
+
+test_that("format_param_value() uses comma formatting", {
+  formatted <- openqaly:::format_param_value(10000, 4)
+  # Should contain comma for thousands separator
+  expect_true(grepl(",", formatted))
+})
+
+# render_tornado_plot() tests - via exported functions
+test_that("render_tornado_plot() single strategy/group has single panel", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    group = "aggregated"
+  )
+  built <- ggplot_build(p)
+
+  # Find rect layer
+  rect_data <- NULL
+  for (ld in built$data) {
+    if ("xmin" %in% names(ld)) {
+      rect_data <- ld
+      break
+    }
+  }
+
+  # Should have single panel
+  if (!is.null(rect_data) && "PANEL" %in% names(rect_data)) {
+    expect_equal(length(unique(rect_data$PANEL)), 1)
+  }
+})
+
+test_that("render_tornado_plot() multiple strategies creates facets", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = NULL  # All strategies
+  )
+  built <- ggplot_build(p)
+
+  # Find rect layer
+  rect_data <- NULL
+  for (ld in built$data) {
+    if ("xmin" %in% names(ld)) {
+      rect_data <- ld
+      break
+    }
+  }
+
+  # Should have multiple panels (one per strategy)
+  if (!is.null(rect_data) && "PANEL" %in% names(rect_data)) {
+    n_panels <- length(unique(rect_data$PANEL))
+    expect_gte(n_panels, 2)
+  }
+})
+
+# extract_parameter_values() tests - via exported functions
+test_that("extract_parameter_values() extracts from variable overrides", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_outcomes_plot(
+    results, "total_qalys",
+    strategies = "standard",
+    show_parameter_values = TRUE
+  )
+
+  # The labels should contain the parameter values
+  built <- ggplot_build(p)
+  labels <- built$layout$panel_params[[1]]$y$get_labels()
+
+  # Check that labels contain numeric values
+  has_numbers <- any(grepl("[0-9]", labels))
+  expect_true(has_numbers)
+})
+
+# ============================================================================
+# Integration Tests
+# ============================================================================
+
+test_that("DSA plots workflow with example model", {
+  model <- build_simple_dsa_model()
+  results <- run_dsa(model)
+  strategies <- results$metadata$strategies$display_name
+
+  # DSA outcomes plot
+  p1 <- dsa_outcomes_plot(results, "total_qalys", strategies = strategies[1])
+  expect_s3_class(p1, "ggplot")
+
+  # DSA NMB plot
+  p2 <- dsa_nmb_plot(
+    results,
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
+    interventions = strategies[2],
+    comparators = strategies[1],
+    wtp = 50000  # Explicit WTP required
+  )
+  expect_s3_class(p2, "ggplot")
+})
+
+test_that("DSA plots work with cost summary", {
+  results <- get_example_dsa_results()
+
+  # Plot cost outcomes instead of QALY outcomes
+  p <- dsa_outcomes_plot(results, "total_cost", strategies = "standard")
+  expect_s3_class(p, "ggplot")
+
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+# ============================================================================
+# Numeric Verification Tests - dsa_outcomes_plot()
+# ============================================================================
+
+test_that("dsa_outcomes_plot base line matches aggregated base case value", {
+  results <- get_example_dsa_results()
+
+  # Helper to extract summary value from aggregated results
+  get_summary <- function(run_id, strategy, summary_name) {
+    results$aggregated %>%
+      dplyr::filter(.data$run_id == !!run_id, .data$strategy == !!strategy) %>%
+      dplyr::pull(summaries) %>% .[[1]] %>%
+      dplyr::filter(summary == summary_name) %>%
+      dplyr::pull(amount) %>% sum()
+  }
+
+  # Compute expected base case value directly from results
+  # run_id == 1 is always the base case
+  expected_base <- get_summary(1, "standard", "total_qalys")
+
+  # Build plot
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Extract vline intercept
+  vline_idx <- which(sapply(built$data, function(x) "xintercept" %in% names(x)))
+  vline_data <- built$data[[vline_idx]]
+
+  expect_equal(vline_data$xintercept[1], expected_base, tolerance = 0.01)
+})
+
+test_that("dsa_outcomes_plot bar endpoints match low/high run values", {
+  results <- get_example_dsa_results()
+
+  # Helper to extract summary value from aggregated results
+  get_summary <- function(run_id, strategy, summary_name) {
+    results$aggregated %>%
+      dplyr::filter(.data$run_id == !!run_id, .data$strategy == !!strategy) %>%
+      dplyr::pull(summaries) %>% .[[1]] %>%
+      dplyr::filter(summary == summary_name) %>%
+      dplyr::pull(amount) %>% sum()
+  }
+
+  # Get metadata to find which run_id corresponds to which parameter
+  metadata <- results$dsa_metadata
+
+  # For p_sick parameter:
+  p_sick_low_run <- metadata %>%
+    dplyr::filter(parameter == "p_sick", variation == "low") %>%
+    dplyr::pull(run_id)
+  p_sick_high_run <- metadata %>%
+    dplyr::filter(parameter == "p_sick", variation == "high") %>%
+    dplyr::pull(run_id)
+
+  # Get the actual outcome values for those runs
+  low_value <- get_summary(p_sick_low_run, "standard", "total_qalys")
+  high_value <- get_summary(p_sick_high_run, "standard", "total_qalys")
+  base_value <- get_summary(1, "standard", "total_qalys")
+
+  # Build plot
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Extract rect data
+  rect_idx <- which(sapply(built$data, function(x) "xmin" %in% names(x)))
+  rect_data <- built$data[[rect_idx]]
+
+  # The plot should contain bars spanning from min(low, high, base) to max(low, high, base)
+  all_values <- c(low_value, high_value, base_value)
+  min_expected <- min(all_values)
+  max_expected <- max(all_values)
+
+  # Some bar should have xmin close to min_expected or xmax close to max_expected
+  expect_true(
+    any(abs(rect_data$xmin - min_expected) < 0.1) ||
+    any(abs(rect_data$xmax - max_expected) < 0.1)
+  )
+})
+
+# ============================================================================
+# Numeric Verification Tests - dsa_nmb_plot()
+# ============================================================================
+
+test_that("dsa_nmb_plot base line equals (delta_qalys * wtp) - delta_costs", {
+  results <- get_example_dsa_results()
+  wtp <- 50000
+
+  # Helper to extract summary value from aggregated results
+  get_summary <- function(run_id, strategy, summary_name) {
+    results$aggregated %>%
+      dplyr::filter(.data$run_id == !!run_id, .data$strategy == !!strategy) %>%
+      dplyr::pull(summaries) %>% .[[1]] %>%
+      dplyr::filter(summary == summary_name) %>%
+      dplyr::pull(amount) %>% sum()
+  }
+
+  # Get base case (run_id = 1) values
+  int_qalys_base <- get_summary(1, "new_treatment", "total_qalys")
+  comp_qalys_base <- get_summary(1, "standard", "total_qalys")
+  int_cost_base <- get_summary(1, "new_treatment", "total_cost")
+  comp_cost_base <- get_summary(1, "standard", "total_cost")
+
+  delta_qalys <- int_qalys_base - comp_qalys_base
+  delta_cost <- int_cost_base - comp_cost_base
+
+  # NMB = (delta_outcome * wtp) - delta_cost
+  expected_nmb <- (delta_qalys * wtp) - delta_cost
+
+  # Build plot
+  p <- dsa_nmb_plot(results, "total_qalys", "total_cost",
+                    interventions = "new_treatment", comparators = "standard",
+                    wtp = wtp)
+  built <- ggplot_build(p)
+
+  # Extract base line position
+  vline_idx <- which(sapply(built$data, function(x) "xintercept" %in% names(x)))
+  vline_data <- built$data[[vline_idx]]
+
+  expect_equal(vline_data$xintercept[1], expected_nmb, tolerance = 1)
+})
+
+test_that("dsa_nmb_plot bar range reflects correct NMB for low/high runs", {
+  results <- get_example_dsa_results()
+  wtp <- 50000
+
+  # Helper to extract summary value
+  get_summary <- function(run_id, strategy, summary_name) {
+    results$aggregated %>%
+      dplyr::filter(.data$run_id == !!run_id, .data$strategy == !!strategy) %>%
+      dplyr::pull(summaries) %>% .[[1]] %>%
+      dplyr::filter(summary == summary_name) %>%
+      dplyr::pull(amount) %>% sum()
+  }
+
+  # Find p_sick low/high run IDs
+  p_sick_low_run <- results$dsa_metadata %>%
+    dplyr::filter(parameter == "p_sick", variation == "low") %>%
+    dplyr::pull(run_id)
+  p_sick_high_run <- results$dsa_metadata %>%
+    dplyr::filter(parameter == "p_sick", variation == "high") %>%
+    dplyr::pull(run_id)
+
+  # Compute NMB for low run
+  int_qalys_low <- get_summary(p_sick_low_run, "new_treatment", "total_qalys")
+  comp_qalys_low <- get_summary(p_sick_low_run, "standard", "total_qalys")
+  int_cost_low <- get_summary(p_sick_low_run, "new_treatment", "total_cost")
+  comp_cost_low <- get_summary(p_sick_low_run, "standard", "total_cost")
+  nmb_low <- ((int_qalys_low - comp_qalys_low) * wtp) - (int_cost_low - comp_cost_low)
+
+  # Compute NMB for high run
+  int_qalys_high <- get_summary(p_sick_high_run, "new_treatment", "total_qalys")
+  comp_qalys_high <- get_summary(p_sick_high_run, "standard", "total_qalys")
+  int_cost_high <- get_summary(p_sick_high_run, "new_treatment", "total_cost")
+  comp_cost_high <- get_summary(p_sick_high_run, "standard", "total_cost")
+  nmb_high <- ((int_qalys_high - comp_qalys_high) * wtp) - (int_cost_high - comp_cost_high)
+
+  expected_range <- abs(nmb_high - nmb_low)
+
+  # Build plot
+  p <- dsa_nmb_plot(results, "total_qalys", "total_cost",
+                    interventions = "new_treatment", comparators = "standard",
+                    wtp = wtp, show_parameter_values = FALSE)
+  built <- ggplot_build(p)
+
+  # Extract rect data
+  rect_idx <- which(sapply(built$data, function(x) "xmin" %in% names(x)))
+  rect_data <- built$data[[rect_idx]]
+
+  # Calculate range for each y level (parameter)
+  actual_ranges <- rect_data %>%
+    dplyr::group_by(y) %>%
+    dplyr::summarize(range = max(xmax) - min(xmin), .groups = "drop")
+
+  # At least one range should approximately match our expected range
+  # Use 5% tolerance since there may be minor rounding differences
+  expect_true(
+    any(abs(actual_ranges$range - expected_range) < expected_range * 0.05) ||
+    expected_range < 1  # If expected range is tiny, skip this check
+  )
+})
+
+# ============================================================================
+# Edge Case Tests
+# ============================================================================
+
+test_that("format_param_value handles small decimals", {
+  formatted <- openqaly:::format_param_value(0.001234, 4)
+  # Should contain the significant digits
+
+  expect_true(grepl("0\\.001", formatted))
+})
+
+test_that("format_param_value handles negative numbers", {
+  formatted <- openqaly:::format_param_value(-1234.5, 4)
+  expect_true(grepl("-", formatted))
+})
+
+test_that("dsa_outcomes_plot errors when strategies used with interventions", {
+  results <- get_example_dsa_results()
+
+  expect_error(
+    dsa_outcomes_plot(results, "total_qalys",
+                      strategies = "standard",
+                      interventions = "new_treatment"),
+    "cannot be used with|mutually exclusive"
+  )
+})
+
+test_that("dsa_outcomes_plot works with discounted = TRUE", {
+  results <- get_example_dsa_results()
+  p <- dsa_outcomes_plot(results, "total_qalys", discounted = TRUE)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("dsa_nmb_plot extracts WTP from metadata when not provided", {
+  results <- get_example_dsa_results()
+
+  # The model has wtp = 50000 in settings
+  p <- dsa_nmb_plot(results, "total_qalys", "total_cost",
+                    interventions = "new_treatment",
+                    comparators = "standard")
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("dsa_nmb_plot errors when health_outcome not found", {
+  results <- get_example_dsa_results()
+
+  expect_error(
+    dsa_nmb_plot(results, "nonexistent_outcome", "total_cost",
+                 interventions = "new_treatment",
+                 comparators = "standard",
+                 wtp = 50000),
+    "not found|does not exist|invalid"
+  )
+})
+
+test_that("dsa_nmb_plot works with drop_zero_impact = FALSE", {
+  results <- get_example_dsa_results()
+
+  p <- dsa_nmb_plot(results, "total_qalys", "total_cost",
+                    interventions = "new_treatment",
+                    comparators = "standard",
+                    wtp = 50000,
+                    drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+})

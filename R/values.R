@@ -358,19 +358,4 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
   arrange(final_evaluated_values, factor(.data$state, levels = state_names))
 }
 
-values_to_vmat <- function(df, state_names) {
-  value_names <- setdiff(colnames(df), c('state', 'cycle', 'state_cycle', 'max_st'))
-  lf <-  df %>%
-    pivot_longer(names_to = "variable", values_to = "value", all_of(value_names)) %>%
-    mutate(e_state = factor(expand_state_name(.data$state, .data$state_cycle), levels = state_names))
-  mat <- lf_to_arr(lf, c('cycle', 'e_state', 'variable'), 'value')
-  dimnames(mat) <- list(
-    unique(df$cycle),
-    state_names,
-    value_names
-  )
-  
-  mat
-    
-}
 

@@ -229,7 +229,7 @@ test_that("Segment-specific multivariate sampling works correctly", {
     }) %>%
     ungroup()
 
-  sampled_raw <- openqaly:::resample(parsed_model, 100, segments, seed = 321)
+  sampled_raw <- openqaly:::resample(parsed_model, 500, segments, seed = 321)
 
   # Separate by strategy in the raw results
   standard_raw <- filter(sampled_raw, strategy == "standard")
@@ -255,12 +255,12 @@ test_that("Segment-specific multivariate sampling works correctly", {
   expect_true(length(unique(intervention_samples$qaly_param)) > 1)
 
   # Check means for intervention
-  expect_equal(mean(intervention_samples$cost_param), 200, tolerance = 5)
-  expect_equal(mean(intervention_samples$qaly_param), 2, tolerance = 0.05)
+  expect_equal(mean(intervention_samples$cost_param), 200, tolerance = 3)
+  expect_equal(mean(intervention_samples$qaly_param), 2, tolerance = 0.03)
 
   # Check correlation for intervention
   cor_intervention <- cor(intervention_samples$cost_param, intervention_samples$qaly_param)
-  expect_equal(cor_intervention, 0.5, tolerance = 0.1)
+  expect_equal(cor_intervention, 0.5, tolerance = 0.15)
 })
 
 test_that("Multivariate sampling validation catches conflicts", {

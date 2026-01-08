@@ -151,11 +151,9 @@ convert_settings_from_df <- function(settings_df) {
 read_workbook <- function(path) {
   sheet_names <- getSheetNames(path)
   names(sheet_names) <- sheet_names
-  lapply(sheet_names, function(x) as_tibble(readWorkbook(path, sheet = x)))
-}
-
-define_object <- function(..., class) {
-  define_object_(list(...), class)
+  lapply(sheet_names, function(x) {
+    suppressWarnings(as_tibble(readWorkbook(path, sheet = x)))
+  })
 }
 
 define_object_ <- function(obj, class) {
@@ -298,11 +296,7 @@ vswitch <- function(x, ...) {
   res
 }
 
-is.empty <- function(x) {
-  is.na(x) | x == ''
-}
-
-`%&%` <- function(a,b) { paste0(a,b)}
+`%&%` <- function(a, b) { paste0(a, b) }
 
 extract_call_vars <- function(expr) {
   call_vars <- lapply(expr, function(x) all.vars(x))
@@ -429,6 +423,10 @@ is_valid_name <- function(x) grepl('^[[:alpha:]]+[[:alnum:]_]*$', x)
 #' 
 #' @return logical vector indicating whether the elements of `x` are empty or missing.
 is_faslsy_chr <- function(x) {
+  is.na(x) | x == ''
+}
+
+is.empty <- function(x) {
   is.na(x) | x == ''
 }
 
@@ -821,91 +819,6 @@ normalize_model_nulls <- function(model) {
 
   if (!is.null(model$groups)) {
     model$groups <- normalize_dataframe(model$groups)
-  }
-
-  return(model)
-}
-
-#' Validate model data structure and types
-#'
-#' Ensures that model data has correct structure and types after normalization
-#'
-#' @param model The normalized model object
-#' @return The validated model object
-validate_model_data <- function(model) {
-  # Validate states
-  if (!is.null(model$states) && is.data.frame(model$states)) {
-    if (nrow(model$states) == 0) {
-      stop("Model must have at least one state defined")
-    }
-
-    # Ensure critical fields exist
-    if (!"name" %in% names(model$states)) {
-      stop("States must have 'name' field")
-    }
-
-    # Ensure initial_probability exists and is valid
-    if (!"initial_probability" %in% names(model$states)) {
-      stop("States must have 'initial_probability' field")
-    }
-
-    # Validate state names are unique and non-empty
-    state_names <- model$states$name
-    if (any(is.na(state_names)) || any(state_names == "")) {
-      stop("All states must have non-empty names")
-    }
-    if (length(unique(state_names)) != length(state_names)) {
-      stop("State names must be unique")
-    }
-  } else {
-    stop("Model must have a 'states' dataframe")
-  }
-
-  # Validate transitions - just check structure, not state references (those are expanded later)
-  if (!is.null(model$transitions) && is.data.frame(model$transitions)) {
-    if (nrow(model$transitions) > 0) {
-      # PSM models have different transition structure
-      # Settings might be a list or a dataframe (setting/value columns)
-      is_psm <- FALSE
-      if (!is.null(model$settings)) {
-        if (is.list(model$settings) && !is.data.frame(model$settings)) {
-          # Settings is a list
-          is_psm <- !is.null(model$settings$model_type) && tolower(model$settings$model_type) == "psm"
-        } else if (is.data.frame(model$settings)) {
-          # Settings is a dataframe (from JSON)
-          model_type_row <- model$settings[model$settings$setting == "model_type", ]
-          if (nrow(model_type_row) > 0) {
-            is_psm <- tolower(model_type_row$value[1]) == "psm"
-          }
-        }
-      }
-
-      if (is_psm) {
-        # PSM transitions must have endpoint, time_unit, formula
-        required_cols <- c("endpoint", "time_unit", "formula")
-        if (!all(required_cols %in% names(model$transitions))) {
-          missing <- setdiff(required_cols, names(model$transitions))
-          stop(paste("PSM transitions missing required fields:", paste(missing, collapse = ", ")))
-        }
-      } else {
-        # Markov transitions must have from_state and to_state fields
-        if (!all(c("from_state", "to_state") %in% names(model$transitions))) {
-          stop("Transitions must have 'from_state' and 'to_state' fields")
-        }
-      }
-    }
-  }
-
-  # Validate values if present
-  if (!is.null(model$values) && is.data.frame(model$values)) {
-    if (nrow(model$values) > 0) {
-      # Ensure name field exists
-      if (!"name" %in% names(model$values)) {
-        stop("Values must have 'name' field")
-      }
-
-      # Values state validation removed - states are expanded later
-    }
   }
 
   return(model)

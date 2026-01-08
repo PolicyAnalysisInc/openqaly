@@ -1,8 +1,5 @@
 context("Trace output")
 
-library(testthat)
-library(openqaly)
-
 # =============================================================================
 # Trace Extraction Tests
 # =============================================================================
@@ -224,8 +221,6 @@ test_that("trace_plot_line creates a ggplot with lines", {
 # =============================================================================
 
 test_that("export_trace exports to CSV", {
-  skip_on_cran()
-
   model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -254,7 +249,6 @@ test_that("export_trace exports to CSV", {
 
 
 test_that("export_trace exports to Excel", {
-  skip_on_cran()
   skip_if_not_installed("openxlsx")
 
   model_path <- system.file("models/example_psm", package = "openqaly")
@@ -280,8 +274,6 @@ test_that("export_trace exports to Excel", {
 
 
 test_that("export_trace exports to JSON", {
-  skip_on_cran()
-
   model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -310,8 +302,6 @@ test_that("export_trace exports to JSON", {
 
 
 test_that("export_trace infers format from extension", {
-  skip_on_cran()
-
   model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"

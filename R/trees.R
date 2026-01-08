@@ -233,12 +233,14 @@ decision_tree <- function(df, name, cycle) {
       define_object_(subtree, class = 'subtree')
     })
   
-  define_object(
-    df = df,
-    terminal_nodes = terminal_nodes,
-    cond_prob = cond_prob,
-    subtrees = subtrees,
-    all = define_object_(terminal_nodes, class = 'subtree'),
+  define_object_(
+    list(
+      df = df,
+      terminal_nodes = terminal_nodes,
+      cond_prob = cond_prob,
+      subtrees = subtrees,
+      all = define_object_(terminal_nodes, class = 'subtree')
+    ),
     class = 'eval_decision_tree'
   )
 }

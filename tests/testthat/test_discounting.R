@@ -1,7 +1,5 @@
 context("Discounting")
 
-library(testthat)
-library(openqaly)
 library(jsonlite)
 
 # =============================================================================

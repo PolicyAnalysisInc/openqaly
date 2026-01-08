@@ -1,8 +1,5 @@
 context("Model builder")
 
-library(testthat)
-library(openqaly)
-
 test_that("Model builder creates valid model structure", {
   model <- define_model("markov") |>
     set_settings(n_cycles = 100, cycle_length = "year") |>

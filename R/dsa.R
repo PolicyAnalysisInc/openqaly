@@ -631,7 +631,7 @@ extract_dsa_summaries <- function(results,
 
   # Vectorized extraction and aggregation (like extract_psa_summaries)
   result <- source_data %>%
-    select("run_id", "strategy", "group", summary_data = summary_col) %>%
+    select("run_id", "strategy", "group", summary_data = all_of(summary_col)) %>%
     unnest("summary_data", keep_empty = TRUE) %>%
     filter(.data$summary == summary_name | is.na(.data$summary))
 

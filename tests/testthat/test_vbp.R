@@ -1,7 +1,4 @@
-library(testthat)
 context("VBP")
-library(openqaly)
-library(dplyr)
 
 # ============================================================================
 # Test Fixtures (no mocks - only model loading helpers)

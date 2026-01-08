@@ -1,82 +1,21 @@
 context("PSA Tables")
 
-library(testthat)
-library(openqaly)
-library(dplyr)
-
-# ============================================================================
-# Test Fixtures
-# ============================================================================
-
-# Build a simple Markov model with sampling distributions for PSA testing
-# This avoids loading large example models and runs quickly
-build_simple_psa_model <- function() {
-  define_model("markov") |>
-    set_settings(
-      n_cycles = 10,
-      cycle_length = 1,
-      cycle_length_unit = "years"
-    ) |>
-    add_strategy("standard") |>
-    add_strategy("new_treatment") |>
-    add_state("healthy", initial_prob = 1) |>
-    add_state("sick", initial_prob = 0) |>
-    add_state("dead", initial_prob = 0) |>
-    # Variables with sampling distributions for PSA
-    add_variable("p_sick", 0.1, sampling = normal(0.1, 0.02)) |>
-    add_variable("p_death_healthy", 0.02, sampling = normal(0.02, 0.005)) |>
-    add_variable("p_death_sick", 0.15, sampling = normal(0.15, 0.03)) |>
-    add_variable("p_stay_healthy", 0.88) |>  # 1 - 0.1 - 0.02
-    add_variable("p_stay_sick", 0.85) |>  # 1 - 0.15
-    add_variable("c_healthy", 1000, sampling = normal(1000, 100)) |>
-    add_variable("c_sick", 5000, sampling = normal(5000, 500)) |>
-    add_variable("c_treatment", 2000,
-                 strategy = "standard",
-                 sampling = normal(2000, 200)) |>
-    add_variable("c_treatment", 8000,
-                 strategy = "new_treatment",
-                 sampling = normal(8000, 800)) |>
-    add_variable("u_healthy", 0.9, sampling = normal(0.9, 0.05)) |>
-    add_variable("u_sick", 0.5, sampling = normal(0.5, 0.1)) |>
-    # Transitions - use explicit probabilities (complement not supported)
-    add_transition("healthy", "sick", "p_sick") |>
-    add_transition("healthy", "dead", "p_death_healthy") |>
-    add_transition("healthy", "healthy", "1 - p_sick - p_death_healthy") |>
-    add_transition("sick", "dead", "p_death_sick") |>
-    add_transition("sick", "sick", "1 - p_death_sick") |>
-    add_transition("dead", "dead", "1") |>
-    # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") |>
-    add_value("cost", "c_sick + c_treatment", state = "sick") |>
-    add_value("cost", "0", state = "dead") |>
-    add_value("qalys", "u_healthy", state = "healthy") |>
-    add_value("qalys", "u_sick", state = "sick") |>
-    add_value("qalys", "0", state = "dead") |>
-    # Summaries
-    add_summary("total_cost", "cost") |>
-    add_summary("total_qalys", "qalys")
-}
-
-# Helper function to get PSA results - builds model and runs PSA
-# n_sim capped at 50 for test performance
-get_example_psa_results <- function(n_sim = 50) {
-  model <- build_simple_psa_model()
-  set.seed(42)  # For reproducibility
-  run_psa(model, n_sim = n_sim)
-}
+# Uses shared fixtures from setup.R:
+# - build_simple_psa_model() - builds the test model
+# - get_cached_psa_results() - returns cached PSA results (computed once)
 
 # ============================================================================
 # Tests for incremental_ceac_table()
 # ============================================================================
 
 test_that("incremental_ceac_table() creates table object", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- incremental_ceac_table(results, "total_qalys", "total_cost")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
 test_that("incremental_ceac_table() respects table_format = 'kable'", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- incremental_ceac_table(results, "total_qalys", "total_cost",
                                  table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
@@ -84,14 +23,14 @@ test_that("incremental_ceac_table() respects table_format = 'kable'", {
 
 test_that("incremental_ceac_table() respects table_format = 'flextable'", {
   skip_if_not_installed("flextable")
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- incremental_ceac_table(results, "total_qalys", "total_cost",
                                  table_format = "flextable")
   expect_s3_class(tbl, "flextable")
 })
 
 test_that("incremental_ceac_table() respects custom wtp_thresholds", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   custom_wtp <- c(0, 25000, 75000)
 
   # Get prepared data to verify row count
@@ -105,7 +44,7 @@ test_that("incremental_ceac_table() respects custom wtp_thresholds", {
 })
 
 test_that("incremental_ceac_table() respects decimals parameter", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -123,7 +62,7 @@ test_that("incremental_ceac_table() respects decimals parameter", {
 # ============================================================================
 
 test_that("prepare_incremental_ceac_table_data() single group has one header row", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -135,7 +74,7 @@ test_that("prepare_incremental_ceac_table_data() single group has one header row
 })
 
 test_that("prepare_incremental_ceac_table_data() formats WTP as dollars", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -148,7 +87,7 @@ test_that("prepare_incremental_ceac_table_data() formats WTP as dollars", {
 })
 
 test_that("prepare_incremental_ceac_table_data() highlights optimal when show_optimal=TRUE", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -160,7 +99,7 @@ test_that("prepare_incremental_ceac_table_data() highlights optimal when show_op
 })
 
 test_that("prepare_incremental_ceac_table_data() no highlights when show_optimal=FALSE", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -173,7 +112,7 @@ test_that("prepare_incremental_ceac_table_data() no highlights when show_optimal
 })
 
 test_that("prepare_incremental_ceac_table_data() sets correct column alignments", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost"
@@ -187,7 +126,7 @@ test_that("prepare_incremental_ceac_table_data() sets correct column alignments"
 })
 
 test_that("prepare_incremental_ceac_table_data() probabilities sum approximately to 100%", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
@@ -210,13 +149,13 @@ test_that("prepare_incremental_ceac_table_data() probabilities sum approximately
 # ============================================================================
 
 test_that("psa_summary_table() creates table object", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- psa_summary_table(results, "total_qalys", "total_cost")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
 test_that("psa_summary_table() respects table_format = 'kable'", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- psa_summary_table(results, "total_qalys", "total_cost",
                             table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
@@ -224,7 +163,7 @@ test_that("psa_summary_table() respects table_format = 'kable'", {
 
 test_that("psa_summary_table() respects table_format = 'flextable'", {
   skip_if_not_installed("flextable")
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- psa_summary_table(results, "total_qalys", "total_cost",
                             table_format = "flextable")
   expect_s3_class(tbl, "flextable")
@@ -235,7 +174,7 @@ test_that("psa_summary_table() respects table_format = 'flextable'", {
 # ============================================================================
 
 test_that("prepare_psa_summary_table_data() has correct row structure", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -248,7 +187,7 @@ test_that("prepare_psa_summary_table_data() has correct row structure", {
 })
 
 test_that("prepare_psa_summary_table_data() identifies section header rows", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost"
@@ -262,7 +201,7 @@ test_that("prepare_psa_summary_table_data() identifies section header rows", {
 })
 
 test_that("prepare_psa_summary_table_data() identifies indented detail rows", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -277,7 +216,7 @@ test_that("prepare_psa_summary_table_data() identifies indented detail rows", {
 })
 
 test_that("prepare_psa_summary_table_data() uses lambda character in P(CE) WTP labels", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -293,7 +232,7 @@ test_that("prepare_psa_summary_table_data() uses lambda character in P(CE) WTP l
 })
 
 test_that("prepare_psa_summary_table_data() single group has one header row", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -305,7 +244,7 @@ test_that("prepare_psa_summary_table_data() single group has one header row", {
 })
 
 test_that("prepare_psa_summary_table_data() respects custom pce_wtp thresholds", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared_1 <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -322,7 +261,7 @@ test_that("prepare_psa_summary_table_data() respects custom pce_wtp thresholds",
 })
 
 test_that("prepare_psa_summary_table_data() formats costs with commas", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
@@ -347,7 +286,7 @@ test_that("prepare_psa_summary_table_data() formats costs with commas", {
 # ============================================================================
 
 test_that("pairwise_ceac_table() works in comparator mode", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   # Get first strategy as comparator
   strategies <- results$metadata$strategies$display_name
@@ -361,7 +300,7 @@ test_that("pairwise_ceac_table() works in comparator mode", {
 })
 
 test_that("pairwise_ceac_table() works in intervention mode", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   strategies <- results$metadata$strategies$display_name
 
@@ -374,7 +313,7 @@ test_that("pairwise_ceac_table() works in intervention mode", {
 })
 
 test_that("pairwise_ceac_table() errors when neither comparator nor intervention provided", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   expect_error(
     pairwise_ceac_table(results, "total_qalys", "total_cost"),
@@ -383,7 +322,7 @@ test_that("pairwise_ceac_table() errors when neither comparator nor intervention
 })
 
 test_that("pairwise_ceac_table() errors when both comparator and intervention provided", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   expect_error(
@@ -396,7 +335,7 @@ test_that("pairwise_ceac_table() errors when both comparator and intervention pr
 
 test_that("pairwise_ceac_table() respects table_format = 'flextable'", {
   skip_if_not_installed("flextable")
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   tbl <- pairwise_ceac_table(
@@ -413,7 +352,7 @@ test_that("pairwise_ceac_table() respects table_format = 'flextable'", {
 # ============================================================================
 
 test_that("prepare_pairwise_ceac_table_data() generates comparison labels with 'vs.'", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   prepared <- prepare_pairwise_ceac_table_data(
@@ -428,7 +367,7 @@ test_that("prepare_pairwise_ceac_table_data() generates comparison labels with '
 })
 
 test_that("prepare_pairwise_ceac_table_data() single group has one header row", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   prepared <- prepare_pairwise_ceac_table_data(
@@ -442,7 +381,7 @@ test_that("prepare_pairwise_ceac_table_data() single group has one header row", 
 })
 
 test_that("prepare_pairwise_ceac_table_data() formats WTP as dollars", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   prepared <- prepare_pairwise_ceac_table_data(
@@ -457,7 +396,7 @@ test_that("prepare_pairwise_ceac_table_data() formats WTP as dollars", {
 })
 
 test_that("prepare_pairwise_ceac_table_data() respects custom wtp_thresholds", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
   custom_wtp <- c(0, 25000, 50000, 75000, 100000)
 
@@ -476,13 +415,13 @@ test_that("prepare_pairwise_ceac_table_data() respects custom wtp_thresholds", {
 # ============================================================================
 
 test_that("evpi_table() creates table object", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- evpi_table(results, "total_qalys", "total_cost")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
 test_that("evpi_table() respects table_format = 'kable'", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- evpi_table(results, "total_qalys", "total_cost",
                     table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
@@ -490,14 +429,14 @@ test_that("evpi_table() respects table_format = 'kable'", {
 
 test_that("evpi_table() respects table_format = 'flextable'", {
   skip_if_not_installed("flextable")
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   tbl <- evpi_table(results, "total_qalys", "total_cost",
                     table_format = "flextable")
   expect_s3_class(tbl, "flextable")
 })
 
 test_that("evpi_table() respects custom wtp_thresholds", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   custom_wtp <- c(25000, 50000, 75000, 100000, 150000)
 
   prepared <- prepare_evpi_table_data(
@@ -514,7 +453,7 @@ test_that("evpi_table() respects custom wtp_thresholds", {
 # ============================================================================
 
 test_that("prepare_evpi_table_data() single group has WTP/EVPI columns", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
@@ -527,7 +466,7 @@ test_that("prepare_evpi_table_data() single group has WTP/EVPI columns", {
 })
 
 test_that("prepare_evpi_table_data() formats EVPI values as dollars", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost"
@@ -539,7 +478,7 @@ test_that("prepare_evpi_table_data() formats EVPI values as dollars", {
 })
 
 test_that("prepare_evpi_table_data() formats WTP as dollars", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
@@ -552,7 +491,7 @@ test_that("prepare_evpi_table_data() formats WTP as dollars", {
 })
 
 test_that("prepare_evpi_table_data() single group has one header row", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
@@ -564,7 +503,7 @@ test_that("prepare_evpi_table_data() single group has one header row", {
 })
 
 test_that("prepare_evpi_table_data() header contains WTP and EVPI", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
@@ -578,7 +517,7 @@ test_that("prepare_evpi_table_data() header contains WTP and EVPI", {
 })
 
 test_that("prepare_evpi_table_data() sets correct column alignments", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost"
@@ -596,8 +535,6 @@ test_that("prepare_evpi_table_data() sets correct column alignments", {
 # ============================================================================
 
 test_that("Full PSA tables workflow with example model", {
-  skip_on_cran()
-
   # 1. Build a simple model with PSA support
 
   model <- build_simple_psa_model()
@@ -627,7 +564,7 @@ test_that("Full PSA tables workflow with example model", {
 })
 
 test_that("Tables work with discounted values", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
 
   # Test with discounted = TRUE
   ceac_tbl <- incremental_ceac_table(
@@ -652,7 +589,7 @@ test_that("Tables work with discounted values", {
 })
 
 test_that("Tables work with strategies filter", {
-  results <- get_example_psa_results(n_sim = 50)
+  results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   # Filter to specific strategies (if more than 1)

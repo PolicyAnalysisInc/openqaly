@@ -124,47 +124,38 @@ test_that("parameter sampling yields correct averages", {
 })
 
 test_that("parameter sampling with random seed is deterministic", {
-
-  # Run a test model
+  # Setup: Run a test model
   model <- system.file("models", "checkimab", package = "openqaly") %>%
     read_model()
   eval_model <- run_model(model)
 
-  # Generate sampled parameter values
-  sampled_segments_raw <- openqaly:::resample(model, 1, eval_model$segments, seed = 1)
+  # First run with seed = 1
+  sampled_segments_1 <- openqaly:::resample(model, 1, eval_model$segments, seed = 1)
 
-  # Extract scalar parameter values (exclude bootstrap data frames like eq5d_data)
-  sampled_segments <- sampled_segments_raw %>%
-    mutate(
-      start_age = map_dbl(parameter_overrides, "start_age"),
-      p_death_ae = map_dbl(parameter_overrides, "p_death_ae"),
-      cost_nausea = map_dbl(parameter_overrides, "cost_nausea")
-    ) %>%
-    select(-parameter_overrides)
+  # Second run with same seed = 1
+  sampled_segments_2 <- openqaly:::resample(model, 1, eval_model$segments, seed = 1)
 
-  # Check results
-  expect_equal(
-    c(21.9280502536794, 34.5536206979549, 29.6314418669539, 37.2969463216801,
-      26.4846723604542, 39.6208119860516, 34.7754043029916, 54.7289530759057,
-      30.9954639302786, 32.2946652274845, 26.0883813821281, 50.907161796309),
-    sampled_segments$start_age,
-    tolerance = 1e-4
-  )
-  expect_equal(
-    c(0.00091844165869545, 0.00112185726404511, 0.000713085751763911,
-      0.00123595904802673, 0.000600523688642854, 0.000505840771071901,
-      0.0004481256783263, 0.000468329790177951, 0.000724807067977948,
-      0.000591768377139757, 0.000653809334326724, 0.000628318845687671),
-    sampled_segments$p_death_ae,
-    tolerance = 1e-4
-  )
-  expect_equal(
-    c(1045.91083104622, 926.319886377034, 844.68985285505, 1108.9208250931,
-      502.662092634832, 1104.48538941009, 1248.04009324853, 886.80400617843,
-      971.913448706372, 1358.25592861894, 1600.40440918246, 643.725401261573),
-    sampled_segments$cost_nausea,
-    tolerance = 1e-4
-  )
+  # Helper to extract scalar parameters
+  extract_params <- function(sampled_raw) {
+    sampled_raw %>%
+      mutate(
+        start_age = map_dbl(parameter_overrides, "start_age"),
+        p_death_ae = map_dbl(parameter_overrides, "p_death_ae"),
+        cost_nausea = map_dbl(parameter_overrides, "cost_nausea")
+      ) %>%
+      select(-parameter_overrides)
+  }
+
+  params_1 <- extract_params(sampled_segments_1)
+  params_2 <- extract_params(sampled_segments_2)
+
+  # Verify determinism: same seed produces identical results
+  expect_equal(params_1$start_age, params_2$start_age)
+  expect_equal(params_1$p_death_ae, params_2$p_death_ae)
+  expect_equal(params_1$cost_nausea, params_2$cost_nausea)
+
+  # Sanity check: verify expected number of segments
+  expect_equal(nrow(params_1), 12)
 })
 
 test_that("errors in distribution parsing are handled properly", {

@@ -1,9 +1,6 @@
 context("Error checkpoints")
 
-library(testthat)
 library(tibble)
-library(dplyr)
-library(openqaly) # Ensure package functions are loaded
 
 # Define a minimal segment for namespace creation
 mock_segment <- tibble::tibble(strategy = "S1", group = "G1")

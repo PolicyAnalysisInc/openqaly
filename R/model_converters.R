@@ -298,34 +298,3 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
   invisible(output)
 }
 
-#' Detect Model Format
-#'
-#' Internal function to detect the format of a model input.
-#'
-#' @param input The input to check
-#'
-#' @return A string indicating the format
-#'
-#' @keywords internal
-detect_model_format <- function(input) {
-  if (inherits(input, "oq_model")) {
-    return("object")
-  }
-
-  if (is.character(input) && length(input) == 1) {
-    if (dir.exists(input)) {
-      if (file.exists(file.path(input, "model.xlsx"))) {
-        return("excel")
-      }
-    } else if (file.exists(input)) {
-      ext <- file_ext(input)
-      if (ext == "xlsx") return("excel")
-      if (ext == "json") return("json")
-      if (ext == "R") return("r")
-    } else if (validate(input)) {
-      return("json_string")
-    }
-  }
-
-  return("unknown")
-}

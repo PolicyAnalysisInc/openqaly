@@ -186,7 +186,6 @@ test_that("build_dsa_segments and metadata generation work correctly", {
 
 # Integration test - skip if slow
 test_that("run_dsa executes full DSA analysis", {
-  skip_on_cran()
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
   model <- define_model("markov") %>%
@@ -326,7 +325,6 @@ test_that("build_dsa_segments validates low < high after evaluation", {
 })
 
 test_that("run_dsa works with bc expressions end-to-end", {
-  skip_on_cran()
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
   model <- define_model("markov") %>%
@@ -364,7 +362,6 @@ test_that("run_dsa works with bc expressions end-to-end", {
 })
 
 test_that("run_dsa with other variable references works", {
-  skip_on_cran()
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
   model <- define_model("markov") %>%
@@ -399,7 +396,6 @@ test_that("run_dsa with other variable references works", {
 
 # Timeframe DSA tests
 test_that("DSA timeframe override works for Markov models", {
-  skip_on_cran()
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
   model <- define_model("markov") %>%
@@ -453,7 +449,6 @@ test_that("DSA timeframe override works for Markov models", {
 })
 
 test_that("DSA timeframe override works for PSM models", {
-  skip_on_cran()
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
   # Create a simple PSM model
