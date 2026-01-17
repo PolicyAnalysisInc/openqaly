@@ -1,0 +1,454 @@
+---
+title: "Probabilistic Sensitivity Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Probabilistic Sensitivity Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to configure, run, and visualize probabilistic sensitivity analysis (PSA) using openqaly. PSA simultaneously varies all uncertain parameters according to their probability distributions to characterize overall uncertainty in model results. The examples use a sample model included with the package.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(system.file("models", "example_markov", package = "openqaly"))
+```
+
+```{r psa-config, include = FALSE}
+# Configure PSA sampling distributions for the examples
+# Update the sampling column directly for existing variables
+model$variables <- model$variables %>%
+  dplyr::mutate(sampling = dplyr::case_when(
+    name == "p_mild" ~ "beta(bc, bc * 0.2)",
+    name == "p_severe" ~ "beta(bc, bc * 0.2)",
+    name == "p_death_severe" ~ "beta(bc, bc * 0.25)",
+    name == "c_mild" ~ "gamma(bc, bc * 0.2)",
+    name == "c_severe" ~ "gamma(bc, bc * 0.2)",
+    name == "u_mild" ~ "beta(bc, bc * 0.1)",
+    name == "u_severe" ~ "beta(bc, bc * 0.15)",
+    TRUE ~ sampling
+  ))
+```
+
+## Configuring PSA Sampling Distributions
+
+Before running PSA, you must specify probability distributions for uncertain parameters using the `sampling` argument in `add_variable()`.
+
+### Basic usage with a normal distribution
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_variable("c_severe", 8000, sampling = normal(bc, 1000))
+```
+
+### Using the `bc` keyword for relative specifications
+
+The `bc` keyword references the base case value, allowing relative distribution specifications.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_variable("p_mild", 0.15, sampling = normal(bc, bc * 0.1))
+```
+
+### Different distribution types
+
+Common distributions for health economic parameters:
+
+```{r, eval = FALSE}
+# Beta distribution for probabilities (constrained to 0-1)
+model <- model %>%
+  add_variable("p_death", 0.02, sampling = beta(bc, bc * 0.2))
+
+# Lognormal distribution for costs (positive values only)
+model <- model %>%
+  add_variable("c_treatment", 5000, sampling = lognormal(bc, bc * 0.3))
+
+# Gamma distribution for resource use
+model <- model %>%
+  add_variable("n_visits", 12, sampling = gamma(bc, bc * 0.25))
+```
+
+### Multivariate sampling for correlated parameters
+
+Use `add_multivariate_sampling()` when parameters should be sampled together with correlation.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_multivariate_sampling(
+    name = "utility_correlation",
+    distribution = multi_normal(
+      means = c(0.8, 0.6),
+      covariance = matrix(c(0.01, 0.005, 0.005, 0.02), nrow = 2)
+    ),
+    variables = c("u_mild", "u_severe")
+  )
+```
+
+## Running PSA
+
+```{r, include = FALSE}
+# Run PSA for the examples
+psa_results <- run_psa(model, n_sim = 1000, seed = 123)
+```
+
+The `run_psa()` function executes the model for each Monte Carlo simulation, sampling parameters from their specified distributions.
+
+```{r, eval = FALSE}
+psa_results <- run_psa(model, n_sim = 1000, seed = 123)
+```
+
+## PSA Scatter Plots
+
+Scatter plots visualize simulation results on the cost-effectiveness plane.
+
+### Cost-Effectiveness Scatter Plot
+
+The `psa_scatter_plot()` function shows costs vs outcomes for all simulations.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  strategies = c("standard", "new_treatment")
+)
+```
+
+#### Hiding mean points
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  show_means = FALSE
+)
+```
+
+### Pairwise Incremental Scatter Plot
+
+The `pairwise_psa_scatter_plot()` function shows incremental costs and outcomes relative to a comparator.
+
+#### Basic incremental CE plane
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "standard"
+)
+```
+
+#### With WTP threshold line
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "standard",
+  wtp = 50000
+)
+```
+
+## CEAC Plots
+
+Cost-effectiveness acceptability curves (CEACs) show the probability of being cost-effective across willingness-to-pay (WTP) thresholds.
+
+### Incremental CEAC
+
+The `incremental_ceac_plot()` function shows the probability that each strategy has the highest net monetary benefit.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### With cost-effectiveness frontier overlay
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  show_frontier = TRUE
+)
+```
+
+#### Custom WTP range
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp_range = c(0, 200000),
+  wtp_step = 5000
+)
+```
+
+### Pairwise CEAC
+
+The `pairwise_ceac_plot()` function shows the probability that an intervention is cost-effective compared to a specific comparator.
+
+#### Intervention perspective
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  intervention = "new_treatment"
+)
+```
+
+#### Comparator perspective
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "standard"
+)
+```
+
+### CEAC Frontier Plot
+
+The `incremental_ceac_frontier_plot()` function shows which strategy is optimal at each WTP threshold.
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_frontier_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+## EVPI Plot
+
+The expected value of perfect information (EVPI) represents the maximum amount a decision maker should pay to eliminate all parameter uncertainty.
+
+### Basic EVPI plot
+
+```{r, fig.width=9, fig.height=6}
+evpi_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+### Custom WTP range
+
+```{r, fig.width=9, fig.height=6}
+evpi_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp_range = c(0, 200000),
+  wtp_step = 5000
+)
+```
+
+## NMB Density Plot
+
+The `nmb_density_plot()` function shows the distribution of net monetary benefit across simulations.
+
+### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000
+)
+```
+
+### With mean lines
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  show_mean = TRUE
+)
+```
+
+## PSA Tables
+
+### PSA Summary Table
+
+The `psa_summary_table()` function provides comprehensive summary statistics including means, standard deviations, and probability of cost-effectiveness at various WTP thresholds.
+
+#### Basic usage
+
+```{r}
+psa_summary_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### With custom WTP thresholds for P(CE)
+
+```{r}
+psa_summary_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  pce_wtp = c(20000, 50000, 100000, 150000)
+)
+```
+
+#### Filtering to specific strategies
+
+```{r}
+psa_summary_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  strategies = c("standard", "new_treatment")
+)
+```
+
+### Incremental CEAC Table
+
+The `incremental_ceac_table()` function presents CEAC probabilities at selected WTP thresholds.
+
+#### Basic usage
+
+```{r}
+incremental_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### With optimal strategy highlighting
+
+```{r}
+incremental_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  show_optimal = TRUE
+)
+```
+
+#### Custom WTP thresholds
+
+```{r}
+incremental_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp_thresholds = c(20000, 50000, 100000, 150000, 200000)
+)
+```
+
+### Pairwise CEAC Table
+
+The `pairwise_ceac_table()` function shows pairwise cost-effectiveness probabilities.
+
+#### Intervention perspective
+
+```{r}
+pairwise_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  intervention = "new_treatment"
+)
+```
+
+#### Comparator perspective
+
+```{r}
+pairwise_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "standard"
+)
+```
+
+### EVPI Table
+
+The `evpi_table()` function presents EVPI values at selected WTP thresholds.
+
+```{r}
+evpi_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+### CE Quadrant Table
+
+The `ce_quadrant_table()` function shows the percentage of simulations falling into each quadrant of the cost-effectiveness plane relative to a comparator.
+
+```{r}
+ce_quadrant_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "Standard Care"
+)
+```
+
+### PSA Parameters Table
+
+The `psa_parameters_table()` function summarizes the distribution of sampled parameter values.
+
+```{r}
+psa_parameters_table(
+  psa_results,
+  variables = c("p_mild", "p_severe", "u_mild", "u_severe")
+)
+```
+
+### Parameter Scatter Matrix
+
+The `psa_parameter_scatter_matrix()` function creates a scatterplot matrix showing relationships between sampled parameters, including correlations, scatter plots, and density distributions.
+
+```{r, fig.width=9, fig.height=9}
+psa_parameter_scatter_matrix(
+  psa_results,
+  variables = c("p_mild", "p_severe", "u_mild", "u_severe"),
+  strategies = "standard"
+)
+```
+

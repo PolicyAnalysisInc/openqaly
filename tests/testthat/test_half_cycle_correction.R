@@ -254,16 +254,16 @@ test_that("Half-cycle method setting defaults to 'start' and validates input", {
 
   # Test default behavior (not specified)
   settings_df <- data.frame(
-    setting = c("n_cycles", "model_type"),
-    value = c("10", "markov")
+    setting = c("n_cycles", "model_type", "discount_cost", "discount_outcomes"),
+    value = c("10", "markov", "0", "0")
   )
   settings <- convert_settings_from_df(settings_df)
   expect_equal(settings$half_cycle_method, "start")
 
   # Test valid values
   settings_df <- data.frame(
-    setting = c("n_cycles", "half_cycle_method"),
-    value = c("10", "life-table")
+    setting = c("n_cycles", "half_cycle_method", "discount_cost", "discount_outcomes"),
+    value = c("10", "life-table", "0", "0")
   )
   settings <- convert_settings_from_df(settings_df)
   expect_equal(settings$half_cycle_method, "life-table")

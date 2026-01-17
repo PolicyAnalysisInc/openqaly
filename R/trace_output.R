@@ -89,7 +89,7 @@ map_names <- function(names, metadata, field = "name") {
 #' trace_wide <- get_trace(results, format = "wide")
 #'
 #' # Get specific strategies and groups
-#' trace_subset <- get_trace(results, strategies = c("standard"),
+#' trace_subset <- get_trace(results, strategies = c("chemo"),
 #'                           groups = c("overall", "moderate"))
 #' }
 #'
@@ -370,10 +370,11 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #' When multiple strategies or groups are present, they are automatically
 #' faceted into separate panels.
 #'
-#' @param results A openqaly model results object
-#' @param facet_by Faceting variable: NULL (auto-detect), "strategy", "group",
-#'   or "both". When NULL and multiple strategies/groups exist, automatically
-#'   creates facets to separate them.
+#' @param res A openqaly model results object (output from run_model)
+#' @param groups Group selection: "overall" (default), specific group name,
+#'   vector of groups, "all" (all groups plus aggregated), "all_groups"
+#'   (all groups without overall), or NULL (same as "all")
+#' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param proportional Logical. If TRUE, show as percentages (0-100%). If FALSE
 #'   (default), show as probabilities (0-1)
 #' @param states Character vector of states to include (NULL for all)
@@ -392,38 +393,41 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
-#' # Basic stacked area plot (auto-facets by strategy if >1)
+#' # Basic stacked area plot (facets by strategy if multiple)
 #' trace_plot_area(results)
-#'
-#' # Explicitly facet by strategy
-#' trace_plot_area(results, facet_by = "strategy")
 #'
 #' # Show as percentages
 #' trace_plot_area(results, proportional = TRUE)
 #' }
 #'
 #' @export
-trace_plot_area <- function(results,
-                       facet_by = NULL,
+trace_plot_area <- function(res,
+                       groups = "overall",
+                       strategies = NULL,
                        proportional = FALSE,
                        states = NULL,
                        color_palette = NULL,
                        show_legend = TRUE,
                        collapsed = TRUE,
-                       use_display_names = FALSE,
+                       use_display_names = TRUE,
                        time_unit = "cycle") {
 
   # Get trace data in long format (names already mapped by get_trace)
-  trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
+  trace_data <- get_trace(res,
+                          format = "long",
+                          collapsed = collapsed,
+                          groups = groups,
+                          strategies = strategies,
+                          states = states,
                           time_unit = time_unit,
                           use_display_names = use_display_names)
 
   # Update color palette keys if provided (plot-specific mapping)
   name_field <- field_from_display_names(use_display_names)
   if (!is.null(color_palette) && !is.null(names(color_palette))) {
-    if (!is.null(results$metadata) && !is.null(results$metadata$states) && name_field != "name") {
+    if (!is.null(res$metadata) && !is.null(res$metadata$states) && name_field != "name") {
       old_names <- names(color_palette)
-      new_names <- map_names(old_names, results$metadata$states, name_field)
+      new_names <- map_names(old_names, res$metadata$states, name_field)
       names(color_palette) <- new_names
     }
   }
@@ -436,18 +440,33 @@ trace_plot_area <- function(results,
       ungroup()
   }
 
-  # Determine faceting - auto-facet if multiple series and no faceting specified
+  # Preserve state ordering from metadata
+  if (!is.null(res$metadata) && !is.null(res$metadata$states)) {
+    state_levels <- if (use_display_names) {
+      res$metadata$states$display_name
+    } else {
+      res$metadata$states$name
+    }
+    trace_data$state <- factor(trace_data$state, levels = state_levels)
+  }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(trace_data$group), res$metadata)
+  trace_data <- trace_data %>%
+    mutate(group = factor(.data$group, levels = group_levels))
+
+  # Determine faceting based on data dimensions
   n_strategies <- length(unique(trace_data$strategy))
   n_groups <- length(unique(trace_data$group))
 
-  if (is.null(facet_by)) {
-    if (n_strategies > 1 && n_groups > 1) {
-      facet_by <- "both"
-    } else if (n_strategies > 1) {
-      facet_by <- "strategy"
-    } else if (n_groups > 1 && !collapsed) {
-      facet_by <- "group"
-    }
+  if (n_strategies > 1 && n_groups > 1) {
+    facet_formula <- ~ strategy + group
+  } else if (n_strategies > 1) {
+    facet_formula <- ~ strategy
+  } else if (n_groups > 1) {
+    facet_formula <- ~ group
+  } else {
+    facet_formula <- NULL
   }
 
   # Determine time column and label
@@ -494,14 +513,8 @@ trace_plot_area <- function(results,
   }
 
   # Add faceting
-  if (!is.null(facet_by)) {
-    if (facet_by == "strategy") {
-      p <- p + facet_wrap(~ strategy)
-    } else if (facet_by == "group") {
-      p <- p + facet_wrap(~ group)
-    } else if (facet_by == "both") {
-      p <- p + facet_wrap(~ strategy + group)
-    }
+  if (!is.null(facet_formula)) {
+    p <- p + facet_wrap(facet_formula)
   }
 
   # Position legend at bottom with horizontal layout (or hide if requested)
@@ -532,35 +545,42 @@ trace_plot_area <- function(results,
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' results <- run_model(model)
 #'
-#' # Line plot showing each state's trajectory
+#' # Line plot showing each state's trajectory (color by state)
 #' trace_plot_line(results)
 #'
-#' # Compare strategies
-#' trace_plot_line(results, facet_by = "strategy")
+#' # Color by strategy, facet by state
+#' trace_plot_line(results, by_state = FALSE)
 #' }
 #'
 #' @export
-trace_plot_line <- function(results,
-                              facet_by = NULL,
+trace_plot_line <- function(res,
+                              groups = "overall",
+                              strategies = NULL,
+                              by_state = TRUE,
                               proportional = FALSE,
                               states = NULL,
                               color_palette = NULL,
                               show_legend = TRUE,
                               collapsed = TRUE,
-                              use_display_names = FALSE,
+                              use_display_names = TRUE,
                               time_unit = "cycle") {
 
   # Get trace data in long format (names already mapped by get_trace)
-  trace_data <- get_trace(results, format = "long", collapsed = collapsed, states = states,
+  trace_data <- get_trace(res,
+                          format = "long",
+                          collapsed = collapsed,
+                          groups = groups,
+                          strategies = strategies,
+                          states = states,
                           time_unit = time_unit,
                           use_display_names = use_display_names)
 
   # Update color palette keys if provided (plot-specific mapping)
   name_field <- field_from_display_names(use_display_names)
   if (!is.null(color_palette) && !is.null(names(color_palette))) {
-    if (!is.null(results$metadata) && !is.null(results$metadata$states) && name_field != "name") {
+    if (!is.null(res$metadata) && !is.null(res$metadata$states) && name_field != "name") {
       old_names <- names(color_palette)
-      new_names <- map_names(old_names, results$metadata$states, name_field)
+      new_names <- map_names(old_names, res$metadata$states, name_field)
       names(color_palette) <- new_names
     }
   }
@@ -573,17 +593,47 @@ trace_plot_line <- function(results,
       ungroup()
   }
 
-  # Determine faceting - auto-facet if multiple series and no faceting specified
+  # Determine faceting based on by_state and data dimensions
   n_strategies <- length(unique(trace_data$strategy))
   n_groups <- length(unique(trace_data$group))
+  n_states <- length(unique(trace_data$state))
 
-  if (is.null(facet_by)) {
+  # Preserve state ordering from metadata
+  if (!is.null(res$metadata) && !is.null(res$metadata$states)) {
+    state_levels <- if (use_display_names) {
+      res$metadata$states$display_name
+    } else {
+      res$metadata$states$name
+    }
+    trace_data$state <- factor(trace_data$state, levels = state_levels)
+  }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(trace_data$group), res$metadata)
+  trace_data <- trace_data %>%
+    mutate(group = factor(.data$group, levels = group_levels))
+
+  if (by_state) {
+    # Color by state, facet by strategy/group
     if (n_strategies > 1 && n_groups > 1) {
-      facet_by <- "both"
+      facet_formula <- ~ strategy + group
     } else if (n_strategies > 1) {
-      facet_by <- "strategy"
-    } else if (n_groups > 1 && !collapsed) {
-      facet_by <- "group"
+      facet_formula <- ~ strategy
+    } else if (n_groups > 1) {
+      facet_formula <- ~ group
+    } else {
+      facet_formula <- NULL
+    }
+  } else {
+    # Color by strategy, facet by state/group
+    if (n_states > 1 && n_groups > 1) {
+      facet_formula <- ~ state + group
+    } else if (n_states > 1) {
+      facet_formula <- ~ state
+    } else if (n_groups > 1) {
+      facet_formula <- ~ group
+    } else {
+      facet_formula <- NULL
     }
   }
 
@@ -614,14 +664,29 @@ trace_plot_line <- function(results,
   }
 
   # Create base plot using the appropriate time column
-  p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability, color = .data$state)) +
-    geom_line(linewidth = 1) +
-    theme_bw() +
-    labs(
-      x = time_label,
-      y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
-      color = "State"
-    )
+  if (by_state) {
+    p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability,
+                                color = .data$state,
+                                group = interaction(.data$state, .data$strategy))) +
+      geom_line(linewidth = 1) +
+      theme_bw() +
+      labs(
+        x = time_label,
+        y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
+        color = "State"
+      )
+  } else {
+    p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability,
+                                color = .data$strategy,
+                                group = interaction(.data$strategy, .data$state))) +
+      geom_line(linewidth = 1) +
+      theme_bw() +
+      labs(
+        x = time_label,
+        y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
+        color = "Strategy"
+      )
+  }
 
   # Apply color palette if provided
   if (!is.null(color_palette)) {
@@ -629,14 +694,8 @@ trace_plot_line <- function(results,
   }
 
   # Add faceting
-  if (!is.null(facet_by)) {
-    if (facet_by == "strategy") {
-      p <- p + facet_wrap(~ strategy)
-    } else if (facet_by == "group") {
-      p <- p + facet_wrap(~ group)
-    } else if (facet_by == "both") {
-      p <- p + facet_wrap(~ strategy + group)
-    }
+  if (!is.null(facet_formula)) {
+    p <- p + facet_wrap(facet_formula)
   }
 
   # Position legend at bottom with horizontal layout (or hide if requested)

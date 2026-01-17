@@ -45,7 +45,7 @@ create_mock_results <- function(strategies_data) {
       results$aggregated,
       tibble(
         strategy = strat_data$strategy,
-        group = "Aggregated",
+        group = "Overall",
         values = list(values_matrix),
         discounted_values = list(values_matrix),  # Same for simplicity
         summaries = list(summaries_df),
@@ -228,18 +228,18 @@ test_that("calculate_incremental_ce() recalculates after removing extended domin
   expect_equal(d_row$doutcome, 2)  # 4 - 2
 })
 
-test_that("calculate_incremental_ce() handles group parameter correctly", {
+test_that("calculate_incremental_ce() handles groups parameter correctly", {
   # Use real model results which may have groups
   results <- get_example_results()
 
   # Test overall (default)
   ce_agg <- calculate_incremental_ce(results, "total_qalys", "total_cost",
-                                      group = "overall")
+                                      groups = "overall")
   expect_equal(unique(ce_agg$group), "Overall")
 
-  # Test NULL (all groups)
+  # Test "all" (overall + all groups)
   ce_all <- calculate_incremental_ce(results, "total_qalys", "total_cost",
-                                      group = NULL)
+                                      groups = "all")
   # Should have at least overall
   expect_true("Overall" %in% ce_all$group)
 })
@@ -280,28 +280,8 @@ test_that("calculate_incremental_ce() uses name fields correctly", {
   expect_true("outcome" %in% names(ce_default))
 })
 
-test_that("calculate_incremental_ce() handles discounted parameter", {
-  results <- get_example_results()
-
-  # Test undiscounted
-  ce_undisc <- calculate_incremental_ce(
-    results, "total_qalys", "total_cost",
-    discounted = FALSE
-  )
-
-  # Test discounted
-  ce_disc <- calculate_incremental_ce(
-    results, "total_qalys", "total_cost",
-    discounted = TRUE
-  )
-
-  # Both should have same structure
-  expect_equal(ncol(ce_undisc), ncol(ce_disc))
-  expect_equal(names(ce_undisc), names(ce_disc))
-
-  # Values may differ due to discounting
-  # (Can't test exact values without knowing discount rates)
-})
+# Test removed: discounted parameter no longer exists for calculate_incremental_ce
+# CE calculations always use discounted values as they're cost-effectiveness measures
 
 test_that("calculate_incremental_ce() returns correct column structure", {
   results <- get_example_results()
@@ -387,35 +367,35 @@ test_that("incremental_ce_plot() creates ggplot object", {
   expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomPoint"))))
 })
 
-test_that("incremental_ce_plot() handles group=overall", {
+test_that("incremental_ce_plot() handles groups=overall", {
   results <- get_example_results()
 
   p <- incremental_ce_plot(results, "total_qalys", "total_cost",
-                           group = "overall")
+                           groups = "overall")
 
   expect_s3_class(p, "ggplot")
   # Should not have facets for single group
   expect_null(p$facet$params$facets)
 })
 
-test_that("incremental_ce_plot() handles group=NULL with faceting", {
+test_that("incremental_ce_plot() handles groups='all' with faceting", {
   results <- get_example_results()
 
-  # When group=NULL, should show all groups
+  # When groups="all", should show all groups
   p <- incremental_ce_plot(results, "total_qalys", "total_cost",
-                           group = NULL)
+                           groups = "all")
 
   expect_s3_class(p, "ggplot")
   # May have facets if multiple groups exist
   # (Can't test exact faceting without knowing if model has groups)
 })
 
-test_that("incremental_ce_plot() handles specific group", {
+test_that("incremental_ce_plot() handles specific groups", {
   results <- get_example_results()
 
   # Test with overall as specific group
   p <- incremental_ce_plot(results, "total_qalys", "total_cost",
-                           group = "overall")
+                           groups = "overall")
 
   expect_s3_class(p, "ggplot")
 })
@@ -516,30 +496,30 @@ test_that("incremental_ce_table() handles flextable backend", {
   expect_s3_class(tbl, "flextable")
 })
 
-test_that("incremental_ce_table() handles group=overall", {
+test_that("incremental_ce_table() handles groups=overall", {
   results <- get_example_results()
 
   tbl <- incremental_ce_table(results, "total_qalys", "total_cost",
-                               group = "overall")
+                               groups = "overall")
 
   expect_true(inherits(tbl, "kableExtra") || inherits(tbl, "flextable"))
 })
 
-test_that("incremental_ce_table() handles group=NULL (three-level)", {
+test_that("incremental_ce_table() handles groups='all' (three-level)", {
   results <- get_example_results()
 
-  # NULL means all groups
+  # "all" means overall + all groups
   tbl <- incremental_ce_table(results, "total_qalys", "total_cost",
-                               group = NULL)
+                               groups = "all")
 
   expect_true(inherits(tbl, "kableExtra") || inherits(tbl, "flextable"))
 })
 
-test_that("incremental_ce_table() handles specific group", {
+test_that("incremental_ce_table() handles specific groups", {
   results <- get_example_results()
 
   tbl <- incremental_ce_table(results, "total_qalys", "total_cost",
-                               group = "overall")
+                               groups = "overall")
 
   expect_true(inherits(tbl, "kableExtra") || inherits(tbl, "flextable"))
 })

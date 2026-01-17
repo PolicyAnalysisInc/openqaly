@@ -1,0 +1,457 @@
+---
+title: "Deterministic Sensitivity Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Deterministic Sensitivity Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to configure, run, and visualize deterministic sensitivity analysis (DSA) using openqaly. DSA varies one parameter at a time while holding others constant to assess the impact on model results. The examples use a sample model included with the package.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(system.file("models", "example_markov", package = "openqaly"))
+```
+
+## Configuring DSA Parameters
+
+Before running DSA, you must specify which parameters to vary and their bounds.
+
+### Adding Variable Parameters
+
+The `add_dsa_variable()` function defines model variables to include in DSA.
+
+#### Basic usage with literal bounds
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_variable("c_severe", low = 5000, high = 12000)
+```
+
+#### Using the `bc` keyword for relative bounds
+
+The `bc` keyword references the base case value, allowing relative variation.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_variable("p_death_severe", low = bc * 0.5, high = bc * 2)
+```
+
+#### Custom display name
+
+Use `display_name` to customize labels in plots and tables.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
+                   display_name = "Disease Incidence")
+```
+
+### Adding Setting Parameters
+
+The `add_dsa_setting()` function varies model settings like discount rates or timeframe.
+
+#### Discount rate sensitivity
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_setting("discount_outcomes", low = 0, high = 5,
+                  display_name = "Outcome Discount Rate")
+```
+
+#### Timeframe sensitivity
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_setting("timeframe", low = 5, high = 20)
+```
+
+## Running DSA
+
+```{r, include = FALSE}
+# Configure DSA parameters for the examples
+# Note: Group-specific variables (p_mild, p_severe, p_death_severe) require
+# specifying which group to vary. Global variables don't require this.
+model <- model %>%
+  add_dsa_variable("u_mild", low = bc * 0.8, high = bc * 1.2,
+                   display_name = "Utility (Mild)") %>%
+  add_dsa_variable("u_severe", low = bc * 0.5, high = bc * 1.5,
+                   display_name = "Utility (Severe)") %>%
+  add_dsa_variable("c_mild", low = bc * 0.8, high = bc * 1.2,
+                   display_name = "Cost (Mild)") %>%
+  add_dsa_variable("c_severe", low = bc * 0.8, high = bc * 1.2,
+                   display_name = "Cost (Severe)") %>%
+  add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
+                   group = "low_risk", display_name = "Disease Incidence (Low Risk)") %>%
+  add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
+                   group = "high_risk", display_name = "Disease Incidence (High Risk)") %>%
+  add_dsa_setting("discount_outcomes", low = 0, high = 5,
+                  display_name = "Outcome Discount Rate")
+
+dsa_results <- run_dsa(model)
+```
+
+The `run_dsa()` function executes the model for each parameter at its low and high bounds.
+
+```{r, eval = FALSE}
+dsa_results <- run_dsa(model)
+```
+
+## Tornado Plots
+
+Tornado plots visualize the impact of each parameter on results, sorted by magnitude.
+
+### Outcomes Tornado Plot
+
+The `dsa_outcomes_plot()` function creates tornado plots for outcome summaries.
+
+#### Basic usage
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  strategies = c("standard", "new_treatment")
+)
+```
+
+#### Intervention vs comparator
+
+Use `interventions` and `comparators` to show incremental differences.
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  interventions = "new_treatment",
+  comparators = "standard"
+)
+```
+
+#### Hiding parameter values in labels
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  show_parameter_values = FALSE
+)
+```
+
+#### Including zero-impact parameters
+
+By default, parameters with no impact are excluded. Set `drop_zero_impact = FALSE` to include them.
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  drop_zero_impact = FALSE
+)
+```
+
+#### Using discounted values
+
+```{r, fig.width=7, fig.height=6}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  discounted = TRUE
+)
+```
+
+#### By subgroup
+
+Use `groups = 'all_groups'` to display results for each population subgroup separately.
+
+```{r, fig.width=7, fig.height=9}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+Use `groups = 'all'` to display results for each subgroup plus the overall population.
+
+```{r, fig.width=7, fig.height=9}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  groups = 'all'
+)
+```
+
+#### Same-side parameter variations
+
+In rare cases, both the low and high parameter values may produce results on the same side of the base case result. When this occurs, both the "Low" and "High" bars extend in the same direction from the base case line rather than on opposite sides.
+
+```{r, include = FALSE}
+# Hidden setup - configure parameter where both low and high are above base case
+model_same_side <- model %>%
+  add_dsa_variable("u_severe", low = bc * 1.1, high = bc * 1.3,
+                   display_name = "Severe Disease Utility (Both Above Base)")
+
+dsa_same_side <- run_dsa(model_same_side)
+```
+
+```{r, fig.width=7, fig.height=6, echo = FALSE}
+dsa_outcomes_plot(
+  dsa_same_side,
+  summary_name = "qalys"
+)
+```
+
+### NMB Tornado Plot
+
+The `dsa_nmb_plot()` function creates tornado plots for Net Monetary Benefit.
+
+#### Intervention perspective
+
+```{r, fig.width=7, fig.height=6}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment"
+)
+```
+
+#### Comparator perspective
+
+```{r, fig.width=7, fig.height=6}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = "standard"
+)
+```
+
+#### Specific intervention vs comparator
+
+```{r, fig.width=7, fig.height=6}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  comparators = "standard"
+)
+```
+
+#### Custom WTP override
+
+```{r, fig.width=7, fig.height=6}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  wtp = 50000
+)
+```
+
+#### By subgroup
+
+```{r, fig.width=7, fig.height=9}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+```{r, fig.width=7, fig.height=9}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  groups = 'all'
+)
+```
+
+## DSA Tables
+
+### Outcomes Table
+
+The `dsa_outcomes_table()` function presents DSA results in tabular format, showing low, base, and high values for each parameter.
+
+#### Basic usage
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  strategies = c("standard", "new_treatment")
+)
+```
+
+#### Intervention perspective
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  interventions = "new_treatment"
+)
+```
+
+#### Comparator perspective
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  comparators = "standard"
+)
+```
+
+#### Custom decimal places
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "costs",
+  decimals = 0
+)
+```
+
+#### Using discounted values
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  discounted = TRUE
+)
+```
+
+#### By subgroup
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  groups = 'all'
+)
+```
+
+### NMB Table
+
+The `dsa_nmb_table()` function presents DSA Net Monetary Benefit results in tabular format, showing low, base, and high NMB values for each parameter.
+
+#### Basic usage (intervention perspective)
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment"
+)
+```
+
+#### Comparator perspective
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  comparators = "standard"
+)
+```
+
+#### Specific intervention vs comparator
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  comparators = "standard"
+)
+```
+
+#### Custom WTP override
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  wtp = 50000
+)
+```
+
+#### By subgroup
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "new_treatment",
+  groups = 'all'
+)
+```
+

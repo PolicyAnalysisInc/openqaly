@@ -20,6 +20,7 @@
 #' @importFrom furrr future_map furrr_options
 #' @importFrom future plan multisession
 #' @importFrom scales comma dollar dollar_format percent number pretty_breaks
+#' @importFrom tidytext reorder_within scale_y_reordered
 NULL
 
 ## usethis namespace: start

@@ -141,6 +141,11 @@ outcomes_plot_line <- function(res, outcome,
     outcome_label <- paste0("Difference in ", outcome_label)
   }
 
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(values_with_total$group), res$metadata)
+  values_with_total <- values_with_total %>%
+    mutate(group = factor(.data$group, levels = group_levels))
+
   # Determine faceting
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
@@ -193,7 +198,6 @@ outcomes_plot_line <- function(res, outcome,
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of comparator strategies (e.g., "control").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
-#' @param discounted Logical. Use discounted values?
 #'
 #' @return A ggplot2 object
 #'
@@ -201,6 +205,8 @@ outcomes_plot_line <- function(res, outcome,
 #' Either `interventions` or `comparators` must be specified (one is mandatory).
 #' WTP is automatically extracted from the health outcome summary metadata if available,
 #' but can be overridden using the `wtp` parameter.
+#'
+#' NMB calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' @examples
 #' \dontrun{
@@ -221,8 +227,7 @@ nmb_plot_bar <- function(res,
                      groups = "overall",
                      wtp = NULL,
                      interventions = NULL,
-                     comparators = NULL,
-                     discounted = FALSE) {
+                     comparators = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -246,12 +251,13 @@ nmb_plot_bar <- function(res,
   }
 
   # Get outcome components with differences (follows outcomes_plot pattern)
+  # Always use discounted values for NMB (cost-effectiveness measure)
   outcome_components <- get_summaries(
     res,
     groups = groups,
     summaries = health_outcome,
     value_type = "outcome",
-    discounted = discounted,
+    discounted = TRUE,
     interventions = interventions,
     comparators = comparators,
     use_display_names = TRUE
@@ -259,12 +265,13 @@ nmb_plot_bar <- function(res,
     mutate(amount = .data$amount * wtp)  # Multiply by WTP
 
   # Get cost components with differences
+  # Always use discounted values for NMB (cost-effectiveness measure)
   cost_components <- get_summaries(
     res,
     groups = groups,
     summaries = cost_outcome,
     value_type = "cost",
-    discounted = discounted,
+    discounted = TRUE,
     interventions = interventions,
     comparators = comparators,
     use_display_names = TRUE
@@ -280,11 +287,14 @@ nmb_plot_bar <- function(res,
     summarize(amount = sum(.data$amount), .groups = 'drop') %>%
     mutate(value = "Total")
 
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(c(all_components$group, totals$group)), res$metadata)
+
   # Combine with totals (like outcomes_plot line 98)
   nmb_data <- bind_rows(all_components, totals) %>%
     mutate(
       strategy = factor(.data$strategy, levels = unique(c(all_components$strategy, totals$strategy))),
-      group = factor(.data$group, levels = unique(c(all_components$group, totals$group))),
+      group = factor(.data$group, levels = group_levels),
       value = factor(.data$value, levels = rev(unique(c(all_components$value, totals$value)))),
       .pos_or_neg = ifelse(.data$amount >= 0, "Positive", "Negative")
     )
@@ -337,12 +347,13 @@ nmb_plot_bar <- function(res,
 #' @param time_unit Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"
 #' @param cumulative Logical. If TRUE (default), shows cumulative NMB over time.
 #'   If FALSE, shows per-cycle NMB.
-#' @param discounted Logical. Use discounted values?
 #'
 #' @return A ggplot2 object
 #'
 #' @details
 #' Either `interventions` or `comparators` must be specified (one is mandatory).
+#'
+#' NMB calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' @examples
 #' \dontrun{
@@ -368,8 +379,7 @@ nmb_plot_line <- function(res,
                           interventions = NULL,
                           comparators = NULL,
                           time_unit = "cycle",
-                          cumulative = TRUE,
-                          discounted = FALSE) {
+                          cumulative = TRUE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -393,13 +403,14 @@ nmb_plot_line <- function(res,
   }
 
   # Get outcome components with differences (like outcomes_plot_time)
+  # Always use discounted values for NMB (cost-effectiveness measure)
   outcome_components <- get_values(
     res,
     format = "long",
     groups = groups,
     value_type = "outcome",
     time_unit = time_unit,
-    discounted = discounted,
+    discounted = TRUE,
     interventions = interventions,
     comparators = comparators,
     use_display_names = TRUE
@@ -407,13 +418,14 @@ nmb_plot_line <- function(res,
     mutate(amount = .data$amount * wtp)  # Multiply by WTP
 
   # Get cost components with differences
+  # Always use discounted values for NMB (cost-effectiveness measure)
   cost_components <- get_values(
     res,
     format = "long",
     groups = groups,
     value_type = "cost",
     time_unit = time_unit,
-    discounted = discounted,
+    discounted = TRUE,
     interventions = interventions,
     comparators = comparators,
     use_display_names = TRUE
@@ -474,6 +486,11 @@ nmb_plot_line <- function(res,
     "Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})"
   )
 
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(values_with_total$group), res$metadata)
+  values_with_total <- values_with_total %>%
+    mutate(group = factor(.data$group, levels = group_levels))
+
   # Determine faceting (like outcomes_plot_time)
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
@@ -524,7 +541,6 @@ nmb_plot_line <- function(res,
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -534,6 +550,8 @@ nmb_plot_line <- function(res,
 #' Dominated and extended dominated strategies are shown with different styling.
 #'
 #' When \code{group = NULL}, creates faceted plots for each group and aggregated results.
+#'
+#' CE calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' @examples
 #' \dontrun{
@@ -552,17 +570,15 @@ incremental_ce_plot <- function(res,
                                 outcome_summary,
                                 cost_summary,
                                 groups = "overall",
-                                strategies = NULL,
-                                discounted = FALSE) {
+                                strategies = NULL) {
 
-  # Calculate incremental CE
+  # Calculate incremental CE (always uses discounted values)
   ce_data <- calculate_incremental_ce(
     res,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = discounted
+    strategies = strategies
   )
 
   # Create status factor for coloring/shaping
@@ -589,6 +605,13 @@ incremental_ce_plot <- function(res,
     outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
     cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
   }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(ce_data$group), res$metadata)
+  ce_data <- ce_data %>%
+    mutate(group = factor(.data$group, levels = group_levels))
+  frontier_data <- frontier_data %>%
+    mutate(group = factor(.data$group, levels = group_levels))
 
   # Determine faceting
   n_groups <- length(unique(ce_data$group))
@@ -645,7 +668,6 @@ incremental_ce_plot <- function(res,
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of comparator strategies (e.g., "control").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -663,6 +685,8 @@ incremental_ce_plot <- function(res,
 #' - One point per panel at the intervention's incremental position
 #' - Line shows ICER slope from origin
 #' - If group=NULL: uses facet_grid with group on rows, comparison on columns
+#'
+#' CE calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' @examples
 #' \dontrun{
@@ -687,15 +711,14 @@ pairwise_ce_plot <- function(res,
                              groups = "overall",
                              strategies = NULL,
                              interventions = NULL,
-                             comparators = NULL,
-                             discounted = FALSE) {
+                             comparators = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
     stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
-  # Calculate pairwise CE
+  # Calculate pairwise CE (always uses discounted values)
   ce_data <- calculate_pairwise_ce(
     res,
     outcome_summary = outcome_summary,
@@ -703,8 +726,7 @@ pairwise_ce_plot <- function(res,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
-    comparators = comparators,
-    discounted = discounted
+    comparators = comparators
   )
 
   # Map summary names for axis labels
@@ -714,6 +736,11 @@ pairwise_ce_plot <- function(res,
     outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
     cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
   }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(ce_data$group), res$metadata)
+  ce_data <- ce_data %>%
+    mutate(group = factor(.data$group, levels = group_levels))
 
   # Get unique groups and comparisons
   n_groups <- length(unique(ce_data$group))

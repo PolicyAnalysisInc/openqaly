@@ -570,3 +570,114 @@ test_that("pairwise_psa_scatter_plot() creates facets for multiple comparisons",
   n_panels <- length(unique(point_layer$PANEL))
   expect_equal(n_panels, length(strategies) - 1)  # One panel per non-comparator
 })
+
+# ============================================================================
+# Tests for nmb_density_plot()
+# ============================================================================
+
+test_that("nmb_density_plot() returns ggplot object", {
+  results <- get_cached_psa_results()
+  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = 50000)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("nmb_density_plot() calculates NMB correctly", {
+  results <- get_cached_psa_results()
+
+  wtp_test <- 50000
+  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = wtp_test)
+  built <- ggplot_build(p)
+
+  # Get the density layer data
+  density_data <- built$data[[1]]
+
+  # NMB x values should be on expected scale (outcome * wtp - cost)
+  # Just verify we have reasonable x range (NMB can be negative or positive)
+  expect_true(min(density_data$x) < max(density_data$x))
+})
+
+test_that("nmb_density_plot() respects strategies filter", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  # Filter to first strategy only
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    strategies = strategies[1]
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+
+  # Should only have one strategy (one unique fill color)
+  expect_equal(length(unique(density_data$fill)), 1)
+})
+
+test_that("nmb_density_plot() show_mean adds vertical lines", {
+  results <- get_cached_psa_results()
+
+  p_without <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    show_mean = FALSE
+  )
+  p_with <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    show_mean = TRUE
+  )
+
+  built_without <- ggplot_build(p_without)
+  built_with <- ggplot_build(p_with)
+
+  # With mean lines should have more layers
+  expect_gt(length(built_with$data), length(built_without$data))
+})
+
+test_that("nmb_density_plot() title includes WTP value", {
+  results <- get_cached_psa_results()
+
+  wtp_test <- 75000
+  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = wtp_test)
+
+  # Title should mention the WTP value
+  expect_true(grepl("75,000", p$labels$title) || grepl("75000", p$labels$title))
+})
+
+test_that("nmb_density_plot() custom title is applied", {
+  results <- get_cached_psa_results()
+
+  custom_title <- "My Custom NMB Plot"
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    title = custom_title
+  )
+
+  expect_equal(p$labels$title, custom_title)
+})
+
+test_that("nmb_density_plot() respects alpha parameter", {
+  results <- get_cached_psa_results()
+
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    alpha = 0.7
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+
+  # Alpha should be applied to density layer
+  expect_true("alpha" %in% names(density_data))
+  expect_equal(unique(density_data$alpha), 0.7)
+})
+
+test_that("nmb_density_plot() x-axis has proper labels", {
+  results <- get_cached_psa_results()
+
+  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = 50000)
+
+  # Default x label should be "Net Monetary Benefit"
+  expect_equal(p$labels$x, "Net Monetary Benefit")
+})

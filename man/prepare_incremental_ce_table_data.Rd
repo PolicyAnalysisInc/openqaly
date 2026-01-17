@@ -11,7 +11,6 @@ prepare_incremental_ce_table_data(
   groups = "overall",
   strategies = NULL,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11
 )
 }
@@ -27,8 +26,6 @@ prepare_incremental_ce_table_data(
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering}
 }

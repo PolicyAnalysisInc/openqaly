@@ -22,9 +22,9 @@ test_that("example_psm model loads correctly", {
   expect_equal(nrow(model$states), 3)
   expect_setequal(model$states$name, c("progression_free", "progressed", "dead"))
 
-  # Verify exactly 2 strategies
-  expect_equal(nrow(model$strategies), 2)
-  expect_setequal(model$strategies$name, c("standard", "new_drug"))
+  # Verify exactly 3 strategies
+  expect_equal(nrow(model$strategies), 3)
+  expect_setequal(model$strategies$name, c("chemo", "targeted", "immuno"))
 
   # Verify transitions have PFS and OS endpoints
   expect_true("PFS" %in% toupper(model$transitions$endpoint))
@@ -44,19 +44,19 @@ test_that("Strategy-specific variables evaluate correctly", {
   expect_true("c_admin" %in% model$variables$name)
   expect_true("c_ae" %in% model$variables$name)
 
-  # Verify c_drug has two rows (one per strategy)
+  # Verify c_drug has three rows (one per strategy)
   c_drug_rows <- model$variables[model$variables$name == "c_drug", ]
-  expect_equal(nrow(c_drug_rows), 2)
-  expect_setequal(c_drug_rows$strategy, c("standard", "new_drug"))
+  expect_equal(nrow(c_drug_rows), 3)
+  expect_setequal(c_drug_rows$strategy, c("chemo", "targeted", "immuno"))
 
   # Verify formulas are simple values (not vswitch)
   expect_false(any(grepl("vswitch", model$variables$formula)))
 
   # Verify expected values
-  standard_drug <- c_drug_rows[c_drug_rows$strategy == "standard", ]$formula
-  new_drug_drug <- c_drug_rows[c_drug_rows$strategy == "new_drug", ]$formula
-  expect_equal(standard_drug, "5000")
-  expect_equal(new_drug_drug, "12000")
+  chemo_drug <- c_drug_rows[c_drug_rows$strategy == "chemo", ]$formula
+  targeted_drug <- c_drug_rows[c_drug_rows$strategy == "targeted", ]$formula
+  expect_equal(chemo_drug, "7000")
+  expect_equal(targeted_drug, "12000")
 })
 
 test_that("example_psm model executes successfully", {
@@ -74,9 +74,9 @@ test_that("example_psm model executes successfully", {
   expect_true("segments" %in% names(results))
   expect_true("aggregated" %in% names(results))
 
-  # Verify both strategies ran
-  expect_equal(nrow(results$aggregated), 2)
-  expect_setequal(results$aggregated$strategy, c("standard", "new_drug"))
+  # Verify all strategies ran
+  expect_equal(nrow(results$aggregated), 3)
+  expect_setequal(results$aggregated$strategy, c("chemo", "targeted", "immuno"))
 
   # Verify traces exist
   expect_true(!is.null(results$aggregated$collapsed_trace[[1]]))
@@ -92,8 +92,8 @@ test_that("PSM trace has correct structure and dimensions", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  # Get trace for standard strategy
-  standard_trace <- results$aggregated$collapsed_trace[[which(results$aggregated$strategy == "standard")]]
+  # Get trace for chemo strategy
+  standard_trace <- results$aggregated$collapsed_trace[[which(results$aggregated$strategy == "chemo")]]
   state_trace <- get_state_columns(standard_trace)
 
   # Verify dimensions
@@ -202,23 +202,23 @@ test_that("PSM strategies produce different costs", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  # Get traces and values for both strategies
-  standard_idx <- which(results$aggregated$strategy == "standard")
-  new_drug_idx <- which(results$aggregated$strategy == "new_drug")
+  # Get traces and values for chemo and targeted strategies
+  chemo_idx <- which(results$aggregated$strategy == "chemo")
+  targeted_idx <- which(results$aggregated$strategy == "targeted")
 
-  standard_values <- results$aggregated$trace_and_values[[standard_idx]]$values
-  new_drug_values <- results$aggregated$trace_and_values[[new_drug_idx]]$values
+  chemo_values <- results$aggregated$trace_and_values[[chemo_idx]]$values
+  targeted_values <- results$aggregated$trace_and_values[[targeted_idx]]$values
 
   # Verify cost columns exist
-  expect_true("cost_drug" %in% colnames(standard_values))
-  expect_true("cost_drug" %in% colnames(new_drug_values))
+  expect_true("cost_drug" %in% colnames(chemo_values))
+  expect_true("cost_drug" %in% colnames(targeted_values))
 
   # Verify costs differ between strategies
-  standard_total_cost <- sum(standard_values[, "cost_drug"])
-  new_drug_total_cost <- sum(new_drug_values[, "cost_drug"])
+  chemo_total_cost <- sum(chemo_values[, "cost_drug"])
+  targeted_total_cost <- sum(targeted_values[, "cost_drug"])
 
-  expect_true(new_drug_total_cost > standard_total_cost,
-              info = "New drug should be more expensive than standard")
+  expect_true(targeted_total_cost > chemo_total_cost,
+              info = "Targeted should be more expensive than chemo")
 })
 
 test_that("PSM values are calculated correctly with half-cycle methods", {
@@ -274,7 +274,7 @@ test_that("PSM discounting is applied correctly", {
   results <- run_model(model)
 
   # Get undiscounted and discounted values
-  standard_idx <- which(results$aggregated$strategy == "standard")
+  standard_idx <- which(results$aggregated$strategy == "chemo")
   values_undiscounted <- results$aggregated$trace_and_values[[standard_idx]]$values
   values_discounted <- results$aggregated$trace_and_values[[standard_idx]]$values_discounted
 
@@ -2174,8 +2174,8 @@ test_that("run_segment.psm_custom executes correctly via run_model", {
       cycle_length_unit = "months",
       days_per_year = 365.25,
       half_cycle_method = "start",
-      discount_cost = 0.035,
-      discount_outcomes = 0.035
+      discount_cost = 3.5,
+      discount_outcomes = 3.5
     ),
     states = tibble::tibble(
       name = c("alive", "dead"),

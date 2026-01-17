@@ -8,9 +8,8 @@ psa_scatter_plot(
   results,
   outcome_summary,
   cost_summary,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   show_means = TRUE,
   alpha = 0.3,
   title = NULL,
@@ -29,13 +28,11 @@ a model object)}
 \item{cost_summary}{Name of the cost summary (required if results is a
 model object)}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(triggers faceting by group)}
+\item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
+"all" includes overall + all groups, "all_groups" includes all groups without overall,
+specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
 \item{show_means}{Logical. Show mean values as larger points? Default is TRUE}
 
@@ -61,6 +58,8 @@ from PSA simulations. Each point represents one simulation, colored by strategy.
 The scatter plot shows each PSA simulation as a point, colored by strategy.
 Mean values for each strategy are shown as larger, highlighted points to
 indicate the central tendency of the distribution.
+
+PSA scatter plots always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

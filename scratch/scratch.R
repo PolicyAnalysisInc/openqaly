@@ -184,6 +184,12 @@ p3 <- dsa_outcomes_plot(res1, "qalys",
                         comparator = c("treatment_b", "treatment_c"))
 ggplot2::ggsave('~/downloads/outcomes_nxm.png', p3, width = 10, height = 10)
 
+dsa_outcomes_table(
+  res1,
+  outcome = "qalys",
+  groups = NULL
+)
+
 cat("=== Tests complete ===\n")
 
 # saveRDS(res, '~/downloads/testit.rds')

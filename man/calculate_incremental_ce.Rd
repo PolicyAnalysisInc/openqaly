@@ -9,8 +9,7 @@ calculate_incremental_ce(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
-  discounted = FALSE
+  strategies = NULL
 )
 }
 \arguments{
@@ -23,8 +22,6 @@ calculate_incremental_ce(
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A tibble with columns:

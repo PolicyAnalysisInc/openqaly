@@ -1,0 +1,133 @@
+---
+title: "Base Case Results - Trace"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Base Case Results - Trace}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to visualize and summarize Markov trace results using openqaly. The trace shows the proportion of the cohort in each health state over time. The examples use a sample model included with the package.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(system.file("models", "checkimab", package = "openqaly"))
+
+results <- run_model(model)
+```
+
+## Trace Visualization
+
+The `trace_plot_area()` function creates stacked area charts showing state occupancy over time. When multiple strategies are present, they are automatically faceted into separate panels.
+
+### Area Charts
+
+The following examples demonstrate stacked area charts for trace visualization.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_area(results)
+```
+
+#### Showing percentages
+
+Set `proportional = TRUE` to display state occupancy as percentages instead of probabilities.
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_area(
+  results,
+  proportional = TRUE
+)
+```
+
+#### By subgroup
+
+Use `groups = 'all_groups'` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_area(
+  results,
+  groups = 'all_groups'
+)
+```
+
+#### Filtering to specific strategies
+
+Use the `strategies` argument to include only selected strategies.
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_area(
+  results,
+  strategies = 'chemo'
+)
+```
+
+### Line Charts
+
+The `trace_plot_line()` function displays individual state trajectories as lines, making it easier to compare specific states.
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_line(results)
+```
+
+#### By subgroup
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_line(
+  results,
+  groups = 'all_groups'
+)
+```
+
+#### Comparing strategies within states
+
+Set `by_state = FALSE` to color by strategy and facet by state. This makes it easier to compare how different strategies perform within each health state.
+
+```{r, fig.width=9, fig.height=6}
+trace_plot_line(
+  results,
+  by_state = FALSE
+)
+```
+
+## Trace Tables
+
+The `trace_table()` function presents state probabilities in tabular format.
+
+### Overall population
+
+```{r}
+trace_table(
+  results,
+  cycles = 0:10
+)
+```
+
+### By subgroup
+
+```{r}
+trace_table(
+  results,
+  groups = "all_groups",
+  cycles = 0:5
+)
+```
+
+### Filtering to specific strategies and cycles
+
+```{r}
+trace_table(
+  results,
+  strategies = "chemo",
+  cycles = c(0, 5, 10, 15, 20)
+)
+```

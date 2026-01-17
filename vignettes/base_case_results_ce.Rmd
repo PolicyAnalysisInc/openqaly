@@ -1,0 +1,178 @@
+---
+title: "Base Case Results - Cost-Effectiveness"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Base Case Results - Cost-Effectiveness}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to visualize and summarize cost-effectiveness results using openqaly. It covers both incremental analysis (comparing strategies in sequence by cost) and pairwise analysis (comparing strategies against a reference). The examples use a sample model included with the package.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(system.file("models", "checkimab", package = "openqaly"))
+
+results <- run_model(model)
+```
+
+## Incremental Cost-Effectiveness
+
+Incremental cost-effectiveness analysis sorts strategies by cost and calculates ICERs comparing each strategy to the next least costly alternative. This approach identifies the efficiency frontier.
+
+### Plots
+
+The `incremental_ce_plot()` function creates a cost-effectiveness plane showing absolute costs and outcomes for each strategy. Strategies on the efficiency frontier are connected by line segments.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+incremental_ce_plot(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### By subgroup
+
+Use `groups = "all"` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
+incremental_ce_plot(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all"
+)
+```
+
+### Tables
+
+The `incremental_ce_table()` function presents strategies sorted by cost, showing incremental costs, outcomes, and ICERs.
+
+#### Basic usage
+
+```{r}
+incremental_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### By subgroup
+
+```{r}
+incremental_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all"
+)
+```
+
+#### Filtering to specific strategies
+
+Use the `strategies` argument to include only selected strategies.
+
+```{r}
+incremental_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  strategies = c("chemo", "check")
+)
+```
+
+## Pairwise Cost-Effectiveness
+
+Pairwise cost-effectiveness analysis compares strategies against a fixed reference. Use the `comparators` argument to specify a reference strategy, or `interventions` to compare a single intervention against all others.
+
+### Plots
+
+The `pairwise_ce_plot()` function creates a cost-effectiveness plane using incremental axes, with the reference strategy at the origin.
+
+#### Comparator perspective
+
+Use `comparators` to compare all other strategies against a reference.
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ce_plot(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "chemo"
+)
+```
+
+#### Intervention perspective
+
+Use `interventions` to compare a single intervention against each other strategy.
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ce_plot(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = "check"
+)
+```
+
+#### By subgroup
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ce_plot(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "chemo",
+  groups = "all"
+)
+```
+
+### Tables
+
+The `pairwise_ce_table()` function presents both absolute values and incremental comparisons against a reference strategy.
+
+#### Comparator perspective
+
+```{r}
+pairwise_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "chemo"
+)
+```
+
+#### Intervention perspective
+
+```{r}
+pairwise_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = "check"
+)
+```
+
+#### By subgroup
+
+```{r}
+pairwise_ce_table(
+  results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "chemo",
+  groups = "all"
+)
+```

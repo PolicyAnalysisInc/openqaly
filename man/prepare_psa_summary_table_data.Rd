@@ -9,9 +9,8 @@ prepare_psa_summary_table_data(
   outcome_summary,
   cost_summary,
   pce_wtp = c(50000, 1e+05, 150000),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   outcome_decimals = 2,
   cost_decimals = 0,
   font_size = 11
@@ -26,11 +25,17 @@ prepare_psa_summary_table_data(
 
 \item{pce_wtp}{Numeric vector of WTP thresholds for P(CE) rows}
 
-\item{group}{Group selection}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategies to include}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{outcome_decimals}{Number of decimal places for outcomes}
 

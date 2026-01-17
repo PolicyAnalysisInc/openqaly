@@ -11,8 +11,7 @@ pairwise_ce_plot(
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
-  comparators = NULL,
-  discounted = FALSE
+  comparators = NULL
 )
 }
 \arguments{
@@ -31,8 +30,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{comparators}{Character vector of comparator strategies (e.g., "control").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A ggplot2 object
@@ -56,6 +53,8 @@ When interventions is specified:
 - One point per panel at the intervention's incremental position
 - Line shows ICER slope from origin
 - If group=NULL: uses facet_grid with group on rows, comparison on columns
+
+CE calculations always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

@@ -13,8 +13,7 @@ nmb_plot_line(
   interventions = NULL,
   comparators = NULL,
   time_unit = "cycle",
-  cumulative = TRUE,
-  discounted = FALSE
+  cumulative = TRUE
 )
 }
 \arguments{
@@ -38,8 +37,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{cumulative}{Logical. If TRUE (default), shows cumulative NMB over time.
 If FALSE, shows per-cycle NMB.}
-
-\item{discounted}{Logical. Use discounted values?}
 }
 \value{
 A ggplot2 object
@@ -49,6 +46,8 @@ Creates a line chart showing cumulative or per-cycle Net Monetary Benefit over t
 }
 \details{
 Either `interventions` or `comparators` must be specified (one is mandatory).
+
+NMB calculations always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

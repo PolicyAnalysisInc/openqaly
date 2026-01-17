@@ -10,9 +10,15 @@
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param wtp Numeric vector of WTP thresholds to evaluate. Default is
 #'   seq(0, 100000, by = 5000)
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (triggers separate calculations per group)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
@@ -57,7 +63,7 @@ calculate_incremental_ceac <- function(results,
                                        outcome_summary,
                                        cost_summary,
                                        wtp = seq(0, 100000, by = 5000),
-                                       group = "aggregated",
+                                       groups = "overall",
                                        strategies = NULL,
                                        discounted = FALSE) {
 
@@ -73,20 +79,20 @@ calculate_incremental_ceac <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted
   )
 
   # Get unique groups and strategies
-  groups <- unique(psa_data$group)
+  unique_groups <- unique(psa_data$group)
   all_strategies <- unique(psa_data$strategy)
 
   # Initialize results
   ceac_results <- list()
 
   # Process each group
-  for (grp in groups) {
+  for (grp in unique_groups) {
     grp_data <- psa_data %>%
       filter(.data$group == grp)
 
@@ -160,34 +166,60 @@ calculate_incremental_ceac <- function(results,
 get_psa_simulations <- function(results,
                                outcome_summary,
                                cost_summary,
-                               group = "aggregated",
+                               groups = "overall",
                                strategies = NULL,
                                discounted = FALSE) {
 
-  # Determine source data
-  if (!is.null(group) && group == "aggregated") {
+  # Determine source data based on groups selection
+  # Handle special values: "overall", "all", "all_groups", NULL
+  if (!is.null(groups) && length(groups) == 1 && groups %in% c("aggregated", "overall")) {
+    # Single overall/aggregated selection
     source_data <- results$aggregated
-    if (!"group" %in% names(source_data)) {
-      source_data <- source_data %>% mutate(group = "Aggregated")
+    if (!"group" %in% names(source_data) || all(source_data$group == "_aggregated")) {
+      source_data <- source_data %>% mutate(group = "Overall")
     }
-  } else if (is.null(group) || group == "all") {
-    # Combine aggregated and segments
+  } else if (is.null(groups) || (length(groups) == 1 && groups == "all")) {
+    # All groups + overall
     source_data <- bind_rows(
-      results$aggregated %>% mutate(group = "Aggregated"),
+      results$aggregated %>% mutate(group = "Overall"),
       results$segments
     )
+  } else if (length(groups) == 1 && groups == "all_groups") {
+    # All groups without overall
+    source_data <- results$segments
   } else {
-    # Specific group(s) - validate using helper
-    for (g in group) {
-      check_group_exists(g, results)
+    # Specific group(s) - may include "overall"
+    has_overall <- "overall" %in% tolower(groups)
+    specific_groups <- groups[!tolower(groups) %in% c("overall", "aggregated")]
+
+    source_data <- NULL
+
+    # Include overall if requested
+    if (has_overall) {
+      overall_data <- results$aggregated
+      if (!"group" %in% names(overall_data)) {
+        overall_data <- overall_data %>% mutate(group = "Overall")
+      }
+      source_data <- overall_data
     }
-    if (!is.null(results$segments) && nrow(results$segments) > 0) {
-      # Use technical names for filtering
-      source_data <- results$segments %>%
-        filter(.data$group %in% group)
-    } else {
-      # Groups were validated to exist, but no segments data
-      stop(sprintf("No segment data available for groups: %s", paste(group, collapse = ", ")))
+
+    # Include specific groups if any
+    if (length(specific_groups) > 0) {
+      # Validate specific groups exist
+      for (g in specific_groups) {
+        check_group_exists(g, results)
+      }
+      if (!is.null(results$segments) && nrow(results$segments) > 0) {
+        segment_data <- results$segments %>%
+          filter(.data$group %in% specific_groups)
+        source_data <- if (is.null(source_data)) segment_data else bind_rows(source_data, segment_data)
+      } else if (!has_overall) {
+        stop(sprintf("No segment data available for groups: %s", paste(specific_groups, collapse = ", ")))
+      }
+    }
+
+    if (is.null(source_data) || nrow(source_data) == 0) {
+      stop("No data found for specified groups")
     }
   }
 
@@ -334,7 +366,7 @@ calculate_incremental_ceac_frontier <- function(results,
                                                 outcome_summary,
                                                 cost_summary,
                                                 wtp = seq(0, 100000, by = 5000),
-                                                group = "aggregated",
+                                                groups = "overall",
                                                 strategies = NULL,
                                                 discounted = FALSE) {
 
@@ -344,7 +376,7 @@ calculate_incremental_ceac_frontier <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp = wtp,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted
   )
@@ -354,7 +386,7 @@ calculate_incremental_ceac_frontier <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted
   )
@@ -467,7 +499,7 @@ calculate_pairwise_ceac <- function(results,
                                    intervention = NULL,
                                    comparator = NULL,
                                    wtp = seq(0, 100000, by = 5000),
-                                   group = "aggregated",
+                                   groups = "overall",
                                    strategies = NULL,
                                    discounted = FALSE) {
 
@@ -488,7 +520,7 @@ calculate_pairwise_ceac <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted
   )
@@ -653,9 +685,15 @@ calculate_pairwise_ceac <- function(results,
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param wtp Numeric vector of WTP thresholds to evaluate. Default is
 #'   seq(0, 100000, by = 5000)
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (triggers separate calculations per group)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
@@ -701,7 +739,7 @@ calculate_evpi <- function(results,
                            outcome_summary,
                            cost_summary,
                            wtp = seq(0, 100000, by = 5000),
-                           group = "aggregated",
+                           groups = "overall",
                            strategies = NULL,
                            discounted = FALSE) {
 
@@ -717,19 +755,19 @@ calculate_evpi <- function(results,
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
     discounted = discounted
   )
 
   # Get unique groups
-  groups <- unique(psa_data$group)
+  unique_groups <- unique(psa_data$group)
 
   # Initialize results
   evpi_results <- list()
 
   # Process each group
-  for (grp in groups) {
+  for (grp in unique_groups) {
     grp_data <- psa_data %>%
       filter(.data$group == grp)
 
@@ -886,7 +924,7 @@ get_sampled_parameters <- function(results,
     }
 
     # Check if group is a vector matching variables length
-    if (!is.null(group) && length(group) > 1 && !group[1] %in% c("aggregated", "all")) {
+    if (!is.null(group) && length(group) > 1 && !group[1] %in% c("aggregated", "overall", "all")) {
       if (length(group) != length(variables)) {
         stop("When 'group' is a vector, it must have the same length as 'variables'")
       }
@@ -914,7 +952,7 @@ get_sampled_parameters <- function(results,
 
   if (!use_tuple_specification) {
     # Use global filtering when not using tuple specification
-    if (!is.null(group) && !group %in% c("aggregated", "all")) {
+    if (!is.null(group) && !group %in% c("aggregated", "overall", "all")) {
       # Validate groups exist using helper
       for (g in group) {
         check_group_exists(g, results)

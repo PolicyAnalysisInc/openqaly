@@ -9,9 +9,8 @@ prepare_incremental_ceac_table_data(
   outcome_summary,
   cost_summary,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   show_optimal = TRUE,
   decimals = 1,
   font_size = 11
@@ -26,13 +25,17 @@ prepare_incremental_ceac_table_data(
 
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as columns}
 
-\item{group}{Group selection: "aggregated" uses aggregated results, specific
-group name filters to that group, NULL or "all" includes all groups
-(creates hierarchical table with group column)}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{show_optimal}{Logical. Highlight optimal strategy at each WTP?}
 

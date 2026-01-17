@@ -38,6 +38,12 @@ prepare_trace_table_data <- function(results,
   strategies_display <- unique(trace_long$strategy)
   groups_display <- if("group" %in% names(trace_long)) unique(trace_long$group) else NULL
   states_display <- unique(trace_long$state)
+
+  # Reorder groups: Overall first, then model definition order
+  if (!is.null(groups_display)) {
+    groups_display <- get_group_order(groups_display, results$metadata)
+  }
+
   n_states <- length(states_display)
   n_strategies <- length(strategies_display)
   n_groups <- if(!is.null(groups_display)) length(groups_display) else 0
@@ -365,7 +371,7 @@ trace_table <- function(results,
                         decimals = 4,
                         time_unit = "cycle",
                         font_size = 11,
-                        table_format = c("kable", "flextable")) {
+                        table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 

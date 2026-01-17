@@ -14,7 +14,6 @@ prepare_nmb_table_data(
   comparators = NULL,
   show_total = TRUE,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11
 )
 }
@@ -36,8 +35,6 @@ prepare_nmb_table_data(
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: 2)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering}
 }

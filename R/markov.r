@@ -196,8 +196,8 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
-  discount_cost <- if (!is.null(model$settings$discount_cost)) model$settings$discount_cost else 0.035
-  discount_outcomes <- if (!is.null(model$settings$discount_outcomes)) model$settings$discount_outcomes else 0.035
+  discount_cost <- model$settings$discount_cost
+  discount_outcomes <- model$settings$discount_outcomes
 
   # Calculate cycle length in years for discounting
   cycle_length_days <- model$settings$cycle_length_days

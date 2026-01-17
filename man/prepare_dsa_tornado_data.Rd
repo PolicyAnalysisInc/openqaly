@@ -7,7 +7,7 @@
 prepare_dsa_tornado_data(
   results,
   summary_name,
-  group,
+  groups,
   strategies,
   interventions,
   comparators,
@@ -20,7 +20,8 @@ prepare_dsa_tornado_data(
 
 \item{summary_name}{Name of the summary to plot}
 
-\item{group}{Group selection}
+\item{groups}{Group selection: "aggregated" (default), specific group name, or NULL
+(all groups plus aggregated)}
 
 \item{strategies}{Character vector of strategies (used only when interventions/comparators are NULL)}
 

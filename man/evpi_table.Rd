@@ -9,12 +9,11 @@ evpi_table(
   outcome_summary,
   cost_summary,
   wtp_thresholds = c(20000, 50000, 1e+05, 150000),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   decimals = 0,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -27,13 +26,17 @@ evpi_table(
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as rows.
 Default is c(20000, 50000, 100000, 150000)}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(creates columns for each group)}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{decimals}{Number of decimal places for EVPI values (default: 0)}
 
@@ -57,6 +60,8 @@ EVPI provides an upper bound on the value of conducting further research to
 reduce uncertainty. When EVPI = 0, the same strategy is optimal in all
 simulations (no uncertainty affects the decision). Higher EVPI indicates
 greater decision uncertainty.
+
+EVPI calculations always use discounted values as this is a cost-effectiveness measure.
 
 When multiple groups are present, the table includes a column for each group
 showing EVPI values.

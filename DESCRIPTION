@@ -14,6 +14,7 @@ Imports:
     magrittr,
     future,
     tidyr,
+    tidytext,
     furrr,
     tibble,
     mvnfast,
@@ -29,7 +30,8 @@ Imports:
     Rcpp,
     jsonlite,
     scales,
-    methods
+    methods,
+    flextable
 Depends:
     openqalysurv
 License: AGPL-3
@@ -40,12 +42,11 @@ Suggests:
     covr,
     knitr,
     rmarkdown,
-    flextable,
     officer,
     GGally,
     kableExtra,
     MASS
 VignetteBuilder: knitr
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp

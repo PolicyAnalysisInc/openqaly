@@ -1,0 +1,238 @@
+---
+title: "Value-Based Pricing Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Value-Based Pricing Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to perform value-based pricing (VBP) analysis using openqaly. VBP calculates the maximum price an intervention can charge while remaining cost-effective at different willingness-to-pay (WTP) thresholds. The examples use a sample model included with the package.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(system.file("models", "example_psm", package = "openqaly"))
+```
+
+## Running VBP Analysis
+
+The `run_vbp()` function performs value-based pricing analysis by varying the intervention's price and calculating the linear relationship between WTP and the price that maintains cost-effectiveness.
+
+### Required parameters
+
+- `price_variable`: The model variable representing the intervention's price
+- `intervention_strategy`: The name of the intervention strategy
+- `outcome_summary`: The health outcome to use (e.g., QALYs)
+- `cost_summary`: The cost outcome to use
+
+```{r}
+vbp_results <- run_vbp(
+  model,
+  price_variable = "c_drug",
+  intervention_strategy = "targeted",
+  outcome_summary = "total_qalys",
+  cost_summary = "total_cost"
+)
+```
+
+### Understanding the output
+
+The VBP analysis returns equations that define the relationship between WTP and value-based price for each comparator strategy.
+
+```{r}
+vbp_results$vbp_equations
+```
+
+The key columns are:
+
+- `vbp_slope`: How much the VBP increases per unit increase in WTP
+- `vbp_intercept`: The VBP when WTP = 0
+
+The VBP at any WTP threshold is: `VBP = vbp_slope * WTP + vbp_intercept`
+
+## Calculating VBP at Specific WTP
+
+The `calculate_vbp_price()` function returns the VBP at a specific WTP threshold.
+
+```{r}
+# VBP at $50,000 per QALY vs chemotherapy
+calculate_vbp_price(vbp_results, comparator = "chemo", wtp = 50000)
+```
+
+```{r}
+# VBP at different WTP thresholds
+calculate_vbp_price(vbp_results, comparator = "chemo", wtp = 100000)
+calculate_vbp_price(vbp_results, comparator = "chemo", wtp = 150000)
+```
+
+## VBP Plots
+
+The `vbp_plot()` function creates line plots showing how VBP varies across WTP thresholds.
+
+### Basic usage
+
+By default, the plot auto-generates a WTP range based on the outcome summary's default WTP threshold.
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(vbp_results)
+```
+
+### Custom WTP range
+
+Use `wtp_range` and `wtp_step` to customize the x-axis range.
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(
+  vbp_results,
+  wtp_range = c(0, 200000),
+  wtp_step = 20000
+)
+```
+
+### Specific comparator
+
+Filter to a single comparator.
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(
+  vbp_results,
+  comparators = "chemo"
+)
+```
+
+### Hiding the default WTP reference line
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(
+  vbp_results,
+  show_default_wtp = FALSE
+)
+```
+
+### Group handling
+
+For models with population subgroups, use the `groups` parameter to control faceting.
+
+#### By subgroup
+
+Use `groups = 'all_groups'` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(
+  vbp_results,
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+Use `groups = 'all'` to display results for each subgroup plus the overall population.
+
+```{r, fig.width=9, fig.height=6}
+vbp_plot(
+  vbp_results,
+  groups = 'all'
+)
+```
+
+## VBP Tables
+
+The `vbp_table()` function creates tables showing VBP at specific WTP thresholds.
+
+### Basic usage
+
+By default, the table auto-generates WTP thresholds based on the outcome summary's default WTP.
+
+```{r}
+vbp_table(vbp_results)
+```
+
+### Custom WTP thresholds
+
+```{r}
+vbp_table(
+  vbp_results,
+  wtp_thresholds = c(0, 50000, 100000, 150000, 200000)
+)
+```
+
+### Specific comparator
+
+Filter to a single comparator.
+
+```{r}
+vbp_table(
+  vbp_results,
+  comparators = "chemo",
+  include_all_comparators = FALSE
+)
+```
+
+### Excluding the "All Comparators" column
+
+```{r}
+vbp_table(
+  vbp_results,
+  include_all_comparators = FALSE
+)
+```
+
+### Custom decimal places
+
+```{r}
+vbp_table(
+  vbp_results,
+  decimals = 2
+)
+```
+
+### Group handling
+
+For models with population subgroups, use the `groups` parameter.
+
+#### By subgroup
+
+Use `groups = 'all_groups'` to display results for each population subgroup separately.
+
+```{r}
+vbp_table(
+  vbp_results,
+  groups = 'all_groups'
+)
+```
+
+#### All groups with overall
+
+Use `groups = 'all'` to display results for each subgroup plus the overall population.
+
+```{r}
+vbp_table(
+  vbp_results,
+  groups = 'all'
+)
+```
+
+## Interpreting VBP Results
+
+### What VBP means
+
+The value-based price represents the **maximum price** the intervention can charge while remaining cost-effective at a given WTP threshold. At prices above the VBP, the intervention would not be considered cost-effective versus the comparator.
+
+### The "All Comparators" column
+
+When there are multiple comparator strategies, the "All Comparators" column in VBP tables shows the **minimum VBP across all comparators** at each WTP threshold. This represents the price that ensures cost-effectiveness versus **all** alternatives simultaneously - the most conservative pricing recommendation.
+
+### Practical use
+
+1. Identify your target WTP threshold (e.g., $100,000/QALY)
+2. Find the VBP at that threshold
+3. If pricing above this value, the intervention will not be cost-effective
+4. The "All Comparators" value provides the safest pricing target when multiple alternatives exist

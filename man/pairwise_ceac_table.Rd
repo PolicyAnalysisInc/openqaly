@@ -11,12 +11,11 @@ pairwise_ceac_table(
   intervention = NULL,
   comparator = NULL,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   decimals = 1,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -35,13 +34,17 @@ Mutually exclusive with intervention.}
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as columns.
 Default is c(0, 20000, 50000, 100000)}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(creates hierarchical table with group column)}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{decimals}{Number of decimal places for percentages (default: 1)}
 
@@ -66,6 +69,8 @@ The table displays these probabilities at selected WTP thresholds.
 
 A probability > 50% indicates higher likelihood of being cost-effective
 in the comparison.
+
+CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 
 When multiple groups are present, the table includes a group column showing
 results in a hierarchical structure (group -> strategy -> probabilities).

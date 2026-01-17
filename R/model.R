@@ -149,6 +149,9 @@ parse_model <- function(model, ...) {
   )
 
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
+
+  # Add settings to metadata (after cycle_length_days is calculated)
+  model$metadata$settings <- model$settings
   # Note: n_cycles is calculated in run_segment after apply_setting_overrides
   # This ensures DSA timeframe overrides work correctly
 

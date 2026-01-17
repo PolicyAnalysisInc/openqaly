@@ -291,7 +291,12 @@ mvnormal <- function(mean, sd = NULL, cor = NULL, cov = NULL) {
     if (!requireNamespace("MASS", quietly = TRUE)) {
       stop("MASS package required for multivariate normal sampling")
     }
-    MASS::mvrnorm(n = n, mu = mean, Sigma = cov_matrix)
+    result <- MASS::mvrnorm(n = n, mu = mean, Sigma = cov_matrix)
+    # Ensure result is always a matrix (mvrnorm returns vector when n=1)
+    if (!is.matrix(result)) {
+      result <- matrix(result, nrow = 1)
+    }
+    result
   }
 }
 

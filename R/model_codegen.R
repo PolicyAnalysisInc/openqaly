@@ -58,9 +58,12 @@ model_to_r_code <- function(model, file = NULL) {
     code <- c(code, generate_groups_code(model$groups))
   }
 
+  # Determine model type once for use by multiple generators
+  is_psm <- tolower(model_type) == "psm"
+
   # Add states
   if (!is.null(model$states) && nrow(model$states) > 0) {
-    code <- c(code, generate_states_code(model$states))
+    code <- c(code, generate_states_code(model$states, is_psm))
   }
 
   # Add variables
@@ -70,7 +73,6 @@ model_to_r_code <- function(model, file = NULL) {
 
   # Add transitions
   if (!is.null(model$transitions) && nrow(model$transitions) > 0) {
-    is_psm <- tolower(model_type) == "psm"
     code <- c(code, generate_transitions_code(model$transitions, is_psm))
   }
 
@@ -162,7 +164,7 @@ generate_settings_code <- function(settings) {
 
 #' Generate States Code
 #' @keywords internal
-generate_states_code <- function(states) {
+generate_states_code <- function(states, is_psm = FALSE) {
   # Defensive check
   if (is.null(states) || !is.data.frame(states) || nrow(states) == 0) {
     return(character(0))
@@ -172,9 +174,16 @@ generate_states_code <- function(states) {
 
   for (i in seq_len(nrow(states))) {
     s <- states[i, ]
-    args <- glue('"{s$name}", initial_prob = {s$initial_probability}')
 
-    # Add optional arguments
+    # PSM states only have name, display_name, description
+    # Markov states also have initial_probability and other fields
+    if (is_psm) {
+      args <- glue('"{s$name}"')
+    } else {
+      args <- glue('"{s$name}", initial_prob = {s$initial_probability}')
+    }
+
+    # Add optional arguments (display_name and description apply to both model types)
     if ("display_name" %in% names(s) && !is.na(s$display_name) && s$display_name != s$name) {
       args <- args %&% glue(', display_name = "{s$display_name}"')
     }
@@ -183,17 +192,21 @@ generate_states_code <- function(states) {
         (!("display_name" %in% names(s)) || s$description != s$display_name)) {
       args <- args %&% glue(', description = "{s$description}"')
     }
-    if ("state_group" %in% names(s) && !is.na(s$state_group)) {
-      args <- args %&% glue(', state_group = "{s$state_group}"')
-    }
-    if ("share_state_time" %in% names(s) && !is.na(s$share_state_time) && s$share_state_time) {
-      args <- args %&% glue(', share_state_time = TRUE')
-    }
-    if ("state_cycle_limit" %in% names(s) && !is.na(s$state_cycle_limit)) {
-      args <- args %&% glue(', state_cycle_limit = {s$state_cycle_limit}')
-    }
-    if ("state_cycle_limit_unit" %in% names(s) && !is.na(s$state_cycle_limit_unit) && s$state_cycle_limit_unit != "cycles") {
-      args <- args %&% glue(', state_cycle_limit_unit = "{s$state_cycle_limit_unit}"')
+
+    # Markov-only optional arguments
+    if (!is_psm) {
+      if ("state_group" %in% names(s) && !is.na(s$state_group)) {
+        args <- args %&% glue(', state_group = "{s$state_group}"')
+      }
+      if ("share_state_time" %in% names(s) && !is.na(s$share_state_time) && s$share_state_time) {
+        args <- args %&% glue(', share_state_time = TRUE')
+      }
+      if ("state_cycle_limit" %in% names(s) && !is.na(s$state_cycle_limit)) {
+        args <- args %&% glue(', state_cycle_limit = {s$state_cycle_limit}')
+      }
+      if ("state_cycle_limit_unit" %in% names(s) && !is.na(s$state_cycle_limit_unit) && s$state_cycle_limit_unit != "cycles") {
+        args <- args %&% glue(', state_cycle_limit_unit = "{s$state_cycle_limit_unit}"')
+      }
     }
 
     code <- c(code, glue('  add_state({args}) |>'))

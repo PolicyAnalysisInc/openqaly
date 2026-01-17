@@ -190,11 +190,20 @@ render_flextable_simple <- function(spec) {
     }
   }
 
-  # Indented rows (add left padding)
-  if (!is.null(spec$special_rows$indented_rows)) {
-    for (row_idx in spec$special_rows$indented_rows) {
-      ft <- flextable::padding(ft, i = row_idx, j = 1, padding.left = 20, part = "body")
+  # Group boundary rows - add border above
+  if (!is.null(spec$special_rows$group_boundary_rows)) {
+    for (row_idx in spec$special_rows$group_boundary_rows) {
+      ft <- flextable::hline(ft, i = row_idx - 1, j = non_spacer_cols,
+                            border = black_border, part = "body")
     }
+  }
+
+  # Indented rows (add left padding)
+  if (!is.null(spec$special_rows$indented_rows) && length(spec$special_rows$indented_rows) > 0) {
+    ft <- flextable::padding(ft, i = spec$special_rows$indented_rows, j = 1,
+                             padding.left = 20, part = "body")
+    # Left-align first column header to match indented content
+    ft <- flextable::align(ft, j = 1, align = "left", part = "header")
   }
 
   # Footnote
@@ -225,6 +234,12 @@ render_flextable_simple <- function(spec) {
     NULL
   }
 
+  # Fix double borders in html_vignette output
+  ft <- flextable::set_table_properties(
+    ft,
+    opts_html = list(extra_css = "table { border-collapse: collapse; }")
+  )
+
   ft
 }
 
@@ -251,9 +266,12 @@ render_kable_simple <- function(spec) {
   kt <- knitr::kable(spec$data, format = "html", align = align_vec,
                      escape = FALSE, col.names = NULL)
   kt <- kableExtra::kable_styling(kt, bootstrap_options = c("condensed"),
-                                  full_width = FALSE, position = "left")
+                                  full_width = TRUE, position = "left")
 
-  # Add header rows
+  # Identify spacer columns
+  spacer_cols <- which(spec$column_widths == 0.2)
+
+  # Add header rows with appropriate line settings
   if (length(spec$headers) > 0) {
     for (i in rev(seq_along(spec$headers))) {
       header_row <- spec$headers[[i]]
@@ -264,136 +282,50 @@ render_kable_simple <- function(spec) {
 
       for (cell in header_row) {
         # Use Unicode non-breaking space for empty cells to prevent collapse
-        # \u00A0 is the Unicode character for non-breaking space
         text <- if (cell$text == "") "\u00A0" else cell$text
         header_names <- c(header_names, text)
         header_vec <- c(header_vec, cell$span)
       }
       names(header_vec) <- header_names
 
-      kt <- kableExtra::add_header_above(kt, header = header_vec, escape = FALSE, line = FALSE)
+      # No lines on headers
+      kt <- kableExtra::add_header_above(kt, header = header_vec,
+                                         escape = FALSE, line = FALSE)
     }
   }
 
-  # Build CSS for styling
-  css_lines <- c(
-    "table { border-collapse: collapse; background-color: white;",
-    sprintf("  font-family: %s, Arial, sans-serif; font-size: %dpt; }",
-            spec$font_family, spec$font_size),
-    "th, td { border: none !important; }",
-    "thead th { text-align: center; font-weight: bold; }"
-  )
-
-  # Add border CSS based on header specification
-  if (length(spec$headers) > 0) {
-    # Top border on first header row (for non-spacer columns only)
-    non_spacer_cols <- which(is.na(spec$column_widths) | spec$column_widths != 0.2)
-
-    # Build mapping from column index to TH element index for first row
-    # (needed because first row has cells with different colspan values)
-    col_to_th <- integer(length(spec$column_widths))
-    th_idx <- 0
-    col_idx <- 0
-
-    for (cell in spec$headers[[1]]) {
-      th_idx <- th_idx + 1  # TH element index
-      for (span_i in seq_len(cell$span)) {
-        col_idx <- col_idx + 1
-        col_to_th[col_idx] <- th_idx
-      }
-    }
-
-    # Apply top border only to non-spacer TH elements
-    # Use unique() to avoid duplicate CSS rules for multi-column cells
-    th_elements_to_border <- unique(col_to_th[non_spacer_cols])
-
-    for (th_idx in th_elements_to_border) {
-      css_lines <- c(css_lines,
-        sprintf("thead tr:first-child th:nth-child(%d) {", th_idx),
-        "  border-top: 1px solid #000000 !important;",
-        "}")
-    }
-
-    # Add bottom border to strategy headers in first row
-    # Strategy headers have colspan > 1 and non-empty text
-    if (length(spec$headers) >= 1) {
-      first_row <- spec$headers[[1]]
-      col_pos <- 0
-      for (cell_idx in seq_along(first_row)) {
-        cell <- first_row[[cell_idx]]
-        # Calculate which th element this is (accounting for colspan)
-        th_index <- col_pos + 1
-
-        # If this cell has a bottom border and non-empty text
-        if (length(cell$borders) >= 3 && cell$borders[3] == 1 && cell$text != "") {
-          # Add CSS to force bottom border on this specific th
-          css_lines <- c(css_lines,
-            sprintf("thead tr:first-child th:nth-child(%d) {", th_index),
-            "  border-bottom: 1px solid #000000 !important;",
-            "}")
-        }
-
-        col_pos <- col_pos + 1  # Move to next header position
-      }
-    }
-
-    # Bottom border on last header row (for non-spacer columns only)
-    for (col_idx in non_spacer_cols) {
-      css_lines <- c(css_lines,
-        sprintf("thead tr:last-child th:nth-child(%d) {", col_idx),
-        "  border-bottom: 1px solid #000000 !important;",
-        "}")
-    }
-  }
-
-  # Body bottom border
-  non_spacer_cols <- which(is.na(spec$column_widths) | spec$column_widths != 0.2)
-  if (length(non_spacer_cols) > 0) {
-    for (col_idx in non_spacer_cols) {
-      css_lines <- c(css_lines,
-        sprintf("tbody tr:last-child td:nth-child(%d) {", col_idx),
-        "  border-bottom: 1px solid #000000 !important;",
-        "}")
-    }
-  }
-
-  # Spacer column CSS
-  spacer_cols <- which(spec$column_widths == 0.2)
+  # Apply spacer column specs - no borders, double width
   for (col_idx in spacer_cols) {
-    css_lines <- c(css_lines,
-      sprintf("th:nth-child(%d), td:nth-child(%d) {", col_idx, col_idx),
-      "  width: 0.2in !important;",
-      "  min-width: 0.2in !important;",
-      "  border-top: none !important;",
-      "  border-right: none !important;",
-      "  border-bottom: none !important;",
-      "  border-left: none !important;",
-      "  background: transparent !important;",
-      "  padding: 0 !important;",
-      "  empty-cells: show !important;",
-      "}")
-
-    # Apply column_spec for spacers
-    kt <- kableExtra::column_spec(kt, column = col_idx, width = "0.2in",
-                                  border_left = FALSE, border_right = FALSE,
-                                  include_thead = TRUE,
-                                  extra_css = "border: none !important; empty-cells: show !important; min-width: 0.2in !important;")
+    kt <- kableExtra::column_spec(kt, column = col_idx,
+                                  width = "0.4in",
+                                  border_left = FALSE,
+                                  border_right = FALSE,
+                                  include_thead = TRUE)
   }
 
-  # Special rows CSS
+  # Apply non-spacer column widths
+  for (j in seq_along(spec$column_widths)) {
+    if (!is.na(spec$column_widths[j]) && !(j %in% spacer_cols)) {
+      kt <- kableExtra::column_spec(kt, column = j,
+                                    width = paste0(spec$column_widths[j], "in"),
+                                    include_thead = TRUE)
+    }
+  }
+
+  # Set minimum width on non-spacer columns
+  non_spacer_cols <- setdiff(seq_along(spec$column_widths), spacer_cols)
+  for (col_idx in non_spacer_cols) {
+    kt <- kableExtra::column_spec(kt, column = col_idx,
+                                  width = "0.4in",
+                                  include_thead = TRUE)
+  }
+
+  # Special rows
   if (!is.null(spec$special_rows$total_row)) {
     total_idx <- spec$special_rows$total_row
 
     # Bold total row
     kt <- kableExtra::row_spec(kt, row = total_idx, bold = TRUE)
-
-    # Border above total row
-    for (col_idx in non_spacer_cols) {
-      css_lines <- c(css_lines,
-        sprintf("tbody tr:nth-child(%d) td:nth-child(%d) {", total_idx - 1, col_idx),
-        "  border-bottom: 1px solid #000000 !important;",
-        "}")
-    }
   }
 
   # Group header rows
@@ -403,14 +335,17 @@ render_kable_simple <- function(spec) {
     }
   }
 
-  # Indented rows (add left padding via CSS)
+  # Group boundary rows - add border above
+  if (!is.null(spec$special_rows$group_boundary_rows)) {
+    for (row_idx in spec$special_rows$group_boundary_rows) {
+      kt <- kableExtra::row_spec(kt, row = row_idx, extra_css = "border-top: 1px solid black;")
+    }
+  }
+
+  # Indented rows - add left padding to first column
   if (!is.null(spec$special_rows$indented_rows)) {
     for (row_idx in spec$special_rows$indented_rows) {
-      # Add CSS for left padding in first column
-      css_lines <- c(css_lines,
-        sprintf("tbody tr:nth-child(%d) td:nth-child(1) {", row_idx),
-        "  padding-left: 20px !important;",
-        "}")
+      kt <- kableExtra::row_spec(kt, row = row_idx, extra_css = "td:first-child { padding-left: 20px; }")
     }
   }
 
@@ -421,27 +356,24 @@ render_kable_simple <- function(spec) {
                                footnote_as_chunk = FALSE)
   }
 
-  # Apply column widths
-  for (j in seq_along(spec$column_widths)) {
-    if (!is.na(spec$column_widths[j]) && spec$column_widths[j] != 0.2) {
-      kt <- kableExtra::column_spec(kt, column = j,
-                                    width = paste0(spec$column_widths[j], "in"))
-    }
+  # Build spacer CSS with min/max width
+  spacer_css <- ""
+  for (col_idx in spacer_cols) {
+    spacer_css <- paste0(spacer_css,
+      "th:nth-child(", col_idx, "), td:nth-child(", col_idx, ") { ",
+      "min-width: 0.2in !important; max-width: 0.2in !important; }")
   }
 
-  # Inject CSS
-  css_block <- paste0("<style>\n", paste(css_lines, collapse = "\n"), "\n</style>\n")
-  html_str <- paste0(css_block, as.character(kt))
-
-  # Post-process HTML to remove inline styles that override our CSS
-  # Remove "empty-cells: hide;" from inline styles (causes spacer collapse)
-  html_str <- gsub("empty-cells: hide;", "", html_str)
-
-  # Remove "border-bottom:hidden;" from inline styles (prevents strategy header borders)
-  html_str <- gsub("border-bottom:hidden;", "", html_str)
-
+  # Add CSS for header styling
+  css_rule <- paste0(
+    "<style>",
+    "thead th { vertical-align: bottom; } ",
+    "thead tr:last-child th { border-bottom: 1px solid black !important; }",
+    spacer_css,
+    "</style>"
+  )
+  html_str <- paste0(css_rule, as.character(kt))
   class(html_str) <- c("kableExtra", "character")
-
   html_str
 }
 

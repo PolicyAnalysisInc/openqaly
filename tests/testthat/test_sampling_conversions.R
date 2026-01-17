@@ -8,8 +8,8 @@ create_test_model_with_all_sampling <- function() {
       n_cycles = 50,
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_rate_costs = 0.03,
-      discount_rate_effects = 0.03
+      discount_cost = 3,
+      discount_outcomes = 3
     ) |>
     add_strategy("standard") |>
     add_strategy("intervention") |>
@@ -193,8 +193,8 @@ test_that("Excel to JSON to Excel preserves all sampling specifications", {
 
   # Create Excel structure with sampling
   settings <- tibble(
-    setting = c("model_type", "n_cycles"),
-    value = c("markov", "10")
+    setting = c("model_type", "n_cycles", "discount_cost", "discount_outcomes"),
+    value = c("markov", "10", "3", "3")
   )
 
   states <- tibble(

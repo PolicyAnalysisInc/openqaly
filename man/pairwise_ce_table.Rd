@@ -13,9 +13,8 @@ pairwise_ce_table(
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -34,8 +33,6 @@ pairwise_ce_table(
 \item{comparators}{Character vector of reference strategies for comparator perspective}
 
 \item{decimals}{Number of decimal places (default: 2)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

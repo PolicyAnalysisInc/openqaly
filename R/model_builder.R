@@ -879,6 +879,48 @@ add_dsa_variable <- function(model, variable, low, high,
     stop("variable must be a single character string")
   }
 
+  # Check if variable is group-specific and require group specification
+  matching_vars <- model$variables[model$variables$name == variable, ]
+  if (nrow(matching_vars) > 0) {
+    # Handle NA values: treat NA as not group-specific
+    non_na_groups <- matching_vars$group[!is.na(matching_vars$group)]
+    has_group_specific <- length(non_na_groups) > 0 && any(non_na_groups != "")
+    if (has_group_specific && group == "") {
+      defined_groups <- unique(non_na_groups[non_na_groups != ""])
+      stop(sprintf(
+        paste0(
+          "Variable '%s' is defined for specific group(s): %s\n",
+          "You must specify which group to vary using the 'group' parameter.\n",
+          "Example: add_dsa_variable(\"%s\", low = ..., high = ..., group = \"%s\")"
+        ),
+        variable,
+        paste(defined_groups, collapse = ", "),
+        variable,
+        defined_groups[1]
+      ), call. = FALSE)
+    }
+  }
+
+  # Check for existing DSA parameter with same name/strategy/group and replace if found
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "variable" &&
+          existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        warning(sprintf(
+          "Replacing existing DSA specification for variable '%s'%s%s",
+          variable,
+          if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+          if (group != "") paste0(" (group: ", group, ")") else ""
+        ), call. = FALSE)
+        model$dsa_parameters <- model$dsa_parameters[-i]
+        break
+      }
+    }
+  }
+
   # Capture low expression using NSE
   low_quo <- enquo(low)
   low_expr <- quo_get_expr(low_quo)
@@ -937,8 +979,8 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
-#'   add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
 #'   add_dsa_setting("timeframe", low = 10, high = 30)
 #' }
 add_dsa_setting <- function(model, setting, low, high,
@@ -947,6 +989,21 @@ add_dsa_setting <- function(model, setting, low, high,
   # Validate inputs
   if (!is.character(setting) || length(setting) != 1) {
     stop("setting must be a single character string")
+  }
+
+  # Check for existing DSA parameter with same setting name and replace if found
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "setting" && existing$name == setting) {
+        warning(sprintf(
+          "Replacing existing DSA specification for setting '%s'",
+          setting
+        ), call. = FALSE)
+        model$dsa_parameters <- model$dsa_parameters[-i]
+        break
+      }
+    }
   }
 
   # Create new DSA parameter specification as a list

@@ -9,8 +9,7 @@ incremental_ce_plot(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
-  discounted = FALSE
+  strategies = NULL
 )
 }
 \arguments{
@@ -23,8 +22,6 @@ incremental_ce_plot(
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A ggplot2 object
@@ -39,6 +36,8 @@ Strategies on the efficiency frontier are connected with line segments.
 Dominated and extended dominated strategies are shown with different styling.
 
 When \code{group = NULL}, creates faceted plots for each group and aggregated results.
+
+CE calculations always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

@@ -4,7 +4,7 @@
 \alias{generate_states_code}
 \title{Generate States Code}
 \usage{
-generate_states_code(states)
+generate_states_code(states, is_psm = FALSE)
 }
 \description{
 Generate States Code

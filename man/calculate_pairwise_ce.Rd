@@ -11,8 +11,7 @@ calculate_pairwise_ce(
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
-  comparators = NULL,
-  discounted = FALSE
+  comparators = NULL
 )
 }
 \arguments{
@@ -31,8 +30,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{comparators}{Character vector of reference strategies for comparator perspective (e.g., "control").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A tibble with columns:

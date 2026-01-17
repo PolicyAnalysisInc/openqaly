@@ -126,12 +126,12 @@ convert_settings_from_df <- function(settings_df) {
     settings[["half_cycle_method"]] <- "start"
   }
 
-  # Set default discount rates if not provided
+  # Validate that discount rates are provided (mandatory)
   if (!("discount_cost" %in% names(settings))) {
-    settings[["discount_cost"]] <- 0.035  # Default 3.5% for costs
+    stop("discount_cost is required but was not provided in settings")
   }
   if (!("discount_outcomes" %in% names(settings))) {
-    settings[["discount_outcomes"]] <- 0.035  # Default 3.5% for outcomes
+    stop("discount_outcomes is required but was not provided in settings")
   }
 
   settings
@@ -1541,14 +1541,6 @@ resolve_groups <- function(groups, results) {
     ))
   }
 
-  # Handle NULL (backward compatible)
-  if (is.null(groups)) {
-    return(list(
-      include_overall = TRUE,
-      include_groups = available_groups
-    ))
-  }
-
   # Expand special keywords
   if (is.character(groups) && length(groups) == 1 && groups == "all") {
     return(list(
@@ -1621,6 +1613,36 @@ select_source_data <- function(groups, results) {
 
   bind_rows(parts)
 }
+
+
+#' Get Consistent Group Order
+#'
+#' Returns group ordering with "Overall" first (if present), followed by
+#' groups in model definition order from metadata.
+#'
+#' @param groups Character vector of group names present in data
+#' @param metadata Model metadata containing groups definition
+#' @return Character vector of ordered group names
+#' @keywords internal
+get_group_order <- function(groups, metadata) {
+  has_overall <- "Overall" %in% groups
+
+  # Get model-defined group order from metadata
+  if (!is.null(metadata$groups)) {
+    model_order <- metadata$groups$display_name
+    ordered_groups <- model_order[model_order %in% groups]
+  } else {
+    ordered_groups <- setdiff(groups, "Overall")
+  }
+
+  # Overall first, then model order
+  if (has_overall) {
+    c("Overall", ordered_groups)
+  } else {
+    ordered_groups
+  }
+}
+
 
 # =============================================================================
 # Override Application Functions

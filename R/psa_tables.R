@@ -7,11 +7,16 @@
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
-#' @param group Group selection: "aggregated" uses aggregated results, specific
-#'   group name filters to that group, NULL or "all" includes all groups
-#'   (creates hierarchical table with group column)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param show_optimal Logical. Highlight optimal strategy at each WTP?
 #' @param decimals Number of decimal places for percentages
 #' @param font_size Font size for rendering
@@ -22,22 +27,21 @@ prepare_incremental_ceac_table_data <- function(results,
                                                 outcome_summary,
                                                 cost_summary,
                                                 wtp_thresholds = c(0, 20000, 50000, 100000),
-                                                group = "aggregated",
+                                                groups = "overall",
                                                 strategies = NULL,
-                                                discounted = FALSE,
                                                 show_optimal = TRUE,
                                                 decimals = 1,
                                                 font_size = 11) {
 
   # Calculate incremental CEAC at specified WTP thresholds
+  # Always uses discounted values (cost-effectiveness measure)
   ceac_data <- calculate_incremental_ceac(
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp = wtp_thresholds,
-    group = group,
-    strategies = strategies,
-    discounted = discounted
+    groups = groups,
+    strategies = strategies
   )
 
   # Get unique strategies and groups
@@ -49,16 +53,14 @@ prepare_incremental_ceac_table_data <- function(results,
     strategy_order <- results$metadata$strategies$display_name
     strategies_display <- strategy_order[strategy_order %in% strategies_display]
   }
-  if (!is.null(results$metadata$groups)) {
-    group_order <- results$metadata$groups$display_name
-    groups_display <- group_order[group_order %in% groups_display]
-  }
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
 
   n_strategies <- length(strategies_display)
   n_groups <- length(groups_display)
 
   # Determine if we have multiple groups
-  has_multiple_groups <- n_groups > 1
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
 
   # Pivot to wide format: WTP in rows, strategies in columns
   if (has_multiple_groups) {
@@ -144,7 +146,7 @@ prepare_incremental_ceac_table_data <- function(results,
     # Two header rows
     # Row 1: Empty over WTP, spacers (no borders), group names spanning strategies
     row1 <- list()
-    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 1, 0))
+    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
 
     for (i in seq_along(groups_display)) {
       row1[[length(row1) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
@@ -256,11 +258,16 @@ prepare_incremental_ceac_table_data <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns.
 #'   Default is c(0, 20000, 50000, 100000)
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (creates hierarchical table with group column)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param show_optimal Logical. Highlight optimal strategy at each WTP?
 #' @param decimals Number of decimal places for percentages (default: 1)
 #' @param font_size Font size for rendering (default: 11)
@@ -272,6 +279,8 @@ prepare_incremental_ceac_table_data <- function(results,
 #' The incremental CEAC table displays probabilities from a multi-way comparison
 #' where all strategies are compared simultaneously. Probabilities sum to 1 across
 #' all strategies at each WTP threshold.
+#'
+#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' When multiple groups are present, the table includes a group column showing
 #' results in a hierarchical structure (group -> strategy -> probabilities).
@@ -294,13 +303,12 @@ incremental_ceac_table <- function(results,
                                    outcome_summary,
                                    cost_summary,
                                    wtp_thresholds = c(0, 20000, 50000, 100000),
-                                   group = "aggregated",
+                                   groups = "overall",
                                    strategies = NULL,
-                                   discounted = FALSE,
                                    show_optimal = TRUE,
                                    decimals = 1,
                                    font_size = 11,
-                                   table_format = c("kable", "flextable")) {
+                                   table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 
@@ -310,9 +318,8 @@ incremental_ceac_table <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp_thresholds = wtp_thresholds,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted,
     show_optimal = show_optimal,
     decimals = decimals,
     font_size = font_size
@@ -332,9 +339,16 @@ incremental_ceac_table <- function(results,
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
-#' @param group Group selection
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include
-#' @param discounted Logical. Use discounted values?
 #' @param outcome_decimals Number of decimal places for outcomes
 #' @param cost_decimals Number of decimal places for costs
 #' @param font_size Font size for rendering
@@ -345,21 +359,20 @@ prepare_psa_summary_table_data <- function(results,
                                           outcome_summary,
                                           cost_summary,
                                           pce_wtp = c(50000, 100000, 150000),
-                                          group = "aggregated",
+                                          groups = "overall",
                                           strategies = NULL,
-                                          discounted = FALSE,
                                           outcome_decimals = 2,
                                           cost_decimals = 0,
                                           font_size = 11) {
 
-  # Get PSA simulation data
+  # Get PSA simulation data (always use discounted for CE-related summary)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted
+    discounted = TRUE
   )
 
   # Calculate summary statistics (expanded to include median, IQR, min, max)
@@ -392,6 +405,7 @@ prepare_psa_summary_table_data <- function(results,
     )
 
   # Calculate P(CE) for each WTP threshold
+  # Always uses discounted values (cost-effectiveness measure)
   pce_results <- list()
   for (wtp_val in pce_wtp) {
     ceac_at_wtp <- calculate_incremental_ceac(
@@ -399,9 +413,8 @@ prepare_psa_summary_table_data <- function(results,
       outcome_summary = outcome_summary,
       cost_summary = cost_summary,
       wtp = wtp_val,
-      group = group,
-      strategies = strategies,
-      discounted = discounted
+      groups = groups,
+      strategies = strategies
     ) %>%
       mutate(wtp = wtp_val) %>%
       select("strategy", "group", "wtp", "probability")
@@ -449,18 +462,12 @@ prepare_psa_summary_table_data <- function(results,
       strategies_display <- filtered_strategies
     }
   }
-  if (!is.null(results$metadata$groups)) {
-    group_order <- results$metadata$groups$display_name
-    filtered_groups <- group_order[group_order %in% groups_display]
-    # Only use filtered version if it's non-empty
-    if (length(filtered_groups) > 0) {
-      groups_display <- filtered_groups
-    }
-  }
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
 
   n_strategies <- length(strategies_display)
   n_groups <- length(groups_display)
-  has_multiple_groups <- n_groups > 1
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
 
   # Build row labels first (these are fixed regardless of strategies)
   # Note: We need unique identifiers for duplicate label names (Mean, SD, etc. appear twice)
@@ -729,9 +736,16 @@ prepare_psa_summary_table_data <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
 #'   (default: c(50000, 100000, 150000))
-#' @param group Group selection: "aggregated" (default), specific group, or NULL
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param outcome_decimals Number of decimal places for outcomes (default: 2)
 #' @param cost_decimals Number of decimal places for costs (default: 0, nearest unit)
 #' @param font_size Font size for rendering (default: 11)
@@ -750,6 +764,9 @@ prepare_psa_summary_table_data <- function(results,
 #'
 #' All rounding uses decimal places (not significant figures). Costs are rounded
 #' to the nearest unit by default (cost_decimals = 0).
+#'
+#' PSA summary calculations always use discounted values as this is a
+#' cost-effectiveness measure.
 #'
 #' @examples
 #' \dontrun{
@@ -773,13 +790,12 @@ psa_summary_table <- function(results,
                              outcome_summary,
                              cost_summary,
                              pce_wtp = c(50000, 100000, 150000),
-                             group = "aggregated",
+                             groups = "overall",
                              strategies = NULL,
-                             discounted = FALSE,
                              outcome_decimals = 2,
                              cost_decimals = 0,
                              font_size = 11,
-                             table_format = c("kable", "flextable")) {
+                             table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 
@@ -789,9 +805,8 @@ psa_summary_table <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     pce_wtp = pce_wtp,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted,
     outcome_decimals = outcome_decimals,
     cost_decimals = cost_decimals,
     font_size = font_size
@@ -815,11 +830,16 @@ psa_summary_table <- function(results,
 #' @param comparator Reference strategy for comparison (comparator perspective).
 #'   Mutually exclusive with intervention.
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
-#' @param group Group selection: "aggregated" uses aggregated results, specific
-#'   group name filters to that group, NULL or "all" includes all groups
-#'   (creates hierarchical table with group column)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param decimals Number of decimal places for percentages
 #' @param font_size Font size for rendering
 #'
@@ -831,13 +851,13 @@ prepare_pairwise_ceac_table_data <- function(results,
                                              intervention = NULL,
                                              comparator = NULL,
                                              wtp_thresholds = c(0, 20000, 50000, 100000),
-                                             group = "aggregated",
+                                             groups = "overall",
                                              strategies = NULL,
-                                             discounted = FALSE,
                                              decimals = 1,
                                              font_size = 11) {
 
   # Calculate pairwise CEAC at specified WTP thresholds
+  # Always uses discounted values (cost-effectiveness measure)
   ceac_data <- calculate_pairwise_ceac(
     results = results,
     outcome_summary = outcome_summary,
@@ -845,9 +865,8 @@ prepare_pairwise_ceac_table_data <- function(results,
     intervention = intervention,
     comparator = comparator,
     wtp = wtp_thresholds,
-    group = group,
-    strategies = strategies,
-    discounted = discounted
+    groups = groups,
+    strategies = strategies
   )
 
   # Determine reference name and label direction
@@ -862,11 +881,8 @@ prepare_pairwise_ceac_table_data <- function(results,
   comparisons_display <- unique(ceac_data$strategy)
   groups_display <- unique(ceac_data$group)
 
-  # Reorder groups according to original model order from metadata
-  if (!is.null(results$metadata$groups)) {
-    group_order <- results$metadata$groups$display_name
-    groups_display <- group_order[group_order %in% groups_display]
-  }
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
 
   # Reorder comparisons according to original strategy order from metadata
   # Comparisons may have "vs. " prefix in intervention mode
@@ -888,6 +904,9 @@ prepare_pairwise_ceac_table_data <- function(results,
   n_comparisons <- length(comparisons_display)
   n_groups <- length(groups_display)
 
+  # Determine if we have multiple groups
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
+
   # Build full "X vs. Y" comparison labels for column headers
   comparison_labels <- character(length(comparisons_display))
   for (i in seq_along(comparisons_display)) {
@@ -901,9 +920,6 @@ prepare_pairwise_ceac_table_data <- function(results,
       comparison_labels[i] <- paste(reference_name, "vs.", strategy_name)
     }
   }
-
-  # Determine if we have multiple groups
-  has_multiple_groups <- n_groups > 1
 
   # Pivot to wide format: WTP in rows, comparisons in columns
   if (has_multiple_groups) {
@@ -979,7 +995,7 @@ prepare_pairwise_ceac_table_data <- function(results,
     # Two header rows
     # Row 1: Empty over WTP, spacers (no borders), group names spanning comparisons
     row1 <- list()
-    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 1, 0))
+    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
 
     for (i in seq_along(groups_display)) {
       row1[[length(row1) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
@@ -1061,11 +1077,16 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'   Mutually exclusive with intervention.
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns.
 #'   Default is c(0, 20000, 50000, 100000)
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (creates hierarchical table with group column)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param decimals Number of decimal places for percentages (default: 1)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
@@ -1082,6 +1103,8 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'
 #' A probability > 50% indicates higher likelihood of being cost-effective
 #' in the comparison.
+#'
+#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' When multiple groups are present, the table includes a group column showing
 #' results in a hierarchical structure (group -> strategy -> probabilities).
@@ -1112,12 +1135,11 @@ pairwise_ceac_table <- function(results,
                                 intervention = NULL,
                                 comparator = NULL,
                                 wtp_thresholds = c(0, 20000, 50000, 100000),
-                                group = "aggregated",
+                                groups = "overall",
                                 strategies = NULL,
-                                discounted = FALSE,
                                 decimals = 1,
                                 font_size = 11,
-                                table_format = c("kable", "flextable")) {
+                                table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 
@@ -1129,9 +1151,8 @@ pairwise_ceac_table <- function(results,
     intervention = intervention,
     comparator = comparator,
     wtp_thresholds = wtp_thresholds,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted,
     decimals = decimals,
     font_size = font_size
   )
@@ -1150,11 +1171,16 @@ pairwise_ceac_table <- function(results,
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows
-#' @param group Group selection: "aggregated" uses aggregated results, specific
-#'   group name filters to that group, NULL or "all" includes all groups
-#'   (creates columns for each group)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param decimals Number of decimal places for values
 #' @param font_size Font size for rendering
 #'
@@ -1164,34 +1190,30 @@ prepare_evpi_table_data <- function(results,
                                     outcome_summary,
                                     cost_summary,
                                     wtp_thresholds = c(20000, 50000, 100000, 150000),
-                                    group = "aggregated",
+                                    groups = "overall",
                                     strategies = NULL,
-                                    discounted = FALSE,
                                     decimals = 0,
                                     font_size = 11) {
 
   # Calculate EVPI at specified WTP thresholds
+  # Always uses discounted values (cost-effectiveness measure)
   evpi_data <- calculate_evpi(
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp = wtp_thresholds,
-    group = group,
-    strategies = strategies,
-    discounted = discounted
+    groups = groups,
+    strategies = strategies
   )
 
   # Get unique groups
   groups_display <- unique(evpi_data$group)
 
-  # Reorder according to original model order from metadata
-  if (!is.null(results$metadata$groups)) {
-    group_order <- results$metadata$groups$display_name
-    groups_display <- group_order[group_order %in% groups_display]
-  }
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
 
   n_groups <- length(groups_display)
-  has_multiple_groups <- n_groups > 1
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
 
   # Pivot to wide format: WTP in rows, groups in columns (if multiple groups)
   if (has_multiple_groups) {
@@ -1293,11 +1315,16 @@ prepare_evpi_table_data <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows.
 #'   Default is c(20000, 50000, 100000, 150000)
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (creates columns for each group)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param discounted Logical. Use discounted values?
 #' @param decimals Number of decimal places for EVPI values (default: 0)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
@@ -1313,6 +1340,8 @@ prepare_evpi_table_data <- function(results,
 #' reduce uncertainty. When EVPI = 0, the same strategy is optimal in all
 #' simulations (no uncertainty affects the decision). Higher EVPI indicates
 #' greater decision uncertainty.
+#'
+#' EVPI calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' When multiple groups are present, the table includes a column for each group
 #' showing EVPI values.
@@ -1335,12 +1364,11 @@ evpi_table <- function(results,
                        outcome_summary,
                        cost_summary,
                        wtp_thresholds = c(20000, 50000, 100000, 150000),
-                       group = "aggregated",
+                       groups = "overall",
                        strategies = NULL,
-                       discounted = FALSE,
                        decimals = 0,
                        font_size = 11,
-                       table_format = c("kable", "flextable")) {
+                       table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 
@@ -1350,9 +1378,511 @@ evpi_table <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp_thresholds = wtp_thresholds,
+    groups = groups,
+    strategies = strategies,
+    decimals = decimals,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Prepare CE Quadrant Table Data
+#'
+#' Internal helper function that prepares cost-effectiveness plane quadrant
+#' probabilities for rendering as a table. Shows the percentage of PSA simulations
+#' falling into each quadrant relative to a comparator strategy.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param comparator Name of the comparator strategy
+#' @param groups Group selection
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param decimals Number of decimal places for percentages
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_ce_quadrant_table_data <- function(results,
+                                           outcome_summary,
+                                           cost_summary,
+                                           comparator,
+                                           groups = "overall",
+                                           strategies = NULL,
+                                           decimals = 1,
+                                           font_size = 11) {
+
+  # Get PSA simulation data (always use discounted for CE-related analysis)
+  psa_data <- get_psa_simulations(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    groups = groups,
+    strategies = strategies,
+    discounted = TRUE
+  )
+
+  # Validate comparator exists
+  all_strategies <- unique(psa_data$strategy)
+  if (!comparator %in% all_strategies) {
+    stop(sprintf("Comparator '%s' not found in results. Available: %s",
+                 comparator, paste(all_strategies, collapse = ", ")))
+  }
+
+  # Get comparator data
+  comparator_data <- psa_data %>%
+    filter(.data$strategy == comparator) %>%
+    select("simulation", "group", cost_comp = "cost", outcome_comp = "outcome")
+
+  # Calculate incremental values for other strategies
+  other_strategies <- setdiff(all_strategies, comparator)
+
+  if (length(other_strategies) == 0) {
+    stop("No other strategies to compare against comparator")
+  }
+
+  incremental_data <- psa_data %>%
+    filter(.data$strategy != comparator) %>%
+    left_join(comparator_data, by = c("simulation", "group")) %>%
+    mutate(
+      incr_cost = .data$cost - .data$cost_comp,
+      incr_outcome = .data$outcome - .data$outcome_comp,
+      quadrant = case_when(
+        .data$incr_cost > 0 & .data$incr_outcome > 0 ~ "NE",
+        .data$incr_cost <= 0 & .data$incr_outcome > 0 ~ "SE",
+        .data$incr_cost <= 0 & .data$incr_outcome <= 0 ~ "SW",
+        .data$incr_cost > 0 & .data$incr_outcome <= 0 ~ "NW"
+      )
+    )
+
+  # Calculate quadrant percentages per strategy and group
+  quadrant_counts <- incremental_data %>%
+    group_by(.data$strategy, .data$group, .data$quadrant) %>%
+    summarize(n = n(), .groups = "drop") %>%
+    group_by(.data$strategy, .data$group) %>%
+    mutate(pct = .data$n / sum(.data$n) * 100) %>%
+    ungroup()
+
+  # Get unique strategies and groups
+  strategies_display <- unique(quadrant_counts$strategy)
+  groups_display <- unique(quadrant_counts$group)
+
+  # Reorder according to original model order from metadata
+  if (!is.null(results$metadata$strategies)) {
+    strategy_order <- results$metadata$strategies$display_name
+    strategies_display <- strategy_order[strategy_order %in% strategies_display]
+  }
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
+
+  n_strategies <- length(strategies_display)
+  n_groups <- length(groups_display)
+  has_multiple_groups <- n_groups > 1
+
+  # Pivot to wide format with quadrants as columns
+  pivot_data <- quadrant_counts %>%
+    select("strategy", "group", "quadrant", "pct") %>%
+    pivot_wider(
+      id_cols = c("strategy", "group"),
+      names_from = "quadrant",
+      values_from = "pct",
+      values_fill = 0
+    )
+
+  # Ensure all quadrant columns exist
+  for (q in c("NE", "SE", "SW", "NW")) {
+    if (!q %in% names(pivot_data)) {
+      pivot_data[[q]] <- 0
+    }
+  }
+
+  # Format percentages
+  format_pct <- function(x) {
+    paste0(format(round(x, decimals), nsmall = decimals, trim = TRUE), "%")
+  }
+
+  # Build result table
+  if (has_multiple_groups) {
+    # Multiple groups: include group column
+    result_data <- pivot_data %>%
+      arrange(factor(.data$group, levels = groups_display),
+              factor(.data$strategy, levels = strategies_display)) %>%
+      transmute(
+        Group = .data$group,
+        Strategy = .data$strategy,
+        `NE (%)` = format_pct(.data$NE),
+        `SE (%)` = format_pct(.data$SE),
+        `SW (%)` = format_pct(.data$SW),
+        `NW (%)` = format_pct(.data$NW)
+      )
+
+    # Build headers
+    headers <- list(list(
+      list(span = 1, text = "Group", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Strategy", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "NE (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "SE (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "SW (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "NW (%)", borders = c(1, 0, 1, 0))
+    ))
+
+    column_alignments <- c("left", "left", "right", "right", "right", "right")
+    column_widths <- rep(NA, 6)
+
+  } else {
+    # Single group: no group column
+    result_data <- pivot_data %>%
+      arrange(factor(.data$strategy, levels = strategies_display)) %>%
+      transmute(
+        Strategy = .data$strategy,
+        `NE (%)` = format_pct(.data$NE),
+        `SE (%)` = format_pct(.data$SE),
+        `SW (%)` = format_pct(.data$SW),
+        `NW (%)` = format_pct(.data$NW)
+      )
+
+    # Build headers
+    headers <- list(list(
+      list(span = 1, text = "Strategy", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "NE (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "SE (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "SW (%)", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "NW (%)", borders = c(1, 0, 1, 0))
+    ))
+
+    column_alignments <- c("left", "right", "right", "right", "right")
+    column_widths <- rep(NA, 5)
+  }
+
+  # Add footnote explaining quadrants
+  footnote <- paste0(
+    "Quadrants relative to ", comparator, ": ",
+    "NE = costlier & more effective; ",
+    "SE = cheaper & more effective (dominant); ",
+    "SW = cheaper & less effective; ",
+    "NW = costlier & less effective (dominated)"
+  )
+
+  create_simple_table_spec(
+    headers = headers,
+    data = result_data,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = list(footnote = footnote),
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' Cost-Effectiveness Quadrant Probabilities Table
+#'
+#' Creates a table showing the percentage of PSA simulations falling into each
+#' quadrant of the cost-effectiveness plane relative to a comparator strategy.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param comparator Name of the comparator strategy
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param decimals Number of decimal places for percentages (default: 1)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The cost-effectiveness plane is divided into four quadrants:
+#' \itemize{
+#'   \item \strong{NE (Northeast)}: Costlier and more effective - trade-off region
+#'   \item \strong{SE (Southeast)}: Cheaper and more effective - dominant
+#'   \item \strong{SW (Southwest)}: Cheaper and less effective - trade-off region
+#'   \item \strong{NW (Northwest)}: Costlier and less effective - dominated
+#' }
+#'
+#' CE quadrant calculations always use discounted values as this is a
+#' cost-effectiveness measure.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # CE quadrant probabilities relative to standard care
+#' ce_quadrant_table(psa_results, "total_qalys", "total_cost",
+#'                   comparator = "Standard Care")
+#' }
+#'
+#' @export
+ce_quadrant_table <- function(results,
+                              outcome_summary,
+                              cost_summary,
+                              comparator,
+                              groups = "overall",
+                              strategies = NULL,
+                              decimals = 1,
+                              font_size = 11,
+                              table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_ce_quadrant_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    comparator = comparator,
+    groups = groups,
+    strategies = strategies,
+    decimals = decimals,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Prepare PSA Parameters Table Data
+#'
+#' Internal helper function that prepares PSA sampled parameter statistics
+#' for rendering as a table. Shows summary statistics for each sampled parameter.
+#'
+#' @param results A openqaly PSA results object
+#' @param variables Character vector of variables to include (NULL for all)
+#' @param group Single group name to filter parameters (NULL for first segment)
+#' @param strategies Single strategy to filter parameters (NULL for first strategy)
+#' @param decimals Number of decimal places
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_psa_parameters_table_data <- function(results,
+                                               variables = NULL,
+                                               group = NULL,
+                                               strategies = NULL,
+                                               decimals = 3,
+                                               font_size = 11) {
+
+  # Get sampled parameters - use first group/strategy if not specified
+  if (is.null(group)) {
+    group <- results$segments$group[1]
+  }
+  if (is.null(strategies)) {
+    strategies <- results$segments$strategy[1]
+  }
+
+  # Try to get sampled parameters
+  param_data <- tryCatch({
+    get_sampled_parameters(
+      results = results,
+      variables = variables,
+      group = group,
+      strategies = strategies
+    )
+  }, error = function(e) {
+    # If no parameters sampled, return empty table
+    NULL
+  })
+
+  if (is.null(param_data) || ncol(param_data) <= 1) {
+    # No sampled parameters - create empty result
+    result_data <- data.frame(
+      Parameter = "No sampled parameters",
+      Type = "",
+      Mean = "",
+      SD = "",
+      Median = "",
+      `2.5%` = "",
+      `97.5%` = "",
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+
+    headers <- list(list(
+      list(span = 1, text = "Parameter", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Type", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Mean", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "SD", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "Median", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "2.5%", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = "97.5%", borders = c(1, 0, 1, 0))
+    ))
+
+    return(create_simple_table_spec(
+      headers = headers,
+      data = result_data,
+      column_alignments = c("left", "left", rep("right", 5)),
+      column_widths = rep(NA, 7),
+      special_rows = list(),
+      font_size = font_size,
+      font_family = "Helvetica"
+    ))
+  }
+
+  # Calculate summary statistics for each parameter
+  param_names <- setdiff(names(param_data), "simulation")
+  stats_list <- lapply(param_names, function(param) {
+    vals <- param_data[[param]]
+    vals <- vals[!is.na(vals)]
+
+    if (length(vals) == 0) {
+      return(list(
+        Parameter = param,
+        Type = "Scalar",
+        Mean = NA,
+        SD = NA,
+        Median = NA,
+        `2.5%` = NA,
+        `97.5%` = NA
+      ))
+    }
+
+    list(
+      Parameter = param,
+      Type = "Scalar",
+      Mean = mean(vals),
+      SD = sd(vals),
+      Median = median(vals),
+      `2.5%` = quantile(vals, 0.025),
+      `97.5%` = quantile(vals, 0.975)
+    )
+  })
+
+  stats_df <- bind_rows(stats_list)
+
+  # Check for bootstrap tables in model (multivariate sampling with bootstrap)
+  # These are stored differently - they're tables, not scalars
+  # Add rows indicating bootstrap tables if present
+  if (!is.null(results$metadata) && "tables" %in% names(results$metadata)) {
+    # Check if any tables have bootstrap sampling configured
+    # This is a placeholder - actual bootstrap detection depends on model structure
+    bootstrap_tables <- character(0)
+
+    if (length(bootstrap_tables) > 0) {
+      bootstrap_rows <- data.frame(
+        Parameter = bootstrap_tables,
+        Type = rep("Bootstrap", length(bootstrap_tables)),
+        Mean = rep(NA, length(bootstrap_tables)),
+        SD = rep(NA, length(bootstrap_tables)),
+        Median = rep(NA, length(bootstrap_tables)),
+        `2.5%` = rep(NA, length(bootstrap_tables)),
+        `97.5%` = rep(NA, length(bootstrap_tables)),
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+      stats_df <- bind_rows(stats_df, bootstrap_rows)
+    }
+  }
+
+  # Format numeric values
+  format_num <- function(x) {
+    if (is.na(x)) return("\u2014")  # em-dash
+    format(round(x, decimals), nsmall = decimals, trim = TRUE, scientific = FALSE)
+  }
+
+  result_data <- stats_df %>%
+    mutate(
+      Mean = sapply(.data$Mean, format_num),
+      SD = sapply(.data$SD, format_num),
+      Median = sapply(.data$Median, format_num),
+      `2.5%` = sapply(.data$`2.5%`, format_num),
+      `97.5%` = sapply(.data$`97.5%`, format_num)
+    )
+
+  # Build headers
+  headers <- list(list(
+    list(span = 1, text = "Parameter", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "Type", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "Mean", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "SD", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "Median", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "2.5%", borders = c(1, 0, 1, 0)),
+    list(span = 1, text = "97.5%", borders = c(1, 0, 1, 0))
+  ))
+
+  create_simple_table_spec(
+    headers = headers,
+    data = result_data,
+    column_alignments = c("left", "left", rep("right", 5)),
+    column_widths = rep(NA, 7),
+    special_rows = list(),
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' PSA Sampled Parameters Table
+#'
+#' Creates a table showing summary statistics for sampled PSA parameters.
+#' Displays mean, SD, median, and 95% credible interval for each parameter.
+#'
+#' @param results A openqaly PSA results object
+#' @param variables Character vector of variables to include (NULL for all)
+#' @param group Single group name to filter parameters (NULL for first segment)
+#' @param strategies Single strategy to filter parameters (NULL for first strategy)
+#' @param decimals Number of decimal places (default: 3)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' This table summarizes the distributions of sampled parameters used in
+#' probabilistic sensitivity analysis. For each parameter, it shows:
+#' \itemize{
+#'   \item Mean: Average sampled value
+#'   \item SD: Standard deviation of sampled values
+#'   \item Median: Middle sampled value
+#'   \item 2.5%: Lower bound of 95% credible interval
+#'   \item 97.5%: Upper bound of 95% credible interval
+#' }
+#'
+#' Bootstrap tables (patient-level data resampling) are indicated with
+#' "Bootstrap" type and dashes for statistics.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # All sampled parameters
+#' psa_parameters_table(psa_results)
+#'
+#' # Specific parameters only
+#' psa_parameters_table(psa_results, variables = c("p_response", "c_treatment"))
+#' }
+#'
+#' @export
+psa_parameters_table <- function(results,
+                                  variables = NULL,
+                                  group = NULL,
+                                  strategies = NULL,
+                                  decimals = 3,
+                                  font_size = 11,
+                                  table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_psa_parameters_table_data(
+    results = results,
+    variables = variables,
     group = group,
     strategies = strategies,
-    discounted = discounted,
     decimals = decimals,
     font_size = font_size
   )

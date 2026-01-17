@@ -11,9 +11,8 @@ incremental_ce_table(
   groups = "overall",
   strategies = NULL,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -28,8 +27,6 @@ incremental_ce_table(
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places (default: 2)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

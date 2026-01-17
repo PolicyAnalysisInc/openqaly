@@ -420,7 +420,7 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #' model <- define_model("markov") %>%
 #'   add_variable("p_disease", 0.03) %>%
 #'   add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
-#'   add_dsa_setting("discount_cost", low = 0, high = 0.05)
+#'   add_dsa_setting("discount_cost", low = 0, high = 5)
 #'
 #' dsa_results <- run_dsa(model)
 #'
@@ -500,7 +500,8 @@ run_dsa <- function(model, ...) {
 #' @param results DSA results object from run_dsa()
 #' @param summary_name Name of the summary to extract (e.g., "total_qalys", "total_cost")
 #' @param value_type Type of value: "all", "cost", or "outcome"
-#' @param group Group selection: "aggregated" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), "all" (overall + all groups),
+#'   "all_groups" (all groups without overall), or specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s). Used with
@@ -520,7 +521,7 @@ run_dsa <- function(model, ...) {
 extract_dsa_summaries <- function(results,
                                   summary_name,
                                   value_type = c("all", "cost", "outcome"),
-                                  group = "aggregated",
+                                  groups = "overall",
                                   strategies = NULL,
                                   interventions = NULL,
                                   comparators = NULL,
@@ -528,30 +529,8 @@ extract_dsa_summaries <- function(results,
 
   value_type <- match.arg(value_type)
 
-  # Determine source data based on group parameter
-  if (is.null(group)) {
-    # Combine aggregated and all segments
-    source_data <- bind_rows(
-      results$aggregated %>% mutate(group = "Aggregated"),
-      results$segments
-    )
-  } else if (group == "aggregated") {
-    # Aggregated only
-    source_data <- results$aggregated
-    if (!"group" %in% names(source_data)) {
-      source_data <- source_data %>% mutate(group = "Aggregated")
-    }
-  } else {
-    # Specific group - validate using helper
-    check_group_exists(group, results)
-    if (!is.null(results$segments) && nrow(results$segments) > 0) {
-      source_data <- results$segments %>%
-        filter(.data$group == !!group)
-    } else {
-      # Group was validated to exist, but no segments data
-      stop(sprintf("No segment data available for group '%s'", group))
-    }
-  }
+  # Use standardized group selection
+  source_data <- select_source_data(groups, results)
 
   # Determine which strategies to include
   strategies_to_include <- strategies

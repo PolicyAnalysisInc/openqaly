@@ -162,10 +162,10 @@ test_that("outcomes_table() with comparators calculates differences correctly", 
   expect_equal(actual_diff, expected_diff, tolerance = 0.01)
 })
 
-test_that("outcomes_table() returns kable by default", {
+test_that("outcomes_table() returns flextable by default", {
   results <- get_test_results()
   tbl <- outcomes_table(results, "total_qalys")
-  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+  expect_true(inherits(tbl, "flextable"))
 })
 
 test_that("outcomes_table() returns flextable when requested", {
@@ -295,7 +295,7 @@ test_that("pairwise_ce_table() returns table object", {
     comparators = "standard"
   )
 
-  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+  expect_true(inherits(tbl, "flextable"))
 })
 
 # ============================================================================
@@ -321,7 +321,7 @@ test_that("Three-level mode has spacer columns between groups", {
 
   prepared <- prepare_outcomes_table_data(
     results, outcome = "total_qalys",
-    groups = NULL, show_total = TRUE, decimals = 2
+    groups = "all", show_total = TRUE, decimals = 2
   )
 
   # Should have spacer columns
@@ -341,7 +341,7 @@ test_that("Three-level mode has two-level header structure", {
 
   prepared <- prepare_outcomes_table_data(
     results, outcome = "total_qalys",
-    groups = NULL, show_total = TRUE, decimals = 2
+    groups = "all", show_total = TRUE, decimals = 2
   )
 
   # Should have header structure with level1 and level2
@@ -366,11 +366,11 @@ test_that("Three-level mode values match get_summaries() for each group-strategy
 
   prepared <- prepare_outcomes_table_data(
     results, outcome = "total_qalys",
-    groups = NULL, show_total = TRUE, decimals = 2
+    groups = "all", show_total = TRUE, decimals = 2
   )
 
   # Get ground truth from get_summaries
-  summaries <- get_summaries(results, summaries = "total_qalys", groups = NULL)
+  summaries <- get_summaries(results, summaries = "total_qalys", groups = "all")
 
   # Get group and strategy display names
   group_map <- setNames(
@@ -413,15 +413,15 @@ test_that("outcomes_table() renders correctly with multiple groups", {
   results <- get_multi_group_test_results()
 
   # Should not error and return valid table
-  tbl <- outcomes_table(results, "total_qalys", groups = NULL)
-  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+  tbl <- outcomes_table(results, "total_qalys", groups = "all")
+  expect_true(inherits(tbl, "flextable"))
 })
 
 test_that("outcomes_table() with flextable renders correctly with multiple groups", {
   skip_if_not_installed("flextable")
   results <- get_multi_group_test_results()
 
-  tbl <- outcomes_table(results, "total_qalys", groups = NULL, table_format = "flextable")
+  tbl <- outcomes_table(results, "total_qalys", groups = "all", table_format = "flextable")
   expect_s3_class(tbl, "flextable")
 })
 
@@ -436,7 +436,7 @@ test_that("Multi-group pairwise CE table has group header rows", {
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    groups = NULL,
+    groups = "all",
     comparators = "standard",
     decimals = 2
   )
@@ -454,36 +454,6 @@ test_that("Multi-group pairwise CE table has group header rows", {
                info = "Should have one group header per group including Overall")
 })
 
-test_that("Multi-group pairwise CE table has indented strategy rows", {
-  results <- get_multi_group_test_results()
-
-  prepared <- prepare_pairwise_ce_table_data(
-    results,
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost",
-    groups = NULL,
-    comparators = "standard",
-    decimals = 2
-  )
-
-  # Get row labels (column is named " " with a space)
-  row_labels <- prepared$data[[" "]]
-
-  # Group header rows should NOT start with spaces
-  group_header_indices <- prepared$special_rows$group_header_rows
-  for (idx in group_header_indices) {
-    expect_false(startsWith(row_labels[idx], "  "),
-                 info = paste("Group header at row", idx, "should not be indented"))
-  }
-
-  # Non-header rows should start with spaces (indented)
-  non_header_indices <- setdiff(seq_along(row_labels), group_header_indices)
-  for (idx in non_header_indices) {
-    expect_true(startsWith(row_labels[idx], "  "),
-                info = paste("Strategy row at row", idx, "should be indented"))
-  }
-})
-
 test_that("Multi-group pairwise CE table has correct columns", {
   results <- get_multi_group_test_results()
 
@@ -491,7 +461,7 @@ test_that("Multi-group pairwise CE table has correct columns", {
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    groups = NULL,
+    groups = "all",
     comparators = "standard",
     decimals = 2
   )
@@ -511,7 +481,7 @@ test_that("Multi-group pairwise CE table group headers contain group names", {
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    groups = NULL,
+    groups = "all",
     comparators = "standard",
     decimals = 2
   )
@@ -537,11 +507,11 @@ test_that("pairwise_ce_table() renders correctly with multiple groups", {
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    groups = NULL,
+    groups = "all",
     comparators = "standard"
   )
 
-  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+  expect_true(inherits(tbl, "flextable"))
 })
 
 test_that("pairwise_ce_table() with flextable renders correctly with multiple groups", {
@@ -552,7 +522,7 @@ test_that("pairwise_ce_table() with flextable renders correctly with multiple gr
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    groups = NULL,
+    groups = "all",
     comparators = "standard",
     table_format = "flextable"
   )

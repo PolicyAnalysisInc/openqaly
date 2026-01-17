@@ -15,7 +15,7 @@ outcomes_table(
   decimals = 2,
   discounted = FALSE,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{

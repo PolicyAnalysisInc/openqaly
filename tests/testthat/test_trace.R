@@ -27,8 +27,8 @@ test_that("get_trace extracts data in long format", {
   expect_true(all(trace_long$probability >= 0))
   expect_true(all(trace_long$probability <= 1))
 
-  # Check that we have data for both strategies (default uses display names)
-  expect_setequal(unique(trace_long$strategy), c("Standard of Care", "New Drug"))
+  # Check that we have data for all strategies (default uses display names)
+  expect_setequal(unique(trace_long$strategy), c("Chemotherapy", "Targeted Therapy", "Immunotherapy"))
 
   # Check that we have all three states (default uses display names)
   expect_equal(length(unique(trace_long$state)), 3)
@@ -37,7 +37,7 @@ test_that("get_trace extracts data in long format", {
   # Verify technical names work when explicitly requested
   trace_long_technical <- get_trace(results, format = "long",
                                      use_display_names = FALSE)
-  expect_setequal(unique(trace_long_technical$strategy), c("standard", "new_drug"))
+  expect_setequal(unique(trace_long_technical$strategy), c("chemo", "targeted", "immuno"))
   expect_setequal(unique(trace_long_technical$state), c("progression_free", "progressed", "dead"))
 })
 
@@ -101,15 +101,15 @@ test_that("get_trace filters by strategy", {
 
   # Filter to one strategy (filtering uses technical names)
   # Result defaults to display names
-  trace_filtered <- get_trace(results, format = "long", strategies = "standard")
+  trace_filtered <- get_trace(results, format = "long", strategies = "chemo")
 
-  # Check that only standard strategy is present (returns display name)
-  expect_equal(unique(trace_filtered$strategy), "Standard of Care")
+  # Check that only chemo strategy is present (returns display name)
+  expect_equal(unique(trace_filtered$strategy), "Chemotherapy")
 
   # Test filtering with explicit technical name output
-  trace_filtered_tech <- get_trace(results, format = "long", strategies = "standard",
+  trace_filtered_tech <- get_trace(results, format = "long", strategies = "chemo",
                                    use_display_names = FALSE)
-  expect_equal(unique(trace_filtered_tech$strategy), "standard")
+  expect_equal(unique(trace_filtered_tech$strategy), "chemo")
 })
 
 
@@ -181,7 +181,7 @@ test_that("trace_plot_area creates a ggplot object", {
 })
 
 
-test_that("trace_plot_area with faceting creates faceted plot", {
+test_that("trace_plot_area auto-facets with multiple strategies", {
   model_path <- system.file("models/example_psm", package = "openqaly")
   if (model_path == "") {
     model_path <- "inst/models/example_psm"
@@ -190,10 +190,10 @@ test_that("trace_plot_area with faceting creates faceted plot", {
   model <- read_model(model_path)
   results <- run_model(model)
 
-  # Create faceted plot
-  p <- trace_plot_area(results, facet_by = "strategy")
+  # Create plot (should auto-facet when there are multiple strategies)
+  p <- trace_plot_area(results)
 
-  # Check that it's faceted
+  # Check that it's faceted (auto-facets when there are multiple strategies)
   expect_s3_class(p, "ggplot")
   expect_s3_class(p$facet, "FacetWrap")
 })

@@ -5,23 +5,27 @@
 \title{Plot Trace as Line Chart}
 \usage{
 trace_plot_line(
-  results,
-  facet_by = NULL,
+  res,
+  groups = "overall",
+  strategies = NULL,
+  by_state = TRUE,
   proportional = FALSE,
   states = NULL,
   color_palette = NULL,
   show_legend = TRUE,
   collapsed = TRUE,
-  use_display_names = FALSE,
+  use_display_names = TRUE,
   time_unit = "cycle"
 )
 }
 \arguments{
-\item{results}{A openqaly model results object}
+\item{res}{A openqaly model results object (output from run_model)}
 
-\item{facet_by}{Faceting variable: NULL (auto-detect), "strategy", "group",
-or "both". When NULL and multiple strategies/groups exist, automatically
-creates facets to separate them.}
+\item{groups}{Group selection: "overall" (default), specific group name,
+vector of groups, "all" (all groups plus aggregated), "all_groups"
+(all groups without overall), or NULL (same as "all")}
+
+\item{strategies}{Character vector of strategy names to include (NULL for all)}
 
 \item{proportional}{Logical. If TRUE, show as percentages (0-100%). If FALSE
 (default), show as probabilities (0-1)}
@@ -52,11 +56,11 @@ Alternative to stacked area charts for easier comparison of individual states.
 model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
-# Line plot showing each state's trajectory
+# Line plot showing each state's trajectory (color by state)
 trace_plot_line(results)
 
-# Compare strategies
-trace_plot_line(results, facet_by = "strategy")
+# Color by strategy, facet by state
+trace_plot_line(results, by_state = FALSE)
 }
 
 }

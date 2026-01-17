@@ -4,14 +4,16 @@
 \alias{calculate_vbp_price}
 \title{Calculate VBP Price at Given WTP}
 \usage{
-calculate_vbp_price(vbp_results, comparator, wtp, group = "overall")
+calculate_vbp_price(vbp_results, wtp, comparator = NULL, group = "overall")
 }
 \arguments{
 \item{vbp_results}{Results from run_vbp()}
 
-\item{comparator}{Name of the comparator strategy}
-
 \item{wtp}{Willingness-to-pay threshold}
+
+\item{comparator}{Name of the comparator strategy. If NULL (default),
+returns the minimum VBP across all comparators (the price that is
+cost-effective vs ALL alternatives).}
 
 \item{group}{Group name or "overall" (default)}
 }
@@ -24,11 +26,14 @@ the VBP equation: Price = slope * WTP + intercept
 }
 \examples{
 \dontrun{
-# Calculate VBP at WTP of $50,000 vs chemo
-vbp_price <- calculate_vbp_price(vbp_results, "chemo", 50000)
+# Calculate minimum VBP across all comparators at WTP of $50,000
+vbp_price <- calculate_vbp_price(vbp_results, 50000)
+
+# Calculate VBP at WTP of $50,000 vs specific comparator
+vbp_price <- calculate_vbp_price(vbp_results, 50000, comparator = "chemo")
 
 # Calculate VBP for a specific group
-vbp_price_group <- calculate_vbp_price(vbp_results, "chemo", 50000, "elderly")
+vbp_price_group <- calculate_vbp_price(vbp_results, 50000, "chemo", "elderly")
 }
 
 }

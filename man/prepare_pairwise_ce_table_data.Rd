@@ -13,7 +13,6 @@ prepare_pairwise_ce_table_data(
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11
 )
 }
@@ -33,8 +32,6 @@ prepare_pairwise_ce_table_data(
 \item{comparators}{Character vector of reference strategies for comparator perspective}
 
 \item{decimals}{Number of decimal places}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering}
 }

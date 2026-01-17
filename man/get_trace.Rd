@@ -64,7 +64,7 @@ trace_long <- get_trace(results, format = "long")
 trace_wide <- get_trace(results, format = "wide")
 
 # Get specific strategies and groups
-trace_subset <- get_trace(results, strategies = c("standard"),
+trace_subset <- get_trace(results, strategies = c("chemo"),
                           groups = c("overall", "moderate"))
 }
 

@@ -7,7 +7,7 @@
 dsa_outcomes_plot(
   results,
   summary_name,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -21,7 +21,7 @@ dsa_outcomes_plot(
 
 \item{summary_name}{Name of the summary to plot (e.g., "total_qalys", "total_cost")}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL
+\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL
 (all groups plus aggregated)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all).
@@ -71,7 +71,7 @@ When interventions and/or comparators are specified:
 Faceting follows the standard pattern:
 - Multiple strategies/comparisons only: facet_wrap(~ strategy)
 - Multiple groups only: facet_wrap(~ group)
-- Both: facet_grid(group ~ strategy)
+- Both: facet_wrap(~ strategy + group)
 - Single: no faceting
 }
 \examples{

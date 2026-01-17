@@ -10,7 +10,7 @@ context("PSA Tables")
 
 test_that("incremental_ceac_table() creates table object", {
   results <- get_cached_psa_results()
-  tbl <- incremental_ceac_table(results, "total_qalys", "total_cost")
+  tbl <- incremental_ceac_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
@@ -66,7 +66,7 @@ test_that("prepare_incremental_ceac_table_data() single group has one header row
 
   prepared <- prepare_incremental_ceac_table_data(
     results, "total_qalys", "total_cost",
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Single group mode should have exactly 1 header row
@@ -150,7 +150,7 @@ test_that("prepare_incremental_ceac_table_data() probabilities sum approximately
 
 test_that("psa_summary_table() creates table object", {
   results <- get_cached_psa_results()
-  tbl <- psa_summary_table(results, "total_qalys", "total_cost")
+  tbl <- psa_summary_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
@@ -236,7 +236,7 @@ test_that("prepare_psa_summary_table_data() single group has one header row", {
 
   prepared <- prepare_psa_summary_table_data(
     results, "total_qalys", "total_cost",
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Single group mode should have exactly 1 header row
@@ -280,9 +280,6 @@ test_that("prepare_psa_summary_table_data() formats costs with commas", {
 
 # ============================================================================
 # Tests for pairwise_ceac_table()
-# NOTE: pairwise_ceac tests are skipped due to a bug in calculate_pairwise_ceac()
-# in ceac.R that causes size mismatch errors. Enable these tests once the bug
-# is fixed.
 # ============================================================================
 
 test_that("pairwise_ceac_table() works in comparator mode", {
@@ -293,7 +290,8 @@ test_that("pairwise_ceac_table() works in comparator mode", {
 
   tbl <- pairwise_ceac_table(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparator = strategies[1],
+    table_format = "kable"
   )
 
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
@@ -306,7 +304,8 @@ test_that("pairwise_ceac_table() works in intervention mode", {
 
   tbl <- pairwise_ceac_table(
     results, "total_qalys", "total_cost",
-    intervention = strategies[1]
+    intervention = strategies[1],
+    table_format = "kable"
   )
 
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
@@ -373,7 +372,7 @@ test_that("prepare_pairwise_ceac_table_data() single group has one header row", 
   prepared <- prepare_pairwise_ceac_table_data(
     results, "total_qalys", "total_cost",
     comparator = strategies[1],
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Single group mode should have exactly 1 header row
@@ -416,7 +415,7 @@ test_that("prepare_pairwise_ceac_table_data() respects custom wtp_thresholds", {
 
 test_that("evpi_table() creates table object", {
   results <- get_cached_psa_results()
-  tbl <- evpi_table(results, "total_qalys", "total_cost")
+  tbl <- evpi_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
@@ -457,7 +456,7 @@ test_that("prepare_evpi_table_data() single group has WTP/EVPI columns", {
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Should have exactly 2 columns: WTP and EVPI
@@ -495,7 +494,7 @@ test_that("prepare_evpi_table_data() single group has one header row", {
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Single group mode should have exactly 1 header row
@@ -507,7 +506,7 @@ test_that("prepare_evpi_table_data() header contains WTP and EVPI", {
 
   prepared <- prepare_evpi_table_data(
     results, "total_qalys", "total_cost",
-    group = "aggregated"
+    groups = "overall"
   )
 
   # Header should have WTP and EVPI
@@ -549,44 +548,21 @@ test_that("Full PSA tables workflow with example model", {
   # 3. Generate all table types
 
   # Incremental CEAC table
-  ceac_tbl <- incremental_ceac_table(results, "total_qalys", "total_cost")
+  ceac_tbl <- incremental_ceac_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(ceac_tbl, "kableExtra") || is.character(ceac_tbl))
 
   # PSA summary table
-  summary_tbl <- psa_summary_table(results, "total_qalys", "total_cost")
+  summary_tbl <- psa_summary_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(summary_tbl, "kableExtra") || is.character(summary_tbl))
-
-  # NOTE: Pairwise CEAC table skipped due to bug in calculate_pairwise_ceac()
 
   # EVPI table
-  evpi_tbl <- evpi_table(results, "total_qalys", "total_cost")
+  evpi_tbl <- evpi_table(results, "total_qalys", "total_cost", table_format = "kable")
   expect_true(inherits(evpi_tbl, "kableExtra") || is.character(evpi_tbl))
 })
 
-test_that("Tables work with discounted values", {
-  results <- get_cached_psa_results()
-
-  # Test with discounted = TRUE
-  ceac_tbl <- incremental_ceac_table(
-    results, "total_qalys", "total_cost",
-    discounted = TRUE
-  )
-  expect_true(inherits(ceac_tbl, "kableExtra") || is.character(ceac_tbl))
-
-  summary_tbl <- psa_summary_table(
-    results, "total_qalys", "total_cost",
-    discounted = TRUE
-  )
-  expect_true(inherits(summary_tbl, "kableExtra") || is.character(summary_tbl))
-
-  # NOTE: Pairwise CEAC table skipped due to bug in calculate_pairwise_ceac()
-
-  evpi_tbl <- evpi_table(
-    results, "total_qalys", "total_cost",
-    discounted = TRUE
-  )
-  expect_true(inherits(evpi_tbl, "kableExtra") || is.character(evpi_tbl))
-})
+# Test removed: discounted parameter no longer exists for PSA tables
+# PSA tables (CEAC, summary, EVPI) always use discounted values as they're
+# cost-effectiveness measures
 
 test_that("Tables work with strategies filter", {
   results <- get_cached_psa_results()
@@ -598,14 +574,247 @@ test_that("Tables work with strategies filter", {
 
     ceac_tbl <- incremental_ceac_table(
       results, "total_qalys", "total_cost",
-      strategies = filtered_strategies
+      strategies = filtered_strategies,
+      table_format = "kable"
     )
     expect_true(inherits(ceac_tbl, "kableExtra") || is.character(ceac_tbl))
 
     summary_tbl <- psa_summary_table(
       results, "total_qalys", "total_cost",
-      strategies = filtered_strategies
+      strategies = filtered_strategies,
+      table_format = "kable"
     )
     expect_true(inherits(summary_tbl, "kableExtra") || is.character(summary_tbl))
+  }
+})
+
+# ============================================================================
+# Tests for ce_quadrant_table()
+# ============================================================================
+
+test_that("ce_quadrant_table() creates table object", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  tbl <- ce_quadrant_table(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1],
+    table_format = "kable"
+  )
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})
+
+test_that("ce_quadrant_table() respects table_format = 'flextable'", {
+  skip_if_not_installed("flextable")
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  tbl <- ce_quadrant_table(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1],
+    table_format = "flextable"
+  )
+  expect_s3_class(tbl, "flextable")
+})
+
+test_that("ce_quadrant_table() errors with invalid comparator", {
+  results <- get_cached_psa_results()
+
+  expect_error(
+    ce_quadrant_table(
+      results, "total_qalys", "total_cost",
+      comparator = "NonExistent Strategy"
+    ),
+    "not found"
+  )
+})
+
+# ============================================================================
+# Tests for prepare_ce_quadrant_table_data() [internal]
+# ============================================================================
+
+test_that("prepare_ce_quadrant_table_data() has quadrant columns", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1]
+  )
+
+  # Should have NE, SE, SW, NW columns
+  col_names <- names(prepared$data)
+  expect_true("NE (%)" %in% col_names)
+  expect_true("SE (%)" %in% col_names)
+  expect_true("SW (%)" %in% col_names)
+  expect_true("NW (%)" %in% col_names)
+})
+
+test_that("prepare_ce_quadrant_table_data() quadrant percentages sum to 100", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1]
+  )
+
+  # Extract numeric percentages from each row
+  for (i in seq_len(nrow(prepared$data))) {
+    probs <- sapply(c("NE (%)", "SE (%)", "SW (%)", "NW (%)"), function(col) {
+      as.numeric(gsub("%", "", prepared$data[[col]][i]))
+    })
+    expect_equal(sum(probs), 100, tolerance = 0.1)
+  }
+})
+
+test_that("prepare_ce_quadrant_table_data() single group has one header row", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1],
+    groups = "overall"
+  )
+
+  # Single group mode should have exactly 1 header row
+  expect_equal(length(prepared$headers), 1)
+})
+
+test_that("prepare_ce_quadrant_table_data() excludes comparator from rows", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1]
+  )
+
+  # Comparator should not appear in Strategy column
+  expect_false(strategies[1] %in% prepared$data$Strategy)
+})
+
+test_that("prepare_ce_quadrant_table_data() includes footnote", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1]
+  )
+
+  # Should have footnote explaining quadrants
+  expect_true(!is.null(prepared$special_rows$footnote))
+  expect_true(grepl("NE", prepared$special_rows$footnote))
+})
+
+test_that("prepare_ce_quadrant_table_data() respects decimals parameter", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$display_name
+
+  prepared <- prepare_ce_quadrant_table_data(
+    results, "total_qalys", "total_cost",
+    comparator = strategies[1],
+    decimals = 2
+  )
+
+  # Values should have % symbol
+  sample_val <- prepared$data[["NE (%)"]][1]
+  expect_true(grepl("%$", sample_val))
+})
+
+# ============================================================================
+# Tests for psa_parameters_table()
+# ============================================================================
+
+test_that("psa_parameters_table() creates table object", {
+  results <- get_cached_psa_results()
+
+  tbl <- psa_parameters_table(results, table_format = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})
+
+test_that("psa_parameters_table() respects table_format = 'flextable'", {
+  skip_if_not_installed("flextable")
+  results <- get_cached_psa_results()
+
+  tbl <- psa_parameters_table(results, table_format = "flextable")
+  expect_s3_class(tbl, "flextable")
+})
+
+# ============================================================================
+# Tests for prepare_psa_parameters_table_data() [internal]
+# ============================================================================
+
+test_that("prepare_psa_parameters_table_data() has correct columns", {
+  results <- get_cached_psa_results()
+
+  prepared <- prepare_psa_parameters_table_data(results)
+
+  # Should have standard summary columns
+  col_names <- names(prepared$data)
+  expect_true("Parameter" %in% col_names)
+  expect_true("Type" %in% col_names)
+  expect_true("Mean" %in% col_names)
+  expect_true("SD" %in% col_names)
+  expect_true("Median" %in% col_names)
+  expect_true("2.5%" %in% col_names)
+  expect_true("97.5%" %in% col_names)
+})
+
+test_that("prepare_psa_parameters_table_data() has Scalar type for scalar params", {
+  results <- get_cached_psa_results()
+
+  prepared <- prepare_psa_parameters_table_data(results)
+
+  # If there are sampled parameters, they should have Type = "Scalar"
+  if (nrow(prepared$data) > 0 && prepared$data$Parameter[1] != "No sampled parameters") {
+    expect_true(all(prepared$data$Type == "Scalar"))
+  }
+})
+
+test_that("prepare_psa_parameters_table_data() respects variables filter", {
+  results <- get_cached_psa_results()
+
+  # Get all parameters first
+  prepared_all <- prepare_psa_parameters_table_data(results)
+
+  # Skip if no sampled parameters
+  if (prepared_all$data$Parameter[1] == "No sampled parameters") {
+    skip("No sampled parameters in test model")
+  }
+
+  # Filter to first parameter only
+  first_param <- prepared_all$data$Parameter[1]
+  prepared_filtered <- prepare_psa_parameters_table_data(
+    results,
+    variables = first_param
+  )
+
+  # Filtered should have fewer or equal rows
+  expect_lte(nrow(prepared_filtered$data), nrow(prepared_all$data))
+})
+
+test_that("prepare_psa_parameters_table_data() single header row", {
+  results <- get_cached_psa_results()
+
+  prepared <- prepare_psa_parameters_table_data(results)
+
+  # Should have exactly 1 header row
+
+  expect_equal(length(prepared$headers), 1)
+})
+
+test_that("prepare_psa_parameters_table_data() respects decimals parameter", {
+  results <- get_cached_psa_results()
+
+  prepared <- prepare_psa_parameters_table_data(results, decimals = 4)
+
+  # If there are sampled parameters with numeric values, check formatting
+  if (prepared$data$Parameter[1] != "No sampled parameters") {
+    mean_val <- prepared$data$Mean[1]
+    # Should be formatted (not raw numeric)
+    expect_true(is.character(mean_val))
   }
 })

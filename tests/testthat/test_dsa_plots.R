@@ -349,7 +349,7 @@ test_that("render_tornado_plot() single strategy/group has single panel", {
   p <- dsa_outcomes_plot(
     results, "total_qalys",
     strategies = "standard",
-    group = "aggregated"
+    groups = "overall"
   )
   built <- ggplot_build(p)
 
@@ -693,4 +693,273 @@ test_that("dsa_nmb_plot works with drop_zero_impact = FALSE", {
                     wtp = 50000,
                     drop_zero_impact = FALSE)
   expect_s3_class(p, "ggplot")
+})
+
+# ============================================================================
+# Same-side Bar Stacking Tests
+# ============================================================================
+
+test_that("render_tornado_plot uses half-height stacked bars when both values on same side", {
+  # Create DSA model with a parameter where both low and high produce same-side results
+  model <- define_model("markov") %>%
+    set_settings(
+      n_cycles = 10,
+      timeframe = 10,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) %>%
+    add_strategy("standard") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    # Variable that affects outcomes positively
+    add_variable("u_healthy", 0.8) %>%
+    add_variable("u_sick", 0.5) %>%
+    # DSA specification where both low AND high are ABOVE base case
+    # (both increase utility, so QALYs will be higher in both cases)
+    add_dsa_variable("u_healthy", low = 0.85, high = 0.95,
+                     display_name = "Utility (Both Above Base)") %>%
+    # Transitions
+    add_transition("healthy", "sick", "0.1") %>%
+    add_transition("healthy", "dead", "0.05") %>%
+    add_transition("healthy", "healthy", "0.85") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    # Values
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    # Summary
+    add_summary("total_qalys", "qalys")
+
+  results <- run_dsa(model)
+
+  # Build the plot
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Find the rect layer (tornado bars)
+  rect_data <- NULL
+  for (ld in built$data) {
+    if ("xmin" %in% names(ld) && "height" %in% names(ld)) {
+      rect_data <- ld
+      break
+    }
+  }
+
+  expect_false(is.null(rect_data))
+
+  # Since both low and high are above base case:
+  # - The bars should have height 0.4 (half of normal 0.8)
+  # - The bars should be at different y positions (offset by +/- 0.2)
+  if (!is.null(rect_data)) {
+    # Calculate actual rendered height from ymax - ymin
+    rect_data <- rect_data %>%
+      dplyr::mutate(actual_height = ymax - ymin)
+
+    # Both bars for same-side parameters should have half height (0.4)
+    same_side_bars <- rect_data %>%
+      dplyr::filter(abs(actual_height - 0.4) < 0.01)
+
+    # Same-side parameters should have half-height (0.4) bars
+    expect_gt(nrow(same_side_bars), 0)
+
+    # Check that same-side bars are offset (different y values for same parameter)
+    if (nrow(same_side_bars) >= 2) {
+      y_values <- round(same_side_bars$y, 1)
+      # For stacked bars, we expect pairs with small y differences (the offset)
+      y_diffs <- diff(sort(y_values))
+      # Same-side bars should be vertically offset
+      expect_true(any(y_diffs < 0.5 & y_diffs > 0))
+    }
+  }
+})
+
+test_that("render_tornado_plot uses normal height when values on opposite sides", {
+  results <- get_example_dsa_results()
+
+  # Build the plot
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Find the rect layer
+  rect_data <- NULL
+  for (ld in built$data) {
+    if ("xmin" %in% names(ld) && "height" %in% names(ld)) {
+      rect_data <- ld
+      break
+    }
+  }
+
+  expect_false(is.null(rect_data))
+
+  # For normal opposite-side parameters, bars should have height 0.8
+  if (!is.null(rect_data)) {
+    # Calculate actual rendered height from ymax - ymin
+    rect_data <- rect_data %>%
+      dplyr::mutate(actual_height = ymax - ymin)
+
+    normal_bars <- rect_data %>%
+      dplyr::filter(abs(actual_height - 0.8) < 0.01)
+
+    # Most bars in the standard test fixture should be normal height
+    expect_gt(nrow(normal_bars), 0)
+  }
+})
+
+# ============================================================================
+# Tests for unit formatting in DSA setting labels
+# ============================================================================
+
+test_that("abbreviate_time_unit() abbreviates time units correctly", {
+  expect_equal(openqaly:::abbreviate_time_unit("years"), "yrs")
+  expect_equal(openqaly:::abbreviate_time_unit("year"), "yrs")
+  expect_equal(openqaly:::abbreviate_time_unit("months"), "mos")
+  expect_equal(openqaly:::abbreviate_time_unit("month"), "mos")
+  expect_equal(openqaly:::abbreviate_time_unit("weeks"), "wks")
+  expect_equal(openqaly:::abbreviate_time_unit("week"), "wks")
+  expect_equal(openqaly:::abbreviate_time_unit("days"), "days")
+  expect_equal(openqaly:::abbreviate_time_unit("day"), "days")
+  expect_equal(openqaly:::abbreviate_time_unit("cycles"), "cycles")
+  expect_equal(openqaly:::abbreviate_time_unit("cycle"), "cycles")
+})
+
+test_that("abbreviate_time_unit() handles edge cases", {
+  expect_equal(openqaly:::abbreviate_time_unit(NULL), "")
+  expect_equal(openqaly:::abbreviate_time_unit(NA), "")
+  expect_equal(openqaly:::abbreviate_time_unit(""), "")
+  expect_equal(openqaly:::abbreviate_time_unit("unknown"), "unknown")
+})
+
+test_that("get_setting_unit_suffix() returns % for discount settings", {
+  settings <- list(timeframe_unit = "years", cycle_length_unit = "months")
+  expect_equal(openqaly:::get_setting_unit_suffix("discount_cost", settings), "%")
+  expect_equal(openqaly:::get_setting_unit_suffix("discount_outcomes", settings), "%")
+})
+
+test_that("get_setting_unit_suffix() returns abbreviated time unit for time settings", {
+  settings <- list(timeframe_unit = "years", cycle_length_unit = "months")
+  expect_equal(openqaly:::get_setting_unit_suffix("timeframe", settings), "yrs")
+  expect_equal(openqaly:::get_setting_unit_suffix("cycle_length", settings), "mos")
+})
+
+test_that("get_setting_unit_suffix() returns empty for other settings", {
+  settings <- list(timeframe_unit = "years", cycle_length_unit = "months")
+  expect_equal(openqaly:::get_setting_unit_suffix("half_cycle_method", settings), "")
+  expect_equal(openqaly:::get_setting_unit_suffix("days_per_year", settings), "")
+  expect_equal(openqaly:::get_setting_unit_suffix("reduce_state_cycle", settings), "")
+  expect_equal(openqaly:::get_setting_unit_suffix("timeframe_unit", settings), "")
+  expect_equal(openqaly:::get_setting_unit_suffix("cycle_length_unit", settings), "")
+})
+
+test_that("get_setting_unit_suffix() handles NULL settings", {
+  expect_equal(openqaly:::get_setting_unit_suffix("discount_cost", NULL), "")
+})
+
+# Build a model with DSA settings to test unit formatting in labels
+build_dsa_settings_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      timeframe = 10,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years",
+      discount_cost = 3,
+      discount_outcomes = 3
+    ) %>%
+    add_strategy("standard") %>%
+    add_strategy("new_treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 2000, strategy = "standard") %>%
+    add_variable("c_treatment", 8000, strategy = "new_treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    # DSA variables (should have no unit suffix)
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    # DSA settings (should have appropriate unit suffixes)
+    add_dsa_setting("discount_cost", low = 0, high = 5,
+                    display_name = "Cost Discount") %>%
+    add_dsa_setting("timeframe", low = 5, high = 20,
+                    display_name = "Time Horizon") %>%
+    # Transitions
+    add_transition("healthy", "sick", "p_sick") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy", "1 - p_sick - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    # Values
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    # Summaries
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+test_that("dsa_outcomes_plot() shows % suffix for discount settings in labels", {
+  model <- build_dsa_settings_model()
+  results <- run_dsa(model)
+
+  # Use drop_zero_impact = FALSE because discount_cost has zero impact on QALYs
+  # (cost discounting only affects cost summaries, not outcome summaries)
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard", drop_zero_impact = FALSE)
+  built <- ggplot_build(p)
+
+  # Extract y-axis labels
+  y_labels <- built$layout$panel_params[[1]]$y$get_labels()
+
+  # Find the discount cost label - should have %
+  discount_labels <- y_labels[grepl("Discount", y_labels, ignore.case = TRUE)]
+  expect_true(any(grepl("%", discount_labels)),
+              info = paste("Discount labels should contain %:", paste(discount_labels, collapse = ", ")))
+})
+
+test_that("dsa_outcomes_plot() shows time unit suffix for timeframe setting", {
+  model <- build_dsa_settings_model()
+  results <- run_dsa(model)
+
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Extract y-axis labels
+  y_labels <- built$layout$panel_params[[1]]$y$get_labels()
+
+  # Find the timeframe label - should have yrs (abbreviated years)
+  timeframe_labels <- y_labels[grepl("Time Horizon", y_labels, ignore.case = TRUE)]
+  expect_true(any(grepl("yrs", timeframe_labels)),
+              info = paste("Timeframe labels should contain yrs:", paste(timeframe_labels, collapse = ", ")))
+})
+
+test_that("dsa_outcomes_plot() shows no unit suffix for variable parameters", {
+  model <- build_dsa_settings_model()
+  results <- run_dsa(model)
+
+  p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
+  built <- ggplot_build(p)
+
+  # Extract y-axis labels
+  y_labels <- built$layout$panel_params[[1]]$y$get_labels()
+
+  # Find the p_sick label - should NOT have % or yrs
+  prob_labels <- y_labels[grepl("Prob\\. Getting Sick", y_labels)]
+  expect_true(length(prob_labels) > 0,
+              info = "Should find probability label")
+  # Variable labels should have (low - high) format but no unit suffix
+  expect_false(any(grepl("%", prob_labels)),
+               info = paste("Variable labels should not contain %:", paste(prob_labels, collapse = ", ")))
+  expect_false(any(grepl("yrs", prob_labels)),
+               info = paste("Variable labels should not contain yrs:", paste(prob_labels, collapse = ", ")))
 })

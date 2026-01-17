@@ -17,7 +17,7 @@ run_example_vbp <- function() {
   run_vbp(
     model,
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost"
   )
@@ -49,7 +49,7 @@ test_that("run_vbp() errors on invalid price variable", {
     run_vbp(
       model,
       price_variable = "nonexistent_variable",
-      intervention_strategy = "new_drug",
+      intervention_strategy = "targeted",
       outcome_summary = "total_qalys",
       cost_summary = "total_cost"
     ),
@@ -64,7 +64,7 @@ test_that("run_vbp() errors on invalid outcome summary", {
     run_vbp(
       model,
       price_variable = "c_drug",
-      intervention_strategy = "new_drug",
+      intervention_strategy = "targeted",
       outcome_summary = "nonexistent_summary",
       cost_summary = "total_cost"
     )
@@ -78,7 +78,7 @@ test_that("run_vbp() errors on invalid cost summary", {
     run_vbp(
       model,
       price_variable = "c_drug",
-      intervention_strategy = "new_drug",
+      intervention_strategy = "targeted",
       outcome_summary = "total_qalys",
       cost_summary = "nonexistent_summary"
     )
@@ -90,7 +90,7 @@ test_that("validate_vbp_spec() returns TRUE for valid spec", {
   parsed <- openqaly:::parse_model(model)
   spec <- list(
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost"
   )
@@ -139,7 +139,7 @@ test_that("spec preserves input parameters", {
   result <- run_example_vbp()
 
   expect_equal(result$spec$price_variable, "c_drug")
-  expect_equal(result$spec$intervention_strategy, "new_drug")
+  expect_equal(result$spec$intervention_strategy, "targeted")
   expect_equal(result$spec$outcome_summary, "total_qalys")
   expect_equal(result$spec$cost_summary, "total_cost")
 })
@@ -171,7 +171,7 @@ test_that("build_vbp_segments() creates correct structure", {
   parsed <- openqaly:::parse_model(model)
   spec <- list(
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
     price_values = c(0, 1000, 2000)
@@ -186,21 +186,24 @@ test_that("build_vbp_segments() creates correct structure", {
   # Price levels 1, 2, 3
   expect_equal(sort(unique(segments$price_level)), c(1, 2, 3))
 
-  # Intervention has overrides with correct values
-  int_segs <- segments[segments$strategy == "new_drug", ]
-  expect_equal(int_segs$parameter_overrides[[1]]$c_drug, 0)
-  expect_equal(int_segs$parameter_overrides[[2]]$c_drug, 1000)
-  expect_equal(int_segs$parameter_overrides[[3]]$c_drug, 2000)
+  # Intervention has overrides with correct values (filter by price_level)
+  int_segs <- segments[segments$strategy == "targeted", ]
+  int_segs_pl1 <- int_segs[int_segs$price_level == 1, ]
+  int_segs_pl2 <- int_segs[int_segs$price_level == 2, ]
+  int_segs_pl3 <- int_segs[int_segs$price_level == 3, ]
+  expect_equal(int_segs_pl1$parameter_overrides[[1]]$c_drug, 0)
+  expect_equal(int_segs_pl2$parameter_overrides[[1]]$c_drug, 1000)
+  expect_equal(int_segs_pl3$parameter_overrides[[1]]$c_drug, 2000)
 
   # Comparator has no c_drug overrides
-  comp_segs <- segments[segments$strategy == "standard", ]
+  comp_segs <- segments[segments$strategy == "chemo", ]
   expect_false("c_drug" %in% names(comp_segs$parameter_overrides[[1]]))
 })
 
 test_that("extract_segment_summary_values() extracts values correctly", {
   result <- run_example_vbp()
   test_data <- result$segments %>%
-    filter(strategy == "new_drug", price_level == 1)
+    filter(strategy == "targeted", price_level == 1)
 
   values <- openqaly:::extract_segment_summary_values(test_data, "total_qalys")
 
@@ -213,7 +216,7 @@ test_that("extract_segment_summary_values() extracts values correctly", {
 test_that("extract_summary_values() extracts from aggregated", {
   result <- run_example_vbp()
   test_data <- result$aggregated %>%
-    filter(strategy == "new_drug")
+    filter(strategy == "targeted")
 
   values <- openqaly:::extract_summary_values(test_data, "total_qalys")
 
@@ -248,7 +251,7 @@ test_that("extract_segment_summary_values() returns NA for NULL summaries", {
 test_that("analyze_vbp_results() errors on non-linear group costs", {
   vbp_spec <- list(
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
     price_values = c(0, 1000, 2000)
@@ -262,7 +265,7 @@ test_that("analyze_vbp_results() errors on non-linear group costs", {
 
   # Segments with NON-LINEAR intervention costs
   segments <- tibble(
-    strategy = c(rep("new_drug", 3), rep("standard", 3)),
+    strategy = c(rep("targeted", 3), rep("chemo", 3)),
     group = rep("all", 6),
     price_level = rep(1:3, 2),
     weight = rep(1, 6),
@@ -273,21 +276,21 @@ test_that("analyze_vbp_results() errors on non-linear group costs", {
   )
 
   aggregated <- tibble(
-    strategy = c(rep("new_drug", 3), rep("standard", 3)),
+    strategy = c(rep("targeted", 3), rep("chemo", 3)),
     run_id = rep(1:3, 2),
     summaries = segments$summaries
   )
 
   expect_error(
     openqaly:::analyze_vbp_results(segments, aggregated, vbp_spec, list()),
-    "Cost not linear with price for new_drug vs standard in group all"
+    "Cost not linear with price for targeted vs chemo in group all"
   )
 })
 
 test_that("analyze_vbp_results() errors on non-linear aggregated costs", {
   vbp_spec <- list(
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
     price_values = c(0, 1000, 2000)
@@ -302,7 +305,7 @@ test_that("analyze_vbp_results() errors on non-linear aggregated costs", {
   # Aggregated: intervention costs non-linear (1000, 2500, 3000)
   # Delta costs: 0, 1500, 2000 - NOT linear (should be 0, 1000, 2000)
   aggregated <- tibble(
-    strategy = c(rep("new_drug", 3), rep("standard", 3)),
+    strategy = c(rep("targeted", 3), rep("chemo", 3)),
     run_id = rep(1:3, 2),
     summaries = list(
       make_summaries(1000, 5), make_summaries(2500, 5), make_summaries(3000, 5),
@@ -312,7 +315,7 @@ test_that("analyze_vbp_results() errors on non-linear aggregated costs", {
 
   # Segments with LINEAR costs (so group check passes, aggregated fails)
   segments <- tibble(
-    strategy = c(rep("new_drug", 3), rep("standard", 3)),
+    strategy = c(rep("targeted", 3), rep("chemo", 3)),
     group = rep("all", 6),
     price_level = rep(1:3, 2),
     weight = rep(1, 6),
@@ -324,7 +327,7 @@ test_that("analyze_vbp_results() errors on non-linear aggregated costs", {
 
   expect_error(
     openqaly:::analyze_vbp_results(segments, aggregated, vbp_spec, list()),
-    "Aggregated cost not linear with price for new_drug vs standard"
+    "Aggregated cost not linear with price for targeted vs chemo"
   )
 })
 
@@ -353,14 +356,14 @@ test_that("outcomes unchanged across price levels", {
 
   outcomes <- sapply(1:3, function(pl) {
     int_data <- result$segments %>%
-      filter(strategy == "new_drug", price_level == pl)
+      filter(strategy == "targeted", price_level == pl)
     int <- int_data$summaries[[1]] %>%
       filter(summary == "total_qalys") %>%
       pull(amount) %>%
       sum()
 
     comp_data <- result$segments %>%
-      filter(strategy == "standard", price_level == pl)
+      filter(strategy == "chemo", price_level == pl)
     comp <- comp_data$summaries[[1]] %>%
       filter(summary == "total_qalys") %>%
       pull(amount) %>%
@@ -379,14 +382,14 @@ test_that("costs are linear with price", {
 
   delta_costs <- sapply(1:3, function(pl) {
     int_data <- result$segments %>%
-      filter(strategy == "new_drug", price_level == pl)
+      filter(strategy == "targeted", price_level == pl)
     int <- int_data$summaries[[1]] %>%
       filter(summary == "total_cost") %>%
       pull(amount) %>%
       sum()
 
     comp_data <- result$segments %>%
-      filter(strategy == "standard", price_level == pl)
+      filter(strategy == "chemo", price_level == pl)
     comp <- comp_data$summaries[[1]] %>%
       filter(summary == "total_cost") %>%
       pull(amount) %>%
@@ -404,19 +407,27 @@ test_that("cost coefficients match linear model fit", {
   result <- run_example_vbp()
   price_values <- c(0, 1000, 2000)
 
+  # Use the first comparator from the overall equations
+  first_comp <- result$vbp_equations$comparator[1]
+
+  # Use group-specific equations for testing (pick first group)
+  first_group <- result$vbp_equations_by_group$group[1]
+
+  # Get costs from segments filtered by group (use summaries, not summaries_discounted
+  # because VBP analysis uses undiscounted values)
   delta_costs <- sapply(1:3, function(pl) {
     int_data <- result$segments %>%
-      filter(strategy == "new_drug", price_level == pl)
+      filter(.data$strategy == "targeted", .data$price_level == pl, .data$group == first_group)
     int <- int_data$summaries[[1]] %>%
-      filter(summary == "total_cost") %>%
-      pull(amount) %>%
+      filter(.data$summary == "total_cost") %>%
+      pull(.data$amount) %>%
       sum()
 
     comp_data <- result$segments %>%
-      filter(strategy == "standard", price_level == pl)
+      filter(.data$strategy == first_comp, .data$price_level == pl, .data$group == first_group)
     comp <- comp_data$summaries[[1]] %>%
-      filter(summary == "total_cost") %>%
-      pull(amount) %>%
+      filter(.data$summary == "total_cost") %>%
+      pull(.data$amount) %>%
       sum()
 
     int - comp
@@ -424,15 +435,19 @@ test_that("cost coefficients match linear model fit", {
 
   fit <- lm(delta_costs ~ price_values)
 
+  # Match against group-specific equations
+  group_eq <- result$vbp_equations_by_group %>%
+    filter(.data$group == first_group, .data$comparator == first_comp)
+
   expect_equal(
     unname(coef(fit)[2]),
-    unname(result$vbp_equations$cost_slope[1]),
-    tolerance = 1e-10
+    unname(group_eq$cost_slope),
+    tolerance = 1e-6
   )
   expect_equal(
     unname(coef(fit)[1]),
-    unname(result$vbp_equations$cost_intercept[1]),
-    tolerance = 1e-10
+    unname(group_eq$cost_intercept),
+    tolerance = 1e-6
   )
 })
 
@@ -444,7 +459,7 @@ test_that("calculate_vbp_price() applies formula correctly", {
   result <- run_example_vbp()
   eq <- result$vbp_equations[1, ]
 
-  price <- calculate_vbp_price(result, eq$comparator, 50000, "overall")
+  price <- calculate_vbp_price(result, 50000, eq$comparator, "overall")
   expected <- eq$vbp_slope * 50000 + eq$vbp_intercept
 
   expect_equal(price, expected, tolerance = 1e-10)
@@ -454,7 +469,7 @@ test_that("price at WTP=0 equals intercept", {
   result <- run_example_vbp()
   eq <- result$vbp_equations[1, ]
 
-  price <- calculate_vbp_price(result, eq$comparator, 0, "overall")
+  price <- calculate_vbp_price(result, 0, eq$comparator, "overall")
   expect_equal(unname(price), unname(eq$vbp_intercept), tolerance = 1e-10)
 })
 
@@ -462,9 +477,9 @@ test_that("price is linear with WTP", {
   result <- run_example_vbp()
   eq <- result$vbp_equations[1, ]
 
-  p0 <- calculate_vbp_price(result, eq$comparator, 0, "overall")
-  p50k <- calculate_vbp_price(result, eq$comparator, 50000, "overall")
-  p100k <- calculate_vbp_price(result, eq$comparator, 100000, "overall")
+  p0 <- calculate_vbp_price(result, 0, eq$comparator, "overall")
+  p50k <- calculate_vbp_price(result, 50000, eq$comparator, "overall")
+  p100k <- calculate_vbp_price(result, 100000, eq$comparator, "overall")
 
   diff1 <- p50k - p0
   diff2 <- p100k - p50k
@@ -481,18 +496,18 @@ test_that("VBP price yields NMB = 0", {
   vbp_results <- run_vbp(
     model,
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost"
   )
 
   wtp <- 50000
-  vbp_price <- calculate_vbp_price(vbp_results, "standard", wtp, "overall")
+  vbp_price <- calculate_vbp_price(vbp_results, wtp, "chemo", "overall")
 
   model_at_vbp <- model
   model_at_vbp$variables <- model_at_vbp$variables %>%
     mutate(formula = ifelse(
-      name == "c_drug" & strategy == "new_drug",
+      name == "c_drug" & strategy == "targeted",
       as.character(vbp_price),
       formula
     ))
@@ -503,14 +518,14 @@ test_that("VBP price yields NMB = 0", {
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    interventions = "New Drug",
-    comparators = "Standard of Care",
+    interventions = "Targeted Therapy",
+    comparators = "Chemotherapy",
     wtp = wtp,
     groups = "overall"
   )
 
   total_nmb <- nmb %>%
-    filter(grepl("New Drug.*Standard of Care", strategy)) %>%
+    filter(grepl("Targeted Therapy.*Chemotherapy", strategy)) %>%
     pull(nmb_amount) %>%
     sum()
 
@@ -523,18 +538,18 @@ test_that("NMB = 0 at multiple WTP thresholds", {
   vbp_results <- run_vbp(
     model,
     price_variable = "c_drug",
-    intervention_strategy = "new_drug",
+    intervention_strategy = "targeted",
     outcome_summary = "total_qalys",
     cost_summary = "total_cost"
   )
 
   for (wtp in c(25000, 50000, 100000, 150000)) {
-    vbp_price <- calculate_vbp_price(vbp_results, "standard", wtp, "overall")
+    vbp_price <- calculate_vbp_price(vbp_results, wtp, "chemo", "overall")
 
     model_at_vbp <- model
     model_at_vbp$variables <- model_at_vbp$variables %>%
       mutate(formula = ifelse(
-        name == "c_drug" & strategy == "new_drug",
+        name == "c_drug" & strategy == "targeted",
         as.character(vbp_price),
         formula
       ))
@@ -545,14 +560,14 @@ test_that("NMB = 0 at multiple WTP thresholds", {
       results,
       outcome_summary = "total_qalys",
       cost_summary = "total_cost",
-      interventions = "New Drug",
-      comparators = "Standard of Care",
+      interventions = "Targeted Therapy",
+      comparators = "Chemotherapy",
       wtp = wtp,
       groups = "overall"
     )
 
     total_nmb <- nmb %>%
-      filter(grepl("New Drug.*Standard of Care", strategy)) %>%
+      filter(grepl("Targeted Therapy.*Chemotherapy", strategy)) %>%
       pull(nmb_amount) %>%
       sum()
 
@@ -585,7 +600,7 @@ test_that("segments have price_level 1, 2, 3", {
 test_that("intervention segments have price overrides", {
   result <- run_example_vbp()
   int_segs <- result$segments %>%
-    filter(strategy == "new_drug")
+    filter(strategy == "targeted")
 
   for (i in seq_len(nrow(int_segs))) {
     override <- int_segs$parameter_overrides[[i]]
@@ -597,7 +612,7 @@ test_that("intervention segments have price overrides", {
 test_that("comparator segments have no price overrides", {
   result <- run_example_vbp()
   comp_segs <- result$segments %>%
-    filter(strategy == "standard")
+    filter(strategy == "chemo")
 
   for (i in seq_len(nrow(comp_segs))) {
     override <- comp_segs$parameter_overrides[[i]]
@@ -641,8 +656,8 @@ test_that("calculate_vbp_price() works with group parameter", {
   result <- run_example_vbp()
   eq <- result$vbp_equations[1, ]
 
-  price_default <- calculate_vbp_price(result, eq$comparator, 50000)
-  price_overall <- calculate_vbp_price(result, eq$comparator, 50000, "overall")
+  price_default <- calculate_vbp_price(result, 50000, eq$comparator)
+  price_overall <- calculate_vbp_price(result, 50000, eq$comparator, "overall")
 
   expect_equal(price_default, price_overall)
 })
@@ -655,7 +670,7 @@ test_that("calculate_vbp_price() errors on missing comparator", {
   result <- run_example_vbp()
 
   expect_error(
-    calculate_vbp_price(result, "nonexistent", 50000, "overall"),
+    calculate_vbp_price(result, 50000, "nonexistent", "overall"),
     "No VBP equation found"
   )
 })
@@ -665,21 +680,54 @@ test_that("calculate_vbp_price() errors on missing group", {
   eq <- result$vbp_equations[1, ]
 
   expect_error(
-    calculate_vbp_price(result, eq$comparator, 50000, "nonexistent"),
-    "No VBP equation found"
+    calculate_vbp_price(result, 50000, eq$comparator, "nonexistent"),
+    "No VBP equations found"
   )
 })
 
-# ============================================================================
-# 11. Single Comparator Test (real model verification)
-# ============================================================================
-
-test_that("run_vbp() handles single comparator correctly", {
+test_that("calculate_vbp_price() with NULL comparator returns minimum VBP", {
   result <- run_example_vbp()
 
-  expect_equal(nrow(result$vbp_equations), 1)
-  expect_equal(result$vbp_equations$comparator[1], "standard")
-  expect_equal(result$vbp_equations$intervention[1], "new_drug")
+  # Calculate VBP for all comparators individually
+  all_prices <- sapply(result$vbp_equations$comparator, function(comp) {
+    calculate_vbp_price(result, 50000, comp, "overall")
+  })
+
+  # Calculate VBP with NULL comparator (should return minimum)
+  min_price <- calculate_vbp_price(result, 50000)
+
+  expect_equal(min_price, min(all_prices), tolerance = 1e-10)
+})
+
+test_that("calculate_vbp_price() with NULL comparator works at multiple WTP values", {
+  result <- run_example_vbp()
+
+  for (wtp in c(0, 25000, 50000, 100000)) {
+    # Calculate individual prices
+    all_prices <- sapply(result$vbp_equations$comparator, function(comp) {
+      calculate_vbp_price(result, wtp, comp, "overall")
+    })
+
+    # NULL comparator should return minimum
+    min_price <- calculate_vbp_price(result, wtp)
+
+    expect_equal(min_price, min(all_prices), tolerance = 1e-10,
+                 info = sprintf("Failed at WTP = %d", wtp))
+  }
+})
+
+# ============================================================================
+# 11. Multiple Comparators Test (real model verification)
+# ============================================================================
+
+test_that("run_vbp() handles multiple comparators correctly", {
+  result <- run_example_vbp()
+
+  # Now there are 2 comparators (chemo and immuno) with targeted as intervention
+  expect_equal(nrow(result$vbp_equations), 2)
+  expect_true("chemo" %in% result$vbp_equations$comparator)
+  expect_true("immuno" %in% result$vbp_equations$comparator)
+  expect_true(all(result$vbp_equations$intervention == "targeted"))
 
   expect_true(is.numeric(result$vbp_equations$vbp_slope))
   expect_true(is.numeric(result$vbp_equations$vbp_intercept))

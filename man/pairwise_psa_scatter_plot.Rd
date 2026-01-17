@@ -11,9 +11,8 @@ pairwise_psa_scatter_plot(
   intervention = NULL,
   comparator = NULL,
   wtp = NULL,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   alpha = 0.3,
   title = NULL,
   xlab = NULL,
@@ -41,13 +40,11 @@ Mutually exclusive with intervention.}
 points are colored by cost-effectiveness status and a WTP threshold line is drawn.
 Default is NULL (no coloring or threshold line)}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(triggers faceting by group)}
+\item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
+"all" includes overall + all groups, "all_groups" includes all groups without overall,
+specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 
@@ -96,6 +93,8 @@ compared to one other strategy
 \strong{Faceting}:
 - Multiple groups: facet_grid with groups on rows, comparisons on columns
 - Single group: facet_wrap by comparison
+
+PSA scatter plots always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

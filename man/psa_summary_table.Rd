@@ -9,13 +9,12 @@ psa_summary_table(
   outcome_summary,
   cost_summary,
   pce_wtp = c(50000, 1e+05, 150000),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   outcome_decimals = 2,
   cost_decimals = 0,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -28,11 +27,17 @@ psa_summary_table(
 \item{pce_wtp}{Numeric vector of WTP thresholds for P(CE) rows
 (default: c(50000, 100000, 150000))}
 
-\item{group}{Group selection: "aggregated" (default), specific group, or NULL}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{outcome_decimals}{Number of decimal places for outcomes (default: 2)}
 
@@ -62,6 +67,9 @@ three sections:
 
 All rounding uses decimal places (not significant figures). Costs are rounded
 to the nearest unit by default (cost_decimals = 0).
+
+PSA summary calculations always use discounted values as this is a
+cost-effectiveness measure.
 }
 \examples{
 \dontrun{

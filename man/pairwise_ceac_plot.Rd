@@ -12,9 +12,8 @@ pairwise_ceac_plot(
   comparator = NULL,
   wtp_range = c(0, 1e+05),
   wtp_step = 5000,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   title = NULL,
   xlab = "Willingness to Pay",
   ylab = NULL,
@@ -42,13 +41,11 @@ Default is c(0, 100000)}
 
 \item{wtp_step}{Step size for WTP thresholds. Default is 5000}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(triggers faceting by group)}
+\item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
+"all" includes overall + all groups, "all_groups" includes all groups without overall,
+specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
 \item{title}{Plot title. If NULL, auto-generated}
 
@@ -76,6 +73,8 @@ The plot displays these probabilities across different WTP thresholds.
 
 A probability > 0.5 indicates higher likelihood of being cost-effective
 in the comparison.
+
+CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

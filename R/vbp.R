@@ -110,6 +110,9 @@ run_vbp <- function(model,
   # Aggregate by price_level + strategy
   aggregated <- aggregate_segments(segment_results, parsed_model)
 
+  # Attach metadata for display name mapping in tables/plots
+  attr(aggregated, "metadata") <- parsed_model$metadata
+
   # Analyze VBP results at both group and overall levels
   vbp_analysis <- analyze_vbp_results(
     segment_results,  # Pass segments for group analysis
@@ -384,29 +387,48 @@ extract_summary_values <- function(data, summary_name) {
 #' the VBP equation: Price = slope * WTP + intercept
 #'
 #' @param vbp_results Results from run_vbp()
-#' @param comparator Name of the comparator strategy
 #' @param wtp Willingness-to-pay threshold
+#' @param comparator Name of the comparator strategy. If NULL (default),
+#'   returns the minimum VBP across all comparators (the price that is
+#'   cost-effective vs ALL alternatives).
 #' @param group Group name or "overall" (default)
 #' @return Numeric value representing the VBP price
 #'
 #' @examples
 #' \dontrun{
-#' # Calculate VBP at WTP of $50,000 vs chemo
-#' vbp_price <- calculate_vbp_price(vbp_results, "chemo", 50000)
+#' # Calculate minimum VBP across all comparators at WTP of $50,000
+#' vbp_price <- calculate_vbp_price(vbp_results, 50000)
+#'
+#' # Calculate VBP at WTP of $50,000 vs specific comparator
+#' vbp_price <- calculate_vbp_price(vbp_results, 50000, comparator = "chemo")
 #'
 #' # Calculate VBP for a specific group
-#' vbp_price_group <- calculate_vbp_price(vbp_results, "chemo", 50000, "elderly")
+#' vbp_price_group <- calculate_vbp_price(vbp_results, 50000, "chemo", "elderly")
 #' }
 #'
 #' @export
-calculate_vbp_price <- function(vbp_results, comparator, wtp, group = "overall") {
+calculate_vbp_price <- function(vbp_results, wtp, comparator = NULL, group = "overall") {
+  # Get equations based on group
   if (group == "overall") {
-    equation <- vbp_results$vbp_equations %>%
-      filter(.data$comparator == !!comparator)
+    equations <- vbp_results$vbp_equations
   } else {
-    equation <- vbp_results$vbp_equations_by_group %>%
-      filter(.data$comparator == !!comparator, .data$group == !!group)
+    equations <- vbp_results$vbp_equations_by_group %>%
+      filter(.data$group == !!group)
   }
+
+  if (nrow(equations) == 0) {
+    stop(sprintf("No VBP equations found for group: %s", group))
+  }
+
+  # When comparator is NULL, return minimum VBP across all comparators
+  if (is.null(comparator)) {
+    vbp_prices <- equations$vbp_slope * wtp + equations$vbp_intercept
+    return(min(vbp_prices))
+  }
+
+  # Filter to specific comparator
+  equation <- equations %>%
+    filter(.data$comparator == !!comparator)
 
   if (nrow(equation) == 0) {
     stop(sprintf("No VBP equation found for comparator: %s, group: %s",

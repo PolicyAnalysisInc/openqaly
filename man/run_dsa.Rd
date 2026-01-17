@@ -31,7 +31,7 @@ DSA variable bounds support flexible specification using:
 model <- define_model("markov") \%>\%
   add_variable("p_disease", 0.03) \%>\%
   add_dsa_variable("p_disease", low = 0.01, high = 0.05) \%>\%
-  add_dsa_setting("discount_cost", low = 0, high = 0.05)
+  add_dsa_setting("discount_cost", low = 0, high = 5)
 
 dsa_results <- run_dsa(model)
 

@@ -151,7 +151,6 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A tibble with columns:
 #'   \item{group}{Group name (using display_name)}
@@ -195,29 +194,28 @@ calculate_incremental_ce <- function(results,
                                      outcome_summary,
                                      cost_summary,
                                      groups = "overall",
-                                     strategies = NULL,
-                                     discounted = FALSE) {
+                                     strategies = NULL) {
 
-  # Get cost summaries
+  # Get cost summaries (always use discounted for CE analysis)
   cost_data <- get_summaries(
     results,
     groups = groups,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
-    discounted = discounted
+    discounted = TRUE
   ) %>%
     group_by(.data$strategy, .data$group) %>%
     summarize(cost = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
-  # Get outcome summaries
+  # Get outcome summaries (always use discounted for CE analysis)
   outcome_data <- get_summaries(
     results,
     groups = groups,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
-    discounted = discounted
+    discounted = TRUE
   ) %>%
     group_by(.data$strategy, .data$group) %>%
     summarize(outcome = sum(.data$amount, na.rm = TRUE), .groups = "drop")
@@ -355,7 +353,6 @@ calculate_incremental_ce <- function(results,
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A tibble with columns:
 #'   \item{group}{Group name (using display_name)}
@@ -399,35 +396,34 @@ calculate_pairwise_ce <- function(results,
                                   groups = "overall",
                                   strategies = NULL,
                                   interventions = NULL,
-                                  comparators = NULL,
-                                  discounted = FALSE) {
+                                  comparators = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
     stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
-  # Get cost summaries (use technical names internally for matching)
+  # Get cost summaries (always use discounted for CE analysis)
   cost_data <- get_summaries(
     results,
     groups = groups,
     strategies = strategies,
     summaries = cost_summary,
     value_type = "cost",
-    discounted = discounted,
+    discounted = TRUE,
     use_display_names = FALSE  # Use technical names internally
   ) %>%
     group_by(.data$strategy, .data$group) %>%
     summarize(cost = sum(.data$amount, na.rm = TRUE), .groups = "drop")
 
-  # Get outcome summaries (use technical names internally for matching)
+  # Get outcome summaries (always use discounted for CE analysis)
   outcome_data <- get_summaries(
     results,
     groups = groups,
     strategies = strategies,
     summaries = outcome_summary,
     value_type = "outcome",
-    discounted = discounted,
+    discounted = TRUE,
     use_display_names = FALSE  # Use technical names internally
   ) %>%
     group_by(.data$strategy, .data$group) %>%

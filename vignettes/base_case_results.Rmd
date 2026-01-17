@@ -7,6 +7,8 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+This vignette demonstrates how to visualize and summarize base case model results using openqaly. The examples use a sample model included with the package.
+
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
@@ -14,43 +16,127 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+```{r setup, include = FALSE}
 library(openqaly)
 
 model <- read_model(system.file("models", "checkimab", package = "openqaly"))
 
 results <- run_model(model)
-
 ```
 
-```r
-## Outcomes/Costs
+## Outcomes Visualization
 
-### Outcomes for all strategies, overall population
+The `outcomes_plot_bar()` function creates bar charts showing outcome values broken down by component. Results can be filtered by strategy and population subgroup.
+
+### Bar Charts
+
+The following examples demonstrate bar charts for outcome visualization.
+
+#### Overall population
+
+```{r, fig.width=9, fig.height=6}
 outcomes_plot_bar(
   results,
   outcome = "qalys"
 )
+```
 
-### Outcomes for all strategies, all subgroups
+#### By subgroup
+
+Use `groups = 'all_groups'` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
 outcomes_plot_bar(
   results,
   outcome = "qalys",
   groups = 'all_groups'
 )
+```
 
-### Filter outcomes to a specific strategy
+#### Filtering to specific strategies
+
+Use the `strategies` argument to include only selected strategies.
+
+```{r, fig.width=9, fig.height=6}
 outcomes_plot_bar(
   results,
   outcome = "qalys",
   strategies = 'chemo'
 )
+```
 
-### Filter outcomes to a specific set of strategies
+Multiple strategies can be specified as a character vector.
+
+```{r, fig.width=9, fig.height=6}
 outcomes_plot_bar(
   results,
   outcome = "qalys",
   strategies = c('chemo', 'check')
 )
+```
 
+### Outcomes Over Time
+
+The `outcomes_plot_line()` function displays outcomes as line charts over the model time horizon. By default, cumulative values are shown.
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_line(
+  results,
+  outcome = "qalys"
+)
+```
+
+Set `cumulative = FALSE` to show per-cycle values instead.
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_line(
+  results,
+  outcome = "qalys",
+  cumulative = FALSE
+)
+```
+
+### Differences Between Strategies
+
+Use the `comparators` argument to show the difference in outcomes relative to a reference strategy.
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  comparators = "chemo"
+)
+```
+
+## Outcomes Tables
+
+The `outcomes_table()` function presents outcome values in tabular format.
+
+### Overall population
+
+```{r}
+outcomes_table(
+  results,
+  outcome = "qalys"
+)
+```
+
+### By subgroup
+
+```{r}
+outcomes_table(
+  results,
+  outcome = "qalys",
+  groups = "all_groups"
+)
+```
+
+### Differences vs comparator
+
+```{r}
+outcomes_table(
+  results,
+  outcome = "qalys",
+  comparators = "chemo"
+)
 ```

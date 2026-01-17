@@ -13,7 +13,7 @@ trace_table(
   decimals = 4,
   time_unit = "cycle",
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{

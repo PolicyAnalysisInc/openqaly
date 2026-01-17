@@ -13,11 +13,10 @@
 #' @param wtp_range Numeric vector with min and max WTP values for x-axis.
 #'   Default is c(0, 100000)
 #' @param wtp_step Step size for WTP thresholds. Default is 5000
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (triggers faceting by group)
+#' @param groups Group selection: "overall" (default) uses overall/aggregated results,
+#'   "all" includes overall + all groups, "all_groups" includes all groups without overall,
+#'   specific group name(s) filter to those groups (triggers faceting by group)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param show_frontier Logical. Overlay the CE acceptability frontier?
 #' @param title Plot title. If NULL, auto-generated
 #' @param xlab X-axis label. Default is "Willingness to Pay"
@@ -32,6 +31,8 @@
 #' most cost-effective changes with the willingness-to-pay threshold in a
 #' multi-way comparison. The probabilities across all strategies sum to 1 at
 #' each WTP value.
+#'
+#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' When multiple groups are present, the plot is automatically faceted by group
 #' using \code{facet_wrap(~ group, scales = "fixed")}.
@@ -59,9 +60,8 @@ incremental_ceac_plot <- function(results,
                                   cost_summary = NULL,
                                   wtp_range = c(0, 100000),
                                   wtp_step = 5000,
-                                  group = "aggregated",
+                                  groups = "overall",
                                   strategies = NULL,
-                                  discounted = FALSE,
                                   show_frontier = FALSE,
                                   title = NULL,
                                   xlab = "Willingness to Pay",
@@ -81,14 +81,14 @@ incremental_ceac_plot <- function(results,
     # Generate WTP sequence
     wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
 
+    # Always use discounted values (cost-effectiveness measure)
     ceac_data <- calculate_incremental_ceac(
       results = results,
       outcome_summary = outcome_summary,
       cost_summary = cost_summary,
       wtp = wtp_seq,
-      group = group,
-      strategies = strategies,
-      discounted = discounted
+      groups = groups,
+      strategies = strategies
     )
   }
 
@@ -99,6 +99,11 @@ incremental_ceac_plot <- function(results,
     ceac_data <- ceac_data %>%
       filter(.data$strategy %in% strategies)
   }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  metadata <- if ("metadata" %in% names(results) && !is.null(results$metadata)) results$metadata else NULL
+  group_levels <- get_group_order(unique(ceac_data$group), metadata)
+  ceac_data <- ceac_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Create base plot
   p <- ggplot(ceac_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
@@ -118,14 +123,14 @@ incremental_ceac_plot <- function(results,
     if ("wtp" %in% names(results) && "probability" %in% names(results)) {
       warning("Cannot add frontier to pre-calculated CEAC data. Pass model results instead.")
     } else {
+      # Always use discounted values (cost-effectiveness measure)
       frontier_data <- calculate_incremental_ceac_frontier(
         results = results,
         outcome_summary = outcome_summary,
         cost_summary = cost_summary,
         wtp = wtp_seq,
-        group = group,
-        strategies = strategies,
-        discounted = discounted
+        groups = groups,
+        strategies = strategies
       )
 
       # Add frontier points
@@ -173,6 +178,8 @@ incremental_ceac_plot <- function(results,
 #' comparison. Vertical lines or shaded regions indicate where the optimal
 #' strategy changes.
 #'
+#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
+#'
 #' When multiple groups are present, the plot is automatically faceted by group
 #' using \code{facet_wrap(~ group, scales = "fixed")}.
 #'
@@ -195,9 +202,8 @@ incremental_ceac_frontier_plot <- function(results,
                                            cost_summary,
                                            wtp_range = c(0, 100000),
                                            wtp_step = 5000,
-                                           group = "aggregated",
+                                           groups = "overall",
                                            strategies = NULL,
-                                           discounted = FALSE,
                                            show_probability = FALSE,
                                            title = NULL,
                                            xlab = "Willingness to Pay",
@@ -207,16 +213,19 @@ incremental_ceac_frontier_plot <- function(results,
   # Generate WTP sequence
   wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
 
-  # Calculate frontier
+  # Calculate frontier (always use discounted values - cost-effectiveness measure)
   frontier_data <- calculate_incremental_ceac_frontier(
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     wtp = wtp_seq,
-    group = group,
-    strategies = strategies,
-    discounted = discounted
+    groups = groups,
+    strategies = strategies
   )
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(frontier_data$group), results$metadata)
+  frontier_data <- frontier_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Identify strategy transitions
   frontier_data <- frontier_data %>%
@@ -294,6 +303,8 @@ incremental_ceac_frontier_plot <- function(results,
 #' Mean values for each strategy are shown as larger, highlighted points to
 #' indicate the central tendency of the distribution.
 #'
+#' PSA scatter plots always use discounted values as this is a cost-effectiveness measure.
+#'
 #' @examples
 #' \dontrun{
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
@@ -310,9 +321,8 @@ incremental_ceac_frontier_plot <- function(results,
 psa_scatter_plot <- function(results,
                              outcome_summary,
                              cost_summary,
-                             group = "aggregated",
+                             groups = "overall",
                              strategies = NULL,
-                             discounted = FALSE,
                              show_means = TRUE,
                              alpha = 0.3,
                              title = NULL,
@@ -320,15 +330,19 @@ psa_scatter_plot <- function(results,
                              ylab = NULL,
                              legend_position = "right") {
 
-  # Get PSA simulation data
+  # Get PSA simulation data (always use discounted for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted
+    discounted = TRUE
   )
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(psa_data$group), results$metadata)
+  psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Set default labels if not provided
   if (is.null(xlab)) {
@@ -451,6 +465,8 @@ psa_scatter_plot <- function(results,
 #' A probability > 0.5 indicates higher likelihood of being cost-effective
 #' in the comparison.
 #'
+#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
+#'
 #' @examples
 #' \dontrun{
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
@@ -473,9 +489,8 @@ pairwise_ceac_plot <- function(results,
                               comparator = NULL,
                               wtp_range = c(0, 100000),
                               wtp_step = 5000,
-                              group = "aggregated",
+                              groups = "overall",
                               strategies = NULL,
-                              discounted = FALSE,
                               title = NULL,
                               xlab = "Willingness to Pay",
                               ylab = NULL,
@@ -484,7 +499,7 @@ pairwise_ceac_plot <- function(results,
   # Generate WTP sequence
   wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
 
-  # Calculate pairwise CEAC
+  # Calculate pairwise CEAC (always use discounted values - cost-effectiveness measure)
   pairwise_data <- calculate_pairwise_ceac(
     results = results,
     outcome_summary = outcome_summary,
@@ -492,10 +507,13 @@ pairwise_ceac_plot <- function(results,
     intervention = intervention,
     comparator = comparator,
     wtp = wtp_seq,
-    group = group,
-    strategies = strategies,
-    discounted = discounted
+    groups = groups,
+    strategies = strategies
   )
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(pairwise_data$group), results$metadata)
+  pairwise_data <- pairwise_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Set y-axis label if not provided
   if (is.null(ylab)) {
@@ -745,11 +763,10 @@ psa_parameter_scatter_matrix <- function(results,
 #' @param wtp_range Numeric vector with min and max WTP values for x-axis.
 #'   Default is c(0, 100000)
 #' @param wtp_step Step size for WTP thresholds. Default is 5000
-#' @param group Group selection: "aggregated" (default) uses aggregated results,
-#'   specific group name filters to that group, NULL or "all" includes all groups
-#'   (triggers faceting by group)
+#' @param groups Group selection: "overall" (default) uses overall/aggregated results,
+#'   "all" includes overall + all groups, "all_groups" includes all groups without overall,
+#'   specific group name(s) filter to those groups (triggers faceting by group)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param title Plot title. If NULL, auto-generated
 #' @param xlab X-axis label. Default is "Willingness to Pay"
 #' @param ylab Y-axis label. Default is "Expected Value of Perfect Information"
@@ -767,6 +784,8 @@ psa_parameter_scatter_matrix <- function(results,
 #' EVPI = 0 indicates that the same strategy is optimal in all PSA simulations,
 #' meaning parameter uncertainty does not affect the optimal decision at that
 #' WTP threshold.
+#'
+#' EVPI calculations always use discounted values as this is a cost-effectiveness measure.
 #'
 #' When multiple groups are present, the plot is automatically faceted by group
 #' using \code{facet_wrap(~ group, scales = "fixed")}.
@@ -794,9 +813,8 @@ evpi_plot <- function(results,
                       cost_summary = NULL,
                       wtp_range = c(0, 100000),
                       wtp_step = 5000,
-                      group = "aggregated",
+                      groups = "overall",
                       strategies = NULL,
-                      discounted = FALSE,
                       title = NULL,
                       xlab = "Willingness to Pay",
                       ylab = "Expected Value of Perfect Information",
@@ -815,16 +833,21 @@ evpi_plot <- function(results,
     # Generate WTP sequence
     wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
 
+    # Always use discounted values (cost-effectiveness measure)
     evpi_data <- calculate_evpi(
       results = results,
       outcome_summary = outcome_summary,
       cost_summary = cost_summary,
       wtp = wtp_seq,
-      group = group,
-      strategies = strategies,
-      discounted = discounted
+      groups = groups,
+      strategies = strategies
     )
   }
+
+  # Apply consistent group ordering (Overall first, then model order)
+  metadata <- if ("metadata" %in% names(results) && !is.null(results$metadata)) results$metadata else NULL
+  group_levels <- get_group_order(unique(evpi_data$group), metadata)
+  evpi_data <- evpi_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
   breaks_fn <- pretty_breaks(n = 5)
@@ -928,6 +951,8 @@ evpi_plot <- function(results,
 #' - Multiple groups: facet_grid with groups on rows, comparisons on columns
 #' - Single group: facet_wrap by comparison
 #'
+#' PSA scatter plots always use discounted values as this is a cost-effectiveness measure.
+#'
 #' @examples
 #' \dontrun{
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
@@ -961,9 +986,8 @@ pairwise_psa_scatter_plot <- function(results,
                                       intervention = NULL,
                                       comparator = NULL,
                                       wtp = NULL,
-                                      group = "aggregated",
+                                      groups = "overall",
                                       strategies = NULL,
-                                      discounted = FALSE,
                                       alpha = 0.3,
                                       title = NULL,
                                       xlab = NULL,
@@ -983,15 +1007,19 @@ pairwise_psa_scatter_plot <- function(results,
   use_intervention <- !is.null(intervention)
 
   # 2. Data Preparation
-  # Get PSA simulation data
+  # Get PSA simulation data (always use discounted for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    group = group,
+    groups = groups,
     strategies = strategies,
-    discounted = discounted
+    discounted = TRUE
   )
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(psa_data$group), results$metadata)
+  psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
   # Check fixed strategy exists
   all_strategies <- unique(psa_data$strategy)
@@ -1192,6 +1220,146 @@ pairwise_psa_scatter_plot <- function(results,
   }
 
   # 9. Set legend position
+  if (legend_position != "default") {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  p
+}
+
+
+#' Net Monetary Benefit Density Plot
+#'
+#' Creates a density plot showing the distribution of Net Monetary Benefit (NMB)
+#' by strategy at a given willingness-to-pay threshold.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
+#' @param cost_summary Name of the cost summary (e.g., "total_cost")
+#' @param wtp Willingness-to-pay threshold for NMB calculation
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param show_mean Logical. Show vertical lines at mean NMB per strategy?
+#' @param alpha Transparency for density fill (default: 0.4)
+#' @param title Optional plot title
+#' @param xlab Optional x-axis label
+#' @param legend_position Legend position ("right", "bottom", "top", "left", "none")
+#'
+#' @return A ggplot object
+#'
+#' @details
+#' Net Monetary Benefit is calculated as:
+#' \deqn{NMB = \lambda \times Outcomes - Costs}
+#'
+#' where \eqn{\lambda} is the willingness-to-pay threshold. Higher NMB indicates
+#' better value. The density plot shows the full distribution of NMB values
+#' across all PSA simulations, providing insight into the uncertainty around
+#' each strategy's value.
+#'
+#' NMB calculations always use discounted values as this is a cost-effectiveness measure.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # NMB density at WTP = $50,000
+#' nmb_density_plot(psa_results, "total_qalys", "total_cost", wtp = 50000)
+#'
+#' # With custom styling
+#' nmb_density_plot(psa_results, "total_qalys", "total_cost",
+#'                  wtp = 100000, show_mean = TRUE, alpha = 0.5)
+#' }
+#'
+#' @export
+nmb_density_plot <- function(results,
+                             outcome_summary,
+                             cost_summary,
+                             wtp,
+                             groups = "overall",
+                             strategies = NULL,
+                             show_mean = TRUE,
+                             alpha = 0.4,
+                             title = NULL,
+                             xlab = NULL,
+                             legend_position = "right") {
+
+  # Get PSA simulation data (always use discounted for NMB - cost-effectiveness measure)
+  psa_data <- get_psa_simulations(
+    results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    groups = groups,
+    strategies = strategies,
+    discounted = TRUE
+  )
+
+  # Apply consistent group ordering (Overall first, then model order)
+  group_levels <- get_group_order(unique(psa_data$group), results$metadata)
+  psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
+
+  # Calculate NMB for each simulation
+  psa_data <- psa_data %>%
+    mutate(nmb = .data$outcome * wtp - .data$cost)
+
+  # Set default x-axis label if not provided
+  if (is.null(xlab)) {
+    xlab <- "Net Monetary Benefit"
+  }
+
+  # Set default title if not provided
+  if (is.null(title)) {
+    title <- paste0("NMB Distribution at WTP = ", dollar(wtp))
+  }
+
+  # Create density plot
+  p <- ggplot(psa_data, aes(x = .data$nmb, fill = .data$strategy, color = .data$strategy)) +
+    geom_density(alpha = alpha) +
+    scale_x_continuous(labels = comma) +
+    scale_y_continuous(labels = number) +
+    theme_bw() +
+    labs(
+      title = title,
+      x = xlab,
+      y = "Density",
+      fill = "Strategy",
+      color = "Strategy"
+    )
+
+  # Add mean lines if requested
+  if (show_mean) {
+    mean_data <- psa_data %>%
+      group_by(.data$strategy, .data$group) %>%
+      summarize(
+        mean_nmb = mean(.data$nmb, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    p <- p +
+      geom_vline(
+        data = mean_data,
+        aes(xintercept = .data$mean_nmb, color = .data$strategy),
+        linetype = "dashed",
+        linewidth = 0.8,
+        show.legend = FALSE
+      )
+  }
+
+  # Facet if multiple groups
+  n_groups <- length(unique(psa_data$group))
+  if (n_groups > 1) {
+    p <- p + facet_wrap(~ group, scales = "free_y")
+  }
+
+  # Set legend position
   if (legend_position != "default") {
     p <- p + theme(legend.position = legend_position)
   }

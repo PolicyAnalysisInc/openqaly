@@ -8,7 +8,7 @@ extract_dsa_summaries(
   results,
   summary_name,
   value_type = c("all", "cost", "outcome"),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
@@ -22,7 +22,8 @@ extract_dsa_summaries(
 
 \item{value_type}{Type of value: "all", "cost", or "outcome"}
 
-\item{group}{Group selection: "aggregated" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), "all" (overall + all groups),
+"all_groups" (all groups without overall), or specific group name(s)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all).
 Mutually exclusive with interventions/comparators.}

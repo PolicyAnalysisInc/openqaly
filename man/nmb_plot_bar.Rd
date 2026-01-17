@@ -11,8 +11,7 @@ nmb_plot_bar(
   groups = "overall",
   wtp = NULL,
   interventions = NULL,
-  comparators = NULL,
-  discounted = FALSE
+  comparators = NULL
 )
 }
 \arguments{
@@ -31,8 +30,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{comparators}{Character vector of comparator strategies (e.g., "control").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
-
-\item{discounted}{Logical. Use discounted values?}
 }
 \value{
 A ggplot2 object
@@ -45,6 +42,8 @@ NMB = (Difference in Outcomes * WTP) - Difference in Costs
 Either `interventions` or `comparators` must be specified (one is mandatory).
 WTP is automatically extracted from the health outcome summary metadata if available,
 but can be overridden using the `wtp` parameter.
+
+NMB calculations always use discounted values as this is a cost-effectiveness measure.
 }
 \examples{
 \dontrun{

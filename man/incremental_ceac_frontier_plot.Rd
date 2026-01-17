@@ -10,9 +10,8 @@ incremental_ceac_frontier_plot(
   cost_summary,
   wtp_range = c(0, 1e+05),
   wtp_step = 5000,
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
-  discounted = FALSE,
   show_probability = FALSE,
   title = NULL,
   xlab = "Willingness to Pay",
@@ -35,13 +34,11 @@ Default is c(0, 100000)}
 
 \item{wtp_step}{Step size for WTP thresholds. Default is 5000}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(triggers faceting by group)}
+\item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
+"all" includes overall + all groups, "all_groups" includes all groups without overall,
+specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
 \item{show_probability}{Logical. Show probability as line thickness or
 transparency? Default is FALSE}
@@ -68,6 +65,8 @@ The incremental CE acceptability frontier shows the optimal strategy choice
 based on expected net monetary benefit at each WTP threshold in a multi-way
 comparison. Vertical lines or shaded regions indicate where the optimal
 strategy changes.
+
+CEAC calculations always use discounted values as this is a cost-effectiveness measure.
 
 When multiple groups are present, the plot is automatically faceted by group
 using \code{facet_wrap(~ group, scales = "fixed")}.

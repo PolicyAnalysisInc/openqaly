@@ -14,9 +14,8 @@ nmb_table(
   comparators = NULL,
   show_total = TRUE,
   decimals = 2,
-  discounted = FALSE,
   font_size = 11,
-  table_format = c("kable", "flextable")
+  table_format = c("flextable", "kable")
 )
 }
 \arguments{
@@ -37,8 +36,6 @@ nmb_table(
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: 2)}
-
-\item{discounted}{Logical. Use discounted values?}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

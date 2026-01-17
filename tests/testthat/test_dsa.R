@@ -34,17 +34,108 @@ test_that("add_dsa_variable validates inputs", {
   expect_equal(length(model_ok2$dsa_parameters), 1)
 })
 
+test_that("add_dsa_variable errors when group-specific variable used without specifying group", {
+  # Create model with group-specific variable
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, group = "young") %>%
+    add_variable("cost", 2000, group = "old")
+
+  # Should error when trying to add DSA for group-specific variable without group
+
+  expect_error(
+    add_dsa_variable(model, "cost", low = 500, high = 1500),
+    "defined for specific group"
+  )
+
+  # Should work when group is specified
+  model_ok <- add_dsa_variable(model, "cost", low = 500, high = 1500, group = "young")
+  expect_equal(length(model_ok$dsa_parameters), 1)
+  expect_equal(model_ok$dsa_parameters[[1]]$group, "young")
+})
+
+test_that("add_dsa_variable allows non-group-specific variables without group", {
+  # Create model with non-group-specific variable
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000)
+
+  # Should work without specifying group
+  model_ok <- add_dsa_variable(model, "cost", low = 500, high = 1500)
+  expect_equal(length(model_ok$dsa_parameters), 1)
+  expect_equal(model_ok$dsa_parameters[[1]]$group, "")
+})
+
+test_that("add_dsa_variable warns and replaces duplicate parameters", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_dsa_variable("cost", low = 500, high = 1500)
+
+  expect_warning(
+    model2 <- add_dsa_variable(model, "cost", low = 800, high = 1200),
+    "Replacing existing DSA specification"
+  )
+
+  # Should have exactly 1 DSA parameter
+  expect_equal(length(model2$dsa_parameters), 1)
+
+  # Should have the new bounds
+  expect_equal(model2$dsa_parameters[[1]]$low$text, "800")
+  expect_equal(model2$dsa_parameters[[1]]$high$text, "1200")
+})
+
+test_that("add_dsa_variable warns for duplicate with strategy specified", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, strategy = "a") %>%
+    add_variable("cost", 2000, strategy = "b") %>%
+    add_dsa_variable("cost", low = 500, high = 1500, strategy = "a")
+
+  expect_warning(
+    model2 <- add_dsa_variable(model, "cost", low = 800, high = 1200, strategy = "a"),
+    "Replacing existing DSA specification.*strategy: a"
+  )
+
+  expect_equal(length(model2$dsa_parameters), 1)
+})
+
+test_that("add_dsa_variable does not warn for different strategy", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, strategy = "a") %>%
+    add_variable("cost", 2000, strategy = "b") %>%
+    add_dsa_variable("cost", low = 500, high = 1500, strategy = "a")
+
+  # Adding for different strategy should not warn
+  expect_no_warning(
+    model2 <- add_dsa_variable(model, "cost", low = 800, high = 1200, strategy = "b")
+  )
+
+  expect_equal(length(model2$dsa_parameters), 2)
+})
+
 test_that("add_dsa_setting adds setting specification", {
   model <- define_model("markov") %>%
-    set_settings(discount_cost = 0.03) %>%
-    add_dsa_setting("discount_cost", low = 0, high = 0.05)
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
 
   expect_equal(length(model$dsa_parameters), 1)
   expect_equal(model$dsa_parameters[[1]]$type, "setting")
   expect_equal(model$dsa_parameters[[1]]$name, "discount_cost")
   expect_equal(model$dsa_parameters[[1]]$low, 0)
-  expect_equal(model$dsa_parameters[[1]]$high, 0.05)
+  expect_equal(model$dsa_parameters[[1]]$high, 5)
   expect_equal(model$dsa_parameters[[1]]$display_name, "discount_cost")
+})
+
+test_that("add_dsa_setting warns and replaces duplicate settings", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3.5) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
+
+  expect_warning(
+    model2 <- add_dsa_setting(model, "discount_cost", low = 1, high = 3),
+    "Replacing existing DSA specification"
+  )
+
+  expect_equal(length(model2$dsa_parameters), 1)
+  expect_equal(model2$dsa_parameters[[1]]$low, 1)
+  expect_equal(model2$dsa_parameters[[1]]$high, 3)
 })
 
 test_that("validate_dsa_spec catches missing specifications", {
@@ -138,7 +229,7 @@ test_that("build_dsa_segments and metadata generation work correctly", {
   model <- define_model("markov") %>%
     add_variable("p_disease", 0.03) %>%
     add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
-    add_dsa_setting("discount_cost", low = 0, high = 0.05) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
     set_settings(timeframe = 10, timeframe_unit = "years",
                 cycle_length = 1, cycle_length_unit = "years") %>%
     add_state("healthy", initial_prob = 1) %>%

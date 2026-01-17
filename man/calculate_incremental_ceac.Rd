@@ -9,7 +9,7 @@ calculate_incremental_ceac(
   outcome_summary,
   cost_summary,
   wtp = seq(0, 1e+05, by = 5000),
-  group = "aggregated",
+  groups = "overall",
   strategies = NULL,
   discounted = FALSE
 )
@@ -24,9 +24,15 @@ calculate_incremental_ceac(
 \item{wtp}{Numeric vector of WTP thresholds to evaluate. Default is
 seq(0, 100000, by = 5000)}
 
-\item{group}{Group selection: "aggregated" (default) uses aggregated results,
-specific group name filters to that group, NULL or "all" includes all groups
-(triggers separate calculations per group)}
+\item{groups}{Group selection:
+\itemize{
+  \item \code{"overall"} - Overall population (aggregated, default)
+  \item \code{"group_name"} - Specific group by name
+  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+  \item \code{c("overall", "group1")} - Specific groups + overall
+  \item \code{"all"} or \code{NULL} - All groups + overall
+  \item \code{"all_groups"} - All groups without overall
+}}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
