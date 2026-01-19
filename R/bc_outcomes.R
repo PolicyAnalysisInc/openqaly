@@ -58,6 +58,13 @@ outcomes_plot_bar <- function(res, outcome,
     comparators = comparators
   )
 
+  # Get values for the specified outcome summary (in model-defined order)
+  summary_values <- res$metadata$summaries |>
+    filter(.data$name == outcome) |>
+    pull(.data$values) |>
+    str_split(pattern = "[,\\s]+") |>
+    unlist()
+
   summaries <- summaries %>%
     mutate(
       strategy = factor(.data$strategy, levels = unique(.data$strategy)),
@@ -94,7 +101,11 @@ outcomes_plot_bar <- function(res, outcome,
 
   summaries_with_total <- bind_rows(summaries, totals) %>%
     mutate(
-      value = factor(.data$value, levels = rev(unique(.data$value))),
+      # Model order with Total last, reversed for bar chart (Total at top)
+      value = factor(.data$value, levels = rev(c(
+        map_value_names(summary_values, res$metadata, "display_name"),
+        "Total"
+      ))),
       .pos_or_neg = ifelse(.data$amount >= 0, "Positive", "Negative")
     )
 

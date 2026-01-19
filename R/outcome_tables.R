@@ -40,6 +40,16 @@ prepare_outcomes_table_data <- function(results,
     comparators = comparators
   )
 
+  # Get values for the specified outcome summary (in model-defined order)
+  summary_values <- results$metadata$summaries |>
+    filter(.data$name == outcome) |>
+    pull(.data$values) |>
+    str_split(pattern = "[,\\s]+") |>
+    unlist()
+
+  # Get display names in model order
+  value_levels <- map_value_names(summary_values, results$metadata, "display_name")
+
   # Get unique strategies, groups, values (already have display names)
   strategies_display <- unique(summary_data$strategy)
   groups_display <- unique(summary_data$group)
@@ -51,8 +61,8 @@ prepare_outcomes_table_data <- function(results,
   n_strategies <- length(strategies_display)
   n_groups <- length(groups_display)
 
-  # Value column is already mapped, just rename for consistency
-  summary_data$value_display <- summary_data$value
+  # Value column is already mapped, apply model-defined order
+  summary_data$value_display <- factor(summary_data$value, levels = value_levels)
 
   # Determine mode and pivoting strategy
   mode <- if (n_groups > 1 || is.null(groups)) "three_level" else "single"
@@ -66,7 +76,8 @@ prepare_outcomes_table_data <- function(results,
         values_from = "amount",
         names_sep = "_",
         id_cols = "value_display"
-      )
+      ) %>%
+      arrange(.data$value_display)
   } else {
     # Mode 1 or 2: Strategy columns only
     pivot_data <- summary_data %>%
@@ -74,7 +85,8 @@ prepare_outcomes_table_data <- function(results,
         names_from = "strategy",
         values_from = "amount",
         id_cols = "value_display"
-      )
+      ) %>%
+      arrange(.data$value_display)
   }
 
   # Round values first (keep as numeric for now)
@@ -793,6 +805,14 @@ prepare_incremental_ce_table_data <- function(results,
     strategies = strategies
   )
 
+  # Map summary names for column headers
+  outcome_label <- outcome_summary
+  cost_label <- cost_summary
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    outcome_label <- map_names(outcome_summary, results$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_summary, results$metadata$summaries, "display_name")
+  }
+
   # Format ICER column using print.icer() logic
   format_icer <- function(icer_values, digits = decimals) {
     fmt_num <- function(v) {
@@ -864,7 +884,8 @@ prepare_incremental_ce_table_data <- function(results,
       select("strategy", "comparator", "cost", "outcome", "dcost", "doutcome", "icer")
 
     # Rename columns (use HTML entity &#916; for Delta symbol)
-    names(result_cols) <- c("Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
+    names(result_cols) <- c("Strategy", "Comparator", cost_label, outcome_label,
+                            paste0("&#916; ", cost_label), paste0("&#916; ", outcome_label), "ICER")
 
     # Build header structure - simple single row
     headers <- list()
@@ -923,7 +944,8 @@ prepare_incremental_ce_table_data <- function(results,
     result_cols <- result_data
 
     # Rename columns (use HTML entity &#916; for Delta symbol)
-    names(result_cols) <- c("Strategy", "Comparator", "Cost", "Outcome", "&#916; Cost", "&#916; Outcome", "ICER")
+    names(result_cols) <- c("Strategy", "Comparator", cost_label, outcome_label,
+                            paste0("&#916; ", cost_label), paste0("&#916; ", outcome_label), "ICER")
 
     # Build header structure - simple single row (7 columns, no Group column)
     headers <- list()
@@ -1062,6 +1084,14 @@ prepare_pairwise_ce_table_data <- function(results,
     comparators = comparators
   )
 
+  # Map summary names for column headers
+  outcome_label <- outcome_summary
+  cost_label <- cost_summary
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    outcome_label <- map_names(outcome_summary, results$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_summary, results$metadata$summaries, "display_name")
+  }
+
   # Get absolute values for all strategies (always use discounted for CE)
   cost_data <- get_summaries(
     results,
@@ -1144,7 +1174,6 @@ prepare_pairwise_ce_table_data <- function(results,
     # Single group: simple table
     # Strategy rows
     strategy_rows <- absolute_data %>%
-      arrange(.data$cost) %>%
       mutate(
         row_label = .data$strategy,
         cost_fmt = format_numeric_col(.data$cost, decimals),
@@ -1165,14 +1194,14 @@ prepare_pairwise_ce_table_data <- function(results,
 
     # Combine
     result_data <- bind_rows(strategy_rows, comparison_rows)
-    colnames(result_data) <- c(" ", "Cost", "Outcome", "ICER")
+    colnames(result_data) <- c(" ", cost_label, outcome_label, "ICER")
 
     # Build header
     headers <- list()
     row1 <- list(
       list(span = 1, text = "", borders = c(1, 0, 1, 0)),
-      list(span = 1, text = "Cost", borders = c(1, 0, 1, 0)),
-      list(span = 1, text = "Outcome", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = cost_label, borders = c(1, 0, 1, 0)),
+      list(span = 1, text = outcome_label, borders = c(1, 0, 1, 0)),
       list(span = 1, text = "ICER", borders = c(1, 0, 1, 0))
     )
     headers[[1]] <- row1
@@ -1205,7 +1234,6 @@ prepare_pairwise_ce_table_data <- function(results,
       # Strategy rows for this group (will be indented via CSS)
       grp_strategies <- absolute_data %>%
         filter(.data$group == grp) %>%
-        arrange(.data$cost) %>%
         mutate(
           row_label = .data$strategy,
           cost_fmt = format_numeric_col(.data$cost, decimals),
@@ -1240,14 +1268,14 @@ prepare_pairwise_ce_table_data <- function(results,
       current_row <- current_row + n_comparison_rows
     }
 
-    colnames(result_data) <- c(" ", "Cost", "Outcome", "ICER")
+    colnames(result_data) <- c(" ", cost_label, outcome_label, "ICER")
 
     # Build header
     headers <- list()
     row1 <- list(
       list(span = 1, text = "", borders = c(1, 0, 1, 0)),
-      list(span = 1, text = "Cost", borders = c(1, 0, 1, 0)),
-      list(span = 1, text = "Outcome", borders = c(1, 0, 1, 0)),
+      list(span = 1, text = cost_label, borders = c(1, 0, 1, 0)),
+      list(span = 1, text = outcome_label, borders = c(1, 0, 1, 0)),
       list(span = 1, text = "ICER", borders = c(1, 0, 1, 0))
     )
     headers[[1]] <- row1

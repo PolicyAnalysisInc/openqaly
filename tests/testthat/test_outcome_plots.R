@@ -159,6 +159,39 @@ test_that("nmb_plot_bar() errors without interventions or comparators", {
   )
 })
 
+test_that("nmb_plot_bar() orders values correctly: outcomes, costs, Total", {
+  results <- get_test_results()
+
+  p <- nmb_plot_bar(results,
+                    health_outcome = "total_qalys",
+                    cost_outcome = "total_cost",
+                    comparators = "standard")
+
+  # Get the factor levels from the plot data
+  # Note: ggplot displays y-axis factor levels from bottom to top
+  # So factor levels are reversed: Total first (bottom), then costs, then outcomes (top)
+  value_levels <- levels(p$data$value)
+
+  # Total should be first in factor levels (displays at bottom of chart)
+  expect_equal(value_levels[1], "Total")
+
+  # In factor level order: Total, costs, outcomes
+  # In visual order (top to bottom): outcomes, costs, Total
+  total_pos <- which(value_levels == "Total")
+  outcome_positions <- which(value_levels %in% c("healthy_qalys", "sick_qalys"))
+  cost_positions <- which(value_levels %in% c("drug_cost", "care_cost"))
+
+  # Total should be first (position 1) in factor levels
+  expect_equal(total_pos, 1)
+
+  # Costs should come after Total in factor levels
+  expect_true(all(cost_positions > total_pos))
+
+  # Outcomes should come after costs in factor levels (appear at top visually)
+  expect_true(all(outcome_positions > max(cost_positions)),
+              info = "Outcomes should appear at top (last in factor levels)")
+})
+
 # ============================================================================
 # Tests for nmb_plot_line()
 # ============================================================================
@@ -189,6 +222,26 @@ test_that("nmb_plot_line() cumulative NMB produces finite values", {
   final_nmb <- total_data$amount[total_data$cycle == max(total_data$cycle)][1]
 
   expect_true(is.finite(final_nmb))
+})
+
+test_that("nmb_plot_line() only shows values from specified summaries", {
+  results <- get_test_results()
+
+  p <- nmb_plot_line(results,
+                     health_outcome = "total_qalys",
+                     cost_outcome = "total_cost",
+                     comparators = "standard")
+
+  # Get unique value names in the plot
+  value_names <- unique(p$data$value_name)
+
+  # Should only contain values from total_qalys and total_cost summaries, plus Total
+  # total_qalys contains: healthy_qalys, sick_qalys
+  # total_cost contains: drug_cost, care_cost
+  expected_values <- c("healthy_qalys", "sick_qalys", "drug_cost", "care_cost", "Total")
+
+  # All values should be in expected set
+  expect_true(all(value_names %in% expected_values))
 })
 
 test_that("nmb_plot_line() errors without interventions or comparators", {

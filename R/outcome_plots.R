@@ -141,10 +141,20 @@ outcomes_plot_line <- function(res, outcome,
     outcome_label <- paste0("Difference in ", outcome_label)
   }
 
+  # Apply consistent value ordering (model order, then Total last)
+  # summary_values already contains the values in model-defined order
+  value_levels <- c(
+    map_value_names(summary_values, res$metadata, "display_name"),
+    "Total"
+  )
+
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(values_with_total$group), res$metadata)
   values_with_total <- values_with_total %>%
-    mutate(group = factor(.data$group, levels = group_levels))
+    mutate(
+      group = factor(.data$group, levels = group_levels),
+      value_name = factor(.data$value_name, levels = value_levels)
+    )
 
   # Determine faceting
   n_groups <- length(unique(values_with_total$group))
@@ -159,21 +169,40 @@ outcomes_plot_line <- function(res, outcome,
     facet_component <- NULL
   }
 
-  # Create the plot
-  p <- ggplot(values_with_total,
-              aes(x = !!sym(time_col), y = .data$amount, color = .data$strategy)) +
-    geom_line(linewidth = 1) +
-    scale_y_continuous(labels = comma) +
-    theme_bw() +
-    labs(
-      x = time_label,
-      y = if (cumulative) {
-        paste0("Cumulative ", outcome_label)
-      } else {
-        paste0("Per-", tolower(time_label), " ", outcome_label)
-      },
-      color = "Strategy"
-    )
+  # Determine if we have multiple strategies
+  n_strategies <- length(unique(values_with_total$strategy))
+
+  # Create the plot - only use color aesthetic if multiple strategies
+  if (n_strategies > 1) {
+    p <- ggplot(values_with_total,
+                aes(x = !!sym(time_col), y = .data$amount, color = .data$strategy)) +
+      geom_line(linewidth = 1) +
+      scale_y_continuous(labels = comma) +
+      theme_bw() +
+      labs(
+        x = time_label,
+        y = if (cumulative) {
+          paste0("Cumulative ", outcome_label)
+        } else {
+          paste0("Per-", tolower(time_label), " ", outcome_label)
+        },
+        color = "Strategy"
+      )
+  } else {
+    p <- ggplot(values_with_total,
+                aes(x = !!sym(time_col), y = .data$amount)) +
+      geom_line(linewidth = 1) +
+      scale_y_continuous(labels = comma) +
+      theme_bw() +
+      labs(
+        x = time_label,
+        y = if (cumulative) {
+          paste0("Cumulative ", outcome_label)
+        } else {
+          paste0("Per-", tolower(time_label), " ", outcome_label)
+        }
+      )
+  }
 
   # Add faceting if needed
   if (!is.null(facet_component)) {
@@ -290,12 +319,29 @@ nmb_plot_bar <- function(res,
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(c(all_components$group, totals$group)), res$metadata)
 
+  # Get value order from metadata (model-defined order)
+  # Outcomes first (in model order), then costs (in model order), then Total
+  outcome_values <- res$metadata$values %>%
+    filter(.data$type == "outcome") %>%
+    pull(.data$name)
+  cost_values <- res$metadata$values %>%
+    filter(.data$type == "cost") %>%
+    pull(.data$name)
+
+  # Map to display names
+  outcome_values_display <- map_value_names(outcome_values, res$metadata, "display_name")
+  cost_values_display <- map_value_names(cost_values, res$metadata, "display_name")
+
+  # Correct visual order (top to bottom): outcomes, costs, Total
+  # ggplot displays y-axis factor levels from bottom to top, so reverse for correct display
+  value_levels <- rev(c(outcome_values_display, cost_values_display, "Total"))
+
   # Combine with totals (like outcomes_plot line 98)
   nmb_data <- bind_rows(all_components, totals) %>%
     mutate(
       strategy = factor(.data$strategy, levels = unique(c(all_components$strategy, totals$strategy))),
       group = factor(.data$group, levels = group_levels),
-      value = factor(.data$value, levels = rev(unique(c(all_components$value, totals$value)))),
+      value = factor(.data$value, levels = value_levels),
       .pos_or_neg = ifelse(.data$amount >= 0, "Positive", "Negative")
     )
 
@@ -402,12 +448,26 @@ nmb_plot_line <- function(res,
     }
   }
 
-  # Get outcome components with differences (like outcomes_plot_time)
+  # Extract value names from the specified summaries
+  outcome_value_names <- res$metadata$summaries %>%
+    filter(.data$name == health_outcome) %>%
+    pull(.data$values) %>%
+    str_split(pattern = "[,\\s]+") %>%
+    unlist()
+
+  cost_value_names <- res$metadata$summaries %>%
+    filter(.data$name == cost_outcome) %>%
+    pull(.data$values) %>%
+    str_split(pattern = "[,\\s]+") %>%
+    unlist()
+
+  # Get outcome components with differences - only values in the specified summary
   # Always use discounted values for NMB (cost-effectiveness measure)
   outcome_components <- get_values(
     res,
     format = "long",
     groups = groups,
+    values = outcome_value_names,
     value_type = "outcome",
     time_unit = time_unit,
     discounted = TRUE,
@@ -417,12 +477,13 @@ nmb_plot_line <- function(res,
   ) %>%
     mutate(amount = .data$amount * wtp)  # Multiply by WTP
 
-  # Get cost components with differences
+  # Get cost components with differences - only values in the specified summary
   # Always use discounted values for NMB (cost-effectiveness measure)
   cost_components <- get_values(
     res,
     format = "long",
     groups = groups,
+    values = cost_value_names,
     value_type = "cost",
     time_unit = time_unit,
     discounted = TRUE,
@@ -476,6 +537,22 @@ nmb_plot_line <- function(res,
   # Combine with totals
   values_with_total <- bind_rows(all_components, totals)
 
+  # Get value order from metadata (model-defined order)
+  # Outcomes first (in model order), then costs (in model order), then Total
+  outcome_values <- res$metadata$values %>%
+    filter(.data$type == "outcome") %>%
+    pull(.data$name)
+  cost_values <- res$metadata$values %>%
+    filter(.data$type == "cost") %>%
+    pull(.data$name)
+
+  # Map to display names
+  outcome_values_display <- map_value_names(outcome_values, res$metadata, "display_name")
+  cost_values_display <- map_value_names(cost_values, res$metadata, "display_name")
+
+  # Correct order: outcomes, costs, Total
+  value_levels <- c(outcome_values_display, cost_values_display, "Total")
+
   # Create NMB label with display names
   outcome_label <- map_names(health_outcome, res$metadata$summaries,
                              "display_name")
@@ -489,7 +566,10 @@ nmb_plot_line <- function(res,
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(values_with_total$group), res$metadata)
   values_with_total <- values_with_total %>%
-    mutate(group = factor(.data$group, levels = group_levels))
+    mutate(
+      group = factor(.data$group, levels = group_levels),
+      value_name = factor(.data$value_name, levels = value_levels)
+    )
 
   # Determine faceting (like outcomes_plot_time)
   n_groups <- length(unique(values_with_total$group))
@@ -613,6 +693,12 @@ incremental_ce_plot <- function(res,
   frontier_data <- frontier_data %>%
     mutate(group = factor(.data$group, levels = group_levels))
 
+  # Map strategy names to display names
+  if (!is.null(res$metadata) && !is.null(res$metadata$strategies)) {
+    ce_data$strategy <- map_names(ce_data$strategy, res$metadata$strategies, "display_name")
+    frontier_data$strategy <- map_names(frontier_data$strategy, res$metadata$strategies, "display_name")
+  }
+
   # Determine faceting
   n_groups <- length(unique(ce_data$group))
 
@@ -641,7 +727,7 @@ incremental_ce_plot <- function(res,
       breaks = y_breaks,
       limits = y_limits
     ) +
-    # labs(x = outcome_label, y = cost_label) +
+    labs(x = outcome_label, y = cost_label, color = "Strategy") +
     theme_bw()
 
   # Add faceting if needed
@@ -741,6 +827,12 @@ pairwise_ce_plot <- function(res,
   group_levels <- get_group_order(unique(ce_data$group), res$metadata)
   ce_data <- ce_data %>%
     mutate(group = factor(.data$group, levels = group_levels))
+
+  # Map strategy names to display names
+  if (!is.null(res$metadata) && !is.null(res$metadata$strategies)) {
+    ce_data$strategy <- map_names(ce_data$strategy, res$metadata$strategies, "display_name")
+    ce_data$comparator <- map_names(ce_data$comparator, res$metadata$strategies, "display_name")
+  }
 
   # Get unique groups and comparisons
   n_groups <- length(unique(ce_data$group))

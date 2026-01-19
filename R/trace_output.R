@@ -440,14 +440,15 @@ trace_plot_area <- function(res,
       ungroup()
   }
 
-  # Preserve state ordering from metadata
+  # Preserve state ordering from metadata (reversed for stacking)
   if (!is.null(res$metadata) && !is.null(res$metadata$states)) {
     state_levels <- if (use_display_names) {
       res$metadata$states$display_name
     } else {
       res$metadata$states$name
     }
-    trace_data$state <- factor(trace_data$state, levels = state_levels)
+    # Reverse levels so first state stacks on top
+    trace_data$state <- factor(trace_data$state, levels = rev(state_levels))
   }
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -460,13 +461,13 @@ trace_plot_area <- function(res,
   n_groups <- length(unique(trace_data$group))
 
   if (n_strategies > 1 && n_groups > 1) {
-    facet_formula <- ~ strategy + group
+    facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$strategy))
   } else if (n_strategies > 1) {
-    facet_formula <- ~ strategy
+    facet_component <- facet_wrap(vars(.data$strategy))
   } else if (n_groups > 1) {
-    facet_formula <- ~ group
+    facet_component <- facet_wrap(vars(.data$group))
   } else {
-    facet_formula <- NULL
+    facet_component <- NULL
   }
 
   # Determine time column and label
@@ -495,17 +496,24 @@ trace_plot_area <- function(res,
     time_label <- "Cycle"
   }
 
+  # Calculate nice x-axis breaks (cap at max data value for area chart)
+  breaks_fn <- pretty_breaks(n = 5)
+  time_range <- range(c(0, trace_data[[time_col_name]]))
+  time_breaks <- breaks_fn(time_range)
+  time_limits <- c(0, max(trace_data[[time_col_name]]))
+
   # Create base plot using the appropriate time column
   p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability, fill = .data$state)) +
     geom_area(position = "stack") +
-    scale_x_continuous(expand = c(0, 0, 0, 0)) +
+    scale_x_continuous(breaks = time_breaks, limits = time_limits, expand = c(0, 0, 0, 0)) +
     scale_y_continuous(expand = c(0, 0, 0, 0)) +
     theme_bw() +
     labs(
       x = time_label,
       y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
       fill = "State"
-    )
+    ) +
+    guides(fill = guide_legend(reverse = TRUE))
 
   # Apply color palette if provided
   if (!is.null(color_palette)) {
@@ -513,8 +521,8 @@ trace_plot_area <- function(res,
   }
 
   # Add faceting
-  if (!is.null(facet_formula)) {
-    p <- p + facet_wrap(facet_formula)
+  if (!is.null(facet_component)) {
+    p <- p + facet_component
   }
 
   # Position legend at bottom with horizontal layout (or hide if requested)
@@ -616,24 +624,24 @@ trace_plot_line <- function(res,
   if (by_state) {
     # Color by state, facet by strategy/group
     if (n_strategies > 1 && n_groups > 1) {
-      facet_formula <- ~ strategy + group
+      facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$strategy))
     } else if (n_strategies > 1) {
-      facet_formula <- ~ strategy
+      facet_component <- facet_wrap(vars(.data$strategy))
     } else if (n_groups > 1) {
-      facet_formula <- ~ group
+      facet_component <- facet_wrap(vars(.data$group))
     } else {
-      facet_formula <- NULL
+      facet_component <- NULL
     }
   } else {
     # Color by strategy, facet by state/group
     if (n_states > 1 && n_groups > 1) {
-      facet_formula <- ~ state + group
+      facet_component <- facet_grid(rows = vars(.data$group), cols = vars(.data$state))
     } else if (n_states > 1) {
-      facet_formula <- ~ state
+      facet_component <- facet_wrap(vars(.data$state))
     } else if (n_groups > 1) {
-      facet_formula <- ~ group
+      facet_component <- facet_wrap(vars(.data$group))
     } else {
-      facet_formula <- NULL
+      facet_component <- NULL
     }
   }
 
@@ -663,12 +671,19 @@ trace_plot_line <- function(res,
     time_label <- "Cycle"
   }
 
+  # Calculate nice x-axis breaks
+  breaks_fn <- pretty_breaks(n = 5)
+  time_range <- range(c(0, trace_data[[time_col_name]]))
+  time_breaks <- breaks_fn(time_range)
+  time_limits <- range(time_breaks)
+
   # Create base plot using the appropriate time column
   if (by_state) {
     p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability,
                                 color = .data$state,
                                 group = interaction(.data$state, .data$strategy))) +
       geom_line(linewidth = 1) +
+      scale_x_continuous(breaks = time_breaks, limits = time_limits) +
       theme_bw() +
       labs(
         x = time_label,
@@ -680,6 +695,7 @@ trace_plot_line <- function(res,
                                 color = .data$strategy,
                                 group = interaction(.data$strategy, .data$state))) +
       geom_line(linewidth = 1) +
+      scale_x_continuous(breaks = time_breaks, limits = time_limits) +
       theme_bw() +
       labs(
         x = time_label,
@@ -694,8 +710,8 @@ trace_plot_line <- function(res,
   }
 
   # Add faceting
-  if (!is.null(facet_formula)) {
-    p <- p + facet_wrap(facet_formula)
+  if (!is.null(facet_component)) {
+    p <- p + facet_component
   }
 
   # Position legend at bottom with horizontal layout (or hide if requested)

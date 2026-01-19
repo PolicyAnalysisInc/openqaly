@@ -37,67 +37,67 @@ test_that("parameter sampling yields correct averages", {
     select(-parameter_overrides)
 
   # Separate the sampled values by strategy/group
-  standard_low <- dplyr::filter(sampled_segments, strategy == 'standard', group == 'low_risk')
-  standard_high <- dplyr::filter(sampled_segments, strategy == 'standard', group == 'high_risk')
-  new_low <- dplyr::filter(sampled_segments, strategy == 'new_treatment', group == 'low_risk')
-  new_high <- dplyr::filter(sampled_segments, strategy == 'new_treatment', group == 'high_risk')
+  seritinib_low <- dplyr::filter(sampled_segments, strategy == 'seritinib', group == 'low_risk')
+  seritinib_high <- dplyr::filter(sampled_segments, strategy == 'seritinib', group == 'high_risk')
+  volantor_low <- dplyr::filter(sampled_segments, strategy == 'volantor', group == 'low_risk')
+  volantor_high <- dplyr::filter(sampled_segments, strategy == 'volantor', group == 'high_risk')
 
   # Check univariate distributions - means should match base case values
   # p_death_healthy: beta(mean = 0.01, sd = 0.002) - same across all segments
-  expect_equal(0.01, mean(standard_low$p_death_healthy), tolerance = 1e-3)
-  expect_equal(0.01, mean(new_high$p_death_healthy), tolerance = 1e-3)
+  expect_equal(0.01, mean(seritinib_low$p_death_healthy), tolerance = 1e-3)
+  expect_equal(0.01, mean(volantor_high$p_death_healthy), tolerance = 1e-3)
 
   # p_death_mild: beta(mean = 0.03, sd = 0.005) - same across all segments
-  expect_equal(0.03, mean(standard_low$p_death_mild), tolerance = 1e-3)
-  expect_equal(0.03, mean(new_high$p_death_mild), tolerance = 1e-3)
+  expect_equal(0.03, mean(seritinib_low$p_death_mild), tolerance = 1e-3)
+  expect_equal(0.03, mean(volantor_high$p_death_mild), tolerance = 1e-3)
 
   # u_severe: beta(mean = 0.5, sd = 0.1) - same across all segments
-  expect_equal(0.5, mean(standard_low$u_severe), tolerance = 0.02)
-  expect_equal(0.5, mean(new_high$u_severe), tolerance = 0.02)
+  expect_equal(0.5, mean(seritinib_low$u_severe), tolerance = 0.02)
+  expect_equal(0.5, mean(volantor_high$u_severe), tolerance = 0.02)
 
   # c_severe: gamma(mean = 8000, sd = 1600) - same across all segments
-  expect_equal(8000, mean(standard_low$c_severe), tolerance = 200)
-  expect_equal(8000, mean(new_high$c_severe), tolerance = 200)
+  expect_equal(8000, mean(seritinib_low$c_severe), tolerance = 200)
+  expect_equal(8000, mean(volantor_high$c_severe), tolerance = 200)
 
   # c_treatment by strategy: gamma distributions
-  expect_equal(500, mean(standard_low$c_treatment), tolerance = 20)
-  expect_equal(500, mean(standard_high$c_treatment), tolerance = 20)
-  expect_equal(3000, mean(new_low$c_treatment), tolerance = 100)
-  expect_equal(3000, mean(new_high$c_treatment), tolerance = 100)
+  expect_equal(500, mean(seritinib_low$c_treatment), tolerance = 20)
+  expect_equal(500, mean(seritinib_high$c_treatment), tolerance = 20)
+  expect_equal(3000, mean(volantor_low$c_treatment), tolerance = 100)
+  expect_equal(3000, mean(volantor_high$c_treatment), tolerance = 100)
 
-  # hr_progression: lognormal(mean = 0.6, sd = 0.1) for new_treatment only
-  # standard strategy doesn't have sampling for hr_progression, so it returns NA
-  expect_true(all(is.na(standard_low$hr_progression)))
-  expect_true(all(is.na(standard_high$hr_progression)))
-  expect_equal(0.6, mean(new_low$hr_progression), tolerance = 0.02)
-  expect_equal(0.6, mean(new_high$hr_progression), tolerance = 0.02)
+  # hr_progression: lognormal(mean = 0.6, sd = 0.1) for volantor only
+  # seritinib strategy doesn't have sampling for hr_progression, so it returns NA
+  expect_true(all(is.na(seritinib_low$hr_progression)))
+  expect_true(all(is.na(seritinib_high$hr_progression)))
+  expect_equal(0.6, mean(volantor_low$hr_progression), tolerance = 0.02)
+  expect_equal(0.6, mean(volantor_high$hr_progression), tolerance = 0.02)
 
   # Group-specific parameters
   # p_mild: 0.05 for low_risk, 0.12 for high_risk
-  expect_equal(0.05, mean(standard_low$p_mild), tolerance = 5e-3)
-  expect_equal(0.12, mean(standard_high$p_mild), tolerance = 1e-2)
-  expect_equal(0.05, mean(new_low$p_mild), tolerance = 5e-3)
-  expect_equal(0.12, mean(new_high$p_mild), tolerance = 1e-2)
+  expect_equal(0.05, mean(seritinib_low$p_mild), tolerance = 5e-3)
+  expect_equal(0.12, mean(seritinib_high$p_mild), tolerance = 1e-2)
+  expect_equal(0.05, mean(volantor_low$p_mild), tolerance = 5e-3)
+  expect_equal(0.12, mean(volantor_high$p_mild), tolerance = 1e-2)
 
   # p_severe: 0.10 for low_risk, 0.20 for high_risk
-  expect_equal(0.10, mean(standard_low$p_severe), tolerance = 1e-2)
-  expect_equal(0.20, mean(standard_high$p_severe), tolerance = 2e-2)
-  expect_equal(0.10, mean(new_low$p_severe), tolerance = 1e-2)
-  expect_equal(0.20, mean(new_high$p_severe), tolerance = 2e-2)
+  expect_equal(0.10, mean(seritinib_low$p_severe), tolerance = 1e-2)
+  expect_equal(0.20, mean(seritinib_high$p_severe), tolerance = 2e-2)
+  expect_equal(0.10, mean(volantor_low$p_severe), tolerance = 1e-2)
+  expect_equal(0.20, mean(volantor_high$p_severe), tolerance = 2e-2)
 
   # p_death_severe: 0.08 for low_risk, 0.18 for high_risk
-  expect_equal(0.08, mean(standard_low$p_death_severe), tolerance = 1e-2)
-  expect_equal(0.18, mean(standard_high$p_death_severe), tolerance = 2e-2)
-  expect_equal(0.08, mean(new_low$p_death_severe), tolerance = 1e-2)
-  expect_equal(0.18, mean(new_high$p_death_severe), tolerance = 2e-2)
+  expect_equal(0.08, mean(seritinib_low$p_death_severe), tolerance = 1e-2)
+  expect_equal(0.18, mean(seritinib_high$p_death_severe), tolerance = 2e-2)
+  expect_equal(0.08, mean(volantor_low$p_death_severe), tolerance = 1e-2)
+  expect_equal(0.18, mean(volantor_high$p_death_severe), tolerance = 2e-2)
 
   # Check multivariate distribution - u_mild and c_mild should have expected means
   # mvnormal(mean = c(0.8, 2000), sd = c(0.05, 400), cor = -0.3)
-  expect_equal(0.8, mean(standard_low$u_mild), tolerance = 0.02)
-  expect_equal(2000, mean(standard_low$c_mild), tolerance = 50)
+  expect_equal(0.8, mean(seritinib_low$u_mild), tolerance = 0.02)
+  expect_equal(2000, mean(seritinib_low$c_mild), tolerance = 50)
 
   # Check negative correlation between u_mild and c_mild
-  cor_u_c <- cor(standard_low$u_mild, standard_low$c_mild)
+  cor_u_c <- cor(seritinib_low$u_mild, seritinib_low$c_mild)
   expect_lt(cor_u_c, 0)  # Should be negative
   expect_equal(-0.3, cor_u_c, tolerance = 0.1)  # Should be approximately -0.3
 })
@@ -139,8 +139,8 @@ test_that("parameter sampling with random seed is deterministic", {
   expect_equal(params_1$u_mild, params_2$u_mild)
   expect_equal(params_1$c_treatment, params_2$c_treatment)
 
-  # Sanity check: verify expected number of segments (2 strategies x 2 groups = 4)
-  expect_equal(nrow(params_1), 4)
+  # Sanity check: verify expected number of segments (3 strategies x 2 groups = 6)
+  expect_equal(nrow(params_1), 6)
 })
 
 test_that("errors in distribution parsing are handled properly", {

@@ -1,8 +1,8 @@
 ---
-title: "Base Case Results"
+title: "Base Case Outcomes"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Base Case Results}
+  %\VignetteIndexEntry{Base Case Outcomes}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -24,13 +24,11 @@ model <- read_model(system.file("models", "checkimab", package = "openqaly"))
 results <- run_model(model)
 ```
 
-## Outcomes Visualization
+## Plots
 
-The `outcomes_plot_bar()` function creates bar charts showing outcome values broken down by component. Results can be filtered by strategy and population subgroup.
+### Bar
 
-### Bar Charts
-
-The following examples demonstrate bar charts for outcome visualization.
+The `outcomes_plot_bar()` function creates bar charts showing outcome values broken down by component.
 
 #### Overall population
 
@@ -61,23 +59,54 @@ Use the `strategies` argument to include only selected strategies.
 outcomes_plot_bar(
   results,
   outcome = "qalys",
-  strategies = 'chemo'
+  strategies = c('chemo', 'check')
 )
 ```
 
-Multiple strategies can be specified as a character vector.
+#### Differences with interventions
+
+Use the `interventions` argument to show differences relative to other strategies.
 
 ```{r, fig.width=9, fig.height=6}
 outcomes_plot_bar(
   results,
   outcome = "qalys",
-  strategies = c('chemo', 'check')
+  interventions = "check"
 )
 ```
 
-### Outcomes Over Time
+#### Differences with comparators
 
-The `outcomes_plot_line()` function displays outcomes as line charts over the model time horizon. By default, cumulative values are shown.
+Use the `comparators` argument to show differences relative to a reference strategy.
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  comparators = "chemo"
+)
+```
+
+#### Differences with both interventions and comparators
+
+Specify both to show a specific comparison.
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_bar(
+  results,
+  outcome = "qalys",
+  interventions = "check",
+  comparators = "chemo"
+)
+```
+
+### Line
+
+The `outcomes_plot_line()` function displays outcomes as line charts over the model time horizon.
+
+#### Cumulative outcomes
+
+By default, cumulative values are shown.
 
 ```{r, fig.width=9, fig.height=6}
 outcomes_plot_line(
@@ -85,6 +114,8 @@ outcomes_plot_line(
   outcome = "qalys"
 )
 ```
+
+#### Per-cycle outcomes
 
 Set `cumulative = FALSE` to show per-cycle values instead.
 
@@ -96,19 +127,38 @@ outcomes_plot_line(
 )
 ```
 
-### Differences Between Strategies
-
-Use the `comparators` argument to show the difference in outcomes relative to a reference strategy.
+#### Differences with interventions
 
 ```{r, fig.width=9, fig.height=6}
-outcomes_plot_bar(
+outcomes_plot_line(
+  results,
+  outcome = "qalys",
+  interventions = "check"
+)
+```
+
+#### Differences with comparators
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_line(
   results,
   outcome = "qalys",
   comparators = "chemo"
 )
 ```
 
-## Outcomes Tables
+#### Differences with both interventions and comparators
+
+```{r, fig.width=9, fig.height=6}
+outcomes_plot_line(
+  results,
+  outcome = "qalys",
+  interventions = "check",
+  comparators = "chemo"
+)
+```
+
+## Tables
 
 The `outcomes_table()` function presents outcome values in tabular format.
 
@@ -131,12 +181,33 @@ outcomes_table(
 )
 ```
 
-### Differences vs comparator
+### Differences with interventions
 
 ```{r}
 outcomes_table(
   results,
   outcome = "qalys",
+  interventions = "check"
+)
+```
+
+### Differences with comparators
+
+```{r}
+outcomes_table(
+  results,
+  outcome = "qalys",
+  comparators = "chemo"
+)
+```
+
+### Differences with both interventions and comparators
+
+```{r}
+outcomes_table(
+  results,
+  outcome = "qalys",
+  interventions = "check",
   comparators = "chemo"
 )
 ```

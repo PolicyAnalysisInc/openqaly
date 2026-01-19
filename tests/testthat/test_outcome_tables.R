@@ -101,8 +101,8 @@ build_multi_group_test_model <- function() {
     add_value("sick_qalys", "u_sick", state = "sick", type = "outcome") |>
 
     # Summaries with WTP for NMB calculations
-    add_summary("total_cost", "drug_cost,care_cost", type = "cost") |>
-    add_summary("total_qalys", "healthy_qalys,sick_qalys", type = "outcome", wtp = 50000)
+    add_summary("total_cost", "drug_cost,care_cost", type = "cost", display_name = "Total Cost") |>
+    add_summary("total_qalys", "healthy_qalys,sick_qalys", type = "outcome", wtp = 50000, display_name = "QALYs")
 }
 
 get_multi_group_test_results <- function() {
@@ -466,8 +466,8 @@ test_that("Multi-group pairwise CE table has correct columns", {
     decimals = 2
   )
 
-  # Should have expected columns (note: uses " ", "Cost", "Outcome", "ICER")
-  expected_cols <- c(" ", "Cost", "Outcome", "ICER")
+  # Should have expected columns matching display names from test model
+  expected_cols <- c(" ", "Total Cost", "QALYs", "ICER")
   for (col in expected_cols) {
     expect_true(col %in% names(prepared$data),
                 info = paste("Should have column:", col))
