@@ -790,3 +790,545 @@ dsa_nmb_table <- function(results,
   # Render using specified backend
   render_table(prepared, format = table_format)
 }
+
+
+# ============================================================================
+# DSA Cost-Effectiveness Table Functions
+# ============================================================================
+
+
+#' Detect Direction Change for CE Table
+#'
+#' Internal helper to detect direction change between base case and variation ICER.
+#' Direction change only occurs with finite-to-finite sign changes.
+#'
+#' @param base_icer Numeric base case ICER
+#' @param variation_icer Numeric variation ICER
+#' @return Logical TRUE if direction change detected
+#' @keywords internal
+detect_direction_change <- function(base_icer, variation_icer) {
+  # Skip if either value is special (NaN, Inf, 0, NA)
+  if (is.na(base_icer) || is.na(variation_icer)) return(FALSE)
+  if (is.nan(base_icer) || is.nan(variation_icer)) return(FALSE)
+  if (is.infinite(base_icer) || is.infinite(variation_icer)) return(FALSE)
+  if (base_icer == 0 || variation_icer == 0) return(FALSE)
+
+  # Direction change: positive -> negative OR negative -> positive
+  base_positive <- base_icer > 0
+  variation_positive <- variation_icer > 0
+
+  return(base_positive != variation_positive)
+}
+
+
+#' Format CE Table Cell Value
+#'
+#' Internal helper to format ICER values for table cells.
+#'
+#' @param icer_value Numeric ICER value
+#' @param base_icer Numeric base case ICER (for direction change detection)
+#' @param decimals Number of decimal places
+#' @return Formatted string
+#' @keywords internal
+format_ce_cell <- function(icer_value, base_icer, decimals = 0) {
+  # Check NaN BEFORE NA because is.na(NaN) returns TRUE
+  if (is.nan(icer_value)) {
+    return("Equivalent")
+  }
+  if (is.na(icer_value)) {
+    return("")
+  }
+  if (is.infinite(icer_value) && icer_value > 0) {
+    return("Dominated")
+  }
+  if (icer_value == 0) {
+    return("Dominant")
+  }
+
+  # Format finite value
+  formatted <- prettyNum(round(abs(icer_value), decimals),
+                         big.mark = ",",
+                         scientific = FALSE)
+
+  # Add asterisk if direction change detected OR if value itself is negative
+  if (detect_direction_change(base_icer, icer_value) || icer_value < 0) {
+    formatted <- paste0(formatted, "*")
+  }
+
+  formatted
+}
+
+
+#' Prepare DSA CE Table Data
+#'
+#' Internal helper function that prepares DSA cost-effectiveness data for table
+#' rendering. Handles ICER formatting, direction change detection, and footnote
+#' generation.
+#'
+#' @param results A openqaly DSA results object
+#' @param health_outcome Name of health outcome summary
+#' @param cost_outcome Name of cost summary
+#' @param groups Group selection
+#' @param interventions Intervention strategy name(s)
+#' @param comparators Comparator strategy name(s)
+#' @param decimals Number of decimal places
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_dsa_ce_table_data <- function(results,
+                                      health_outcome,
+                                      cost_outcome,
+                                      groups = "overall",
+                                      interventions = NULL,
+                                      comparators = NULL,
+                                      decimals = 0,
+                                      font_size = 11) {
+
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided for CE table")
+  }
+
+  # Extract cost summaries (always discounted for CE)
+  cost_data <- extract_dsa_summaries(
+    results,
+    summary_name = cost_outcome,
+    value_type = "all",
+    groups = groups,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = TRUE
+  )
+
+  # Extract outcome summaries (always discounted for CE)
+  outcome_data <- extract_dsa_summaries(
+    results,
+    summary_name = health_outcome,
+    value_type = "all",
+    groups = groups,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = TRUE
+  )
+
+  # Combine cost and outcome data
+  combined_data <- cost_data %>%
+    inner_join(
+      outcome_data %>% select("run_id", "strategy", "group", outcome = "amount"),
+      by = c("run_id", "strategy", "group"),
+      suffix = c("", "_outcome")
+    ) %>%
+    rename(cost = amount)
+
+  # Get all strategies in the data
+  all_strategies <- unique(combined_data$strategy)
+
+  # Determine comparison pairs
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+  } else if (!is.null(interventions)) {
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
+
+  if (length(comparison_pairs) == 0) {
+    stop("No valid comparisons after excluding self-comparisons")
+  }
+
+  # Calculate ICERs for each comparison pair and run
+  all_icer_data <- list()
+
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    # Get display names for comparison label
+    int_mapped <- map_names(int_strat, results$metadata$strategies, "display_name")
+    comp_mapped <- map_names(comp_strat, results$metadata$strategies, "display_name")
+    comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
+
+    # Get data for intervention and comparator
+    int_data <- combined_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("run_id", "group", "parameter", "parameter_display_name", "variation",
+             cost_int = "cost", outcome_int = "outcome")
+
+    comp_data <- combined_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("run_id", "group", cost_comp = "cost", outcome_comp = "outcome")
+
+    # Join and calculate deltas
+    icer_data <- int_data %>%
+      inner_join(comp_data, by = c("run_id", "group")) %>%
+      mutate(
+        strategy = comp_label,
+        intervention_name = int_mapped,
+        comparator_name = comp_mapped,
+        dcost = .data$cost_int - .data$cost_comp,
+        doutcome = .data$outcome_int - .data$outcome_comp,
+        icer_value = icer(.data$dcost, .data$doutcome)
+      ) %>%
+      select("run_id", "group", "parameter", "parameter_display_name", "variation",
+             "strategy", "intervention_name", "comparator_name", "icer_value")
+
+    all_icer_data[[length(all_icer_data) + 1]] <- icer_data
+  }
+
+  combined_icer <- bind_rows(all_icer_data)
+
+  # Map group names
+  if (!is.null(results$metadata) && !is.null(results$metadata$groups)) {
+    combined_icer$group <- map_names(combined_icer$group, results$metadata$groups, "display_name")
+  }
+
+  # Separate base case from variations
+  base_data <- combined_icer %>%
+    filter(.data$variation == "base") %>%
+    select("strategy", "group", "intervention_name", "comparator_name",
+           base_icer = "icer_value")
+
+  low_data <- combined_icer %>%
+    filter(.data$variation == "low") %>%
+    select("strategy", "group", "parameter", "parameter_display_name",
+           low_icer = "icer_value")
+
+  high_data <- combined_icer %>%
+    filter(.data$variation == "high") %>%
+    select("strategy", "group", "parameter", "parameter_display_name",
+           high_icer = "icer_value")
+
+  # Combine into wide format per parameter
+  ce_data <- low_data %>%
+    inner_join(high_data, by = c("strategy", "group", "parameter", "parameter_display_name")) %>%
+    inner_join(base_data, by = c("strategy", "group"))
+
+  # Format cells and detect direction changes
+  ce_data <- ce_data %>%
+    rowwise() %>%
+    mutate(
+      low_formatted = format_ce_cell(.data$low_icer, .data$base_icer, decimals),
+      base_formatted = format_ce_cell(.data$base_icer, .data$base_icer, decimals),
+      high_formatted = format_ce_cell(.data$high_icer, .data$base_icer, decimals),
+      has_direction_change = detect_direction_change(.data$base_icer, .data$low_icer) ||
+        detect_direction_change(.data$base_icer, .data$high_icer) ||
+        (.data$base_icer < 0 && is.finite(.data$base_icer))
+    ) %>%
+    ungroup()
+
+  # Collect footnotes for direction changes
+  footnote_data <- ce_data %>%
+    filter(.data$has_direction_change) %>%
+    distinct(.data$intervention_name, .data$comparator_name) %>%
+    mutate(
+      footnote_text = sprintf(
+        "* %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
+        .data$comparator_name,
+        .data$intervention_name,
+        .data$comparator_name,
+        .data$intervention_name
+      )
+    )
+
+  footnotes <- unique(footnote_data$footnote_text)
+
+  # Get unique strategies and groups
+  strategies_display <- unique(ce_data$strategy)
+  groups_display <- unique(ce_data$group)
+
+  # Reorder groups: Overall first, then model definition order
+  groups_display <- get_group_order(groups_display, results$metadata)
+
+  n_strategies <- length(strategies_display)
+  n_groups <- length(groups_display)
+
+  # Determine mode
+  mode <- if (n_groups > 1 || is.null(groups)) "multi_group" else "single_group"
+
+  # Build table data based on mode
+  if (mode == "single_group") {
+    # Single group: pivot to wide format with strategy columns
+    result_data <- ce_data %>%
+      arrange(.data$parameter_display_name) %>%
+      select("parameter_display_name", "strategy",
+             low = "low_formatted", base = "base_formatted", high = "high_formatted")
+
+    # Pivot wider to get strategy columns
+    result_data <- result_data %>%
+      pivot_wider(
+        names_from = "strategy",
+        values_from = c("low", "base", "high"),
+        names_glue = "{strategy}_{.value}"
+      )
+
+    # Reorder columns to group by strategy
+    col_order <- c("parameter_display_name")
+    for (strat in strategies_display) {
+      col_order <- c(col_order, paste0(strat, "_low"), paste0(strat, "_base"), paste0(strat, "_high"))
+    }
+    result_data <- result_data[, col_order]
+
+    # Rename first column
+    names(result_data)[1] <- " "
+
+    # Build two-level headers
+    headers <- list()
+
+    # Level 1: Strategy names spanning 3 columns each
+    row1 <- list()
+    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 1, 0))
+    for (strat in strategies_display) {
+      row1[[length(row1) + 1]] <- list(span = 3, text = strat, borders = c(1, 0, 1, 0))
+    }
+    headers[[1]] <- row1
+
+    # Level 2: Low/Base/High labels
+    row2 <- list()
+    row2[[1]] <- list(span = 1, text = " ", borders = c(0, 0, 1, 0))
+    for (strat in strategies_display) {
+      row2[[length(row2) + 1]] <- list(span = 1, text = "Low", borders = c(0, 0, 1, 0))
+      row2[[length(row2) + 1]] <- list(span = 1, text = "Base", borders = c(0, 0, 1, 0))
+      row2[[length(row2) + 1]] <- list(span = 1, text = "High", borders = c(0, 0, 1, 0))
+    }
+    headers[[2]] <- row2
+
+    # Column alignments
+    column_alignments <- c("left", rep(c("right", "right", "right"), n_strategies))
+    column_widths <- rep(NA, ncol(result_data))
+
+    special_rows <- list()
+
+  } else {
+    # Multi-group mode: group header rows with indented parameters
+    result_data <- tibble()
+    group_header_rows <- integer()
+    indented_rows <- integer()
+    current_row <- 0
+
+    for (grp in groups_display) {
+      # Group header row
+      current_row <- current_row + 1
+      group_header_rows <- c(group_header_rows, current_row)
+
+      # Create group header row (all columns empty except first)
+      group_row <- tibble(parameter_display_name = grp)
+      for (strat in strategies_display) {
+        group_row[[paste0(strat, "_low")]] <- ""
+        group_row[[paste0(strat, "_base")]] <- ""
+        group_row[[paste0(strat, "_high")]] <- ""
+      }
+      result_data <- bind_rows(result_data, group_row)
+
+      # Parameter rows for this group
+      grp_data <- ce_data %>%
+        filter(.data$group == grp) %>%
+        arrange(.data$parameter_display_name) %>%
+        select("parameter_display_name", "strategy",
+               low = "low_formatted", base = "base_formatted", high = "high_formatted") %>%
+        pivot_wider(
+          names_from = "strategy",
+          values_from = c("low", "base", "high"),
+          names_glue = "{strategy}_{.value}"
+        )
+
+      # Reorder columns
+      col_order <- c("parameter_display_name")
+      for (strat in strategies_display) {
+        col_order <- c(col_order, paste0(strat, "_low"), paste0(strat, "_base"), paste0(strat, "_high"))
+      }
+      grp_data <- grp_data[, col_order]
+
+      # Track indented row indices
+      n_param_rows <- nrow(grp_data)
+      indented_rows <- c(indented_rows, seq(current_row + 1, current_row + n_param_rows))
+
+      result_data <- bind_rows(result_data, grp_data)
+      current_row <- current_row + n_param_rows
+    }
+
+    # Rename first column
+    names(result_data)[1] <- " "
+
+    # Build two-level headers (same as single group)
+    headers <- list()
+
+    # Level 1: Strategy names
+    row1 <- list()
+    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
+    for (strat in strategies_display) {
+      row1[[length(row1) + 1]] <- list(span = 3, text = strat, borders = c(1, 0, 1, 0))
+    }
+    headers[[1]] <- row1
+
+    # Level 2: Low/Base/High
+    row2 <- list()
+    row2[[1]] <- list(span = 1, text = " ", borders = c(0, 0, 1, 0))
+    for (strat in strategies_display) {
+      row2[[length(row2) + 1]] <- list(span = 1, text = "Low", borders = c(0, 0, 1, 0))
+      row2[[length(row2) + 1]] <- list(span = 1, text = "Base", borders = c(0, 0, 1, 0))
+      row2[[length(row2) + 1]] <- list(span = 1, text = "High", borders = c(0, 0, 1, 0))
+    }
+    headers[[2]] <- row2
+
+    # Column alignments
+    column_alignments <- c("left", rep(c("right", "right", "right"), n_strategies))
+    column_widths <- rep(NA, ncol(result_data))
+
+    # Calculate group boundary rows (all group headers except the first)
+    group_boundary_rows <- if (length(group_header_rows) > 1) group_header_rows[-1] else integer()
+    special_rows <- list(
+      group_header_rows = group_header_rows,
+      group_boundary_rows = group_boundary_rows,
+      indented_rows = indented_rows
+    )
+  }
+
+  # Create table spec
+  spec <- create_simple_table_spec(
+    headers = headers,
+    data = result_data,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = special_rows,
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+
+  # Add footnotes to spec
+  spec$footnotes <- footnotes
+
+  spec
+}
+
+
+#' Format DSA Cost-Effectiveness as Summary Table
+#'
+#' Creates a table showing DSA cost-effectiveness results with low, base case,
+#' and high ICER values for each parameter across pairwise comparisons.
+#'
+#' @param results A openqaly DSA results object (output from run_dsa)
+#' @param health_outcome Name of health outcome summary (e.g., "total_qalys")
+#' @param cost_outcome Name of cost summary (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
+#' @param interventions Character vector of intervention strategy name(s).
+#'   At least one of interventions or comparators must be specified.
+#' @param comparators Character vector of comparator strategy name(s).
+#'   At least one of interventions or comparators must be specified.
+#' @param decimals Number of decimal places (default: 0 for ICERs)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The table shows each DSA parameter as a row with three columns per comparison:
+#' Low, Base, and High ICER values.
+#'
+#' **ICER Cell Formatting:**
+#' - Positive finite: Currency formatted (e.g., "$50,000")
+#' - Negative finite: Currency formatted with asterisk (e.g., "$50,000*")
+#' - Dominated (+Inf): "Dominated"
+#' - Dominant (0): "Dominant"
+#' - Equivalent (NaN): "Equivalent"
+#'
+#' **Direction Change Handling:**
+#' - Cells showing direction change (sign flip) get asterisk
+#' - Per-comparison footnote explains the asterisk
+#'
+#' When multiple groups need to be displayed (groups = NULL), uses group label rows
+#' (in bold) followed by indented parameter rows for each group.
+#'
+#' ICER calculations always use discounted values.
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") %>%
+#'   add_variable("p_disease", 0.03) %>%
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+#' dsa_results <- run_dsa(model)
+#'
+#' # CE table (comparator perspective)
+#' dsa_ce_table(dsa_results, "total_qalys", "total_cost", comparators = "control")
+#'
+#' # CE table (intervention perspective)
+#' dsa_ce_table(dsa_results, "total_qalys", "total_cost", interventions = "new_treatment")
+#'
+#' # All groups with flextable format
+#' dsa_ce_table(dsa_results, "total_qalys", "total_cost",
+#'              groups = NULL, comparators = "control",
+#'              table_format = "flextable")
+#' }
+#'
+#' @export
+dsa_ce_table <- function(results,
+                         health_outcome,
+                         cost_outcome,
+                         groups = "overall",
+                         interventions = NULL,
+                         comparators = NULL,
+                         decimals = 0,
+                         font_size = 11,
+                         table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_dsa_ce_table_data(
+    results = results,
+    health_outcome = health_outcome,
+    cost_outcome = cost_outcome,
+    groups = groups,
+    interventions = interventions,
+    comparators = comparators,
+    decimals = decimals,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  tbl <- render_table(prepared, format = table_format)
+
+  # Add footnotes if any
+  if (length(prepared$footnotes) > 0) {
+    if (table_format == "flextable") {
+      tbl <- flextable::add_footer_lines(tbl, values = prepared$footnotes)
+      tbl <- flextable::align(tbl, align = "left", part = "footer")
+      tbl <- flextable::fontsize(tbl, size = font_size - 1, part = "footer")
+    } else {
+      # For kable, footnotes are handled differently
+      tbl <- kableExtra::footnote(tbl,
+                                  general = prepared$footnotes,
+                                  general_title = "",
+                                  footnote_as_chunk = FALSE)
+    }
+  }
+
+  tbl
+}

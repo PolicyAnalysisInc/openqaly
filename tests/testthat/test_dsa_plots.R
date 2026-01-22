@@ -963,3 +963,427 @@ test_that("dsa_outcomes_plot() shows no unit suffix for variable parameters", {
   expect_false(any(grepl("yrs", prob_labels)),
                info = paste("Variable labels should not contain yrs:", paste(prob_labels, collapse = ", ")))
 })
+
+
+# ============================================================================
+# CE Test Fixtures - Models that produce specific ICER scenarios
+# ============================================================================
+
+# Normal ICER: Treatment more costly AND more effective (NE quadrant)
+build_normal_icer_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 0, strategy = "control") %>%
+    add_variable("c_treatment", 10000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 0.5, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 5000, high = 15000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_dsa_variable("u_sick", low = 0.3, high = 0.7,
+                     display_name = "Utility (Sick)") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# Dominated: Treatment more costly AND less effective (SE quadrant, ICER = Inf)
+build_dominated_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 0, strategy = "control") %>%
+    add_variable("c_treatment", 10000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 1.5, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 5000, high = 15000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_dsa_variable("treatment_effect", low = 1.2, high = 2.0,
+                     display_name = "Treatment Harm", strategy = "treatment") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# Dominant: Treatment less costly AND more effective (NW quadrant, ICER = 0)
+build_dominant_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 5000, strategy = "control") %>%
+    add_variable("c_treatment", 1000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 0.3, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 500, high = 2000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_dsa_variable("treatment_effect", low = 0.1, high = 0.5,
+                     display_name = "Treatment Effect", strategy = "treatment") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# Flipped: Treatment less costly BUT less effective (SW quadrant, negative ICER)
+build_flipped_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 8000, strategy = "control") %>%
+    add_variable("c_treatment", 2000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 1.3, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 1000, high = 3000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_dsa_variable("treatment_effect", low = 1.1, high = 1.5,
+                     display_name = "Treatment Effect", strategy = "treatment") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# Multiple strategies model (3 strategies)
+build_multi_strategy_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment_a") %>%
+    add_strategy("treatment_b") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 0, strategy = "control") %>%
+    add_variable("c_treatment", 8000, strategy = "treatment_a") %>%
+    add_variable("c_treatment", 15000, strategy = "treatment_b") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 0.6, strategy = "treatment_a") %>%
+    add_variable("treatment_effect", 0.3, strategy = "treatment_b") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 5000, high = 12000,
+                     display_name = "Treatment A Cost", strategy = "treatment_a") %>%
+    add_dsa_variable("c_treatment", low = 10000, high = 20000,
+                     display_name = "Treatment B Cost", strategy = "treatment_b") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# ============================================================================
+# Tests for dsa_ce_plot() - Cost-Effectiveness Tornado Plot
+# ============================================================================
+
+test_that("dsa_ce_plot() works with normal ICER scenario", {
+  model <- build_normal_icer_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control")
+  expect_s3_class(p, "ggplot")
+
+  # Verify it builds without error
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_ce_plot() works with dominated scenario", {
+  model <- build_dominated_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_ce_plot() works with dominant scenario", {
+  model <- build_dominant_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_ce_plot() works with flipped scenario", {
+  model <- build_flipped_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_ce_plot() works with multiple strategies", {
+  model <- build_multi_strategy_model()
+  results <- run_dsa(model)
+
+  # All interventions vs control
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   comparators = "control", drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+
+  built <- ggplot_build(p)
+  expect_true(length(built$data) > 0)
+})
+
+test_that("dsa_ce_plot() works with specific intervention and comparator", {
+  model <- build_multi_strategy_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment_a", comparators = "control",
+                   drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("dsa_ce_plot() requires interventions or comparators", {
+  model <- build_normal_icer_model()
+  results <- run_dsa(model)
+
+  expect_error(
+    dsa_ce_plot(results, "total_qalys", "total_cost"),
+    "interventions.*comparators"
+  )
+})
+
+test_that("dsa_ce_plot() show_parameter_values option works", {
+  model <- build_normal_icer_model()
+  results <- run_dsa(model)
+
+  p_with <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                        interventions = "treatment", comparators = "control",
+                        show_parameter_values = TRUE)
+  p_without <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                           interventions = "treatment", comparators = "control",
+                           show_parameter_values = FALSE)
+
+  expect_s3_class(p_with, "ggplot")
+  expect_s3_class(p_without, "ggplot")
+})
+
+test_that("dsa_ce_plot() drop_zero_impact option works", {
+  model <- build_normal_icer_model()
+  results <- run_dsa(model)
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  expect_s3_class(p, "ggplot")
+})
+
+# ============================================================================
+# Tests for ICER Helper Functions
+# ============================================================================
+
+test_that("classify_base_case() returns correct classifications", {
+  expect_equal(openqaly:::classify_base_case(50000), "normal")
+  expect_equal(openqaly:::classify_base_case(-50000), "flipped")
+  expect_equal(openqaly:::classify_base_case(0), "dominant")
+  expect_equal(openqaly:::classify_base_case(Inf), "dominated")
+  expect_equal(openqaly:::classify_base_case(NaN), "identical")
+  expect_equal(openqaly:::classify_base_case(NA_real_), "reference")
+})
+
+test_that("detect_variation_error() returns correct error states", {
+  # Normal base with direction change
+ result <- openqaly:::detect_variation_error("normal", -50000)
+  expect_equal(result$type, "direction_change")
+  expect_false(result$show_bar)
+
+  # Normal base with identical outcome
+  result <- openqaly:::detect_variation_error("normal", NaN)
+  expect_equal(result$type, "identical")
+  expect_false(result$show_bar)
+
+  # Normal base with dominated
+  result <- openqaly:::detect_variation_error("normal", Inf)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "arrow")
+
+  # Normal base with dominant
+  result <- openqaly:::detect_variation_error("normal", 0)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "to_zero")
+
+  # Normal base with normal variation
+  result <- openqaly:::detect_variation_error("normal", 60000)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "standard")
+})
+
+test_that("format_icer_label() formats values correctly", {
+  expect_equal(openqaly:::format_icer_label(50000), "$50,000")
+  expect_equal(openqaly:::format_icer_label(50000, is_flipped = TRUE), "$50,000*")
+  expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
+  expect_equal(openqaly:::format_icer_label(0), "Dominant")
+  expect_equal(openqaly:::format_icer_label(NaN), "Equivalent")
+  expect_equal(openqaly:::format_icer_label(NA_real_), "")
+})
+
+test_that("generate_ce_error_message() creates correct messages", {
+  msg <- openqaly:::generate_ce_error_message(
+    "direction_change", "Low", -50000, "Treatment A", "Control"
+  )
+  expect_true(grepl("Low value", msg))
+  expect_true(grepl("directionality", msg))
+  expect_true(grepl("Control vs. Treatment A", msg))
+
+  msg <- openqaly:::generate_ce_error_message(
+    "identical", "High", NaN, "Treatment A", "Control"
+  )
+  expect_true(grepl("High value", msg))
+  expect_true(grepl("identical outcomes and costs", msg))
+
+  expect_true(is.na(
+    openqaly:::generate_ce_error_message(NULL, "Low", 50000, "A", "B")
+  ))
+})
+
+test_that("generate_ce_footnote() creates correct footnote", {
+  footnote <- openqaly:::generate_ce_footnote("Control", "Treatment A")
+  expect_true(grepl("Control is more costly", footnote))
+  expect_true(grepl("more effective than Treatment A", footnote))
+})

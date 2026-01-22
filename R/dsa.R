@@ -286,24 +286,62 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
         override_value = NA_character_
       )
     } else {
-      # Find a segment with this run_id to inspect overrides
-      seg <- segments %>% filter(.data$run_id == rid) %>% slice(1)
+      # Find a segment with this run_id that has non-empty overrides
+      # (For strategy-specific params, only some segments will have overrides)
+      run_segments <- segments %>% filter(.data$run_id == rid)
 
-      # Check if it has parameter_overrides or setting_overrides
-      param_overrides <- seg$parameter_overrides[[1]]
-      setting_overrides <- seg$setting_overrides[[1]]
+      # Find segment with non-empty param_overrides first
+      seg_with_override <- NULL
+      param_overrides <- list()
+      setting_overrides <- list()
+
+      for (i in seq_len(nrow(run_segments))) {
+        seg_param <- run_segments$parameter_overrides[[i]]
+        seg_setting <- run_segments$setting_overrides[[i]]
+
+        if (length(seg_param) > 0) {
+          seg_with_override <- run_segments[i, ]
+          param_overrides <- seg_param
+          break
+        } else if (length(seg_setting) > 0 && is.null(seg_with_override)) {
+          seg_with_override <- run_segments[i, ]
+          setting_overrides <- seg_setting
+        }
+      }
+
+      # Fall back to first segment if none have overrides
+      seg <- if (!is.null(seg_with_override)) seg_with_override else run_segments %>% slice(1)
 
       if (length(param_overrides) > 0) {
         # Variable DSA
         param_name <- names(param_overrides)[1]
         param_value <- param_overrides[[1]]
 
+        # Get segment's group and strategy to help match the correct DSA spec
+        seg_group <- seg$group[[1]]
+        seg_strategy <- seg$strategy[[1]]
+
         # Find the parameter in dsa_parameters to get display info
+        # Match on name AND group/strategy if specified in the DSA spec
         param_spec <- NULL
         for (p in model$dsa_parameters) {
           if (p$type == "variable" && p$name == param_name) {
-            param_spec <- p
-            break
+            # Check if this DSA spec is for the segment's group
+            p_group <- if (!is.na(p$group) && p$group != "") p$group else ""
+            seg_grp <- if (!is.na(seg_group) && seg_group != "_aggregated") seg_group else ""
+
+            # Check if this DSA spec is for the segment's strategy
+            p_strategy <- if (!is.na(p$strategy) && p$strategy != "") p$strategy else ""
+            seg_strat <- if (!is.na(seg_strategy)) seg_strategy else ""
+
+            # Match if: DSA has no restriction, or group matches, or strategy matches
+            group_ok <- (p_group == "" || p_group == seg_grp)
+            strategy_ok <- (p_strategy == "" || p_strategy == seg_strat)
+
+            if (group_ok && strategy_ok) {
+              param_spec <- p
+              break
+            }
           }
         }
 

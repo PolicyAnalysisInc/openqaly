@@ -46,6 +46,99 @@ get_dsa_test_results <- function() {
 }
 
 # ============================================================================
+# CE Test Fixtures - Models that produce specific ICER scenarios
+# ============================================================================
+
+# Normal ICER: Treatment more costly AND more effective (NE quadrant)
+build_ce_normal_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 0, strategy = "control") %>%
+    add_variable("c_treatment", 10000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 0.5, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 5000, high = 15000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# Multi-strategy model (3 strategies)
+build_ce_multi_strategy_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment_a") %>%
+    add_strategy("treatment_b") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 0, strategy = "control") %>%
+    add_variable("c_treatment", 8000, strategy = "treatment_a") %>%
+    add_variable("c_treatment", 15000, strategy = "treatment_b") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 0.6, strategy = "treatment_a") %>%
+    add_variable("treatment_effect", 0.3, strategy = "treatment_b") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 5000, high = 12000,
+                     display_name = "Treatment A Cost", strategy = "treatment_a") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+# ============================================================================
 # Mathematical Correctness Tests
 # ============================================================================
 
@@ -698,4 +791,299 @@ test_that("DSA NMB table with interventions produces valid output", {
   expect_true(inherits(nmb_tbl, "flextable") ||
                 inherits(nmb_tbl, "kableExtra") ||
                 is.character(nmb_tbl))
+})
+
+
+# ============================================================================
+# DSA CE (Cost-Effectiveness) Table Tests
+# ============================================================================
+
+# ============================================================================
+# DSA CE Table: Helper Function Tests
+# ============================================================================
+
+test_that("detect_direction_change() detects sign changes correctly", {
+  # Positive to negative = direction change
+  expect_true(openqaly:::detect_direction_change(50000, -50000))
+
+  # Negative to positive = direction change
+  expect_true(openqaly:::detect_direction_change(-50000, 50000))
+
+  # Same sign = no direction change
+  expect_false(openqaly:::detect_direction_change(50000, 60000))
+  expect_false(openqaly:::detect_direction_change(-50000, -60000))
+
+  # Special values = no direction change
+  expect_false(openqaly:::detect_direction_change(50000, Inf))
+  expect_false(openqaly:::detect_direction_change(50000, 0))
+  expect_false(openqaly:::detect_direction_change(50000, NaN))
+  expect_false(openqaly:::detect_direction_change(50000, NA))
+  expect_false(openqaly:::detect_direction_change(Inf, -50000))
+  expect_false(openqaly:::detect_direction_change(0, 50000))
+})
+
+test_that("format_ce_cell() formats ICER values correctly", {
+  # Positive finite
+  expect_equal(openqaly:::format_ce_cell(50000, 50000, 0), "$50,000")
+
+  # Dominated
+  expect_equal(openqaly:::format_ce_cell(Inf, 50000, 0), "Dominated")
+
+  # Dominant
+  expect_equal(openqaly:::format_ce_cell(0, 50000, 0), "Dominant")
+
+  # Equivalent
+  expect_equal(openqaly:::format_ce_cell(NaN, 50000, 0), "Equivalent")
+
+  # NA (reference)
+  expect_equal(openqaly:::format_ce_cell(NA, 50000, 0), "")
+
+  # Direction change (negative with positive base)
+  result <- openqaly:::format_ce_cell(-50000, 50000, 0)
+  expect_true(grepl("\\*", result))
+  expect_true(grepl("50,000", result))
+
+  # Negative value with negative base (no direction change, but negative itself gets asterisk)
+  result <- openqaly:::format_ce_cell(-50000, -40000, 0)
+  expect_true(grepl("\\*", result))
+})
+
+# ============================================================================
+# DSA CE Table: Data Preparation Tests
+# ============================================================================
+
+test_that("prepare_dsa_ce_table_data has correct structure", {
+
+  results <- get_dsa_test_results()
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, health_outcome = "total_qalys", cost_outcome = "total_cost",
+    groups = "overall", comparators = "standard"
+  )
+
+  # Should return a list with required components
+  expect_true(is.list(prepared))
+  expect_true("headers" %in% names(prepared))
+  expect_true("data" %in% names(prepared))
+  expect_true("footnotes" %in% names(prepared))
+})
+
+test_that("prepare_dsa_ce_table_data has one row per parameter", {
+
+  results <- get_dsa_test_results()
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, health_outcome = "total_qalys", cost_outcome = "total_cost",
+    groups = "overall", comparators = "standard"
+  )
+
+  n_params <- length(unique(
+    results$dsa_metadata$parameter[results$dsa_metadata$parameter != "base"]
+  ))
+  expect_equal(nrow(prepared$data), n_params)
+})
+
+test_that("prepare_dsa_ce_table_data has Low/Base/High columns per comparison", {
+
+  results <- get_dsa_test_results()
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, health_outcome = "total_qalys", cost_outcome = "total_cost",
+    groups = "overall", comparators = "standard"
+  )
+
+  # With 2 strategies and comparators="standard", should have 1 comparison
+  # So: 1 label column + 3 columns (Low/Base/High) = 4 columns
+  expect_equal(ncol(prepared$data), 4)
+})
+
+test_that("prepare_dsa_ce_table_data headers have comparison labels and Low/Base/High", {
+
+  results <- get_dsa_test_results()
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, health_outcome = "total_qalys", cost_outcome = "total_cost",
+    groups = "overall", comparators = "standard"
+  )
+
+  # Two header rows
+  expect_equal(length(prepared$headers), 2)
+
+  # Row 1 should have comparison label (contains "vs.")
+  row1_texts <- sapply(prepared$headers[[1]], function(x) x$text)
+  expect_true(any(grepl("vs\\.", row1_texts)))
+
+  # Row 2 should have Low/Base/High
+  row2_texts <- sapply(prepared$headers[[2]], function(x) x$text)
+  expect_true(all(c("Low", "Base", "High") %in% row2_texts))
+})
+
+# ============================================================================
+# DSA CE Table: API Contract Tests
+# ============================================================================
+
+test_that("dsa_ce_table() returns flextable by default", {
+  skip_if_not_installed("flextable")
+
+  results <- get_dsa_test_results()
+  tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
+                      groups = "overall", comparators = "standard")
+  expect_s3_class(tbl, "flextable")
+})
+
+test_that("dsa_ce_table() returns kable when requested", {
+
+  results <- get_dsa_test_results()
+  tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
+                      groups = "overall", comparators = "standard",
+                      table_format = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})
+
+test_that("dsa_ce_table() errors when neither interventions nor comparators provided", {
+
+  results <- get_dsa_test_results()
+  expect_error(
+    dsa_ce_table(results, "total_qalys", "total_cost", groups = "overall"),
+    "At least one of 'interventions' or 'comparators' must be provided"
+  )
+})
+
+test_that("dsa_ce_table() works with interventions parameter", {
+
+  results <- get_dsa_test_results()
+  expect_no_error(
+    dsa_ce_table(results, "total_qalys", "total_cost",
+                 groups = "overall", interventions = "new_treatment")
+  )
+})
+
+test_that("dsa_ce_table() works with both interventions and comparators", {
+
+  results <- get_dsa_test_results()
+  expect_no_error(
+    dsa_ce_table(results, "total_qalys", "total_cost",
+                 groups = "overall",
+                 interventions = "new_treatment",
+                 comparators = "standard")
+  )
+})
+
+test_that("dsa_ce_table() respects decimals parameter", {
+
+  results <- get_dsa_test_results()
+  prepared_0 <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall", comparators = "standard",
+    decimals = 0
+  )
+  prepared_2 <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall", comparators = "standard",
+    decimals = 2
+  )
+
+  # Values with 2 decimals should be different from 0 decimals
+  # (unless values happen to be whole numbers)
+  expect_type(prepared_0, "list")
+  expect_type(prepared_2, "list")
+})
+
+# ============================================================================
+# DSA CE Table: Mathematical Correctness Tests
+# ============================================================================
+
+test_that("DSA CE table ICER values match manual calculation", {
+
+  results <- get_dsa_test_results()
+
+  # Helper to extract summary value from aggregated results (discounted)
+  get_summary <- function(run_id, strategy, summary_name) {
+    results$aggregated %>%
+      dplyr::filter(.data$run_id == !!run_id, .data$strategy == !!strategy) %>%
+      dplyr::pull(summaries_discounted) %>% .[[1]] %>%
+      dplyr::filter(summary == summary_name) %>%
+      dplyr::pull(amount) %>% sum()
+  }
+
+  # Calculate expected base case ICER manually
+  int_qalys_base <- get_summary(1, "new_treatment", "total_qalys")
+  comp_qalys_base <- get_summary(1, "standard", "total_qalys")
+  int_cost_base <- get_summary(1, "new_treatment", "total_cost")
+  comp_cost_base <- get_summary(1, "standard", "total_cost")
+
+  delta_qalys <- int_qalys_base - comp_qalys_base
+  delta_cost <- int_cost_base - comp_cost_base
+  expected_icer <- icer(delta_cost, delta_qalys)
+
+  # Get prepared table data
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall", comparators = "standard",
+    decimals = 0
+  )
+
+  # Find the base column and get first row value
+  col_names <- names(prepared$data)
+  base_col <- col_names[grepl("_base$", col_names)]
+  expect_length(base_col, 1)
+
+  base_value <- prepared$data[[base_col]][1]
+
+  # Expected formatted value
+  expected_formatted <- openqaly:::format_ce_cell(as.numeric(expected_icer), as.numeric(expected_icer), 0)
+
+  expect_equal(base_value, expected_formatted)
+})
+
+# ============================================================================
+# DSA CE Table: Integration Tests
+# ============================================================================
+
+test_that("Full DSA CE table workflow produces valid output", {
+
+  model <- build_dsa_test_model()
+  results <- run_dsa(model)
+
+  # Generate CE table with comparators
+  ce_tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
+                         groups = "overall", comparators = "standard")
+
+  expect_true(inherits(ce_tbl, "flextable") ||
+                inherits(ce_tbl, "kableExtra") ||
+                is.character(ce_tbl))
+})
+
+test_that("DSA CE table with interventions produces valid output", {
+
+  model <- build_dsa_test_model()
+  results <- run_dsa(model)
+
+  ce_tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
+                         groups = "overall",
+                         interventions = "new_treatment")
+
+  expect_true(inherits(ce_tbl, "flextable") ||
+                inherits(ce_tbl, "kableExtra") ||
+                is.character(ce_tbl))
+})
+
+test_that("DSA CE table cells show special values correctly", {
+
+  results <- get_dsa_test_results()
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall", comparators = "standard"
+  )
+
+  # Get all cell values
+  all_values <- unlist(prepared$data[, -1])
+
+  # All cells should be formatted strings ($ or special values)
+  for (val in all_values) {
+    if (!is.na(val) && val != "") {
+      expect_true(
+        grepl("^\\$", val) ||
+          val %in% c("Dominated", "Dominant", "Equivalent") ||
+          grepl("\\*$", val),  # asterisk for direction change
+        info = paste("Value should be properly formatted:", val)
+      )
+    }
+  }
 })

@@ -98,6 +98,16 @@ model <- model %>%
                   display_name = "Outcome Discount Rate")
 
 dsa_results <- run_dsa(model)
+
+# Additional DSA parameters for CE tornado plot examples
+# These produce dominated and dominant ICER scenarios
+model_ce <- model %>%
+  add_dsa_variable("hr_progression", low = 0.1, high = 3.0,
+                   display_name = "Progression HR", strategy = "volantor") %>%
+  add_dsa_variable("c_treatment", low = bc * 0.1, high = bc * 5,
+                   display_name = "Treatment Cost", strategy = "volantor")
+
+dsa_ce_results <- run_dsa(model_ce)
 ```
 
 The `run_dsa()` function executes the model for each parameter at its low and high bounds.
@@ -116,7 +126,7 @@ The `dsa_outcomes_plot()` function creates tornado plots for outcome summaries.
 
 #### Basic usage
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys"
@@ -129,7 +139,7 @@ dsa_outcomes_plot(
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
-  strategies = c("standard", "new_treatment")
+  strategies = c("seritinib", "volantor")
 )
 ```
 
@@ -137,18 +147,18 @@ dsa_outcomes_plot(
 
 Use `interventions` and `comparators` to show incremental differences.
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=5}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
-  interventions = "new_treatment",
-  comparators = "standard"
+  interventions = "volantor",
+  comparators = "seritinib"
 )
 ```
 
 #### Hiding parameter values in labels
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
@@ -160,7 +170,7 @@ dsa_outcomes_plot(
 
 By default, parameters with no impact are excluded. Set `drop_zero_impact = FALSE` to include them.
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
@@ -170,7 +180,7 @@ dsa_outcomes_plot(
 
 #### Using discounted values
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
@@ -182,7 +192,7 @@ dsa_outcomes_plot(
 
 Use `groups = 'all_groups'` to display results for each population subgroup separately.
 
-```{r, fig.width=7, fig.height=9}
+```{r, fig.width=12, fig.height=10}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
@@ -194,7 +204,7 @@ dsa_outcomes_plot(
 
 Use `groups = 'all'` to display results for each subgroup plus the overall population.
 
-```{r, fig.width=7, fig.height=9}
+```{r, fig.width=16, fig.height=12}
 dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
@@ -215,7 +225,7 @@ model_same_side <- model %>%
 dsa_same_side <- run_dsa(model_same_side)
 ```
 
-```{r, fig.width=7, fig.height=6, echo = FALSE}
+```{r, fig.width=7, fig.height=7, echo = FALSE}
 dsa_outcomes_plot(
   dsa_same_side,
   summary_name = "qalys"
@@ -228,70 +238,70 @@ The `dsa_nmb_plot()` function creates tornado plots for Net Monetary Benefit.
 
 #### Intervention perspective
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=5}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment"
+  interventions = "volantor"
 )
 ```
 
 #### Comparator perspective
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=5}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  comparators = "standard"
+  comparators = "seritinib"
 )
 ```
 
 #### Specific intervention vs comparator
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=5}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
-  comparators = "standard"
+  interventions = "volantor",
+  comparators = "seritinib"
 )
 ```
 
 #### Custom WTP override
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=5}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   wtp = 50000
 )
 ```
 
 #### By subgroup
 
-```{r, fig.width=7, fig.height=9}
+```{r, fig.width=12, fig.height=6}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   groups = 'all_groups'
 )
 ```
 
 #### All groups with overall
 
-```{r, fig.width=7, fig.height=9}
+```{r, fig.width=12, fig.height=10}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   groups = 'all'
 )
 ```
@@ -317,7 +327,7 @@ dsa_outcomes_table(
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
-  strategies = c("standard", "new_treatment")
+  strategies = c("seritinib", "volantor")
 )
 ```
 
@@ -327,7 +337,7 @@ dsa_outcomes_table(
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
-  interventions = "new_treatment"
+  interventions = "volantor"
 )
 ```
 
@@ -337,7 +347,7 @@ dsa_outcomes_table(
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
-  comparators = "standard"
+  comparators = "seritinib"
 )
 ```
 
@@ -392,7 +402,7 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment"
+  interventions = "volantor"
 )
 ```
 
@@ -403,7 +413,7 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  comparators = "standard"
+  comparators = "seritinib"
 )
 ```
 
@@ -414,8 +424,8 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
-  comparators = "standard"
+  interventions = "volantor",
+  comparators = "seritinib"
 )
 ```
 
@@ -426,7 +436,7 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   wtp = 50000
 )
 ```
@@ -438,7 +448,7 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   groups = 'all_groups'
 )
 ```
@@ -450,8 +460,45 @@ dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
   cost_outcome = "costs",
-  interventions = "new_treatment",
+  interventions = "volantor",
   groups = 'all'
+)
+```
+
+### CE Tornado Plot
+
+The `dsa_ce_plot()` function creates tornado plots showing the impact of parameter variations on the Incremental Cost-Effectiveness Ratio (ICER).
+
+#### Basic usage
+
+```{r, fig.width=7, fig.height=5}
+dsa_ce_plot(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib"
+)
+```
+
+The plot handles special ICER cases:
+
+- **Dominated**: When the intervention has higher costs and lower/equal outcomes, the ICER is undefined (infinity). These are shown as arrow bars extending to the right edge of the plot.
+- **Dominant**: When the intervention has lower costs and higher/equal outcomes, the ICER is zero. These are shown as bars extending to the zero line on the left.
+
+### CE Table
+
+The `dsa_ce_table()` function presents ICER sensitivity results in tabular format.
+
+#### Basic usage
+
+```{r}
+dsa_ce_table(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib"
 )
 ```
 
