@@ -17,7 +17,6 @@
 #'   "all" includes overall + all groups, "all_groups" includes all groups without overall,
 #'   specific group name(s) filter to those groups (triggers faceting by group)
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param show_frontier Logical. Overlay the CE acceptability frontier?
 #' @param title Plot title. If NULL, auto-generated
 #' @param xlab X-axis label. Default is "Willingness to Pay"
 #' @param ylab Y-axis label. Default is "Probability of Being Most Cost-Effective"
@@ -48,10 +47,6 @@
 #' # Custom WTP range
 #' incremental_ceac_plot(psa_results, "total_qalys", "total_cost",
 #'                       wtp_range = c(0, 200000), wtp_step = 10000)
-#'
-#' # With frontier overlay
-#' incremental_ceac_plot(psa_results, "total_qalys", "total_cost",
-#'                       show_frontier = TRUE)
 #' }
 #'
 #' @export
@@ -62,7 +57,6 @@ incremental_ceac_plot <- function(results,
                                   wtp_step = 5000,
                                   groups = "overall",
                                   strategies = NULL,
-                                  show_frontier = FALSE,
                                   title = NULL,
                                   xlab = "Willingness to Pay",
                                   ylab = "Probability of Being Most Cost-Effective",
@@ -118,162 +112,8 @@ incremental_ceac_plot <- function(results,
       color = "Strategy"
     )
 
-  # Add frontier if requested
-  if (show_frontier) {
-    if ("wtp" %in% names(results) && "probability" %in% names(results)) {
-      warning("Cannot add frontier to pre-calculated CEAC data. Pass model results instead.")
-    } else {
-      # Always use discounted values (cost-effectiveness measure)
-      frontier_data <- calculate_incremental_ceac_frontier(
-        results = results,
-        outcome_summary = outcome_summary,
-        cost_summary = cost_summary,
-        wtp = wtp_seq,
-        groups = groups,
-        strategies = strategies
-      )
-
-      # Add frontier points
-      p <- p +
-        geom_point(
-          data = frontier_data,
-          aes(x = .data$wtp, y = .data$probability),
-          color = "black",
-          size = 2,
-          shape = 16
-        )
-    }
-  }
-
   # Facet if multiple groups
   n_groups <- length(unique(ceac_data$group))
-  if (n_groups > 1) {
-    p <- p + facet_wrap(~ group, scales = "fixed")
-  }
-
-  # Set legend position
-  if (legend_position != "default") {
-    p <- p + theme(legend.position = legend_position)
-  }
-
-  p
-}
-
-
-#' Plot Incremental Cost-Effectiveness Acceptability Frontier
-#'
-#' Creates a plot showing which strategy is optimal (highest expected NMB)
-#' at each willingness-to-pay threshold in a multi-way (incremental) comparison,
-#' along with the probability that it is actually the best choice.
-#'
-#' @inheritParams incremental_ceac_plot
-#' @param show_probability Logical. Show probability as line thickness or
-#'   transparency? Default is FALSE
-#'
-#' @return A ggplot2 object
-#'
-#' @details
-#' The incremental CE acceptability frontier shows the optimal strategy choice
-#' based on expected net monetary benefit at each WTP threshold in a multi-way
-#' comparison. Vertical lines or shaded regions indicate where the optimal
-#' strategy changes.
-#'
-#' CEAC calculations always use discounted values as this is a cost-effectiveness measure.
-#'
-#' When multiple groups are present, the plot is automatically faceted by group
-#' using \code{facet_wrap(~ group, scales = "fixed")}.
-#'
-#' @examples
-#' \dontrun{
-#' model <- read_model(system.file("models/example_psm", package = "openqaly"))
-#' psa_results <- run_psa(model, n_sim = 1000)
-#'
-#' # Basic frontier plot
-#' incremental_ceac_frontier_plot(psa_results, "total_qalys", "total_cost")
-#'
-#' # With probability shown
-#' incremental_ceac_frontier_plot(psa_results, "total_qalys", "total_cost",
-#'                                show_probability = TRUE)
-#' }
-#'
-#' @export
-incremental_ceac_frontier_plot <- function(results,
-                                           outcome_summary,
-                                           cost_summary,
-                                           wtp_range = c(0, 100000),
-                                           wtp_step = 5000,
-                                           groups = "overall",
-                                           strategies = NULL,
-                                           show_probability = FALSE,
-                                           title = NULL,
-                                           xlab = "Willingness to Pay",
-                                           ylab = "Optimal Strategy",
-                                           legend_position = "bottom") {
-
-  # Generate WTP sequence
-  wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
-
-  # Calculate frontier (always use discounted values - cost-effectiveness measure)
-  frontier_data <- calculate_incremental_ceac_frontier(
-    results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
-    wtp = wtp_seq,
-    groups = groups,
-    strategies = strategies
-  )
-
-  # Apply consistent group ordering (Overall first, then model order)
-  group_levels <- get_group_order(unique(frontier_data$group), results$metadata)
-  frontier_data <- frontier_data %>% mutate(group = factor(.data$group, levels = group_levels))
-
-  # Identify strategy transitions
-  frontier_data <- frontier_data %>%
-    group_by(.data$group) %>%
-    mutate(
-      strategy_change = .data$optimal_strategy != lag(.data$optimal_strategy, default = first(.data$optimal_strategy))
-    ) %>%
-    ungroup()
-
-  # Create base plot
-  if (show_probability) {
-    # Show probability as alpha or size
-    p <- ggplot(frontier_data, aes(x = .data$wtp, y = .data$optimal_strategy)) +
-      geom_line(aes(alpha = .data$probability, group = .data$group), linewidth = 2) +
-      geom_point(aes(alpha = .data$probability), size = 1) +
-      scale_alpha_continuous(range = c(0.3, 1), name = "Probability")
-  } else {
-    # Simple step plot
-    p <- ggplot(frontier_data, aes(x = .data$wtp, y = .data$optimal_strategy)) +
-      geom_step(aes(group = .data$group), linewidth = 1.5, color = "darkblue") +
-      geom_point(data = frontier_data %>% filter(.data$strategy_change),
-                size = 3, color = "red")
-  }
-
-  p <- p +
-    scale_x_continuous(labels = comma) +
-    theme_bw() +
-    labs(
-      title = title,
-      x = xlab,
-      y = ylab
-    )
-
-  # Add vertical lines at transitions
-  transition_points <- frontier_data %>%
-    filter(.data$strategy_change) %>%
-    pull(.data$wtp)
-
-  if (length(transition_points) > 0) {
-    p <- p +
-      geom_vline(xintercept = transition_points,
-                linetype = "dashed",
-                color = "gray50",
-                alpha = 0.5)
-  }
-
-  # Facet if multiple groups
-  n_groups <- length(unique(frontier_data$group))
   if (n_groups > 1) {
     p <- p + facet_wrap(~ group, scales = "fixed")
   }

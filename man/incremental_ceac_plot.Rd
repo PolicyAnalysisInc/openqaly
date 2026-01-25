@@ -12,7 +12,6 @@ incremental_ceac_plot(
   wtp_step = 5000,
   groups = "overall",
   strategies = NULL,
-  show_frontier = FALSE,
   title = NULL,
   xlab = "Willingness to Pay",
   ylab = "Probability of Being Most Cost-Effective",
@@ -39,8 +38,6 @@ Default is c(0, 100000)}
 specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{show_frontier}{Logical. Overlay the CE acceptability frontier?}
 
 \item{title}{Plot title. If NULL, auto-generated}
 
@@ -81,10 +78,6 @@ incremental_ceac_plot(psa_results, "total_qalys", "total_cost")
 # Custom WTP range
 incremental_ceac_plot(psa_results, "total_qalys", "total_cost",
                       wtp_range = c(0, 200000), wtp_step = 10000)
-
-# With frontier overlay
-incremental_ceac_plot(psa_results, "total_qalys", "total_cost",
-                      show_frontier = TRUE)
 }
 
 }

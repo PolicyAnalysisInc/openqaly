@@ -1355,8 +1355,8 @@ test_that("detect_variation_error() returns correct error states", {
 })
 
 test_that("format_icer_label() formats values correctly", {
-  expect_equal(openqaly:::format_icer_label(50000), "$50,000")
-  expect_equal(openqaly:::format_icer_label(50000, is_flipped = TRUE), "$50,000*")
+  expect_equal(openqaly:::format_icer_label(50000), "50,000")
+  expect_equal(openqaly:::format_icer_label(50000, is_flipped = TRUE), "50,000*")
   expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
   expect_equal(openqaly:::format_icer_label(0), "Dominant")
   expect_equal(openqaly:::format_icer_label(NaN), "Equivalent")

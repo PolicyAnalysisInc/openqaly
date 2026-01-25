@@ -7,9 +7,8 @@
 prepare_vbp_table_data_multi_group(
   vbp_results,
   wtp_thresholds = NULL,
-  comparators = NULL,
+  comparators = "all",
   groups_to_process,
-  include_all_comparators = TRUE,
   decimals = 0,
   font_size = 11
 )
@@ -19,11 +18,15 @@ prepare_vbp_table_data_multi_group(
 
 \item{wtp_thresholds}{Numeric vector of WTP thresholds}
 
-\item{comparators}{Character vector of comparators}
+\item{comparators}{Comparator selection:
+\itemize{
+  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+  \item Character vector - Specific comparator name(s)
+}}
 
 \item{groups_to_process}{Character vector of groups to include}
-
-\item{include_all_comparators}{Logical. Include all comparators column?}
 
 \item{decimals}{Number of decimal places}
 

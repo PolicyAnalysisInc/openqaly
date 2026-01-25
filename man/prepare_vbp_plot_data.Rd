@@ -8,9 +8,8 @@ prepare_vbp_plot_data(
   vbp_results,
   wtp_range = NULL,
   wtp_step = NULL,
-  comparators = NULL,
-  groups = "overall",
-  include_all_comparators = TRUE
+  comparators = "all",
+  groups = "overall"
 )
 }
 \arguments{
@@ -21,8 +20,13 @@ If NULL, auto-generates based on outcome metadata.}
 
 \item{wtp_step}{Step size for WTP thresholds. If NULL, auto-calculated.}
 
-\item{comparators}{Character vector of comparators to include.
-NULL for all comparators.}
+\item{comparators}{Comparator selection:
+\itemize{
+  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+  \item Character vector - Specific comparator name(s)
+}}
 
 \item{groups}{Group selection:
 \itemize{
@@ -30,9 +34,6 @@ NULL for all comparators.}
   \item \code{"group_name"} - Specific group by name
   \item \code{NULL} or \code{"all"} - All groups (triggers faceting)
 }}
-
-\item{include_all_comparators}{Logical. Include "All Comparators" line
-showing minimum VBP across all comparators?}
 }
 \value{
 Tibble with columns: wtp, comparator, vbp_price, group

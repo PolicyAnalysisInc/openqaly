@@ -224,38 +224,26 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
       delta_costs <- int_costs - comp_costs
       delta_outcomes <- int_outcomes - comp_outcomes
 
-      # Verify outcomes don't change with price
-      if (!all(near(delta_outcomes, delta_outcomes[1], tol = 1e-10))) {
-        stop(sprintf("VBP error: Price affects outcomes for %s vs %s in group %s",
-                    vbp_spec$intervention_strategy, comparator, grp))
-      }
-
-      # Fit linear model
-      price_vals <- vbp_spec$price_values
-      cost_model <- lm(delta_costs ~ price_vals)
-
-      # Verify linearity using the third point
-      predicted <- predict(cost_model)
-      residuals <- delta_costs - predicted
-      if (max(abs(residuals)) > 1e-8) {
-        stop(sprintf("VBP error: Cost not linear with price for %s vs %s in group %s",
-                    vbp_spec$intervention_strategy, comparator, grp))
-      }
-
-      # Extract coefficients
-      cost_slope <- coef(cost_model)[2]
-      cost_intercept <- coef(cost_model)[1]
+      # Use shared VBP calculation
+      vbp_eq <- calculate_vbp_equation(
+        delta_costs = delta_costs,
+        delta_outcomes = delta_outcomes,
+        price_values = vbp_spec$price_values,
+        intervention = vbp_spec$intervention_strategy,
+        comparator = comparator,
+        context = sprintf("in group %s", grp)
+      )
 
       # Calculate VBP equation for this group
       group_equations[[comparator]] <- tibble(
         group = grp,
         intervention = vbp_spec$intervention_strategy,
         comparator = comparator,
-        outcome_difference = delta_outcomes[1],
-        cost_slope = cost_slope,
-        cost_intercept = cost_intercept,
-        vbp_slope = delta_outcomes[1] / cost_slope,
-        vbp_intercept = -cost_intercept / cost_slope,
+        outcome_difference = vbp_eq$outcome_difference,
+        cost_slope = vbp_eq$cost_slope,
+        cost_intercept = vbp_eq$cost_intercept,
+        vbp_slope = vbp_eq$vbp_slope,
+        vbp_intercept = vbp_eq$vbp_intercept,
         weight = intervention_data$weight[1]  # Store group weight
       )
     }
@@ -295,37 +283,25 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
     delta_costs <- int_costs - comp_costs
     delta_outcomes <- int_outcomes - comp_outcomes
 
-    # Verify outcomes don't change with price
-    if (!all(near(delta_outcomes, delta_outcomes[1], tol = 1e-10))) {
-      stop(sprintf("VBP error: Price affects aggregated outcomes for %s vs %s",
-                  vbp_spec$intervention_strategy, comparator))
-    }
-
-    # Fit linear model
-    price_vals <- vbp_spec$price_values
-    cost_model <- lm(delta_costs ~ price_vals)
-
-    # Verify linearity
-    predicted <- predict(cost_model)
-    residuals <- delta_costs - predicted
-    if (max(abs(residuals)) > 1e-8) {
-      stop(sprintf("VBP error: Aggregated cost not linear with price for %s vs %s",
-                  vbp_spec$intervention_strategy, comparator))
-    }
-
-    # Extract coefficients
-    cost_slope <- coef(cost_model)[2]
-    cost_intercept <- coef(cost_model)[1]
+    # Use shared VBP calculation
+    vbp_eq <- calculate_vbp_equation(
+      delta_costs = delta_costs,
+      delta_outcomes = delta_outcomes,
+      price_values = vbp_spec$price_values,
+      intervention = vbp_spec$intervention_strategy,
+      comparator = comparator,
+      context = "(aggregated)"
+    )
 
     overall_equations[[comparator]] <- tibble(
       group = "overall",
       intervention = vbp_spec$intervention_strategy,
       comparator = comparator,
-      outcome_difference = delta_outcomes[1],
-      cost_slope = cost_slope,
-      cost_intercept = cost_intercept,
-      vbp_slope = delta_outcomes[1] / cost_slope,
-      vbp_intercept = -cost_intercept / cost_slope
+      outcome_difference = vbp_eq$outcome_difference,
+      cost_slope = vbp_eq$cost_slope,
+      cost_intercept = vbp_eq$cost_intercept,
+      vbp_slope = vbp_eq$vbp_slope,
+      vbp_intercept = vbp_eq$vbp_intercept
     )
   }
 
@@ -473,4 +449,60 @@ validate_vbp_spec <- function(model, vbp_spec) {
 #' @keywords internal
 near <- function(x, y, tol = .Machine$double.eps^0.5) {
   abs(x - y) < tol
+}
+
+#' Calculate VBP Equation from Cost and Outcome Data
+#'
+#' Core VBP calculation logic shared between run_vbp() and run_dsa() with VBP.
+#' Fits a linear model to incremental costs across price levels and derives
+#' the VBP equation.
+#'
+#' @param delta_costs Numeric vector of incremental costs at each price level
+#' @param delta_outcomes Numeric vector of incremental outcomes at each price level
+#' @param price_values Numeric vector of price values tested
+#' @param intervention Intervention strategy name (for error messages)
+#' @param comparator Comparator strategy name (for error messages)
+#' @param context Additional context for error messages (e.g., "group X, run_id Y")
+#'
+#' @return List with: outcome_difference, cost_slope, cost_intercept, vbp_slope, vbp_intercept
+#' @keywords internal
+calculate_vbp_equation <- function(delta_costs,
+                                    delta_outcomes,
+                                    price_values,
+                                    intervention,
+                                    comparator,
+                                    context = "") {
+  # Build context string for error messages
+  ctx <- if (context != "") paste0(" ", context) else ""
+
+  # Verify outcomes don't change with price
+  if (!all(near(delta_outcomes, delta_outcomes[1], tol = 1e-10))) {
+    stop(sprintf("VBP error: Price affects outcomes for %s vs %s%s",
+                intervention, comparator, ctx))
+  }
+
+  # Fit linear model
+  cost_model <- lm(delta_costs ~ price_values)
+
+  # Verify linearity using residuals
+
+  predicted <- predict(cost_model)
+  residuals <- delta_costs - predicted
+  if (max(abs(residuals)) > 1e-8) {
+    stop(sprintf("VBP error: Cost not linear with price for %s vs %s%s",
+                intervention, comparator, ctx))
+  }
+
+  # Extract coefficients
+  cost_slope <- coef(cost_model)[2]
+  cost_intercept <- coef(cost_model)[1]
+
+  # Calculate VBP equation coefficients
+  list(
+    outcome_difference = delta_outcomes[1],
+    cost_slope = cost_slope,
+    cost_intercept = cost_intercept,
+    vbp_slope = delta_outcomes[1] / cost_slope,
+    vbp_intercept = -cost_intercept / cost_slope
+  )
 }

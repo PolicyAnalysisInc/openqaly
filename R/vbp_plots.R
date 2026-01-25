@@ -16,25 +16,27 @@ NULL
 #' @param wtp_range Numeric vector with min and max WTP values.
 #'   If NULL, auto-generates based on outcome metadata.
 #' @param wtp_step Step size for WTP thresholds. If NULL, auto-calculated.
-#' @param comparators Character vector of comparators to include.
-#'   NULL for all comparators.
+#' @param comparators Comparator selection:
+#'   \itemize{
+#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+#'     \item Character vector - Specific comparator name(s)
+#'   }
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (default)
 #'     \item \code{"group_name"} - Specific group by name
 #'     \item \code{NULL} or \code{"all"} - All groups (triggers faceting)
 #'   }
-#' @param include_all_comparators Logical. Include "All Comparators" line
-#'   showing minimum VBP across all comparators?
 #'
 #' @return Tibble with columns: wtp, comparator, vbp_price, group
 #' @keywords internal
 prepare_vbp_plot_data <- function(vbp_results,
                                   wtp_range = NULL,
                                   wtp_step = NULL,
-                                  comparators = NULL,
-                                  groups = "overall",
-                                  include_all_comparators = TRUE) {
+                                  comparators = "all",
+                                  groups = "overall") {
 
  # Handle group selection for plotting
   if (is.null(groups) || identical(groups, "all")) {
@@ -48,13 +50,16 @@ prepare_vbp_plot_data <- function(vbp_results,
     groups_to_plot <- groups
   }
 
-  # Reorder groups: Overall first, then model definition order
+  # Reorder groups: Overall first, then model definition order (using internal names)
   metadata <- attr(vbp_results$aggregated, "metadata")
-  # Map "overall" to "Overall" for consistency with get_group_order
-  groups_to_plot[groups_to_plot == "overall"] <- "Overall"
-  groups_to_plot <- get_group_order(groups_to_plot, metadata)
-  # Map back to internal name for data lookup
-  groups_to_plot[groups_to_plot == "Overall"] <- "overall"
+  has_overall <- "overall" %in% groups_to_plot
+  if (!is.null(metadata$groups)) {
+    model_order <- metadata$groups$name
+    ordered_groups <- model_order[model_order %in% groups_to_plot]
+  } else {
+    ordered_groups <- setdiff(groups_to_plot, "overall")
+  }
+  groups_to_plot <- if (has_overall) c("overall", ordered_groups) else ordered_groups
 
   # Process each group
   all_data <- list()
@@ -74,17 +79,32 @@ prepare_vbp_plot_data <- function(vbp_results,
 
     available_comparators <- unique(equations$comparator)
 
-    # Filter comparators if specified
-    if (!is.null(comparators)) {
+    # Process comparators based on selection pattern (matching DSA VBP pattern)
+    include_aggregate <- FALSE
+    if (identical(comparators, "overall")) {
+      # Just the aggregate "All Comparators"
+      comparators_for_calc <- available_comparators
+      include_aggregate <- length(available_comparators) > 0
+      show_individuals <- FALSE
+    } else if (identical(comparators, "all")) {
+      # All individuals + aggregate
+      comparators_for_calc <- available_comparators
+      include_aggregate <- length(available_comparators) > 1
+      show_individuals <- TRUE
+    } else if (identical(comparators, "all_comparators")) {
+      # Just individuals, no aggregate
+      comparators_for_calc <- available_comparators
+      show_individuals <- TRUE
+    } else {
+      # Specific comparator names - filter
       invalid <- setdiff(comparators, available_comparators)
       if (length(invalid) > 0) {
         stop(sprintf("Comparator(s) not found: %s. Available: %s",
                      paste(invalid, collapse = ", "),
                      paste(available_comparators, collapse = ", ")))
       }
-      comparators_display <- comparators
-    } else {
-      comparators_display <- available_comparators
+      comparators_for_calc <- comparators
+      show_individuals <- TRUE
     }
 
     # Generate WTP range if not provided
@@ -110,30 +130,51 @@ prepare_vbp_plot_data <- function(vbp_results,
     wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
 
     # Calculate VBP at each WTP for each comparator
-    vbp_data <- expand_grid(
-      wtp = wtp_seq,
-      comparator = comparators_display
-    ) %>%
-      rowwise() %>%
-      mutate(
-        vbp_price = calculate_vbp_price(
-          vbp_results,
-          wtp = .data$wtp,
-          comparator = .data$comparator,
-          group = grp
-        )
+    vbp_data <- NULL
+    if (show_individuals) {
+      vbp_data <- expand_grid(
+        wtp = wtp_seq,
+        comparator = comparators_for_calc
       ) %>%
-      ungroup() %>%
-      mutate(group = grp)
+        rowwise() %>%
+        mutate(
+          vbp_price = calculate_vbp_price(
+            vbp_results,
+            wtp = .data$wtp,
+            comparator = .data$comparator,
+            group = grp
+          )
+        ) %>%
+        ungroup() %>%
+        mutate(group = grp)
+    }
 
     # Calculate "All Comparators" series (minimum VBP at each WTP)
-    if (include_all_comparators && length(comparators_display) > 1) {
-      all_comp_data <- vbp_data %>%
-        group_by(.data$wtp, .data$group) %>%
+    if (include_aggregate) {
+      # Calculate minimum VBP across all available comparators at each WTP
+      all_comp_data <- expand_grid(
+        wtp = wtp_seq,
+        comparator = available_comparators
+      ) %>%
+        rowwise() %>%
+        mutate(
+          vbp_price = calculate_vbp_price(
+            vbp_results,
+            wtp = .data$wtp,
+            comparator = .data$comparator,
+            group = grp
+          )
+        ) %>%
+        ungroup() %>%
+        group_by(.data$wtp) %>%
         summarize(vbp_price = min(.data$vbp_price), .groups = "drop") %>%
-        mutate(comparator = "All Comparators")
+        mutate(comparator = "All Comparators", group = grp)
 
-      vbp_data <- bind_rows(vbp_data, all_comp_data)
+      if (is.null(vbp_data)) {
+        vbp_data <- all_comp_data
+      } else {
+        vbp_data <- bind_rows(vbp_data, all_comp_data)
+      }
     }
 
     all_data[[grp]] <- vbp_data
@@ -152,8 +193,13 @@ prepare_vbp_plot_data <- function(vbp_results,
 #'   If NULL, auto-generates based on outcome summary metadata (0 to 2x default WTP).
 #' @param wtp_step Step size for WTP thresholds. If NULL, auto-calculated
 #'   for smooth curve (~40 points).
-#' @param comparators Character vector of comparators to include.
-#'   NULL for all comparators.
+#' @param comparators Comparator selection:
+#'   \itemize{
+#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+#'     \item Character vector - Specific comparator name(s)
+#'   }
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (default)
@@ -187,7 +233,7 @@ prepare_vbp_plot_data <- function(vbp_results,
 #'   intervention_strategy = "targeted"
 #' )
 #'
-#' # Basic VBP plot with auto-generated WTP range
+#' # Basic VBP plot with auto-generated WTP range (individuals only by default)
 #' vbp_plot(vbp_results)
 #'
 #' # Custom WTP range
@@ -195,26 +241,33 @@ prepare_vbp_plot_data <- function(vbp_results,
 #'
 #' # VBP plot for specific comparator
 #' vbp_plot(vbp_results, comparators = "chemo")
+#'
+#' # VBP plot with aggregate line
+#' vbp_plot(vbp_results, comparators = "all")
 #' }
 #'
 #' @export
 vbp_plot <- function(vbp_results,
                      wtp_range = NULL,
                      wtp_step = NULL,
-                     comparators = NULL,
+                     comparators = "all_comparators",
                      groups = "overall",
                      show_default_wtp = TRUE,
                      show_vbp_at_wtp = TRUE) {
 
-  # Prepare plot data (never include "All Comparators" in plots)
+  # Prepare plot data
   plot_data <- prepare_vbp_plot_data(
     vbp_results = vbp_results,
     wtp_range = wtp_range,
     wtp_step = wtp_step,
     comparators = comparators,
-    groups = groups,
-    include_all_comparators = FALSE
+    groups = groups
   )
+
+  # Check for empty data
+  if (is.null(plot_data) || nrow(plot_data) == 0) {
+    stop("No VBP data available for the specified comparators and groups")
+  }
 
   # Map comparator and group names to display names
 

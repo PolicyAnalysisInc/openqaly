@@ -7,9 +7,8 @@
 vbp_table(
   vbp_results,
   wtp_thresholds = NULL,
-  comparators = NULL,
+  comparators = "all",
   groups = "overall",
-  include_all_comparators = TRUE,
   decimals = 0,
   font_size = 11,
   table_format = c("flextable", "kable")
@@ -21,8 +20,13 @@ vbp_table(
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as rows.
 If NULL, generates a default sequence based on outcome summary metadata.}
 
-\item{comparators}{Character vector of comparators to include.
-NULL for all comparators.}
+\item{comparators}{Comparator selection:
+\itemize{
+  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+  \item Character vector - Specific comparator name(s)
+}}
 
 \item{groups}{Group selection:
 \itemize{
@@ -31,10 +35,6 @@ NULL for all comparators.}
   \item \code{"all_groups"} - All groups (excluding overall)
   \item \code{NULL} or \code{"all"} - All groups plus overall
 }}
-
-\item{include_all_comparators}{Logical. Include a column showing the
-minimum VBP across all comparators? This represents the maximum price
-that is cost-effective versus ALL alternatives. Default TRUE.}
 
 \item{decimals}{Number of decimal places for VBP values (default: 0)}
 
@@ -51,7 +51,7 @@ thresholds for each comparator strategy.
 }
 \details{
 The VBP table displays the maximum price the intervention can charge while
-remaining cost-effective at each WTP threshold. The "All Comparators" column
+remaining cost-effective at each WTP threshold. The "vs. All Comparators" column
 shows the minimum VBP across all comparators - this is the price that ensures
 cost-effectiveness versus ALL alternatives simultaneously.
 
@@ -71,7 +71,7 @@ vbp_results <- run_vbp(
   intervention_strategy = "targeted"
 )
 
-# VBP table with auto-generated WTP thresholds
+# VBP table with auto-generated WTP thresholds (all comparators + aggregate)
 vbp_table(vbp_results)
 
 # VBP table with custom WTP thresholds
@@ -79,6 +79,12 @@ vbp_table(vbp_results, wtp_thresholds = c(0, 50000, 100000, 150000))
 
 # VBP table for specific comparator
 vbp_table(vbp_results, comparators = "chemo")
+
+# VBP table with only the aggregate column
+vbp_table(vbp_results, comparators = "overall")
+
+# VBP table with individual comparators only (no aggregate)
+vbp_table(vbp_results, comparators = "all_comparators")
 }
 
 }

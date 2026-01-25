@@ -186,15 +186,22 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   # Compute y positions as numeric values within each facet so each panel has
   # its own 1, 2, 3... sequence. This avoids duplicate labels caused by global factor levels.
   # Largest range gets y=1 (top position on standard y-axis)
-  tornado_long <- tornado_long %>%
+  # Use parameter_display_name as tiebreaker for equal ranges to ensure unique y positions
+  # First compute rank per parameter (not per variation), then join back
+  param_ranks <- tornado_long %>%
+    distinct(.data$reorder_group, .data$parameter_display_name, .data$range) %>%
     group_by(.data$reorder_group) %>%
+    arrange(desc(.data$range), .data$parameter_display_name, .by_group = TRUE) %>%
+    mutate(y_base = row_number() * y_spacing) %>%
+    ungroup() %>%
+    select("reorder_group", "parameter_display_name", "y_base")
+
+  tornado_long <- tornado_long %>%
+    left_join(param_ranks, by = c("reorder_group", "parameter_display_name")) %>%
     mutate(
-      # Create numeric y position ordered by range (largest = 1, smallest = N) within each group
-      y_base = dense_rank(desc(.data$range)) * y_spacing,
       # Apply offset for same-side bars
       y_numeric = .data$y_base + .data$y_offset
-    ) %>%
-    ungroup()
+    )
 
   # Create a label lookup table for y-axis labels (one entry per parameter per facet group)
   y_labels <- tornado_long %>%
@@ -272,10 +279,9 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
       data = base_case_labels,
       aes(x = .data$base, y = .data$y_pos, label = .data$base_label),
       vjust = 0,
-      size = 2,
+      size = 2.5,
       fontface = "bold",
       fill = "white",
-      linewidth = 0.5,
       label.padding = unit(0.25, "lines"),
       inherit.aes = FALSE
     ) +
@@ -283,8 +289,8 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
       data = label_data,
       aes(x = .data$label_x, y = .data$y_numeric, label = .data$label,
           hjust = .data$label_hjust),
-      vjust = 0,
-      size = 2,
+      vjust = 0.5,
+      size = 2.5,
       inherit.aes = FALSE
     ) +
     scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +
@@ -297,7 +303,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
           if (nrow(match_row) > 0) match_row$parameter_display_name else ""
         })
       },
-      expand = expansion(mult = c(0, 0), add = c(0.1, 0.7))
+      expand = expansion(mult = c(0, 0), add = c(0.3, 0.7))
     ) +
     scale_fill_manual(values = c("Low" = "#F8766D", "High" = "#00BFC4")) +
     labs(y = NULL, x = summary_label, fill = "Parameter Value") +
@@ -2159,10 +2165,9 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     data = base_case_labels,
     aes(x = .data$label_x, y = .data$y_pos, label = .data$base_label, hjust = .data$label_hjust),
     vjust = 0,
-    size = 2,
+    size = 2.5,
     fontface = "bold",
     fill = "white",
-    label.size = 0.5,
     label.padding = unit(0.25, "lines")
   )
 
@@ -2233,8 +2238,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       data = label_data,
       aes(x = .data$label_x, y = .data$y_numeric, label = .data$label,
           hjust = .data$label_hjust),
-      vjust = 0,
-      size = 2
+      vjust = 0.5,
+      size = 2.5
     )
   }
 
@@ -2275,8 +2280,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       data = error_label_data,
       aes(x = .data$label_x, y = .data$y_numeric, label = .data$error_label,
           hjust = .data$label_hjust),
-      vjust = 0,
-      size = 2,
+      vjust = 0.5,
+      size = 2.5,
       fill = "white",
       color = "black",
       label.size = 0.3,
@@ -2315,7 +2320,7 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
           if (nrow(match_row) > 0) match_row$parameter_display_name else ""
         })
       },
-      expand = expansion(mult = c(0, 0), add = c(0.1, 0.7))
+      expand = expansion(mult = c(0, 0), add = c(0.3, 0.7))
     )
 
   # Only add fill scale if there's data that uses it (avoids warning)

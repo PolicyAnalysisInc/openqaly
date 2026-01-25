@@ -171,17 +171,29 @@ Filter to a single comparator.
 ```{r}
 vbp_table(
   vbp_results,
-  comparators = "chemo",
-  include_all_comparators = FALSE
+  comparators = "chemo"
 )
 ```
 
-### Excluding the "All Comparators" column
+### Aggregate only
+
+Show only the "vs. All Comparators" column (minimum VBP across all comparators).
 
 ```{r}
 vbp_table(
   vbp_results,
-  include_all_comparators = FALSE
+  comparators = "overall"
+)
+```
+
+### Individual comparators only (no aggregate)
+
+Show individual comparator columns without the aggregate column.
+
+```{r}
+vbp_table(
+  vbp_results,
+  comparators = "all_comparators"
 )
 ```
 
@@ -226,13 +238,13 @@ vbp_table(
 
 The value-based price represents the **maximum price** the intervention can charge while remaining cost-effective at a given WTP threshold. At prices above the VBP, the intervention would not be considered cost-effective versus the comparator.
 
-### The "All Comparators" column
+### The "vs. All Comparators" column
 
-When there are multiple comparator strategies, the "All Comparators" column in VBP tables shows the **minimum VBP across all comparators** at each WTP threshold. This represents the price that ensures cost-effectiveness versus **all** alternatives simultaneously - the most conservative pricing recommendation.
+When there are multiple comparator strategies, the "vs. All Comparators" column in VBP tables shows the **minimum VBP across all comparators** at each WTP threshold. This represents the price that ensures cost-effectiveness versus **all** alternatives simultaneously - the most conservative pricing recommendation.
 
 ### Practical use
 
 1. Identify your target WTP threshold (e.g., $100,000/QALY)
 2. Find the VBP at that threshold
 3. If pricing above this value, the intervention will not be cost-effective
-4. The "All Comparators" value provides the safest pricing target when multiple alternatives exist
+4. The "vs. All Comparators" value provides the safest pricing target when multiple alternatives exist

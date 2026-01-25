@@ -824,7 +824,7 @@ test_that("detect_direction_change() detects sign changes correctly", {
 
 test_that("format_ce_cell() formats ICER values correctly", {
   # Positive finite
-  expect_equal(openqaly:::format_ce_cell(50000, 50000, 0), "$50,000")
+  expect_equal(openqaly:::format_ce_cell(50000, 50000, 0), "50,000")
 
   # Dominated
   expect_equal(openqaly:::format_ce_cell(Inf, 50000, 0), "Dominated")

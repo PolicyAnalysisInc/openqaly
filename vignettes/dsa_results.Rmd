@@ -12,7 +12,8 @@ This vignette demonstrates how to configure, run, and visualize deterministic se
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  dpi = 150
 )
 ```
 
@@ -467,7 +468,7 @@ dsa_nmb_table(
 
 ### CE Tornado Plot
 
-The `dsa_ce_plot()` function creates tornado plots showing the impact of parameter variations on the Incremental Cost-Effectiveness Ratio (ICER).
+The `dsa_ce_plot()` function creates tornado plots showing the sensitivity of the Incremental Cost-Effectiveness Ratio (ICER) to variation in input parameters over specified ranges.
 
 #### Basic usage
 
@@ -488,7 +489,7 @@ The plot handles special ICER cases:
 
 ### CE Table
 
-The `dsa_ce_table()` function presents ICER sensitivity results in tabular format.
+The `dsa_ce_table()` function presents the sensitivity of the ICER to variation in input parameters in tabular format.
 
 #### Basic usage
 
@@ -502,3 +503,255 @@ dsa_ce_table(
 )
 ```
 
+#### CE Plot by subgroup
+
+Use `groups = 'all_groups'` to display CE results for each population subgroup separately.
+
+```{r, fig.width=12, fig.height=8}
+dsa_ce_plot(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  groups = "all_groups"
+)
+```
+
+#### CE Plot with all groups including overall
+
+Use `groups = 'all'` to display results for each subgroup plus the overall population.
+
+```{r, fig.width=16, fig.height=10}
+dsa_ce_plot(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  groups = "all"
+)
+```
+
+#### CE Table by subgroup
+
+```{r}
+dsa_ce_table(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  groups = "all_groups"
+)
+```
+
+#### CE Table with all groups including overall
+
+```{r}
+dsa_ce_table(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  groups = "all"
+)
+```
+
+## Value-Based Pricing in DSA
+
+Value-based pricing (VBP) analysis determines the maximum price an intervention can have while remaining cost-effective at a given willingness-to-pay (WTP) threshold. When combined with DSA, VBP analysis shows how parameter uncertainty affects the value-based price.
+
+### Running DSA with VBP
+
+To enable VBP analysis, pass additional parameters to `run_dsa()`:
+
+- `vbp_price_variable`: The name of the variable representing the intervention's price
+- `vbp_intervention`: The name of the intervention strategy
+
+```{r, include = FALSE}
+# Configure model for VBP analysis
+# Note: The VBP price variable (c_treatment) should NOT be a DSA parameter
+model_vbp <- model %>%
+  add_dsa_variable("hr_progression", low = 0.1, high = 3.0,
+                   display_name = "Progression HR", strategy = "volantor")
+
+# Run DSA with VBP enabled
+dsa_vbp_results <- run_dsa(
+  model_vbp,
+  vbp_price_variable = "c_treatment",
+  vbp_intervention = "volantor",
+  vbp_outcome_summary = "qalys",
+  vbp_cost_summary = "costs"
+)
+```
+
+```{r, eval = FALSE}
+dsa_vbp_results <- run_dsa(
+  model,
+  vbp_price_variable = "c_treatment",
+  vbp_intervention = "volantor",
+  vbp_outcome_summary = "qalys",
+  vbp_cost_summary = "costs"
+)
+```
+
+### VBP Tornado Plot
+
+The `dsa_vbp_plot()` function creates tornado plots showing how parameter variations affect the value-based price. By default, the WTP threshold is extracted from the outcome summary specified in the VBP analysis.
+
+The `comparators` parameter controls which comparisons are shown:
+
+- `"all"` (default): Shows each individual comparator plus "All Comparators" (minimum VBP)
+- `"overall"`: Shows only the "All Comparators" aggregate
+- `"all_comparators"`: Shows each individual comparator without the aggregate
+- specific names: Shows only the specified comparator(s)
+
+#### Default: all comparators + aggregate
+
+By default, the plot shows each individual comparator plus an "All Comparators" aggregate facet:
+
+```{r, fig.width=12, fig.height=5}
+dsa_vbp_plot(dsa_vbp_results)
+```
+
+#### Aggregate only
+
+Use `comparators = "overall"` to show only the "All Comparators" aggregate (minimum VBP across all comparators):
+
+```{r, fig.width=7, fig.height=5}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  comparators = "overall"
+)
+```
+
+#### Individual comparators only (no aggregate)
+
+Use `comparators = "all_comparators"` to show each individual comparator without the aggregate:
+
+```{r, fig.width=10, fig.height=5}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  comparators = "all_comparators"
+)
+```
+
+#### Single comparator
+
+Specify a comparator name to show only that comparison:
+
+```{r, fig.width=7, fig.height=5}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  comparators = "seritinib"
+)
+```
+
+#### Overriding the WTP threshold
+
+You can specify a different WTP threshold using the `wtp` parameter:
+
+```{r, fig.width=7, fig.height=5}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  wtp = 150000,
+  comparators = "seritinib"
+)
+```
+
+#### Hiding parameter values in labels
+
+```{r, fig.width=7, fig.height=5}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  comparators = "seritinib",
+  show_parameter_values = FALSE
+)
+```
+
+#### All comparators by subgroup
+
+```{r, fig.width=16, fig.height=8}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  groups = "all_groups"
+)
+```
+
+#### All comparators with all groups
+
+```{r, fig.width=20, fig.height=12}
+dsa_vbp_plot(
+  dsa_vbp_results,
+  groups = "all"
+)
+```
+
+### VBP Table
+
+The `dsa_vbp_table()` function presents VBP sensitivity results in tabular format, showing how the value-based price varies with each parameter. Like the plot function, WTP defaults to the value from the outcome summary.
+
+The `comparators` parameter follows the same pattern as the plot function.
+
+#### Default: all comparators + aggregate
+
+```{r}
+dsa_vbp_table(dsa_vbp_results)
+```
+
+#### Aggregate only
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  comparators = "overall"
+)
+```
+
+#### Individual comparators only (no aggregate)
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  comparators = "all_comparators"
+)
+```
+
+#### Single comparator
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  comparators = "seritinib"
+)
+```
+
+#### Overriding the WTP threshold
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  wtp = 150000,
+  comparators = "seritinib"
+)
+```
+
+#### All comparators by subgroup
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  groups = "all_groups"
+)
+```
+
+#### All comparators with all groups
+
+```{r}
+dsa_vbp_table(
+  dsa_vbp_results,
+  groups = "all"
+)
+```

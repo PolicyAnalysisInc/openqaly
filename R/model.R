@@ -216,6 +216,108 @@ aggregate_segments <- function(segments, parsed_model) {
     return(aggregated_results)
   }
 
+  # Check if this is DSA+VBP (has both run_id and vbp_price_level columns)
+  if ("run_id" %in% names(segments) && "vbp_price_level" %in% names(segments)) {
+    # DSA+VBP mode: group by run_id and vbp_price_level first
+    run_ids <- unique(segments$run_id)
+    price_levels <- unique(segments$vbp_price_level)
+
+    # Process each run_id + price_level combination
+    aggregated_results <- map_dfr(run_ids, function(run) {
+      map_dfr(price_levels, function(pl) {
+        # Get segments for this run + price level
+        run_segments <- segments %>%
+          filter(.data$run_id == run, .data$vbp_price_level == pl)
+
+        # Get unique strategies
+        strategies <- unique(run_segments$strategy)
+
+        # Process each strategy
+        map_dfr(strategies, function(strat) {
+          # Get segments for this strategy
+          strat_segments <- run_segments %>%
+            filter(.data$strategy == strat)
+
+          # Perform standard aggregation
+          result <- aggregate_strategy_segments(strat_segments, parsed_model)
+
+          # Add run_id and vbp_price_level columns
+          result %>%
+            mutate(run_id = run, vbp_price_level = pl, .before = 1)
+        })
+      })
+    })
+
+    return(aggregated_results)
+  }
+
+  # Check if this is Scenario+VBP (has both scenario_id and vbp_price_level columns)
+  if ("scenario_id" %in% names(segments) && "vbp_price_level" %in% names(segments)) {
+    # Scenario+VBP mode: group by scenario_id and vbp_price_level first
+    scenario_ids <- unique(segments$scenario_id)
+    price_levels <- unique(segments$vbp_price_level)
+
+    # Process each scenario_id + price_level combination
+    aggregated_results <- map_dfr(scenario_ids, function(sid) {
+      map_dfr(price_levels, function(pl) {
+        # Get segments for this scenario + price level
+        scenario_segments <- segments %>%
+          filter(.data$scenario_id == sid, .data$vbp_price_level == pl)
+
+        # Get unique strategies
+        strategies <- unique(scenario_segments$strategy)
+
+        # Process each strategy
+        map_dfr(strategies, function(strat) {
+          # Get segments for this strategy
+          strat_segments <- scenario_segments %>%
+            filter(.data$strategy == strat)
+
+          # Perform standard aggregation
+          result <- aggregate_strategy_segments(strat_segments, parsed_model)
+
+          # Add scenario_id and vbp_price_level columns
+          result %>%
+            mutate(scenario_id = sid, vbp_price_level = pl, .before = 1)
+        })
+      })
+    })
+
+    return(aggregated_results)
+  }
+
+  # Check if this is Scenario (has scenario_id column)
+  if ("scenario_id" %in% names(segments)) {
+    # Scenario mode: group by scenario_id first, then aggregate within each scenario
+    scenario_ids <- unique(segments$scenario_id)
+
+    # Process each scenario
+    aggregated_results <- map_dfr(scenario_ids, function(sid) {
+      # Get segments for this scenario
+      scenario_segments <- segments %>%
+        filter(.data$scenario_id == sid)
+
+      # Get unique strategies for this scenario
+      strategies <- unique(scenario_segments$strategy)
+
+      # Process each strategy within this scenario
+      map_dfr(strategies, function(strat) {
+        # Get segments for this strategy
+        strat_segments <- scenario_segments %>%
+          filter(.data$strategy == strat)
+
+        # Perform standard aggregation
+        result <- aggregate_strategy_segments(strat_segments, parsed_model)
+
+        # Add scenario_id column
+        result %>%
+          mutate(scenario_id = sid, .before = 1)
+      })
+    })
+
+    return(aggregated_results)
+  }
+
   # Check if this is DSA (has run_id column)
   if ("run_id" %in% names(segments)) {
     # DSA mode: group by run_id first, then aggregate within each run

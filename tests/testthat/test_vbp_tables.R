@@ -93,8 +93,7 @@ test_that("prepare_vbp_table_data() filters comparators correctly", {
   if (length(comparators) >= 1) {
     prepared <- openqaly:::prepare_vbp_table_data(
       vbp_results,
-      comparators = comparators[1],
-      include_all_comparators = FALSE
+      comparators = comparators[1]
     )
 
     # Should have WTP + 1 comparator column
@@ -135,12 +134,12 @@ test_that("prepare_vbp_table_data() includes 'All Comparators' column", {
   if (n_comparators > 1) {
     prepared <- openqaly:::prepare_vbp_table_data(
       vbp_results,
-      include_all_comparators = TRUE
+      comparators = "all"
     )
 
-    # Check "All Comparators" column exists
+    # Check "vs. All Comparators" column exists (columns use "vs. X" format)
     col_names <- colnames(prepared$data)
-    expect_true("All Comparators" %in% col_names)
+    expect_true("vs. All Comparators" %in% col_names)
   }
 })
 
@@ -149,11 +148,11 @@ test_that("prepare_vbp_table_data() can exclude 'All Comparators' column", {
 
   prepared <- openqaly:::prepare_vbp_table_data(
     vbp_results,
-    include_all_comparators = FALSE
+    comparators = "all_comparators"
   )
 
   col_names <- colnames(prepared$data)
-  expect_false("All Comparators" %in% col_names)
+  expect_false("vs. All Comparators" %in% col_names)
 })
 
 # ============================================================================
@@ -179,11 +178,11 @@ test_that("'All Comparators' column is minimum of individual comparator VBPs", {
     prepared <- openqaly:::prepare_vbp_table_data(
       vbp_results,
       wtp_thresholds = wtp_test,
-      include_all_comparators = TRUE
+      comparators = "all"
     )
 
-    # Parse the dollar-formatted "All Comparators" value
-    all_comp_col <- prepared$data[["All Comparators"]]
+    # Parse the dollar-formatted "vs. All Comparators" value (columns use "vs. X" format)
+    all_comp_col <- prepared$data[["vs. All Comparators"]]
     # Remove $ and commas, convert to numeric
     all_comp_value <- as.numeric(gsub("[$,]", "", all_comp_col[1]))
 
@@ -264,8 +263,7 @@ test_that("vbp_table() uses 'vs. X' format for comparator columns", {
 
   prepared <- openqaly:::prepare_vbp_table_data(
     vbp_results,
-    comparators = comparators[1],
-    include_all_comparators = FALSE
+    comparators = comparators[1]
   )
 
   col_names <- colnames(prepared$data)

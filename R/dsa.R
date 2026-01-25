@@ -448,9 +448,23 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #' - The `bc` keyword to reference base case values (e.g., bc * 0.5)
 #' - Other model variables (e.g., bc - 2 * cost_se)
 #'
+#' When VBP parameters are provided, DSA+VBP mode is activated. In this mode,
+#' each DSA run includes 3 VBP price level sub-simulations to calculate the
+#' VBP relationship at each parameter variation.
+#'
 #' @param model An openqaly model object with DSA specifications
+#' @param vbp_price_variable Name of the price variable to vary for VBP analysis.
+#'   If NULL (default), standard DSA without VBP is performed.
+#' @param vbp_intervention Intervention strategy name for VBP analysis.
+#'   Required if vbp_price_variable is specified.
+#' @param vbp_outcome_summary Outcome summary name for VBP analysis.
+#'   Defaults to "total_qalys" from model metadata if available.
+#' @param vbp_cost_summary Cost summary name for VBP analysis.
+#'   Defaults to "total_cost" from model metadata if available.
 #' @param ... Additional arguments passed to run_segment
-#' @return Results list with segments and aggregated results (includes run_id dimension)
+#' @return Results list with segments and aggregated results (includes run_id dimension).
+#'   When VBP is enabled, also includes dsa_vbp_equations tibble with VBP equations
+#'   for each DSA run.
 #' @export
 #' @examples
 #' \dontrun{
@@ -485,8 +499,33 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #'                    high = bc + 1.96 * p_disease_se)
 #'
 #' dsa_results <- run_dsa(model)
+#'
+#' # Example 4: DSA with VBP add-on
+#' model <- define_model("markov") %>%
+#'   add_variable("cost_tx", 1000) %>%
+#'   add_dsa_variable("cost_tx", low = bc * 0.75, high = bc * 1.25) %>%
+#'   # ... other model setup ...
+#'   add_strategy("treatment") %>%
+#'   add_strategy("comparator")
+#'
+#' dsa_vbp_results <- run_dsa(
+#'   model,
+#'   vbp_price_variable = "cost_tx",
+#'   vbp_intervention = "treatment"
+#' )
+#'
+#' # Get VBP at base case
+#' vbp_base <- calculate_dsa_vbp_price(dsa_vbp_results, wtp = 50000)
+#'
+#' # Get VBP for a specific DSA variation
+#' vbp_low <- calculate_dsa_vbp_price(dsa_vbp_results, wtp = 50000, run_id = 2)
 #' }
-run_dsa <- function(model, ...) {
+run_dsa <- function(model,
+                    vbp_price_variable = NULL,
+                    vbp_intervention = NULL,
+                    vbp_outcome_summary = NULL,
+                    vbp_cost_summary = NULL,
+                    ...) {
   # Finalize builders (convert to openqaly model)
   if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
@@ -498,8 +537,60 @@ run_dsa <- function(model, ...) {
   # Validate DSA specifications
   validate_dsa_spec(parsed_model)
 
-  # Build all DSA segments with overrides (base case + all variations)
-  all_segments <- build_dsa_segments(parsed_model)
+  # Check if VBP mode is enabled
+  vbp_enabled <- !is.null(vbp_price_variable)
+
+  # Validate VBP parameters if enabled
+  vbp_spec <- NULL
+  if (vbp_enabled) {
+    # Require intervention if price variable specified
+    if (is.null(vbp_intervention)) {
+      stop("vbp_intervention is required when vbp_price_variable is specified")
+    }
+
+    # Default outcome/cost summaries from metadata if not specified
+    if (is.null(vbp_outcome_summary)) {
+      if (!is.null(parsed_model$metadata$outcome_summary)) {
+        vbp_outcome_summary <- parsed_model$metadata$outcome_summary
+      } else {
+        vbp_outcome_summary <- "total_qalys"
+      }
+    }
+    if (is.null(vbp_cost_summary)) {
+      if (!is.null(parsed_model$metadata$cost_summary)) {
+        vbp_cost_summary <- parsed_model$metadata$cost_summary
+      } else {
+        vbp_cost_summary <- "total_cost"
+      }
+    }
+
+    # Validate VBP spec
+    validate_dsa_vbp_spec(
+      parsed_model,
+      vbp_price_variable,
+      vbp_intervention,
+      vbp_outcome_summary,
+      vbp_cost_summary
+    )
+
+    # Create VBP spec
+    vbp_spec <- list(
+      price_variable = vbp_price_variable,
+      intervention_strategy = vbp_intervention,
+      outcome_summary = vbp_outcome_summary,
+      cost_summary = vbp_cost_summary,
+      price_values = c(0, 1000, 2000)
+    )
+  }
+
+  # Build segments based on mode
+  if (vbp_enabled) {
+    # Build DSA+VBP segments (includes vbp_price_level)
+    all_segments <- build_dsa_vbp_segments(parsed_model, vbp_spec)
+  } else {
+    # Build standard DSA segments
+    all_segments <- build_dsa_segments(parsed_model)
+  }
 
   # Get unique run_ids for metadata generation
   run_ids <- unique(all_segments$run_id)
@@ -513,9 +604,16 @@ run_dsa <- function(model, ...) {
     bind_rows()
 
   # Generate metadata for DSA runs (for analysis functions and plots)
-  dsa_metadata <- generate_dsa_metadata_from_segments(parsed_model, all_segments)
+  # Use only base DSA segments (before VBP expansion) for metadata
+  if (vbp_enabled) {
+    dsa_segments_for_meta <- all_segments %>%
+      filter(.data$vbp_price_level == 1)
+  } else {
+    dsa_segments_for_meta <- all_segments
+  }
+  dsa_metadata <- generate_dsa_metadata_from_segments(parsed_model, dsa_segments_for_meta)
 
-  # Aggregate by run_id + strategy
+  # Aggregate by run_id + strategy (and vbp_price_level if present)
   aggregated <- aggregate_segments(results, parsed_model)
 
   # Return results
@@ -524,6 +622,18 @@ run_dsa <- function(model, ...) {
   res$aggregated <- aggregated
   res$metadata <- parsed_model$metadata
   res$dsa_metadata <- dsa_metadata
+
+  # Add VBP analysis if enabled
+  if (vbp_enabled) {
+    res$dsa_vbp_equations <- analyze_dsa_vbp_results(
+      results,
+      aggregated,
+      vbp_spec,
+      dsa_metadata,
+      parsed_model
+    )
+    res$vbp_spec <- vbp_spec
+  }
 
   return(res)
 }
@@ -569,6 +679,13 @@ extract_dsa_summaries <- function(results,
 
   # Use standardized group selection
   source_data <- select_source_data(groups, results)
+
+  # Filter out VBP sub-simulations (keep only price_level 1 or no price_level)
+  # This ensures extract_dsa_summaries returns one row per DSA run, not 3 per run
+  if ("vbp_price_level" %in% names(source_data)) {
+    source_data <- source_data %>%
+      filter(is.na(.data$vbp_price_level) | .data$vbp_price_level == 1)
+  }
 
   # Determine which strategies to include
   strategies_to_include <- strategies

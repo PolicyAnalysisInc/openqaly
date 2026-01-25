@@ -83,15 +83,18 @@ extract_vbp_default_wtp <- function(vbp_results) {
 #' @param vbp_results Results from run_vbp()
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows.
 #'   If NULL, generates a default sequence based on outcome metadata.
-#' @param comparators Character vector of comparators to include.
-#'   NULL for all comparators.
+#' @param comparators Comparator selection:
+#'   \itemize{
+#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+#'     \item Character vector - Specific comparator name(s)
+#'   }
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (default)
 #'     \item \code{"group_name"} - Specific group by name
 #'   }
-#' @param include_all_comparators Logical. Include a column showing the
-#'   minimum VBP across all comparators (price to be cost-effective vs all)?
 #' @param decimals Number of decimal places for VBP values
 #' @param font_size Font size for rendering
 #'
@@ -99,9 +102,8 @@ extract_vbp_default_wtp <- function(vbp_results) {
 #' @keywords internal
 prepare_vbp_table_data <- function(vbp_results,
                                    wtp_thresholds = NULL,
-                                   comparators = NULL,
+                                   comparators = "all",
                                    groups = "overall",
-                                   include_all_comparators = TRUE,
                                    decimals = 0,
                                    font_size = 11) {
 
@@ -117,13 +119,16 @@ prepare_vbp_table_data <- function(vbp_results,
     groups_to_process <- groups
   }
 
-  # Reorder groups: Overall first, then model definition order
+  # Reorder groups: Overall first, then model definition order (using internal names)
   metadata <- attr(vbp_results$aggregated, "metadata")
-  # Map "overall" to "Overall" for consistency with get_group_order
-  groups_to_process[groups_to_process == "overall"] <- "Overall"
-  groups_to_process <- get_group_order(groups_to_process, metadata)
-  # Map back to internal name for data lookup
-  groups_to_process[groups_to_process == "Overall"] <- "overall"
+  has_overall <- "overall" %in% groups_to_process
+  if (!is.null(metadata$groups)) {
+    model_order <- metadata$groups$name
+    ordered_groups <- model_order[model_order %in% groups_to_process]
+  } else {
+    ordered_groups <- setdiff(groups_to_process, "overall")
+  }
+  groups_to_process <- if (has_overall) c("overall", ordered_groups) else ordered_groups
 
   # Check if any valid groups remain after filtering
 
@@ -138,7 +143,6 @@ prepare_vbp_table_data <- function(vbp_results,
       wtp_thresholds = wtp_thresholds,
       comparators = comparators,
       groups_to_process = groups_to_process,
-      include_all_comparators = include_all_comparators,
       decimals = decimals,
       font_size = font_size
     ))
@@ -161,38 +165,56 @@ prepare_vbp_table_data <- function(vbp_results,
 
   available_comparators <- unique(equations$comparator)
 
-  # Filter comparators if specified
-  if (!is.null(comparators)) {
-    invalid <- setdiff(comparators, available_comparators)
-    if (length(invalid) > 0) {
-      stop(sprintf("Comparator(s) not found: %s. Available: %s",
-                   paste(invalid, collapse = ", "),
-                   paste(available_comparators, collapse = ", ")))
-    }
-    comparators_display <- comparators
-  } else {
-    comparators_display <- available_comparators
-  }
-
   # Generate WTP thresholds if not provided
   if (is.null(wtp_thresholds)) {
     default_wtp <- extract_vbp_default_wtp(vbp_results)
     wtp_thresholds <- generate_vbp_wtp_sequence(default_wtp)
   }
 
-  # Map comparator names to display names
+  # Get metadata for name mapping
   metadata <- attr(vbp_results$aggregated, "metadata")
-  comparators_for_calc <- comparators_display  # Keep original names for calculation
-  if (!is.null(metadata) && !is.null(metadata$strategies)) {
-    comparators_display <- map_names(comparators_display,
-                                      metadata$strategies,
-                                      "display_name")
+
+  # Process comparators based on selection pattern (matching DSA VBP pattern)
+  if (identical(comparators, "overall")) {
+    # Just the aggregate "vs. All Comparators"
+    comparators_for_calc <- available_comparators
+    comparators_display <- "All Comparators"
+  } else if (identical(comparators, "all")) {
+    # All individuals + aggregate
+    comparators_for_calc <- available_comparators
+    comparators_display <- available_comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
+    if (length(available_comparators) > 1) {
+      comparators_display <- c(comparators_display, "All Comparators")
+    }
+  } else if (identical(comparators, "all_comparators")) {
+    # Just individuals, no aggregate
+    comparators_for_calc <- available_comparators
+    comparators_display <- available_comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
+  } else {
+    # Specific comparator names - filter
+    invalid <- setdiff(comparators, available_comparators)
+    if (length(invalid) > 0) {
+      stop(sprintf("Comparator(s) not found: %s. Available: %s",
+                   paste(invalid, collapse = ", "),
+                   paste(available_comparators, collapse = ", ")))
+    }
+    comparators_for_calc <- comparators
+    comparators_display <- comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
   }
 
-  # Calculate VBP at each WTP for each comparator
+  # Calculate VBP at each WTP for each available comparator
   vbp_data <- expand_grid(
     wtp = wtp_thresholds,
-    comparator = comparators_for_calc
+    comparator = available_comparators
   ) %>%
     rowwise() %>%
     mutate(
@@ -212,16 +234,25 @@ prepare_vbp_table_data <- function(vbp_results,
                                       "display_name")
   }
 
-  # Calculate "All Comparators" column (minimum VBP at each WTP)
-  if (include_all_comparators && length(comparators_display) > 1) {
+  # Process based on comparator selection
+  if (identical(comparators, "overall")) {
+    # Just the aggregate - calculate minimum VBP at each WTP
+    vbp_data <- vbp_data %>%
+      group_by(.data$wtp) %>%
+      summarize(vbp_price = min(.data$vbp_price), .groups = "drop") %>%
+      mutate(comparator = "All Comparators")
+  } else if (identical(comparators, "all") && length(available_comparators) > 1) {
+    # All individuals + aggregate
     all_comp_data <- vbp_data %>%
       group_by(.data$wtp) %>%
       summarize(vbp_price = min(.data$vbp_price), .groups = "drop") %>%
       mutate(comparator = "All Comparators")
-
     vbp_data <- bind_rows(vbp_data, all_comp_data)
-    comparators_display <- c(comparators_display, "All Comparators")
+  } else if (!identical(comparators, "all") && !identical(comparators, "all_comparators") && !identical(comparators, "overall")) {
+    # Specific comparator names - filter to those display names
+    vbp_data <- vbp_data %>% filter(.data$comparator %in% comparators_display)
   }
+  # For "all_comparators" - keep vbp_data as-is (individuals only)
 
   # Pivot to wide format: WTP as rows, comparators as columns
   pivot_data <- vbp_data %>%
@@ -254,7 +285,9 @@ prepare_vbp_table_data <- function(vbp_results,
   # Rename comparator columns to "vs. X" format
   for (i in seq_along(comparators_display)) {
     comp <- comparators_display[i]
-    if (comp != "All Comparators") {
+    if (comp == "All Comparators") {
+      colnames(result_cols)[i + 1] <- "vs. All Comparators"
+    } else {
       colnames(result_cols)[i + 1] <- paste0("vs. ", comp)
     }
   }
@@ -297,9 +330,14 @@ prepare_vbp_table_data <- function(vbp_results,
 #'
 #' @param vbp_results Results from run_vbp()
 #' @param wtp_thresholds Numeric vector of WTP thresholds
-#' @param comparators Character vector of comparators
+#' @param comparators Comparator selection:
+#'   \itemize{
+#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+#'     \item Character vector - Specific comparator name(s)
+#'   }
 #' @param groups_to_process Character vector of groups to include
-#' @param include_all_comparators Logical. Include all comparators column?
 #' @param decimals Number of decimal places
 #' @param font_size Font size for rendering
 #'
@@ -307,9 +345,8 @@ prepare_vbp_table_data <- function(vbp_results,
 #' @keywords internal
 prepare_vbp_table_data_multi_group <- function(vbp_results,
                                                 wtp_thresholds = NULL,
-                                                comparators = NULL,
+                                                comparators = "all",
                                                 groups_to_process,
-                                                include_all_comparators = TRUE,
                                                 decimals = 0,
                                                 font_size = 11) {
 
@@ -322,8 +359,8 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
   # Get metadata for name mapping
   metadata <- attr(vbp_results$aggregated, "metadata")
 
-  # Determine comparators to use (check first group that has data)
-  comparators_for_calc <- NULL
+  # Determine available comparators (check first group that has data)
+  available_comparators <- NULL
   for (grp in groups_to_process) {
     if (grp == "overall") {
       equations <- vbp_results$vbp_equations
@@ -333,31 +370,49 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
     }
     if (nrow(equations) > 0) {
       available_comparators <- unique(equations$comparator)
-      if (!is.null(comparators)) {
-        invalid <- setdiff(comparators, available_comparators)
-        if (length(invalid) > 0) {
-          stop(sprintf("Comparator(s) not found: %s. Available: %s",
-                       paste(invalid, collapse = ", "),
-                       paste(available_comparators, collapse = ", ")))
-        }
-        comparators_for_calc <- comparators
-      } else {
-        comparators_for_calc <- available_comparators
-      }
       break
     }
   }
 
-  if (is.null(comparators_for_calc)) {
+  if (is.null(available_comparators)) {
     stop("No VBP data found for any of the specified groups")
   }
 
-  # Map comparator names to display names
-  comparators_display <- comparators_for_calc
-  if (!is.null(metadata) && !is.null(metadata$strategies)) {
-    comparators_display <- map_names(comparators_for_calc,
-                                      metadata$strategies,
-                                      "display_name")
+  # Process comparators based on selection pattern (matching DSA VBP pattern)
+  include_aggregate <- FALSE
+  if (identical(comparators, "overall")) {
+    # Just the aggregate "vs. All Comparators"
+    comparators_for_calc <- available_comparators
+    comparators_display <- character(0)  # No individual columns
+    include_aggregate <- length(available_comparators) > 0
+  } else if (identical(comparators, "all")) {
+    # All individuals + aggregate
+    comparators_for_calc <- available_comparators
+    comparators_display <- available_comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
+    include_aggregate <- length(available_comparators) > 1
+  } else if (identical(comparators, "all_comparators")) {
+    # Just individuals, no aggregate
+    comparators_for_calc <- available_comparators
+    comparators_display <- available_comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
+  } else {
+    # Specific comparator names - filter
+    invalid <- setdiff(comparators, available_comparators)
+    if (length(invalid) > 0) {
+      stop(sprintf("Comparator(s) not found: %s. Available: %s",
+                   paste(invalid, collapse = ", "),
+                   paste(available_comparators, collapse = ", ")))
+    }
+    comparators_for_calc <- comparators
+    comparators_display <- comparators
+    if (!is.null(metadata) && !is.null(metadata$strategies)) {
+      comparators_display <- map_names(comparators_display, metadata$strategies, "display_name")
+    }
   }
 
   # Build column names (WTP + comparators + optionally All Comparators)
@@ -365,8 +420,8 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
   for (comp in comparators_display) {
     col_names <- c(col_names, paste0("vs. ", comp))
   }
-  if (include_all_comparators && length(comparators_display) > 1) {
-    col_names <- c(col_names, "All Comparators")
+  if (include_aggregate) {
+    col_names <- c(col_names, "vs. All Comparators")
   }
 
   # Build result data with group headers (like CE tables)
@@ -404,8 +459,8 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
     for (comp in comparators_display) {
       header_row[[paste0("vs. ", comp)]] <- ""
     }
-    if (include_all_comparators && length(comparators_display) > 1) {
-      header_row[["All Comparators"]] <- ""
+    if (include_aggregate) {
+      header_row[["vs. All Comparators"]] <- ""
     }
     result_data <- bind_rows(result_data, header_row)
 
@@ -416,26 +471,29 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 
       for (i in seq_along(comparators_for_calc)) {
         comp <- comparators_for_calc[i]
-        comp_display <- comparators_display[i]
-        vbp_price <- calculate_vbp_price(
-          vbp_results,
-          wtp = wtp_val,
-          comparator = comp,
-          group = grp
-        )
-        row_data[[paste0("vs. ", comp_display)]] <- comma(
-          round(vbp_price, decimals),
-          accuracy = if (decimals == 0) 1 else 10^(-decimals)
-        )
+        # Only add column if we're showing individual comparators
+        if (length(comparators_display) > 0 && i <= length(comparators_display)) {
+          comp_display <- comparators_display[i]
+          vbp_price <- calculate_vbp_price(
+            vbp_results,
+            wtp = wtp_val,
+            comparator = comp,
+            group = grp
+          )
+          row_data[[paste0("vs. ", comp_display)]] <- comma(
+            round(vbp_price, decimals),
+            accuracy = if (decimals == 0) 1 else 10^(-decimals)
+          )
+        }
       }
 
-      # Calculate "All Comparators" (minimum VBP)
-      if (include_all_comparators && length(comparators_for_calc) > 1) {
-        all_vbps <- sapply(comparators_for_calc, function(comp) {
+      # Calculate "vs. All Comparators" (minimum VBP)
+      if (include_aggregate) {
+        all_vbps <- sapply(available_comparators, function(comp) {
           calculate_vbp_price(vbp_results, wtp = wtp_val, comparator = comp, group = grp)
         })
         min_vbp <- min(all_vbps)
-        row_data[["All Comparators"]] <- comma(
+        row_data[["vs. All Comparators"]] <- comma(
           round(min_vbp, decimals),
           accuracy = if (decimals == 0) 1 else 10^(-decimals)
         )
@@ -499,8 +557,13 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #' @param vbp_results Results from run_vbp()
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows.
 #'   If NULL, generates a default sequence based on outcome summary metadata.
-#' @param comparators Character vector of comparators to include.
-#'   NULL for all comparators.
+#' @param comparators Comparator selection:
+#'   \itemize{
+#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+#'     \item Character vector - Specific comparator name(s)
+#'   }
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (default)
@@ -508,9 +571,6 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #'     \item \code{"all_groups"} - All groups (excluding overall)
 #'     \item \code{NULL} or \code{"all"} - All groups plus overall
 #'   }
-#' @param include_all_comparators Logical. Include a column showing the
-#'   minimum VBP across all comparators? This represents the maximum price
-#'   that is cost-effective versus ALL alternatives. Default TRUE.
 #' @param decimals Number of decimal places for VBP values (default: 0)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" or "kable"
@@ -519,7 +579,7 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #'
 #' @details
 #' The VBP table displays the maximum price the intervention can charge while
-#' remaining cost-effective at each WTP threshold. The "All Comparators" column
+#' remaining cost-effective at each WTP threshold. The "vs. All Comparators" column
 #' shows the minimum VBP across all comparators - this is the price that ensures
 #' cost-effectiveness versus ALL alternatives simultaneously.
 #'
@@ -539,7 +599,7 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #'   intervention_strategy = "targeted"
 #' )
 #'
-#' # VBP table with auto-generated WTP thresholds
+#' # VBP table with auto-generated WTP thresholds (all comparators + aggregate)
 #' vbp_table(vbp_results)
 #'
 #' # VBP table with custom WTP thresholds
@@ -547,14 +607,19 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #'
 #' # VBP table for specific comparator
 #' vbp_table(vbp_results, comparators = "chemo")
+#'
+#' # VBP table with only the aggregate column
+#' vbp_table(vbp_results, comparators = "overall")
+#'
+#' # VBP table with individual comparators only (no aggregate)
+#' vbp_table(vbp_results, comparators = "all_comparators")
 #' }
 #'
 #' @export
 vbp_table <- function(vbp_results,
                       wtp_thresholds = NULL,
-                      comparators = NULL,
+                      comparators = "all",
                       groups = "overall",
-                      include_all_comparators = TRUE,
                       decimals = 0,
                       font_size = 11,
                       table_format = c("flextable", "kable")) {
@@ -567,7 +632,6 @@ vbp_table <- function(vbp_results,
     wtp_thresholds = wtp_thresholds,
     comparators = comparators,
     groups = groups,
-    include_all_comparators = include_all_comparators,
     decimals = decimals,
     font_size = font_size
   )

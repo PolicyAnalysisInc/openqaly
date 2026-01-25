@@ -8,7 +8,7 @@ vbp_plot(
   vbp_results,
   wtp_range = NULL,
   wtp_step = NULL,
-  comparators = NULL,
+  comparators = "all_comparators",
   groups = "overall",
   show_default_wtp = TRUE,
   show_vbp_at_wtp = TRUE
@@ -23,8 +23,13 @@ If NULL, auto-generates based on outcome summary metadata (0 to 2x default WTP).
 \item{wtp_step}{Step size for WTP thresholds. If NULL, auto-calculated
 for smooth curve (~40 points).}
 
-\item{comparators}{Character vector of comparators to include.
-NULL for all comparators.}
+\item{comparators}{Comparator selection:
+\itemize{
+  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+  \item Character vector - Specific comparator name(s)
+}}
 
 \item{groups}{Group selection:
 \itemize{
@@ -66,7 +71,7 @@ vbp_results <- run_vbp(
   intervention_strategy = "targeted"
 )
 
-# Basic VBP plot with auto-generated WTP range
+# Basic VBP plot with auto-generated WTP range (individuals only by default)
 vbp_plot(vbp_results)
 
 # Custom WTP range
@@ -74,6 +79,9 @@ vbp_plot(vbp_results, wtp_range = c(0, 150000), wtp_step = 10000)
 
 # VBP plot for specific comparator
 vbp_plot(vbp_results, comparators = "chemo")
+
+# VBP plot with aggregate line
+vbp_plot(vbp_results, comparators = "all")
 }
 
 }

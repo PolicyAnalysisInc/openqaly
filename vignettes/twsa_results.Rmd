@@ -1,0 +1,323 @@
+---
+title: "Two-Way Sensitivity Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Two-Way Sensitivity Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to configure, run, and visualize two-way
+sensitivity analysis (TWSA) using openqaly. TWSA varies two parameters
+simultaneously across a grid of values, allowing you to explore how
+combinations of parameter changes affect model results.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  dpi = 150
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(
+  system.file("models", "example_markov", package = "openqaly")
+)
+```
+
+## Configuring TWSA Parameters
+
+Before running TWSA, you must define one or more two-way analyses:
+
+- `add_twsa()` - Create a named TWSA analysis
+- `add_twsa_variable()` - Add a variable parameter to vary
+- `add_twsa_setting()` - Add a model setting to vary
+
+Each TWSA analysis must have exactly two parameters.
+
+### Creating a TWSA Analysis
+
+```{r, eval = FALSE}
+model <- model |>
+  add_twsa("Cost vs Efficacy")
+```
+
+### Adding Variable Parameters
+
+Use `add_twsa_variable()` to define parameters. Each parameter can use:
+
+- **Range**: Explicit low and high bounds with a specified number of steps
+- **Radius**: Symmetric variation around base case
+- **Custom**: Explicit vector of values
+
+#### Range-based parameters
+
+```{r, eval = FALSE}
+model <- model |>
+  add_twsa("Cost vs Efficacy") |>
+  add_twsa_variable("Cost vs Efficacy", "c_treatment",
+    type = "range", min = 5000, max = 20000, steps = 5) |>
+  add_twsa_variable("Cost vs Efficacy", "hr_progression",
+    type = "range", min = 0.5, max = 2.0, steps = 5)
+```
+
+#### Radius-based parameters using `bc`
+
+```{r, eval = FALSE}
+model <- model |>
+  add_twsa("Utility Sensitivity") |>
+  add_twsa_variable("Utility Sensitivity", "u_mild",
+    type = "radius", radius = bc * 0.2, steps = 3) |>
+  add_twsa_variable("Utility Sensitivity", "u_severe",
+    type = "radius", radius = bc * 0.3, steps = 3)
+```
+
+#### Custom display names
+
+```{r, eval = FALSE}
+model <- model |>
+  add_twsa_variable("Cost vs Efficacy", "c_treatment",
+    type = "range", min = 5000, max = 20000, steps = 5,
+    display_name = "Treatment Cost")
+```
+
+### Adding Setting Parameters
+
+Use `add_twsa_setting()` to vary model settings like discount rates:
+
+```{r, eval = FALSE}
+model <- model |>
+  add_twsa("Discount Sensitivity") |>
+  add_twsa_setting("Discount Sensitivity", "discount_cost",
+    type = "range", min = 0, max = 5, steps = 6) |>
+  add_twsa_setting("Discount Sensitivity", "discount_outcomes",
+    type = "range", min = 0, max = 5, steps = 6)
+```
+
+## Running TWSA
+
+```{r, include = FALSE}
+# Configure TWSA for examples - use utility parameters that both affect QALYs
+model <- model |>
+  add_twsa("Utility Sensitivity") |>
+  add_twsa_variable("Utility Sensitivity", "u_mild",
+    type = "range", min = 0.75, max = 0.95, steps = 5,
+    display_name = "Utility (Mild)") |>
+  add_twsa_variable("Utility Sensitivity", "u_severe",
+    type = "range", min = 0.40, max = 0.70, steps = 5,
+    display_name = "Utility (Severe)")
+
+results <- run_twsa(model)
+```
+
+Use `run_twsa()` to execute the model across the parameter grid:
+
+```{r, eval = FALSE}
+results <- run_twsa(model)
+```
+
+The function runs the model for each combination of X and Y parameter
+values, creating a complete grid of results.
+
+## Outcomes Heatmaps
+
+Use `twsa_outcomes_plot()` to create heatmaps showing how outcomes vary
+across the parameter grid.
+
+### Basic usage
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys")
+```
+
+### Filtering to specific strategies
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys", strategies = "volantor")
+```
+
+### Incremental outcomes (intervention vs comparator)
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+### Different color palettes
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys",
+  viridis_option = "magma")
+```
+
+### Using discounted values
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys",
+  discounted = TRUE)
+```
+
+## NMB Heatmaps
+
+Use `twsa_nmb_plot()` to show Net Monetary Benefit across the grid.
+NMB = (delta outcomes x WTP) - delta costs.
+
+```{r, include = FALSE}
+# Configure TWSA with cost + utility for true 2D NMB/CE sensitivity
+model_ce <- model |>
+  add_twsa("Cost vs Utility") |>
+  add_twsa_variable("Cost vs Utility", "c_treatment",
+    type = "range", min = 5000, max = 15000, steps = 5,
+    display_name = "Treatment Cost", strategy = "volantor") |>
+  add_twsa_variable("Cost vs Utility", "u_mild",
+    type = "range", min = 0.75, max = 0.95, steps = 5,
+    display_name = "Utility (Mild)")
+
+results_ce <- run_twsa(model_ce)
+```
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_nmb_plot(results_ce, "qalys", "costs",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+### With explicit WTP
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_nmb_plot(results_ce, "qalys", "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  wtp = 50000)
+```
+
+## CE Heatmaps
+
+Use `twsa_ce_plot()` to show Incremental Cost-Effectiveness Ratios
+(ICERs) across the grid.
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_ce_plot(results_ce, "qalys", "costs",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+The CE heatmap handles special cases:
+
+- **Dominated** (higher cost, lower effectiveness): High end of scale
+- **Dominant** (lower cost, higher effectiveness): Low end of scale
+- **Equivalent** (identical outcomes): Shown as gray
+
+## Outcomes Tables
+
+Use `twsa_outcomes_table()` to create grid tables of outcome values.
+
+```{r}
+twsa_outcomes_table(results, "qalys",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+## NMB Tables
+
+Use `twsa_nmb_table()` to create grid tables of NMB values.
+
+```{r}
+twsa_nmb_table(results, "qalys", "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  wtp = 100000)
+```
+
+## CE Tables
+
+Use `twsa_ce_table()` to create grid tables with formatted ICER values.
+
+```{r}
+twsa_ce_table(results, "qalys", "costs",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+The CE table shows:
+
+- Numeric ICERs for normal cases
+- "Dominated" for dominated scenarios
+- "Dominant" for dominant scenarios
+- "Equivalent" for identical outcomes
+- Values with "*" suffix for SW quadrant scenarios
+
+## VBP Integration
+
+TWSA can be combined with Value-Based Pricing analysis to understand
+how parameter changes affect the value-based price.
+
+### Running TWSA with VBP
+
+```{r, include = FALSE}
+# Configure model with VBP for examples
+model_vbp <- model |>
+  add_twsa("Cost vs Efficacy VBP") |>
+  add_twsa_variable("Cost vs Efficacy VBP", "u_mild",
+    type = "range", min = 0.75, max = 0.95, steps = 5,
+    display_name = "Utility (Mild)") |>
+  add_twsa_variable("Cost vs Efficacy VBP", "u_severe",
+    type = "range", min = 0.40, max = 0.70, steps = 5,
+    display_name = "Utility (Severe)")
+
+results_vbp <- run_twsa(model_vbp,
+  vbp_price_variable = "c_treatment",
+  vbp_intervention = "volantor",
+  vbp_outcome_summary = "qalys",
+  vbp_cost_summary = "costs")
+```
+
+```{r, eval = FALSE}
+results_vbp <- run_twsa(model,
+  vbp_price_variable = "c_treatment",
+  vbp_intervention = "volantor",
+  vbp_outcome_summary = "qalys",
+  vbp_cost_summary = "costs")
+```
+
+### VBP Heatmap
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_vbp_plot(results_vbp, wtp = 100000)
+```
+
+### VBP Table
+
+```{r}
+twsa_vbp_table(results_vbp, wtp = 100000)
+```
+
+## Working with Groups
+
+TWSA supports subgroup analysis. Use the `groups` parameter to filter
+or display results by population subgroup.
+
+### Overall only (default)
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys",
+  groups = "overall")
+```
+
+### Specific groups
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_outcomes_plot(results, "qalys",
+  groups = "low_risk")
+```
+
+### All groups
+
+```{r, fig.width = 12, fig.height = 10}
+twsa_outcomes_plot(results, "qalys",
+  groups = "all_groups")
+```

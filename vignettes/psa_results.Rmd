@@ -190,17 +190,6 @@ incremental_ceac_plot(
 )
 ```
 
-#### With cost-effectiveness frontier overlay
-
-```{r, fig.width=9, fig.height=6}
-incremental_ceac_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
-  show_frontier = TRUE
-)
-```
-
 #### Custom WTP range
 
 ```{r, fig.width=9, fig.height=6}
@@ -236,18 +225,6 @@ pairwise_ceac_plot(
   outcome_summary = "qalys",
   cost_summary = "costs",
   comparator = "standard"
-)
-```
-
-### CEAC Frontier Plot
-
-The `incremental_ceac_frontier_plot()` function shows which strategy is optimal at each WTP threshold.
-
-```{r, fig.width=9, fig.height=6}
-incremental_ceac_frontier_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
 )
 ```
 

@@ -7,9 +7,8 @@
 prepare_vbp_table_data(
   vbp_results,
   wtp_thresholds = NULL,
-  comparators = NULL,
+  comparators = "all",
   groups = "overall",
-  include_all_comparators = TRUE,
   decimals = 0,
   font_size = 11
 )
@@ -20,17 +19,19 @@ prepare_vbp_table_data(
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as rows.
 If NULL, generates a default sequence based on outcome metadata.}
 
-\item{comparators}{Character vector of comparators to include.
-NULL for all comparators.}
+\item{comparators}{Comparator selection:
+\itemize{
+  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"overall"} - Aggregate only ("vs. All Comparators")
+  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
+  \item Character vector - Specific comparator name(s)
+}}
 
 \item{groups}{Group selection:
 \itemize{
   \item \code{"overall"} - Overall population (default)
   \item \code{"group_name"} - Specific group by name
 }}
-
-\item{include_all_comparators}{Logical. Include a column showing the
-minimum VBP across all comparators (price to be cost-effective vs all)?}
 
 \item{decimals}{Number of decimal places for VBP values}
 

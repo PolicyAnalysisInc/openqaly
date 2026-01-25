@@ -114,7 +114,9 @@ define_model <- function(type = "markov") {
     scripts = list(),
     trees = NULL,
     multivariate_sampling = list(),
-    dsa_parameters = structure(list(), class = "dsa_parameters")
+    dsa_parameters = structure(list(), class = "dsa_parameters"),
+    scenarios = list(),
+    twsa_analyses = list()
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -1050,4 +1052,584 @@ print.dsa_parameters <- function(x, ...) {
     cat(sprintf("  %d. [%s] %s\n", i, param$type, display))
   }
   invisible(x)
+}
+
+#' Add a Scenario to Model
+#'
+#' Define a named scenario for scenario analysis. Scenarios allow you to define
+#' alternate sets of parameter values and model settings to test different
+#' assumptions. Each scenario is given a name and optional description, and
+#' variable/setting overrides can be added using `add_scenario_variable()` and
+#' `add_scenario_setting()`.
+#'
+#' A "Base Case" scenario is automatically created when running scenario analysis,
+#' representing the model with default parameters. User-defined scenarios are
+#' compared against this base case.
+#'
+#' @param model An oq_model_builder object
+#' @param name Unique name for the scenario (e.g., "Optimistic", "Pessimistic")
+#' @param description Optional description explaining the scenario assumptions
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic", description = "Best case assumptions") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   add_scenario_variable("Optimistic", "cost", 4000) |>
+#'   add_scenario("Pessimistic", description = "Conservative assumptions") |>
+#'   add_scenario_variable("Pessimistic", "efficacy", 0.70)
+#' }
+add_scenario <- function(model, name, description = NULL) {
+  # Validate inputs
+
+if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("Scenario name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Check for reserved name "Base Case"
+  if (tolower(name) == "base case") {
+    stop("'Base Case' is a reserved scenario name that is automatically created",
+         call. = FALSE)
+  }
+
+  # Initialize scenarios list if NULL
+  if (is.null(model$scenarios)) {
+    model$scenarios <- list()
+  }
+
+  # Check for duplicate names
+  existing_names <- sapply(model$scenarios, function(s) s$name)
+  if (name %in% existing_names) {
+    stop(sprintf("Scenario '%s' already exists. Use a unique name.", name),
+         call. = FALSE)
+  }
+
+  # Create new scenario
+  new_scenario <- list(
+    name = name,
+    description = description %||% name,
+    variable_overrides = list(),
+    setting_overrides = list()
+  )
+
+  model$scenarios <- c(model$scenarios, list(new_scenario))
+  model
+}
+
+#' Add Variable Override to Scenario
+#'
+#' Add a variable value override for a specific scenario. When the scenario
+#' analysis runs this scenario, the specified variable will use the override
+#' value instead of its default formula.
+#'
+#' Values can be specified as:
+#' - Literal numeric values (e.g., 0.95, 5000)
+#' - Expressions using NSE (e.g., base_efficacy * 1.2)
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario to add the override to (must exist)
+#' @param variable Name of the variable to override (must exist in model$variables)
+#' @param value Value expression for the override (uses NSE)
+#' @param strategy Optional strategy name to limit override to specific strategy
+#' @param group Optional group name to limit override to specific group
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_variable("cost", 5000) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   add_scenario_variable("Optimistic", "cost", 4000)
+#' }
+add_scenario_variable <- function(model, scenario, variable, value,
+                                   strategy = "", group = "") {
+  # Validate inputs
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found. Use add_scenario() first.", scenario),
+         call. = FALSE)
+  }
+
+  # Capture value with NSE
+  value_quo <- enquo(value)
+  value_expr <- quo_get_expr(value_quo)
+
+  # Store as literal numeric or oq_formula depending on type
+  if (is.numeric(value_expr)) {
+    stored_value <- value_expr
+  } else {
+    stored_value <- as.oq_formula(expr_text(value_expr))
+  }
+
+  # Create override entry
+  override <- list(
+    name = variable,
+    value = stored_value,
+    strategy = as.character(strategy),
+    group = as.character(group)
+  )
+
+  # Add to scenario's variable_overrides
+  model$scenarios[[scenario_idx]]$variable_overrides <- c(
+    model$scenarios[[scenario_idx]]$variable_overrides,
+    list(override)
+  )
+
+  model
+}
+
+#' Add Setting Override to Scenario
+#'
+#' Add a model setting override for a specific scenario. When the scenario
+#' analysis runs this scenario, the specified setting will use the override
+#' value instead of its default.
+#'
+#' Common settings that can be overridden include:
+#' - `timeframe`: Model time horizon
+#' - `discount_cost`: Discount rate for costs (percentage)
+#' - `discount_outcomes`: Discount rate for outcomes (percentage)
+#' - `cycle_length`: Length of each model cycle
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario to add the override to (must exist)
+#' @param setting Name of the setting to override
+#' @param value Value for the setting override
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_scenario("Extended Horizon") |>
+#'   add_scenario_setting("Extended Horizon", "timeframe", 30) |>
+#'   add_scenario("No Discounting") |>
+#'   add_scenario_setting("No Discounting", "discount_cost", 0) |>
+#'   add_scenario_setting("No Discounting", "discount_outcomes", 0)
+#' }
+add_scenario_setting <- function(model, scenario, setting, value) {
+  # Validate inputs
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found. Use add_scenario() first.", scenario),
+         call. = FALSE)
+  }
+
+  # Create override entry
+  override <- list(
+    name = setting,
+    value = value
+  )
+
+  # Add to scenario's setting_overrides
+  model$scenarios[[scenario_idx]]$setting_overrides <- c(
+    model$scenarios[[scenario_idx]]$setting_overrides,
+    list(override)
+  )
+
+  model
+}
+
+#' Print Scenarios
+#'
+#' Print method for displaying scenarios defined in a model
+#'
+#' @param model An oq_model_builder object with scenarios
+#'
+#' @return Invisible model
+#' @keywords internal
+print_scenarios <- function(model) {
+  if (is.null(model$scenarios) || length(model$scenarios) == 0) {
+    cat("No scenarios defined\n")
+    return(invisible(model))
+  }
+
+  cat("Scenarios (", length(model$scenarios), "):\n", sep = "")
+  for (i in seq_along(model$scenarios)) {
+    scenario <- model$scenarios[[i]]
+    cat(sprintf("  %d. %s\n", i, scenario$name))
+    if (scenario$description != scenario$name) {
+      cat(sprintf("     Description: %s\n", scenario$description))
+    }
+    n_vars <- length(scenario$variable_overrides)
+    n_settings <- length(scenario$setting_overrides)
+    cat(sprintf("     Overrides: %d variable(s), %d setting(s)\n", n_vars, n_settings))
+  }
+  invisible(model)
+}
+
+#' Add a Two-Way Sensitivity Analysis to Model
+#'
+#' Define a named two-way sensitivity analysis (2WSA) that varies two parameters
+#' simultaneously across a grid of values. Each 2WSA must have exactly two
+#' variable or setting specifications added via `add_twsa_variable()` or
+#' `add_twsa_setting()`.
+#'
+#' @param model An oq_model_builder object
+#' @param name Unique name for the 2WSA analysis (e.g., "Cost vs Efficacy")
+#' @param description Optional description explaining what this analysis explores
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   add_twsa_variable("Cost vs Efficacy", "cost_tx",
+#'     type = "range", min = 1000, max = 3000, steps = 5) |>
+#'   add_twsa_variable("Cost vs Efficacy", "efficacy",
+#'     type = "radius", radius = 0.1, steps = 5)
+#' }
+add_twsa <- function(model, name, description = NULL) {
+  # Validate inputs
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("TWSA name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Check for reserved name "Base Case"
+  if (tolower(name) == "base case") {
+    stop("'Base Case' is a reserved name that cannot be used for TWSA analyses",
+         call. = FALSE)
+  }
+
+  # Initialize twsa_analyses list if NULL
+  if (is.null(model$twsa_analyses)) {
+    model$twsa_analyses <- list()
+  }
+
+  # Check for duplicate names
+  existing_names <- sapply(model$twsa_analyses, function(s) s$name)
+  if (name %in% existing_names) {
+    stop(sprintf("TWSA analysis '%s' already exists. Use a unique name.", name),
+         call. = FALSE)
+  }
+
+  # Create new TWSA analysis
+  new_twsa <- list(
+    name = name,
+    description = description %||% name,
+    parameters = list()  # Will hold exactly 2 variable/setting specs
+  )
+
+  model$twsa_analyses <- c(model$twsa_analyses, list(new_twsa))
+  model
+}
+
+#' Add Variable to Two-Way Sensitivity Analysis
+#'
+#' Add a variable to vary in a two-way sensitivity analysis. Each TWSA must have
+#' exactly two parameters (variables or settings). Values can be specified using
+#' three different range types:
+#'
+#' - `type = "range"`: Vary from `min` to `max` in `steps` evenly-spaced values
+#' - `type = "radius"`: Vary from `bc - radius` to `bc + radius` where `bc` is
+#'   the base case value, creating `steps * 2 + 1` values centered on the base case
+#' - `type = "custom"`: Use explicit values provided as a numeric vector
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis to add the variable to (must exist)
+#' @param variable Name of the variable to vary (must exist in model$variables)
+#' @param type Type of range specification: "range", "radius", or "custom"
+#' @param min For type="range": minimum value (can use NSE expressions)
+#' @param max For type="range": maximum value (can use NSE expressions)
+#' @param radius For type="radius": distance from base case (can use NSE)
+#' @param steps For type="range" or "radius": number of steps
+#' @param values For type="custom": numeric vector of values to use
+#' @param strategy Optional strategy name to limit the variable to specific strategy
+#' @param group Optional group name to limit the variable to specific group
+#' @param display_name Optional display name for plots and tables
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost_tx", 1000) |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   # Using range type
+#'   add_twsa_variable("Cost vs Efficacy", "cost_tx",
+#'     type = "range", min = 500, max = 1500, steps = 5) |>
+#'   # Using radius type (varies around base case)
+#'   add_twsa_variable("Cost vs Efficacy", "efficacy",
+#'     type = "radius", radius = 0.1, steps = 3)
+#'
+#' # Using custom values
+#' model <- define_model("markov") |>
+#'   add_variable("discount_rate", 0.03) |>
+#'   add_twsa("Discount Analysis") |>
+#'   add_twsa_variable("Discount Analysis", "discount_rate",
+#'     type = "custom", values = c(0, 0.015, 0.03, 0.05))
+#' }
+add_twsa_variable <- function(model, twsa_name, variable, type,
+                               min = NULL, max = NULL,
+                               radius = NULL, steps = NULL,
+                               values = NULL,
+                               strategy = "", group = "",
+                               display_name = NULL) {
+  # Validate inputs
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found. Use add_twsa() first.", twsa_name),
+         call. = FALSE)
+  }
+
+  # Check if TWSA already has 2 parameters
+  current_params <- length(model$twsa_analyses[[twsa_idx]]$parameters)
+  if (current_params >= 2) {
+    stop(sprintf(
+      "TWSA analysis '%s' already has 2 parameters. Each TWSA must have exactly 2 parameters.",
+      twsa_name
+    ), call. = FALSE)
+  }
+
+  # Validate type
+  type <- match.arg(type, c("range", "radius", "custom"))
+
+  # Validate type-specific parameters
+  if (type == "range") {
+    if (is.null(substitute(min)) || is.null(substitute(max)) || is.null(steps)) {
+      stop("For type='range', min, max, and steps are required", call. = FALSE)
+    }
+  } else if (type == "radius") {
+    if (is.null(substitute(radius)) || is.null(steps)) {
+      stop("For type='radius', radius and steps are required", call. = FALSE)
+    }
+  } else if (type == "custom") {
+    if (is.null(substitute(values))) {
+      stop("For type='custom', values is required", call. = FALSE)
+    }
+  }
+
+  # Capture expressions with NSE
+  min_formula <- NULL
+  max_formula <- NULL
+  radius_formula <- NULL
+  values_formula <- NULL
+
+  if (type == "range") {
+    min_quo <- enquo(min)
+    min_expr <- quo_get_expr(min_quo)
+    if (is.numeric(min_expr)) {
+      min_formula <- as.oq_formula(as.character(min_expr))
+    } else {
+      min_formula <- as.oq_formula(expr_text(min_expr))
+    }
+
+    max_quo <- enquo(max)
+    max_expr <- quo_get_expr(max_quo)
+    if (is.numeric(max_expr)) {
+      max_formula <- as.oq_formula(as.character(max_expr))
+    } else {
+      max_formula <- as.oq_formula(expr_text(max_expr))
+    }
+  } else if (type == "radius") {
+    radius_quo <- enquo(radius)
+    radius_expr <- quo_get_expr(radius_quo)
+    if (is.numeric(radius_expr)) {
+      radius_formula <- as.oq_formula(as.character(radius_expr))
+    } else {
+      radius_formula <- as.oq_formula(expr_text(radius_expr))
+    }
+  } else if (type == "custom") {
+    values_quo <- enquo(values)
+    values_expr <- quo_get_expr(values_quo)
+    # For custom, we need to handle vector expressions
+    values_formula <- as.oq_formula(expr_text(values_expr))
+  }
+
+  # Create parameter specification
+  param_spec <- list(
+    param_type = "variable",
+    name = variable,
+    type = type,
+    min = min_formula,
+    max = max_formula,
+    radius = radius_formula,
+    steps = steps,
+    values = values_formula,
+    strategy = as.character(strategy),
+    group = as.character(group),
+    display_name = display_name
+  )
+
+  # Add to TWSA's parameters list
+  model$twsa_analyses[[twsa_idx]]$parameters <- c(
+    model$twsa_analyses[[twsa_idx]]$parameters,
+    list(param_spec)
+  )
+
+  model
+}
+
+#' Add Setting to Two-Way Sensitivity Analysis
+#'
+#' Add a model setting to vary in a two-way sensitivity analysis. Each TWSA must
+#' have exactly two parameters (variables or settings). Settings include parameters
+#' like discount rates, timeframe, and other global model configuration values.
+#'
+#' Values can be specified using three different range types:
+#'
+#' - `type = "range"`: Vary from `min` to `max` in `steps` evenly-spaced values
+#' - `type = "radius"`: Vary from `base - radius` to `base + radius` where `base`
+#'   is the current setting value, creating `steps * 2 + 1` values
+#' - `type = "custom"`: Use explicit values provided as a numeric vector
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis to add the setting to (must exist)
+#' @param setting Name of the setting to vary (e.g., "discount_cost", "timeframe")
+#' @param type Type of range specification: "range", "radius", or "custom"
+#' @param min For type="range": minimum value
+#' @param max For type="range": maximum value
+#' @param radius For type="radius": distance from base value
+#' @param steps For type="range" or "radius": number of steps
+#' @param values For type="custom": numeric vector of values to use
+#' @param display_name Optional display name for plots and tables
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_twsa("Time vs Discount") |>
+#'   add_twsa_setting("Time vs Discount", "timeframe",
+#'     type = "range", min = 10, max = 30, steps = 5) |>
+#'   add_twsa_setting("Time vs Discount", "discount_cost",
+#'     type = "custom", values = c(0, 1.5, 3, 5))
+#' }
+add_twsa_setting <- function(model, twsa_name, setting, type,
+                              min = NULL, max = NULL,
+                              radius = NULL, steps = NULL,
+                              values = NULL,
+                              display_name = NULL) {
+  # Validate inputs
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found. Use add_twsa() first.", twsa_name),
+         call. = FALSE)
+  }
+
+  # Check if TWSA already has 2 parameters
+  current_params <- length(model$twsa_analyses[[twsa_idx]]$parameters)
+  if (current_params >= 2) {
+    stop(sprintf(
+      "TWSA analysis '%s' already has 2 parameters. Each TWSA must have exactly 2 parameters.",
+      twsa_name
+    ), call. = FALSE)
+  }
+
+  # Validate type
+  type <- match.arg(type, c("range", "radius", "custom"))
+
+  # Validate type-specific parameters
+  if (type == "range") {
+    if (is.null(min) || is.null(max) || is.null(steps)) {
+      stop("For type='range', min, max, and steps are required", call. = FALSE)
+    }
+  } else if (type == "radius") {
+    if (is.null(radius) || is.null(steps)) {
+      stop("For type='radius', radius and steps are required", call. = FALSE)
+    }
+  } else if (type == "custom") {
+    if (is.null(values)) {
+      stop("For type='custom', values is required", call. = FALSE)
+    }
+  }
+
+  # Create parameter specification (store literal values for settings)
+  param_spec <- list(
+    param_type = "setting",
+    name = setting,
+    type = type,
+    min = min,
+    max = max,
+    radius = radius,
+    steps = steps,
+    values = values,
+    display_name = display_name %||% setting
+  )
+
+  # Add to TWSA's parameters list
+  model$twsa_analyses[[twsa_idx]]$parameters <- c(
+    model$twsa_analyses[[twsa_idx]]$parameters,
+    list(param_spec)
+  )
+
+  model
+}
+
+#' Print TWSA Analyses
+#'
+#' Print method for displaying two-way sensitivity analyses defined in a model
+#'
+#' @param model An oq_model_builder object with TWSA analyses
+#'
+#' @return Invisible model
+#' @keywords internal
+print_twsa <- function(model) {
+  if (is.null(model$twsa_analyses) || length(model$twsa_analyses) == 0) {
+    cat("No TWSA analyses defined\n")
+    return(invisible(model))
+  }
+
+  cat("Two-Way Sensitivity Analyses (", length(model$twsa_analyses), "):\n", sep = "")
+  for (i in seq_along(model$twsa_analyses)) {
+    twsa <- model$twsa_analyses[[i]]
+    cat(sprintf("  %d. %s\n", i, twsa$name))
+    if (twsa$description != twsa$name) {
+      cat(sprintf("     Description: %s\n", twsa$description))
+    }
+    n_params <- length(twsa$parameters)
+    cat(sprintf("     Parameters: %d/2\n", n_params))
+    for (j in seq_along(twsa$parameters)) {
+      param <- twsa$parameters[[j]]
+      param_display <- param$display_name %||% param$name
+      cat(sprintf("       - [%s] %s (%s)\n", param$param_type, param_display, param$type))
+    }
+  }
+  invisible(model)
 }

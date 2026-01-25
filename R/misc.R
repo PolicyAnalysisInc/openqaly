@@ -1626,18 +1626,21 @@ select_source_data <- function(groups, results) {
 #' @keywords internal
 get_group_order <- function(groups, metadata) {
   has_overall <- "Overall" %in% groups
+  has_aggregated <- "_aggregated" %in% groups
 
   # Get model-defined group order from metadata
   if (!is.null(metadata$groups)) {
     model_order <- metadata$groups$display_name
     ordered_groups <- model_order[model_order %in% groups]
   } else {
-    ordered_groups <- setdiff(groups, "Overall")
+    ordered_groups <- setdiff(groups, c("Overall", "_aggregated"))
   }
 
-  # Overall first, then model order
+  # Overall/_aggregated first, then model order
   if (has_overall) {
     c("Overall", ordered_groups)
+  } else if (has_aggregated) {
+    c("_aggregated", ordered_groups)
   } else {
     ordered_groups
   }

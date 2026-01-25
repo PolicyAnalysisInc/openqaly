@@ -327,7 +327,7 @@ test_that("analyze_vbp_results() errors on non-linear aggregated costs", {
 
   expect_error(
     openqaly:::analyze_vbp_results(segments, aggregated, vbp_spec, list()),
-    "Aggregated cost not linear with price for targeted vs chemo"
+    "VBP error: Cost not linear with price for targeted vs chemo"
   )
 })
 

@@ -56,8 +56,7 @@ test_that("prepare_vbp_plot_data() filters comparators correctly", {
   if (length(comparators) >= 1) {
     plot_data <- openqaly:::prepare_vbp_plot_data(
       vbp_results,
-      comparators = comparators[1],
-      include_all_comparators = FALSE
+      comparators = comparators[1]
     )
 
     # Should only have 1 comparator
@@ -98,7 +97,7 @@ test_that("prepare_vbp_plot_data() includes 'All Comparators' series", {
   if (n_comparators > 1) {
     plot_data <- openqaly:::prepare_vbp_plot_data(
       vbp_results,
-      include_all_comparators = TRUE
+      comparators = "all"
     )
 
     comparators_in_data <- unique(plot_data$comparator)
@@ -111,7 +110,7 @@ test_that("prepare_vbp_plot_data() can exclude 'All Comparators' series", {
 
   plot_data <- openqaly:::prepare_vbp_plot_data(
     vbp_results,
-    include_all_comparators = FALSE
+    comparators = "all_comparators"
   )
 
   comparators_in_data <- unique(plot_data$comparator)
@@ -131,7 +130,7 @@ test_that("'All Comparators' series is minimum of individual comparator VBPs", {
       vbp_results,
       wtp_range = c(50000, 50000),
       wtp_step = 1,
-      include_all_comparators = TRUE
+      comparators = "all"
     )
 
     # Get individual comparator VBPs at WTP = 50000

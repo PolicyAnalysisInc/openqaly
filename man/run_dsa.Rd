@@ -4,15 +4,36 @@
 \alias{run_dsa}
 \title{Run Deterministic Sensitivity Analysis}
 \usage{
-run_dsa(model, ...)
+run_dsa(
+  model,
+  vbp_price_variable = NULL,
+  vbp_intervention = NULL,
+  vbp_outcome_summary = NULL,
+  vbp_cost_summary = NULL,
+  ...
+)
 }
 \arguments{
 \item{model}{An openqaly model object with DSA specifications}
 
+\item{vbp_price_variable}{Name of the price variable to vary for VBP analysis.
+If NULL (default), standard DSA without VBP is performed.}
+
+\item{vbp_intervention}{Intervention strategy name for VBP analysis.
+Required if vbp_price_variable is specified.}
+
+\item{vbp_outcome_summary}{Outcome summary name for VBP analysis.
+Defaults to "total_qalys" from model metadata if available.}
+
+\item{vbp_cost_summary}{Cost summary name for VBP analysis.
+Defaults to "total_cost" from model metadata if available.}
+
 \item{...}{Additional arguments passed to run_segment}
 }
 \value{
-Results list with segments and aggregated results (includes run_id dimension)
+Results list with segments and aggregated results (includes run_id dimension).
+  When VBP is enabled, also includes dsa_vbp_equations tibble with VBP equations
+  for each DSA run.
 }
 \description{
 Runs deterministic sensitivity analysis by executing the model multiple times
@@ -24,6 +45,10 @@ DSA variable bounds support flexible specification using:
 - Literal values (e.g., 0.01, 0.05)
 - The `bc` keyword to reference base case values (e.g., bc * 0.5)
 - Other model variables (e.g., bc - 2 * cost_se)
+
+When VBP parameters are provided, DSA+VBP mode is activated. In this mode,
+each DSA run includes 3 VBP price level sub-simulations to calculate the
+VBP relationship at each parameter variation.
 }
 \examples{
 \dontrun{
@@ -58,5 +83,25 @@ model <- define_model("markov") \%>\%
                    high = bc + 1.96 * p_disease_se)
 
 dsa_results <- run_dsa(model)
+
+# Example 4: DSA with VBP add-on
+model <- define_model("markov") \%>\%
+  add_variable("cost_tx", 1000) \%>\%
+  add_dsa_variable("cost_tx", low = bc * 0.75, high = bc * 1.25) \%>\%
+  # ... other model setup ...
+  add_strategy("treatment") \%>\%
+  add_strategy("comparator")
+
+dsa_vbp_results <- run_dsa(
+  model,
+  vbp_price_variable = "cost_tx",
+  vbp_intervention = "treatment"
+)
+
+# Get VBP at base case
+vbp_base <- calculate_dsa_vbp_price(dsa_vbp_results, wtp = 50000)
+
+# Get VBP for a specific DSA variation
+vbp_low <- calculate_dsa_vbp_price(dsa_vbp_results, wtp = 50000, run_id = 2)
 }
 }
