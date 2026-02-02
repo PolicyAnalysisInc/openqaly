@@ -327,7 +327,7 @@ analyze_vbp_results <- function(segments, aggregated, vbp_spec, model) {
 #' @keywords internal
 extract_segment_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = map_dbl(.data$summaries, function(s) {
+    mutate(total = map_dbl(.data$summaries_discounted, function(s) {
       if (is.null(s)) return(NA_real_)
       s %>%
         filter(.data$summary == summary_name) %>%
@@ -348,7 +348,7 @@ extract_segment_summary_values <- function(data, summary_name) {
 #' @keywords internal
 extract_summary_values <- function(data, summary_name) {
   data %>%
-    mutate(total = map_dbl(.data$summaries, function(s) {
+    mutate(total = map_dbl(.data$summaries_discounted, function(s) {
       s %>%
         filter(.data$summary == summary_name) %>%
         pull(.data$amount) %>%
@@ -434,6 +434,26 @@ validate_vbp_spec <- function(model, vbp_spec) {
   if (!vbp_spec$price_variable %in% model$variables$name) {
     stop(sprintf("Price variable '%s' not found in model variables",
                 vbp_spec$price_variable))
+  }
+
+  # Check if price variable is group-specific and error if so
+  # VBP applies price to all groups - no way to target specific group
+  matching_vars <- model$variables[model$variables$name == vbp_spec$price_variable, ]
+  if (nrow(matching_vars) > 0) {
+    non_na_groups <- matching_vars$group[!is.na(matching_vars$group)]
+    has_group_specific <- length(non_na_groups) > 0 && any(non_na_groups != "")
+    if (has_group_specific) {
+      defined_groups <- unique(non_na_groups[non_na_groups != ""])
+      stop(sprintf(
+        paste0(
+          "Price variable '%s' is defined for specific group(s): %s\n",
+          "VBP analysis does not currently support group-specific price variables.\n",
+          "The price variable must be defined without group specification."
+        ),
+        vbp_spec$price_variable,
+        paste(defined_groups, collapse = ", ")
+      ), call. = FALSE)
+    }
   }
 
   # Check summaries exist using validation helper

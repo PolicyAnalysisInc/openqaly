@@ -8,33 +8,27 @@ pairwise_ceac_plot(
   results,
   outcome_summary,
   cost_summary,
-  intervention = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   wtp_range = c(0, 1e+05),
   wtp_step = 5000,
   groups = "overall",
-  strategies = NULL,
   title = NULL,
   xlab = "Willingness to Pay",
-  ylab = NULL,
+  ylab = "Probability of Cost-Effectiveness",
   legend_position = "bottom"
 )
 }
 \arguments{
-\item{results}{A openqaly PSA results object, or pre-calculated CEAC data
-from calculate_incremental_ceac()}
+\item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (required if results is
-a model object)}
+\item{outcome_summary}{Name of the outcome summary}
 
-\item{cost_summary}{Name of the cost summary (required if results is a
-model object)}
+\item{cost_summary}{Name of the cost summary}
 
-\item{intervention}{Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-Mutually exclusive with comparator.}
+\item{interventions}{Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).}
 
-\item{comparator}{Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-Mutually exclusive with intervention.}
+\item{comparators}{Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).}
 
 \item{wtp_range}{Numeric vector with min and max WTP values for x-axis.
 Default is c(0, 100000)}
@@ -45,13 +39,11 @@ Default is c(0, 100000)}
 "all" includes overall + all groups, "all_groups" includes all groups without overall,
 specific group name(s) filter to those groups (triggers faceting by group)}
 
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
-
 \item{title}{Plot title. If NULL, auto-generated}
 
 \item{xlab}{X-axis label. Default is "Willingness to Pay"}
 
-\item{ylab}{Y-axis label. Default is "Probability of Being Most Cost-Effective"}
+\item{ylab}{Y-axis label. Default is "Probability of Cost-Effectiveness"}
 
 \item{legend_position}{Legend position: "bottom" (default), "right", "top",
 "left", or "none"}

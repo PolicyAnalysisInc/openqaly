@@ -11,7 +11,8 @@ render_twsa_heatmap(
   ylab = NULL,
   legend_title = "Value",
   viridis_option = "viridis",
-  show_base_case = TRUE
+  show_base_case = TRUE,
+  caption = NULL
 )
 }
 \arguments{

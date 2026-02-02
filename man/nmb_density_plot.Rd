@@ -2,13 +2,15 @@
 % Please edit documentation in R/psa_plots.R
 \name{nmb_density_plot}
 \alias{nmb_density_plot}
-\title{Net Monetary Benefit Density Plot}
+\title{Incremental Net Monetary Benefit Density Plot}
 \usage{
 nmb_density_plot(
   results,
   outcome_summary,
   cost_summary,
   wtp,
+  interventions = NULL,
+  comparators = NULL,
   groups = "overall",
   strategies = NULL,
   show_mean = TRUE,
@@ -27,6 +29,12 @@ nmb_density_plot(
 
 \item{wtp}{Willingness-to-pay threshold for NMB calculation}
 
+\item{interventions}{Character vector of intervention strategy name(s).
+Can be combined with comparators for N x M comparisons.}
+
+\item{comparators}{Character vector of comparator strategy name(s).
+Can be combined with interventions for N x M comparisons.}
+
 \item{groups}{Group selection:
 \itemize{
   \item \code{"overall"} - Overall population (aggregated, default)
@@ -37,9 +45,10 @@ nmb_density_plot(
   \item \code{"all_groups"} - All groups without overall
 }}
 
-\item{strategies}{Character vector of strategies to include (NULL for all)}
+\item{strategies}{Character vector of strategies to include (NULL for all).
+Mutually exclusive with interventions/comparators.}
 
-\item{show_mean}{Logical. Show vertical lines at mean NMB per strategy?}
+\item{show_mean}{Logical. Show vertical lines at mean incremental NMB per comparison?}
 
 \item{alpha}{Transparency for density fill (default: 0.4)}
 
@@ -53,17 +62,29 @@ nmb_density_plot(
 A ggplot object
 }
 \description{
-Creates a density plot showing the distribution of Net Monetary Benefit (NMB)
-by strategy at a given willingness-to-pay threshold.
+Creates a density plot showing the distribution of incremental Net Monetary
+Benefit (NMB) relative to a comparator at a given willingness-to-pay threshold.
 }
 \details{
-Net Monetary Benefit is calculated as:
-\deqn{NMB = \lambda \times Outcomes - Costs}
+Incremental Net Monetary Benefit is calculated as:
+\deqn{\Delta NMB = \lambda \times \Delta Outcomes - \Delta Costs}
 
-where \eqn{\lambda} is the willingness-to-pay threshold. Higher NMB indicates
-better value. The density plot shows the full distribution of NMB values
-across all PSA simulations, providing insight into the uncertainty around
-each strategy's value.
+where \eqn{\lambda} is the willingness-to-pay threshold and \eqn{\Delta}
+represents the difference between intervention and comparator. Positive
+incremental NMB indicates the intervention is cost-effective at the given
+WTP threshold.
+
+**Comparison Modes:**
+
+When interventions and/or comparators are specified:
+\itemize{
+  \item Both as single values: shows one comparison (intervention - comparator)
+  \item One as vector, other NULL: shows each vs. all others
+  \item Both as vectors (N x M mode): shows all pairwise comparisons (excluding self)
+}
+
+A vertical dashed line at x = 0 indicates the threshold for cost-effectiveness:
+positive values indicate the intervention is cost-effective.
 
 NMB calculations always use discounted values as this is a cost-effectiveness measure.
 }
@@ -72,12 +93,13 @@ NMB calculations always use discounted values as this is a cost-effectiveness me
 model <- read_model(system.file("models/example_psm", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
-# NMB density at WTP = $50,000
-nmb_density_plot(psa_results, "total_qalys", "total_cost", wtp = 50000)
-
-# With custom styling
+# Incremental NMB density relative to a comparator
 nmb_density_plot(psa_results, "total_qalys", "total_cost",
-                 wtp = 100000, show_mean = TRUE, alpha = 0.5)
+                 wtp = 50000, comparators = "control")
+
+# Intervention perspective
+nmb_density_plot(psa_results, "total_qalys", "total_cost",
+                 wtp = 100000, interventions = "new_treatment", show_mean = TRUE)
 }
 
 }

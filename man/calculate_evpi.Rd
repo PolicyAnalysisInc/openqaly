@@ -10,8 +10,7 @@ calculate_evpi(
   cost_summary,
   wtp = seq(0, 1e+05, by = 5000),
   groups = "overall",
-  strategies = NULL,
-  discounted = FALSE
+  strategies = NULL
 )
 }
 \arguments{
@@ -35,8 +34,6 @@ seq(0, 100000, by = 5000)}
 }}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A tibble with columns:

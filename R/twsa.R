@@ -270,33 +270,89 @@ build_twsa_segments <- function(model) {
     x_param <- twsa$parameters[[1]]
     y_param <- twsa$parameters[[2]]
 
-    # Use first segment's namespace to generate the grid (values are the same for all segments)
-    first_segment <- enriched_segments[1, ]
-    namespace <- first_segment$eval_vars[[1]]
+    # Generate values and base case per segment (each segment may have different bc value)
+    # This mirrors the DSA pattern for strategy/group-specific parameters
+    x_values_per_segment <- vector("list", n_segments)
+    y_values_per_segment <- vector("list", n_segments)
+    x_bc_per_segment <- vector("list", n_segments)
+    y_bc_per_segment <- vector("list", n_segments)
 
-    # Generate values for both parameters
-    x_values <- generate_twsa_values(x_param, namespace, model$settings)
-    y_values <- generate_twsa_values(y_param, namespace, model$settings)
+    for (seg_idx in seq_len(n_segments)) {
+      segment <- enriched_segments[seg_idx, ]
+      seg_strategy <- segment$strategy[[1]]
+      seg_group <- segment$group[[1]]
+      seg_ns <- segment$eval_vars[[1]]
 
-    # Determine base case values for metadata
-    x_bc_value <- if (x_param$param_type == "variable") {
-      namespace[x_param$name]
-    } else {
-      model$settings[[x_param$name]]
+      # Check if x_param applies to this segment
+      x_applies <- TRUE
+      if (x_param$param_type == "variable") {
+        if (!is.null(x_param$strategy) && x_param$strategy != "" && x_param$strategy != seg_strategy) {
+          x_applies <- FALSE
+        }
+        if (!is.null(x_param$group) && x_param$group != "" && x_param$group != seg_group) {
+          x_applies <- FALSE
+        }
+      }
+
+      # Check if y_param applies to this segment
+      y_applies <- TRUE
+      if (y_param$param_type == "variable") {
+        if (!is.null(y_param$strategy) && y_param$strategy != "" && y_param$strategy != seg_strategy) {
+          y_applies <- FALSE
+        }
+        if (!is.null(y_param$group) && y_param$group != "" && y_param$group != seg_group) {
+          y_applies <- FALSE
+        }
+      }
+
+      # Generate values using this segment's namespace (for correct bc reference)
+      if (x_applies) {
+        x_values_per_segment[[seg_idx]] <- generate_twsa_values(
+          x_param, seg_ns, model$settings,
+          include_base_case = x_param$include_base_case %||% TRUE
+        )
+        x_bc_per_segment[[seg_idx]] <- if (x_param$param_type == "variable") {
+          seg_ns[x_param$name]
+        } else {
+          model$settings[[x_param$name]]
+        }
+      }
+
+      if (y_applies) {
+        y_values_per_segment[[seg_idx]] <- generate_twsa_values(
+          y_param, seg_ns, model$settings,
+          include_base_case = y_param$include_base_case %||% TRUE
+        )
+        y_bc_per_segment[[seg_idx]] <- if (y_param$param_type == "variable") {
+          seg_ns[y_param$name]
+        } else {
+          model$settings[[y_param$name]]
+        }
+      }
     }
-    y_bc_value <- if (y_param$param_type == "variable") {
-      namespace[y_param$name]
-    } else {
-      model$settings[[y_param$name]]
+
+    # For grid creation, use the first applicable segment's values
+    # (all applicable segments should have the same number of steps)
+    x_values_for_grid <- NULL
+    y_values_for_grid <- NULL
+    for (seg_idx in seq_len(n_segments)) {
+      if (is.null(x_values_for_grid) && !is.null(x_values_per_segment[[seg_idx]])) {
+        x_values_for_grid <- x_values_per_segment[[seg_idx]]
+      }
+      if (is.null(y_values_for_grid) && !is.null(y_values_per_segment[[seg_idx]])) {
+        y_values_for_grid <- y_values_per_segment[[seg_idx]]
+      }
     }
 
-    # Create grid of all combinations
-    grid <- expand_grid(x = x_values, y = y_values)
+    # Create grid indices (not actual values, since values may differ per segment)
+    n_x <- length(x_values_for_grid)
+    n_y <- length(y_values_for_grid)
+    grid_indices <- expand_grid(x_idx = seq_len(n_x), y_idx = seq_len(n_y))
 
     # Create segments for each grid point - same run_id for all strategies at each grid point
-    for (grid_row in seq_len(nrow(grid))) {
-      x_val <- grid$x[grid_row]
-      y_val <- grid$y[grid_row]
+    for (grid_row in seq_len(nrow(grid_indices))) {
+      x_idx <- grid_indices$x_idx[grid_row]
+      y_idx <- grid_indices$y_idx[grid_row]
 
       # For each segment (strategy x group), create overrides
       for (seg_idx in seq_len(n_segments)) {
@@ -304,43 +360,47 @@ build_twsa_segments <- function(model) {
         seg_strategy <- segment$strategy[[1]]
         seg_group <- segment$group[[1]]
 
-        # Build overrides
+        # Build overrides using segment-specific values
         param_overrides <- list()
         setting_overrides <- list()
 
+        # Get segment-specific values and bc (or NULL if doesn't apply)
+        x_values <- x_values_per_segment[[seg_idx]]
+        y_values <- y_values_per_segment[[seg_idx]]
+        x_bc_value <- x_bc_per_segment[[seg_idx]]
+        y_bc_value <- y_bc_per_segment[[seg_idx]]
+
         # X parameter override
+        x_val <- NA_real_
         if (x_param$param_type == "variable") {
-          # Check if override applies to this segment
-          x_applies <- TRUE
-          if (!is.null(x_param$strategy) && x_param$strategy != "" && x_param$strategy != seg_strategy) {
-            x_applies <- FALSE
-          }
-          if (!is.null(x_param$group) && x_param$group != "" && x_param$group != seg_group) {
-            x_applies <- FALSE
-          }
-          if (x_applies) {
+          if (!is.null(x_values)) {
+            x_val <- x_values[x_idx]
             param_overrides[[x_param$name]] <- x_val
           }
         } else {
+          x_val <- x_values_for_grid[x_idx]
           setting_overrides[[x_param$name]] <- x_val
+          x_bc_value <- model$settings[[x_param$name]]
         }
 
         # Y parameter override
+        y_val <- NA_real_
         if (y_param$param_type == "variable") {
-          # Check if override applies to this segment
-          y_applies <- TRUE
-          if (!is.null(y_param$strategy) && y_param$strategy != "" && y_param$strategy != seg_strategy) {
-            y_applies <- FALSE
-          }
-          if (!is.null(y_param$group) && y_param$group != "" && y_param$group != seg_group) {
-            y_applies <- FALSE
-          }
-          if (y_applies) {
+          if (!is.null(y_values)) {
+            y_val <- y_values[y_idx]
             param_overrides[[y_param$name]] <- y_val
           }
         } else {
+          y_val <- y_values_for_grid[y_idx]
           setting_overrides[[y_param$name]] <- y_val
+          y_bc_value <- model$settings[[y_param$name]]
         }
+
+        # Use grid values for metadata if segment-specific not available
+        if (is.na(x_val)) x_val <- x_values_for_grid[x_idx]
+        if (is.na(y_val)) y_val <- y_values_for_grid[y_idx]
+        if (is.null(x_bc_value)) x_bc_value <- x_bc_per_segment[[which(!sapply(x_bc_per_segment, is.null))[1]]]
+        if (is.null(y_bc_value)) y_bc_value <- y_bc_per_segment[[which(!sapply(y_bc_per_segment, is.null))[1]]]
 
         # Create segment with overrides (same run_id for all strategies at this grid point)
         twsa_seg <- segment %>%
@@ -619,7 +679,7 @@ extract_twsa_summaries <- function(results,
                                    strategies = NULL,
                                    interventions = NULL,
                                    comparators = NULL,
-                                   discounted = FALSE) {
+                                   discounted = TRUE) {
 
   value_type <- match.arg(value_type)
 

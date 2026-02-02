@@ -2,33 +2,15 @@ context("VBP Plots")
 
 # ============================================================================
 # Test Fixtures
+# Uses get_cached_vbp_results() from setup.R for performance
 # ============================================================================
-
-get_example_model <- function() {
-  model_path <- system.file("models", "example_psm", package = "openqaly")
-  if (model_path == "") {
-    model_path <- "inst/models/example_psm"
-  }
-  read_model(model_path)
-}
-
-run_example_vbp <- function() {
-  model <- get_example_model()
-  run_vbp(
-    model,
-    price_variable = "c_drug",
-    intervention_strategy = "targeted",
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost"
-  )
-}
 
 # ============================================================================
 # 1. prepare_vbp_plot_data() Tests
 # ============================================================================
 
 test_that("prepare_vbp_plot_data() returns tibble with correct columns", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   plot_data <- openqaly:::prepare_vbp_plot_data(vbp_results)
 
   expect_s3_class(plot_data, "tbl_df")
@@ -39,7 +21,7 @@ test_that("prepare_vbp_plot_data() returns tibble with correct columns", {
 })
 
 test_that("prepare_vbp_plot_data() includes all comparators by default", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   plot_data <- openqaly:::prepare_vbp_plot_data(vbp_results)
 
   n_comparators <- nrow(vbp_results$vbp_equations)
@@ -50,7 +32,7 @@ test_that("prepare_vbp_plot_data() includes all comparators by default", {
 })
 
 test_that("prepare_vbp_plot_data() filters comparators correctly", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   comparators <- unique(vbp_results$vbp_equations$comparator)
 
   if (length(comparators) >= 1) {
@@ -65,7 +47,7 @@ test_that("prepare_vbp_plot_data() filters comparators correctly", {
 })
 
 test_that("prepare_vbp_plot_data() errors on invalid comparator", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   expect_error(
     openqaly:::prepare_vbp_plot_data(
@@ -77,7 +59,7 @@ test_that("prepare_vbp_plot_data() errors on invalid comparator", {
 })
 
 test_that("prepare_vbp_plot_data() uses custom WTP range", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   plot_data <- openqaly:::prepare_vbp_plot_data(
     vbp_results,
@@ -91,7 +73,7 @@ test_that("prepare_vbp_plot_data() uses custom WTP range", {
 })
 
 test_that("prepare_vbp_plot_data() includes 'All Comparators' series", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   n_comparators <- nrow(vbp_results$vbp_equations)
 
   if (n_comparators > 1) {
@@ -106,7 +88,7 @@ test_that("prepare_vbp_plot_data() includes 'All Comparators' series", {
 })
 
 test_that("prepare_vbp_plot_data() can exclude 'All Comparators' series", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   plot_data <- openqaly:::prepare_vbp_plot_data(
     vbp_results,
@@ -122,7 +104,7 @@ test_that("prepare_vbp_plot_data() can exclude 'All Comparators' series", {
 # ============================================================================
 
 test_that("'All Comparators' series is minimum of individual comparator VBPs", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   n_comparators <- nrow(vbp_results$vbp_equations)
 
   if (n_comparators > 1) {
@@ -152,7 +134,7 @@ test_that("'All Comparators' series is minimum of individual comparator VBPs", {
 # ============================================================================
 
 test_that("vbp_plot() returns ggplot object", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results)
 
   expect_s3_class(p, "ggplot")
@@ -164,7 +146,7 @@ test_that("vbp_plot() returns ggplot object", {
 # ============================================================================
 
 test_that("vbp_plot() auto-generates WTP range when NULL", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, wtp_range = NULL)
 
   # Should still produce valid plot
@@ -176,7 +158,7 @@ test_that("vbp_plot() auto-generates WTP range when NULL", {
 })
 
 test_that("vbp_plot() uses custom WTP range", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(
     vbp_results,
     wtp_range = c(0, 100000),
@@ -191,7 +173,7 @@ test_that("vbp_plot() uses custom WTP range", {
 # ============================================================================
 
 test_that("vbp_plot() adds default WTP line when show_default_wtp = TRUE", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, show_default_wtp = TRUE)
 
   # Check that plot builds without error
@@ -199,7 +181,7 @@ test_that("vbp_plot() adds default WTP line when show_default_wtp = TRUE", {
 })
 
 test_that("vbp_plot() omits default WTP line when show_default_wtp = FALSE", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, show_default_wtp = FALSE)
 
   expect_s3_class(p, "ggplot")
@@ -210,7 +192,7 @@ test_that("vbp_plot() omits default WTP line when show_default_wtp = FALSE", {
 # ============================================================================
 
 test_that("vbp_plot() with single comparator produces valid plot", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   comparators <- unique(vbp_results$vbp_equations$comparator)
 
   if (length(comparators) >= 1) {
@@ -228,7 +210,7 @@ test_that("vbp_plot() with single comparator produces valid plot", {
 # ============================================================================
 
 test_that("vbp_plot() works with 'overall' group", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, groups = "overall")
 
   expect_s3_class(p, "ggplot")
@@ -239,7 +221,7 @@ test_that("vbp_plot() works with 'overall' group", {
 # ============================================================================
 
 test_that("vbp_plot() uses theme_bw as base theme", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results)
 
   # Check theme inheritance
@@ -247,7 +229,7 @@ test_that("vbp_plot() uses theme_bw as base theme", {
 })
 
 test_that("vbp_plot() formats axes with dollar labels", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results)
 
   # Both X and Y axes should use dollar formatting
@@ -260,7 +242,7 @@ test_that("vbp_plot() formats axes with dollar labels", {
 # ============================================================================
 
 test_that("vbp_plot() adds VBP callouts when show_vbp_at_wtp = TRUE", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, show_default_wtp = TRUE, show_vbp_at_wtp = TRUE)
 
   # Check that plot builds without error
@@ -268,14 +250,14 @@ test_that("vbp_plot() adds VBP callouts when show_vbp_at_wtp = TRUE", {
 })
 
 test_that("vbp_plot() omits VBP callouts when show_vbp_at_wtp = FALSE", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results, show_default_wtp = TRUE, show_vbp_at_wtp = FALSE)
 
   expect_s3_class(p, "ggplot")
 })
 
 test_that("vbp_plot() omits VBP callouts when show_default_wtp = FALSE", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   # VBP callouts require default WTP line
   p <- vbp_plot(vbp_results, show_default_wtp = FALSE, show_vbp_at_wtp = TRUE)
 
@@ -287,7 +269,7 @@ test_that("vbp_plot() omits VBP callouts when show_default_wtp = FALSE", {
 # ============================================================================
 
 test_that("vbp_plot() maps comparator names to display names", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results)
 
   # Check that plot builds without error with display name mapping

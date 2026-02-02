@@ -11,7 +11,7 @@ dsa_outcomes_plot(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE,
+  discounted = TRUE,
   show_parameter_values = TRUE,
   drop_zero_impact = TRUE
 )

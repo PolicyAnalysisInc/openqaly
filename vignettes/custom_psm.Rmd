@@ -1,0 +1,311 @@
+---
+title: "Custom Partitioned Survival Models"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Custom Partitioned Survival Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(openqaly)
+library(openqalysurv)
+```
+
+## Introduction
+
+Custom PSM models extend standard PSMs by allowing arbitrary numbers of states
+with direct probability formulas. Unlike standard PSMs which derive state
+occupancy from PFS and OS survival curve areas, Custom PSMs let you specify the
+probability of being in each state directly at each cycle.
+
+## When to Use Custom PSM
+
+Standard PSMs are limited to exactly 3 states (PF, Progressed, Dead) derived
+from PFS and OS curves. Custom PSMs are needed when:
+- **More than 3 health states** are required
+- **State structure doesn't map to PFS/OS** (e.g., treatment discontinuation, response status)
+- **Direct probability formulas** are preferred over survival curve areas
+
+This vignette demonstrates two common use cases through fully worked examples.
+
+---
+
+## Example 1: Treatment Discontinuation Model
+
+### Motivation
+
+In oncology, patients may discontinue treatment while still progression-free
+(e.g., due to toxicity or patient choice). This creates 4 distinct health states
+that cannot be modeled with standard PSM:
+
+| State | Description |
+|-------|-------------|
+| PF On Treatment | Progression-free, receiving active therapy |
+| PF Off Treatment | Progression-free, discontinued therapy |
+| Progressed | Disease progression |
+| Dead | Death |
+
+This structure allows different costs (no drug cost when off treatment) and
+potentially different utilities for each state.
+
+### Building the Model
+
+```{r discontinuation-model}
+discontinuation_model <- define_model("custom_psm") |>
+  # Settings
+  set_settings(
+    timeframe = 5,
+    timeframe_unit = "years",
+    cycle_length = 1,
+    cycle_length_unit = "month",
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
+  ) |>
+  # States (4 states for discontinuation model)
+  add_state("pf_on_tx", display_name = "PF On Treatment") |>
+  add_state("pf_off_tx", display_name = "PF Off Treatment") |>
+  add_state("progressed", display_name = "Progressed") |>
+  add_state("dead", display_name = "Dead") |>
+  # Strategies
+  add_strategy("treatment", display_name = "Active Treatment") |>
+  add_strategy("bsc", display_name = "Best Supportive Care") |>
+  # Groups
+  add_group("all", display_name = "All Patients") |>
+  # Survival distributions defined as variables
+  add_variable("pfs_dist", define_surv_param("weibull", shape = 1.2, scale = 24)) |>
+  add_variable("os_dist", define_surv_param("weibull", shape = 1.1, scale = 36)) |>
+  add_variable("ttd_dist", define_surv_param("exp", rate = 0.02)) |>
+  # Calculate survival probabilities at each cycle
+  add_variable("S_pfs", surv_prob(pfs_dist, month)) |>
+  add_variable("S_os", surv_prob(os_dist, month)) |>
+  add_variable("S_on_tx", surv_prob(ttd_dist, month)) |>
+  # State probability formulas
+  # PF On Tx: PFS survival * still on treatment
+  add_custom_psm_transition("pf_on_tx", S_pfs * S_on_tx) |>
+  # PF Off Tx: PFS survival * discontinued treatment
+  add_custom_psm_transition("pf_off_tx", S_pfs * (1 - S_on_tx)) |>
+  # Progressed: alive but not PF (OS - PFS area)
+  add_custom_psm_transition("progressed", S_os - S_pfs) |>
+  # Dead: complement (1 - sum of others)
+  add_custom_psm_transition("dead", C) |>
+  # Values - costs
+  add_variable("c_drug", 5000, description = "Monthly drug cost") |>
+  add_variable("c_admin", 500, description = "Monthly administration cost") |>
+  add_variable("c_monitoring", 200, description = "Monthly monitoring cost") |>
+  add_variable("c_progression", 1000, description = "Monthly progression care cost") |>
+  # Drug cost only applies when on treatment
+  add_value("drug_cost", c_drug, state = "pf_on_tx", type = "cost") |>
+  add_value("admin_cost", c_admin, state = "pf_on_tx", type = "cost") |>
+  # Monitoring for all PF patients
+  add_value("monitoring_pf_on", c_monitoring, state = "pf_on_tx", type = "cost") |>
+  add_value("monitoring_pf_off", c_monitoring, state = "pf_off_tx", type = "cost") |>
+  # Progression care costs
+  add_value("progression_cost", c_progression, state = "progressed", type = "cost") |>
+  # Values - utilities
+  add_variable("u_pf_on", 0.80, description = "Utility PF on treatment") |>
+  add_variable("u_pf_off", 0.85, description = "Utility PF off treatment (no toxicity)") |>
+  add_variable("u_prog", 0.60, description = "Utility progressed") |>
+  add_value("qaly_pf_on", u_pf_on / 12, state = "pf_on_tx", type = "outcome") |>
+  add_value("qaly_pf_off", u_pf_off / 12, state = "pf_off_tx", type = "outcome") |>
+  add_value("qaly_prog", u_prog / 12, state = "progressed", type = "outcome") |>
+  # Summaries
+  add_summary("total_cost", "drug_cost,admin_cost,monitoring_pf_on,monitoring_pf_off,progression_cost",
+              display_name = "Total Cost", type = "cost") |>
+  add_summary("qalys", "qaly_pf_on,qaly_pf_off,qaly_prog",
+              display_name = "QALYs", type = "outcome")
+```
+
+### Running the Model
+
+```{r run-discontinuation}
+disc_results <- run_model(discontinuation_model)
+```
+
+### Viewing Results
+
+```{r disc-trace, fig.width=9, fig.height=6}
+# State occupancy over time
+trace_plot(disc_results)
+```
+
+```{r disc-outcomes, fig.width=9, fig.height=6}
+outcomes_plot_bar(disc_results, outcome = "qalys")
+```
+
+```{r disc-table}
+outcomes_table(disc_results, outcome = "total_cost")
+```
+
+---
+
+## Example 2: Response-Based Model
+
+### Motivation
+
+For hematologic malignancies, outcomes often depend on treatment response status.
+Patients may achieve response, be refractory (never respond), or relapse after
+initial response. This creates 4 states:
+
+| State | Description |
+|-------|-------------|
+| Response | Achieved treatment response (CR, PR) |
+| Refractory | Never achieved response to treatment |
+| Relapse | Lost response after initial response |
+| Dead | Death |
+
+This structure enables modeling of response-dependent costs, retreatment, and
+response-specific utilities.
+
+### Building the Model
+
+```{r response-model}
+response_model <- define_model("custom_psm") |>
+  # Settings
+  set_settings(
+    timeframe = 3,
+    timeframe_unit = "years",
+    cycle_length = 1,
+    cycle_length_unit = "month",
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
+  ) |>
+  # States (4 states for response model)
+  add_state("response", display_name = "Response") |>
+  add_state("refractory", display_name = "Refractory") |>
+  add_state("relapse", display_name = "Relapse") |>
+  add_state("dead", display_name = "Dead") |>
+  # Strategies with different response rates
+  add_strategy("new_tx", display_name = "New Treatment") |>
+  add_strategy("soc", display_name = "Standard of Care") |>
+  # Groups
+  add_group("all", display_name = "All Patients") |>
+  # Response rates by strategy
+  add_variable("p_response", 0.65, strategy = "new_tx") |>
+  add_variable("p_response", 0.40, strategy = "soc") |>
+  # Survival distributions
+  add_variable("dor_dist", define_surv_param("weibull", shape = 1.3, scale = 18)) |>
+  add_variable("os_response_dist", define_surv_param("weibull", shape = 1.1, scale = 48)) |>
+  add_variable("os_refractory_dist", define_surv_param("weibull", shape = 1.0, scale = 12)) |>
+  # Calculate survival probabilities
+  add_variable("S_dor", surv_prob(dor_dist, month)) |>
+  add_variable("S_os_response", surv_prob(os_response_dist, month)) |>
+  add_variable("S_os_refractory", surv_prob(os_refractory_dist, month)) |>
+  # State probability formulas
+  # Response: responders who haven't relapsed and are alive
+  add_custom_psm_transition("response", p_response * S_dor * S_os_response) |>
+  # Refractory: non-responders still alive
+  add_custom_psm_transition("refractory", (1 - p_response) * S_os_refractory) |>
+  # Relapse: responders who relapsed (simplified - in practice would need more complex modeling)
+  add_custom_psm_transition("relapse", p_response * (1 - S_dor) * S_os_response) |>
+  # Dead: complement
+  add_custom_psm_transition("dead", C) |>
+  # Values - costs
+  add_variable("c_maintenance", 3000, description = "Monthly maintenance cost in response") |>
+  add_variable("c_salvage", 8000, description = "Monthly salvage therapy cost") |>
+  add_variable("c_palliative", 2000, description = "Monthly palliative care cost") |>
+  add_value("maintenance_cost", c_maintenance, state = "response", type = "cost") |>
+  add_value("salvage_cost", c_salvage, state = "relapse", type = "cost") |>
+  add_value("palliative_cost", c_palliative, state = "refractory", type = "cost") |>
+  # Values - utilities
+  add_variable("u_response", 0.85) |>
+  add_variable("u_refractory", 0.50) |>
+  add_variable("u_relapse", 0.60) |>
+  add_value("qaly_response", u_response / 12, state = "response", type = "outcome") |>
+  add_value("qaly_refractory", u_refractory / 12, state = "refractory", type = "outcome") |>
+  add_value("qaly_relapse", u_relapse / 12, state = "relapse", type = "outcome") |>
+  # Summaries
+  add_summary("total_cost", "maintenance_cost,salvage_cost,palliative_cost",
+              display_name = "Total Cost", type = "cost") |>
+  add_summary("qalys", "qaly_response,qaly_refractory,qaly_relapse",
+              display_name = "QALYs", type = "outcome")
+```
+
+### Running the Model
+
+```{r run-response}
+response_results <- run_model(response_model)
+```
+
+### Viewing Results
+
+```{r response-trace, fig.width=9, fig.height=6}
+trace_plot(response_results)
+```
+
+```{r response-outcomes, fig.width=9, fig.height=6}
+outcomes_plot_bar(response_results, outcome = "qalys")
+```
+
+```{r response-table}
+outcomes_table(response_results, outcome = "total_cost")
+```
+
+---
+
+## Key Concepts
+
+### Using openqalysurv for Survival Distributions
+
+Custom PSM models integrate with the openqalysurv package for defining survival
+distributions. Define distributions as variables, then evaluate them:
+
+```r
+# Define a survival distribution as a variable
+add_variable("pfs_dist", define_surv_param("weibull", shape = 1.2, scale = 24))
+
+# Evaluate survival probability at each cycle using surv_prob()
+add_variable("S_pfs", surv_prob(pfs_dist, month))
+```
+
+Available distribution types from openqalysurv:
+- `define_surv_param()` - Parametric (weibull, exp, gompertz, lognormal, etc.)
+- `define_surv_spline()` - Royston-Parmar splines
+- `define_surv_cure()` - Mixture/non-mixture cure models
+- `define_surv_func()` - Custom function
+
+### The Complement Operator
+
+Exactly one state in a Custom PSM can use `C` (complement) as its formula. This
+state's probability is calculated as `1 - sum(all other states)`, ensuring
+probabilities sum to 1. Typically used for the absorbing "Dead" state.
+
+```r
+add_custom_psm_transition("dead", C)
+```
+
+### Formulas Can Use Variables and Time
+
+State probability formulas can reference:
+- Model variables (e.g., `S_pfs`, `p_response`)
+- Time variables: `cycle`, `day`, `week`, `month`, `year`
+- openqalysurv functions (e.g., `surv_prob()`)
+- Mathematical expressions
+
+### Values: Residency Only
+
+Custom PSM supports:
+- **Residency values**: Applied when in a specific state (`state = "alive"`)
+- **Model-level values**: Applied regardless of state (`state = NA`)
+
+**Transitional values** (with both `state` and `destination`) are **not supported**
+in Custom PSM because there are no explicit transitions between states.
+
+---
+
+## Comparison with Standard PSM
+
+| Feature | Standard PSM | Custom PSM |
+|---------|-------------|------------|
+| States | Exactly 3 (PF, Progressed, Dead) | 2 or more |
+| State probabilities | Derived from PFS/OS curve areas | Direct formulas |
+| Use cases | Standard oncology endpoints | Discontinuation, response-based, multi-state |
+| Values | Residency + transitional | Residency + model-level only |
+| Complement | Not applicable | One state can use `C` |

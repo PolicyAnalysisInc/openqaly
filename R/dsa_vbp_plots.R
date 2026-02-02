@@ -214,7 +214,7 @@ prepare_dsa_vbp_tornado_data <- function(results,
       mutate(
         parameter_display_name = paste0(
           .data$parameter_display_name, " (",
-          .data$low_override, " / ", .data$high_override, ")"
+          .data$low_override, " - ", .data$high_override, ")"
         )
       )
   }

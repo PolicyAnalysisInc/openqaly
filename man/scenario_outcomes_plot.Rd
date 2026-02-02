@@ -11,7 +11,7 @@ scenario_outcomes_plot(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE
+  discounted = TRUE
 )
 }
 \arguments{

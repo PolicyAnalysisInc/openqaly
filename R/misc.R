@@ -855,7 +855,7 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     "markov"
   } else if (model_type_lower == "psm") {
     "psm"
-  } else if (model_type_lower %in% c("custom psm", "custompsm", "psm_custom")) {
+  } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
     "custom_psm"
   } else {
     # Try to match partial strings
@@ -863,7 +863,7 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
       "markov"
     } else if (model_type_lower %in% c("psm")) {
       "psm"
-    } else if (model_type_lower %in% c("custom psm", "custompsm", "psm_custom")) {
+    } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
       "custom_psm"
     } else {
       warning("Invalid model_type '", model_type, "'. Defaulting to 'markov'.")

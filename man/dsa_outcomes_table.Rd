@@ -12,7 +12,7 @@ dsa_outcomes_table(
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
-  discounted = FALSE,
+  discounted = TRUE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )

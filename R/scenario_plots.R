@@ -85,6 +85,14 @@ render_scenario_bar_plot <- function(bar_data, x_label,
   x_range <- range(c(0, bar_data$value), na.rm = TRUE)
   x_breaks <- pretty_breaks(n = 5)(x_range)
 
+  # Determine expansion based on where values exist
+  has_negative <- any(bar_data$value < 0, na.rm = TRUE)
+  has_positive <- any(bar_data$value > 0, na.rm = TRUE)
+
+  # Higher expansion (0.15) on sides with values for label room, lower (0.05) otherwise
+  left_expand <- if (has_negative) 0.15 else 0.05
+  right_expand <- if (has_positive) 0.15 else 0.05
+
   # Create base plot with uniform color
   p <- ggplot(bar_data, aes(
     y = .data$scenario_name,
@@ -116,7 +124,7 @@ render_scenario_bar_plot <- function(bar_data, x_label,
 
   p <- p +
     scale_x_continuous(breaks = x_breaks, labels = comma,
-                       expand = expansion(mult = c(0.05, 0.15))) +
+                       expand = expansion(mult = c(left_expand, right_expand))) +
     labs(y = "Scenario", x = x_label) +
     theme_bw() +
     theme(
@@ -306,7 +314,7 @@ scenario_outcomes_plot <- function(results,
                                     strategies = NULL,
                                     interventions = NULL,
                                     comparators = NULL,
-                                    discounted = FALSE) {
+                                    discounted = TRUE) {
 
   # Validate that strategies is mutually exclusive with interventions/comparators
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -460,8 +468,8 @@ scenario_nmb_plot <- function(results,
     cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
   }
 
-  wtp_formatted <- format(wtp, big.mark = ",")
-  nmb_label <- glue("Incremental Net Monetary Benefit (\u03bb = {wtp_formatted})")
+  wtp_formatted <- scales::comma(wtp)
+  nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   # Render bar plot
   render_scenario_bar_plot(nmb_data, nmb_label)
@@ -548,70 +556,43 @@ scenario_ce_plot <- function(results,
     rename(delta_outcome = "value") %>%
     mutate(
       # Calculate ICER with special case handling
+      # Match the logic in icer() function for consistency
       icer = case_when(
-        abs(.data$delta_outcome) < .Machine$double.eps ~ NaN,  # Equivalent (undefined)
-        .data$delta_outcome < 0 & .data$delta_cost > 0 ~ Inf,  # Dominated
-        .data$delta_outcome > 0 & .data$delta_cost <= 0 ~ 0,   # Dominant (or cost-saving)
-        TRUE ~ .data$delta_cost / .data$delta_outcome          # Normal ICER
+        # Identical: no differences at all
+        abs(.data$delta_outcome) < .Machine$double.eps &
+          abs(.data$delta_cost) < .Machine$double.eps ~ NaN,
+        # Dominated (weakly): worse or equal effects at higher or equal cost
+        # with at least one strict detriment
+        (.data$delta_outcome < 0 & .data$delta_cost > 0) |
+          (.data$delta_outcome < 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost > 0) ~ Inf,
+        # Dominant (weakly): better or equal effects at lower or equal cost
+        # with at least one strict improvement
+        (.data$delta_outcome > 0 & .data$delta_cost < 0) |
+          (.data$delta_outcome > 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost < 0) ~ 0,
+        # Normal ICER for remaining cases
+        TRUE ~ .data$delta_cost / .data$delta_outcome
       ),
       # Classify for display
-      # SW quadrant: intervention cheaper but worse (delta_cost < 0 AND delta_outcome < 0)
+      # Flipped (SW quadrant): intervention cheaper but worse (delta_cost < 0 AND delta_outcome < 0)
       # This produces positive ICER (negative/negative = positive), but semantically flipped
       ce_class = case_when(
-        is.nan(.data$icer) ~ "equivalent",
+        is.nan(.data$icer) ~ "identical",
         is.infinite(.data$icer) & .data$icer > 0 ~ "dominated",
         .data$icer == 0 ~ "dominant",
-        .data$delta_outcome < 0 & .data$delta_cost < 0 ~ "sw_quadrant",  # SW quadrant (both negative)
+        .data$delta_outcome < 0 & .data$delta_cost < 0 ~ "flipped",  # SW quadrant (both negative)
         TRUE ~ "normal"
       ),
       # Display value for bar (use absolute value, handle special cases)
       value = case_when(
         .data$ce_class == "dominated" ~ NA_real_,   # No bar for dominated (arrow instead)
-        .data$ce_class == "equivalent" ~ NA_real_,  # No bar for equivalent
+        .data$ce_class == "identical" ~ NA_real_,   # No bar for identical
         .data$ce_class == "dominant" ~ 0,           # Bar to 0
-        .data$ce_class == "sw_quadrant" ~ abs(.data$icer),  # Show absolute value
+        .data$ce_class == "flipped" ~ abs(.data$icer),  # Show absolute value
         TRUE ~ .data$icer
-      ),
-      # Label text (initial - will be updated for direction changes)
-      label = case_when(
-        .data$ce_class == "dominated" ~ "Dominated",
-        .data$ce_class == "equivalent" ~ "Equivalent",
-        .data$ce_class == "dominant" ~ "Dominant",
-        .data$ce_class == "sw_quadrant" ~ sprintf("%s*", scales::comma(abs(.data$icer), accuracy = 1)),
-        TRUE ~ scales::comma(.data$icer, accuracy = 1)
       )
-    )
-
-  # Determine base case classification for direction change detection
-  base_case_class <- ce_data %>%
-    filter(.data$scenario_name == "Base Case") %>%
-    pull(.data$ce_class) %>%
-    first()
-
-  # Detect direction changes relative to base case
-  # "Direction change" = scenarios where ICER direction is incompatible with base
-  ce_data <- ce_data %>%
-    mutate(
-      has_direction_change = case_when(
-        .data$scenario_name == "Base Case" ~ FALSE,
-        # Base is normal/dominated (positive direction) and scenario is sw_quadrant (flipped direction)
-        base_case_class %in% c("normal", "dominated") & .data$ce_class == "sw_quadrant" ~ TRUE,
-        # Base is sw_quadrant and scenario is normal/dominated
-        base_case_class == "sw_quadrant" & .data$ce_class %in% c("normal", "dominated") ~ TRUE,
-        TRUE ~ FALSE
-      )
-    )
-
-  # Override ce_class for direction changes - these get error labels, not bars
-  ce_data <- ce_data %>%
-    mutate(
-      ce_class = if_else(.data$has_direction_change, "direction_change", .data$ce_class),
-      value = if_else(.data$has_direction_change, NA_real_, .data$value),
-      label = if_else(
-        .data$has_direction_change,
-        sprintf("%s*", scales::comma(abs(.data$icer), accuracy = 1)),
-        .data$label
-      )
+      # Note: Labels are assigned in render_scenario_ce_bar_plot() after footnote order is determined
     )
 
   # Check if data is valid
@@ -629,7 +610,7 @@ scenario_ce_plot <- function(results,
 #'
 #' Internal helper to create horizontal bar chart for ICER data with special case handling.
 #'
-#' @param ce_data Prepared CE data with icer, ce_class, value, label columns
+#' @param ce_data Prepared CE data with icer, ce_class, value columns
 #' @param metadata Model metadata for display name mapping
 #'
 #' @return A ggplot2 object
@@ -683,26 +664,52 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
     distinct(.data$scenario_name, .data$y_numeric) %>%
     arrange(.data$y_numeric)
 
-  # Separate normal bars from special cases
-  normal_data <- ce_data %>% filter(.data$ce_class %in% c("normal", "dominant", "sw_quadrant"))
+  # Determine footnote order based on first occurrence in visual display order
+  # Visual order: facets left-to-right then top-to-bottom, scenarios top-to-bottom within facet
+  # Since y-axis uses scale_y_reverse, lower y_numeric = higher on screen (top)
+  # So ascending y_numeric = top-to-bottom visual order
+  special_cases <- ce_data %>%
+    filter(.data$ce_class %in% c("flipped", "identical")) %>%
+    arrange(.data$strategy, .data$group, .data$y_numeric) %>%
+    pull(.data$ce_class) %>%
+    unique()
+
+  # Assign asterisks: first type gets *, second gets **
+  asterisk_map <- if (length(special_cases) > 0) {
+    stats::setNames(c("*", "**")[seq_along(special_cases)], special_cases)
+  } else {
+    character(0)
+  }
+
+  # Generate labels now that we have asterisk assignments
+  ce_data <- ce_data %>%
+    mutate(
+      label = case_when(
+        .data$ce_class == "dominated" ~ "Dominated",
+        .data$ce_class == "identical" ~ paste0("Identical", asterisk_map["identical"]),
+        .data$ce_class == "dominant" ~ "Dominant",
+        .data$ce_class == "flipped" ~ paste0(
+          scales::comma(abs(.data$icer), accuracy = 1),
+          asterisk_map["flipped"]
+        ),
+        TRUE ~ scales::comma(.data$icer, accuracy = 1)
+      )
+    )
+
+  # Separate data by ce_class for different visual treatments
+  normal_data <- ce_data %>% filter(.data$ce_class %in% c("normal", "dominant", "flipped"))
   dominated_data <- ce_data %>% filter(.data$ce_class == "dominated")
-  equivalent_data <- ce_data %>% filter(.data$ce_class == "equivalent")
-  direction_change_data <- ce_data %>% filter(.data$ce_class == "direction_change")
+  identical_data <- ce_data %>% filter(.data$ce_class == "identical")
 
-  # Check if base case is identical (equivalent)
-  base_case_identical <- ce_data %>%
-    filter(.data$scenario_name == "Base Case", .data$ce_class == "equivalent") %>%
-    nrow() > 0
-
-  # Calculate axis limits from normal data only
+  # Calculate axis limits from plottable data (normal, dominant, flipped)
   if (nrow(normal_data) > 0) {
     x_range <- range(c(0, normal_data$value), na.rm = TRUE)
   } else {
-    x_range <- c(0, 100000)  # Default range if no normal ICERs
+    x_range <- c(0, 100000)  # Default range if no plottable ICERs
+
   }
   x_breaks <- pretty_breaks(n = 5)(x_range)
   x_tick_max <- max(x_breaks)
-  x_offset <- diff(range(x_breaks)) * 0.02
 
   # Calculate dominated_position (15% past last X-axis tick)
   dominated_position <- x_tick_max * 1.15
@@ -716,7 +723,7 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
   # Create base plot with numeric y-axis (will use scale_y_reverse for proper ordering)
   p <- ggplot(ce_data, aes(y = .data$y_numeric))
 
-  # Add normal bars with uniform color
+  # Add bars for normal, dominant, and flipped scenarios
   if (nrow(normal_data) > 0) {
     p <- p +
       geom_col(
@@ -730,10 +737,6 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
 
   # Add notched polygon arrows for dominated scenarios (DSA CE style)
   if (nrow(dominated_data) > 0) {
-    # y_numeric is already computed on ce_data and inherited by dominated_data
-
-    # Note: In rowwise() + mutate() with list(), .data$ doesn't work inside list()
-    # Access columns directly by name instead
     arrow_polygons <- dominated_data %>%
       rowwise() %>%
       mutate(
@@ -771,49 +774,18 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
     )
   }
 
-  # Add verbose error labels for equivalent scenarios (DSA CE style)
-  if (nrow(equivalent_data) > 0 && !base_case_identical) {
-    equivalent_data <- equivalent_data %>%
-      mutate(
-        error_label = sprintf(
-          "Bar could not be displayed for %s scenario because\nICER is undefined when costs and outcomes are identical\nbetween %s and %s.",
-          .data$scenario_name, .data$intervention_name, .data$comparator_name
-        )
-      )
-
-    p <- p + geom_label(
-      data = equivalent_data,
-      aes(x = x_offset, y = .data$y_numeric, label = .data$error_label),
-      hjust = 0, size = 2.5,
-      fill = "white", color = "black",
-      label.size = 0.3, label.padding = unit(0.15, "lines")
+  # Add labels for identical scenarios (no bar, just text)
+  if (nrow(identical_data) > 0) {
+    p <- p + geom_text(
+      data = identical_data,
+      aes(x = 0, y = .data$y_numeric, label = .data$label),
+      hjust = -0.1, size = 2.5
     )
   }
 
-  # Add verbose error labels for direction change scenarios (DSA CE style)
-  if (nrow(direction_change_data) > 0) {
-    direction_change_data <- direction_change_data %>%
-      mutate(
-        error_label = sprintf(
-          "Bar could not be displayed for %s scenario because\ndirectionality of ICER changed relative to base case.\nICER of %s reflects comparison of %s vs. %s.",
-          .data$scenario_name,
-          scales::comma(abs(.data$icer), accuracy = 1),
-          .data$comparator_name, .data$intervention_name
-        )
-      )
-
-    p <- p + geom_label(
-      data = direction_change_data,
-      aes(x = x_offset, y = .data$y_numeric, label = .data$error_label),
-      hjust = 0, size = 2.5,
-      fill = "white", color = "black",
-      label.size = 0.3, label.padding = unit(0.15, "lines")
-    )
-  }
-
-  # Add value labels for normal/dominant/dominated scenarios (exclude direction changes which have error labels)
+  # Add value labels for normal/dominant/flipped/dominated scenarios
   label_data <- ce_data %>%
-    filter(!is.na(.data$label), !.data$ce_class %in% c("equivalent", "direction_change"))
+    filter(.data$ce_class != "identical")
   if (nrow(label_data) > 0) {
     p <- p +
       geom_text(
@@ -829,21 +801,31 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
   # Add vertical line at 0
   p <- p + geom_vline(xintercept = 0, linewidth = 0.5, color = "gray30")
 
-  # Generate footnotes for direction change scenarios
-  footnote_text <- NULL
-  if (nrow(direction_change_data) > 0) {
-    footnotes <- direction_change_data %>%
-      distinct(.data$intervention_name, .data$comparator_name) %>%
-      mutate(
-        footnote = sprintf("* %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
-                           .data$comparator_name, .data$intervention_name,
-                           .data$comparator_name, .data$intervention_name)
-      ) %>%
-      pull(.data$footnote) %>%
-      unique()
-
-    footnote_text <- paste(footnotes, collapse = "\n")
+  # Generate footnotes in display order
+  all_footnotes <- c()
+  for (case_type in special_cases) {
+    asterisks <- asterisk_map[case_type]
+    if (case_type == "flipped") {
+      # One footnote per unique strategy pair
+      flipped_footnotes <- ce_data %>%
+        filter(.data$ce_class == "flipped") %>%
+        distinct(.data$intervention_name, .data$comparator_name) %>%
+        mutate(
+          footnote = sprintf("%s %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
+                             asterisks, .data$comparator_name, .data$intervention_name,
+                             .data$comparator_name, .data$intervention_name)
+        ) %>%
+        pull(.data$footnote)
+      all_footnotes <- c(all_footnotes, flipped_footnotes)
+    } else if (case_type == "identical") {
+      all_footnotes <- c(all_footnotes, sprintf(
+        "%s Bar could not be displayed because ICER is undefined when costs and outcomes are identical.",
+        asterisks
+      ))
+    }
   }
+
+  footnote_text <- if (length(all_footnotes) > 0) paste(all_footnotes, collapse = "\n") else NULL
 
   p <- p +
     scale_x_continuous(
@@ -864,34 +846,6 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
       axis.text.y = element_text(size = 8),
       plot.caption = element_text(hjust = 0, size = 9, face = "italic")
     )
-
-  # Add full-chart error for identical base case
-  if (base_case_identical) {
-    # Get intervention/comparator names from first row
-    first_row <- ce_data[1, ]
-    full_chart_error <- sprintf(
-      "Scenario analysis chart for %s vs. %s cannot be displayed\nbecause the difference in outcomes and costs in the base case is zero,\nresulting in an undefined ICER.",
-      first_row$intervention_name, first_row$comparator_name
-    )
-
-    # Add placeholder to ensure facet panel appears (use middle of y-axis)
-    y_mid <- (max_y + 1) / 2
-    p <- p + geom_blank(aes(x = dominated_position / 2, y = y_mid))
-
-    p <- p + geom_label(
-      data = data.frame(
-        x = dominated_position / 2,
-        y = y_mid,
-        strategy = first_row$strategy,
-        group = first_row$group
-      ),
-      aes(x = .data$x, y = .data$y),
-      label = full_chart_error,
-      size = 5, fill = "white", color = "black",
-      label.size = 0.5, label.padding = unit(0.25, "lines"),
-      hjust = 0.5, vjust = 0
-    )
-  }
 
   # Add faceting if needed
   if (!is.null(facet_component)) {

@@ -1,4 +1,4 @@
-context("bc_outcomes (outcomes_plot_bar)")
+context("Base Case Outcome Plots")
 
 # ============================================================================
 # Test Fixtures
@@ -57,7 +57,7 @@ get_test_results <- function() {
 }
 
 # ============================================================================
-# Basic Structure Tests
+# Tests for outcomes_plot_bar()
 # ============================================================================
 
 test_that("outcomes_plot_bar() returns ggplot with bar geom", {
@@ -75,10 +75,6 @@ test_that("outcomes_plot_bar() has correct axis labels in absolute mode", {
   expect_null(p$labels$y)
   expect_false(grepl("Difference", p$labels$x))
 })
-
-# ============================================================================
-# Data Content Tests
-# ============================================================================
 
 test_that("outcomes_plot_bar() Total equals sum of components", {
   results <- get_test_results()
@@ -125,10 +121,6 @@ test_that("outcomes_plot_bar() cross-validates with get_summaries()", {
   }
 })
 
-# ============================================================================
-# Differences Mode Tests
-# ============================================================================
-
 test_that("outcomes_plot_bar() with comparators shows difference in label", {
   results <- get_test_results()
   p <- outcomes_plot_bar(results, "total_qalys", comparators = "standard")
@@ -161,10 +153,6 @@ test_that("outcomes_plot_bar() difference values are correct", {
   expect_equal(plot_total, expected_diff, tolerance = 0.01)
 })
 
-# ============================================================================
-# Input Validation Tests
-# ============================================================================
-
 test_that("outcomes_plot_bar() errors when strategies used with comparators", {
   results <- get_test_results()
 
@@ -185,10 +173,6 @@ test_that("outcomes_plot_bar() errors when strategies used with interventions", 
   )
 })
 
-# ============================================================================
-# Faceting Behavior Tests
-# ============================================================================
-
 test_that("outcomes_plot_bar() uses facet_wrap for multiple strategies, single group", {
   results <- get_test_results()
   p <- outcomes_plot_bar(results, "total_qalys", groups = "overall")
@@ -207,10 +191,6 @@ test_that("outcomes_plot_bar() removes faceting for single strategy, single grou
   # With 1 strategy and 1 group, facet should be FacetNull (no faceting)
   expect_s3_class(p$facet, "FacetNull")
 })
-
-# ============================================================================
-# Visual Properties Tests
-# ============================================================================
 
 test_that("outcomes_plot_bar() classifies positive/negative values for fill", {
   results <- get_test_results()
@@ -234,4 +214,68 @@ test_that("outcomes_plot_bar() axis includes zero", {
     # The function uses pretty_breaks which should include 0
     expect_true(TRUE)  # Pass - function uses pretty_breaks(n=5) on range including 0
   }
+})
+
+# ============================================================================
+# Tests for outcomes_plot_line()
+# ============================================================================
+
+test_that("outcomes_plot_line() returns ggplot with line geom", {
+  results <- get_test_results()
+
+  p <- outcomes_plot_line(results, outcome = "total_qalys")
+
+  expect_s3_class(p, "ggplot")
+  expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomLine"))))
+})
+
+test_that("outcomes_plot_line() cumulative values increase monotonically", {
+  results <- get_test_results()
+
+  p <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = TRUE)
+
+  # Extract Total line data for one strategy
+  total_data <- p$data[p$data$value_name == "Total", ]
+  std_data <- total_data[grepl("Standard", total_data$strategy), ]
+  std_data <- std_data[order(std_data$cycle), ]
+
+  # Cumulative should be monotonically increasing (for positive utilities)
+  diffs <- diff(std_data$amount)
+  expect_true(all(diffs >= 0), info = "Cumulative should not decrease")
+})
+
+test_that("outcomes_plot_line() non-cumulative mode shows per-cycle values", {
+  results <- get_test_results()
+
+  p_cum <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = TRUE)
+  p_noncum <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = FALSE)
+
+  # Non-cumulative final value should be less than cumulative final value
+  cum_data <- p_cum$data[p_cum$data$value_name == "Total", ]
+  noncum_data <- p_noncum$data[p_noncum$data$value_name == "Total", ]
+
+  max_cycle <- max(cum_data$cycle)
+  cum_final <- cum_data$amount[cum_data$cycle == max_cycle][1]
+  noncum_final <- noncum_data$amount[noncum_data$cycle == max_cycle][1]
+
+  expect_true(noncum_final < cum_final)
+})
+
+test_that("outcomes_plot_line() with comparator has 'Difference' in label", {
+  results <- get_test_results()
+
+  p <- outcomes_plot_line(results, outcome = "total_qalys",
+                          comparators = "standard")
+
+  expect_true(grepl("Difference", p$labels$y))
+})
+
+test_that("outcomes_plot_line() errors when strategies used with comparators", {
+  results <- get_test_results()
+
+  expect_error(
+    outcomes_plot_line(results, outcome = "total_qalys",
+                       strategies = "standard", comparators = "standard"),
+    "'strategies' cannot be used"
+  )
 })

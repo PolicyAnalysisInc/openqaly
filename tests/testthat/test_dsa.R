@@ -64,6 +64,36 @@ test_that("add_dsa_variable allows non-group-specific variables without group", 
   expect_equal(model_ok$dsa_parameters[[1]]$group, "")
 })
 
+test_that("add_dsa_variable errors when strategy-specific variable used without specifying strategy", {
+  # Create model with strategy-specific variable
+  model <- define_model("markov") %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_variable("c_treatment", 1000, strategy = "treatment")
+
+  # Should error when trying to add DSA for strategy-specific variable without strategy
+  expect_error(
+    add_dsa_variable(model, "c_treatment", low = 500, high = 1500),
+    "defined for specific strategy"
+  )
+
+  # Should work when strategy is specified
+  model_ok <- add_dsa_variable(model, "c_treatment", low = 500, high = 1500, strategy = "treatment")
+  expect_equal(length(model_ok$dsa_parameters), 1)
+  expect_equal(model_ok$dsa_parameters[[1]]$strategy, "treatment")
+})
+
+test_that("add_dsa_variable allows non-strategy-specific variables without strategy", {
+  # Create model with non-strategy-specific variable
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000)
+
+  # Should work without specifying strategy
+  model_ok <- add_dsa_variable(model, "cost", low = 500, high = 1500)
+  expect_equal(length(model_ok$dsa_parameters), 1)
+  expect_equal(model_ok$dsa_parameters[[1]]$strategy, "")
+})
+
 test_that("add_dsa_variable warns and replaces duplicate parameters", {
   model <- define_model("markov") %>%
     add_variable("cost", 1000) %>%

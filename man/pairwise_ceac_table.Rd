@@ -8,11 +8,10 @@ pairwise_ceac_table(
   results,
   outcome_summary,
   cost_summary,
-  intervention = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
-  strategies = NULL,
   decimals = 1,
   font_size = 11,
   table_format = c("flextable", "kable")
@@ -25,11 +24,11 @@ pairwise_ceac_table(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{intervention}{Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-Mutually exclusive with comparator.}
+\item{interventions}{Reference strategies for comparison (intervention perspective).
+Can be a single strategy or vector of strategies.}
 
-\item{comparator}{Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-Mutually exclusive with intervention.}
+\item{comparators}{Reference strategies for comparison (comparator perspective).
+Can be a single strategy or vector of strategies.}
 
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as columns.
 Default is c(0, 20000, 50000, 100000)}
@@ -43,8 +42,6 @@ Default is c(0, 20000, 50000, 100000)}
   \item \code{"all"} or \code{NULL} - All groups + overall
   \item \code{"all_groups"} - All groups without overall
 }}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places for percentages (default: 1)}
 
@@ -63,9 +60,8 @@ willingness-to-pay thresholds.
 Pairwise comparisons calculate P(intervention > comparator) for each pair.
 The table displays these probabilities at selected WTP thresholds.
 
-\strong{Intervention mode}: Shows P(intervention > each other strategy)
-
-\strong{Comparator mode}: Shows P(each other strategy > comparator)
+At least one of interventions or comparators must be provided. If both are
+provided, N×M explicit comparisons are generated.
 
 A probability > 50% indicates higher likelihood of being cost-effective
 in the comparison.
@@ -82,15 +78,15 @@ psa_results <- run_psa(model, n_sim = 1000)
 
 # Comparator perspective: Compare strategies to control
 pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-                    comparator = "control")
+                    comparators = "control")
 
 # Intervention perspective: Compare new treatment to others
 pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-                    intervention = "new_treatment")
+                    interventions = "new_treatment")
 
 # Custom WTP thresholds
 pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-                    comparator = "control",
+                    comparators = "control",
                     wtp_thresholds = c(0, 30000, 50000, 75000, 100000))
 }
 

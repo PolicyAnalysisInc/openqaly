@@ -165,6 +165,14 @@ scenario_vbp_plot <- function(results,
   x_breaks <- pretty_breaks(n = 5)(x_range)
   x_offset <- diff(range(x_breaks)) * 0.02
 
+  # Determine expansion based on where values exist
+  has_negative <- any(bar_data$value < 0, na.rm = TRUE)
+  has_positive <- any(bar_data$value > 0, na.rm = TRUE)
+
+  # Higher expansion (0.15) on sides with values for label room, lower (0.05) otherwise
+  left_expand <- if (has_negative) 0.15 else 0.05
+  right_expand <- if (has_positive) 0.15 else 0.05
+
   # Create plot with uniform color
   p <- ggplot(bar_data, aes(
     y = .data$scenario_name,
@@ -184,11 +192,11 @@ scenario_vbp_plot <- function(results,
     scale_x_continuous(
       breaks = x_breaks,
       labels = comma,
-      expand = expansion(mult = c(0.05, 0.15))
+      expand = expansion(mult = c(left_expand, right_expand))
     ) +
     labs(
       y = "Scenario",
-      x = glue("Value-Based Price (\u03bb = {format(wtp, big.mark = ',')})")
+      x = glue("Value-Based Price (\u03bb = {scales::comma(wtp)})")
     ) +
     theme_bw() +
     theme(

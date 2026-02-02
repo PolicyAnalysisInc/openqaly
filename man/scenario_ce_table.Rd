@@ -48,15 +48,16 @@ The table shows each scenario as a row with columns for incremental cost,
 incremental outcome, and ICER.
 
 **ICER Cell Formatting:**
-- Positive finite: Formatted ICER value
-- Negative finite: Formatted value with asterisk (direction change)
+- Normal: Formatted ICER value
+- Flipped: Formatted value with asterisk and reversed comparison direction
 - Dominated (+Inf): "Dominated"
 - Dominant (0): "Dominant"
-- Equivalent (NaN): "Equivalent"
+- Identical (NaN): "Identical" with asterisk
 
-**Direction Change Handling:**
-- Cells showing direction change (SW quadrant) get asterisk
-- Footnote explains the asterisk
+**Special Case Handling:**
+- Flipped ICERs (SW quadrant) show value with asterisk and "(comparator vs. intervention)"
+- Identical scenarios show "Identical" with asterisk
+- Footnotes explain the asterisks, ordered by first occurrence
 }
 \examples{
 \dontrun{

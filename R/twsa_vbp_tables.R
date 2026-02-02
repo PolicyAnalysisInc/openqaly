@@ -87,8 +87,7 @@ prepare_twsa_vbp_table_data <- function(results,
       for (col in x_cols) {
         if (is.numeric(wide_data[[col]])) {
           rounded_vals <- round(wide_data[[col]], decimals)
-          wide_data[[col]] <- format(rounded_vals, nsmall = decimals,
-                                      big.mark = ",", scientific = FALSE, trim = TRUE)
+          wide_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 

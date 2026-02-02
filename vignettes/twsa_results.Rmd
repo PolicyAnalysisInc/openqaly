@@ -167,15 +167,20 @@ Use `twsa_nmb_plot()` to show Net Monetary Benefit across the grid.
 NMB = (delta outcomes x WTP) - delta costs.
 
 ```{r, include = FALSE}
-# Configure TWSA with cost + utility for true 2D NMB/CE sensitivity
-model_ce <- model |>
-  add_twsa("Cost vs Utility") |>
-  add_twsa_variable("Cost vs Utility", "c_treatment",
-    type = "range", min = 5000, max = 15000, steps = 5,
+# Configure TWSA with cost + efficacy for 2D NMB/CE sensitivity
+# Range spans dominance boundaries: low cost + good efficacy = dominant,
+# high cost + bad efficacy = dominated
+# Use fresh model read to avoid inheriting "Utility Sensitivity" TWSA
+model_ce <- read_model(
+  system.file("models", "example_markov", package = "openqaly")
+) |>
+  add_twsa("Cost vs Efficacy") |>
+  add_twsa_variable("Cost vs Efficacy", "c_treatment",
+    type = "custom", values = c(200, 400, 1500, 3000, 4500),
     display_name = "Treatment Cost", strategy = "volantor") |>
-  add_twsa_variable("Cost vs Utility", "u_mild",
-    type = "range", min = 0.75, max = 0.95, steps = 5,
-    display_name = "Utility (Mild)")
+  add_twsa_variable("Cost vs Efficacy", "hr_progression",
+    type = "custom", values = c(0.3, 0.6, 1.2, 1.5),
+    display_name = "Progression HR", strategy = "volantor")
 
 results_ce <- run_twsa(model_ce)
 ```

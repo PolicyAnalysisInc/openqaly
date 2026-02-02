@@ -7,7 +7,7 @@
 render_scenario_ce_bar_plot(ce_data, metadata)
 }
 \arguments{
-\item{ce_data}{Prepared CE data with icer, ce_class, value, label columns}
+\item{ce_data}{Prepared CE data with icer, ce_class, value columns}
 
 \item{metadata}{Model metadata for display name mapping}
 }

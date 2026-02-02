@@ -28,9 +28,9 @@ format_cell_value <- function(x) {
     if (is.na(val)) return("")
     abs_val <- abs(val)
     if (abs_val >= 10000) {
-      format(round(val), big.mark = ",", scientific = FALSE)
+      scales::comma(round(val))
     } else if (abs_val >= 100) {
-      format(round(val, 1), nsmall = 1, big.mark = ",")
+      scales::comma(round(val, 1), accuracy = 0.1)
     } else if (abs_val >= 1) {
       format(round(val, 2), nsmall = 2)
     } else {
@@ -62,7 +62,7 @@ prepare_twsa_outcomes_data <- function(results,
                                        strategies = NULL,
                                        interventions = NULL,
                                        comparators = NULL,
-                                       discounted = FALSE) {
+                                       discounted = TRUE) {
 
   # Extract TWSA summaries
   twsa_data <- extract_twsa_summaries(
@@ -104,49 +104,79 @@ prepare_twsa_outcomes_data <- function(results,
 
   # Calculate differences if interventions/comparators provided
   if (!is.null(interventions) || !is.null(comparators)) {
-    intervention_strategy <- if (!is.null(interventions)) interventions else comparators
-
     # Get all strategies present
     all_strats <- unique(grid_data$strategy)
-    other_strategies <- setdiff(all_strats, intervention_strategy)
 
-    if (length(other_strategies) == 0) {
+    # Determine comparison pairs (N×M pattern)
+    comparison_pairs <- list()
+
+    if (!is.null(interventions) && !is.null(comparators)) {
+      # Both provided: N×M explicit comparisons
+      for (int_strat in interventions) {
+        for (comp_strat in comparators) {
+          if (int_strat != comp_strat) {
+            comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+              intervention = int_strat,
+              comparator = comp_strat
+            )
+          }
+        }
+      }
+    } else if (!is.null(interventions)) {
+      # Intervention only: each intervention vs all others
+      for (int_strat in interventions) {
+        other_strategies <- setdiff(all_strats, int_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = other
+          )
+        }
+      }
+    } else {
+      # Comparator only: all others vs each comparator
+      for (comp_strat in comparators) {
+        other_strategies <- setdiff(all_strats, comp_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = other,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+
+    if (length(comparison_pairs) == 0) {
       stop("No comparator strategies found for incremental calculation", call. = FALSE)
     }
 
-    # Calculate incremental values
+    # Calculate incremental values for each comparison pair
     diff_data <- list()
-    for (other in other_strategies) {
+    for (pair in comparison_pairs) {
+      int_strat <- pair$intervention
+      comp_strat <- pair$comparator
+
       int_data <- grid_data %>%
-        filter(.data$strategy == intervention_strategy) %>%
+        filter(.data$strategy == int_strat) %>%
         select("x_value", "y_value", "group",
                "x_param_display_name", "y_param_display_name",
                "x_bc_value", "y_bc_value",
                int_amount = "amount")
 
       other_data <- grid_data %>%
-        filter(.data$strategy == other) %>%
+        filter(.data$strategy == comp_strat) %>%
         select("x_value", "y_value", "group", other_amount = "amount")
 
       # Map display names
-      int_mapped <- map_names_if_available(intervention_strategy, results$metadata$strategies)
-      other_mapped <- map_names_if_available(other, results$metadata$strategies)
-
-      if (!is.null(interventions)) {
-        comparison_label <- paste0(int_mapped, " vs. ", other_mapped)
-      } else {
-        comparison_label <- paste0(other_mapped, " vs. ", int_mapped)
-      }
+      int_mapped <- map_names_if_available(int_strat, results$metadata$strategies)
+      comp_mapped <- map_names_if_available(comp_strat, results$metadata$strategies)
+      comparison_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
       joined <- int_data %>%
         inner_join(other_data, by = c("x_value", "y_value", "group")) %>%
         mutate(
           strategy = comparison_label,
-          value = if (!is.null(interventions)) {
-            .data$int_amount - .data$other_amount
-          } else {
-            .data$other_amount - .data$int_amount
-          }
+          value = .data$int_amount - .data$other_amount
         ) %>%
         select("x_value", "y_value", "group", "strategy", "value",
                "x_param_display_name", "y_param_display_name",
@@ -179,6 +209,11 @@ prepare_twsa_outcomes_data <- function(results,
                                      "display_name")
   }
 
+  # Flag base case rows for highlighting in plots
+  heatmap_data <- heatmap_data %>%
+    mutate(is_base_case = abs(.data$x_value - .data$x_bc_value) < 1e-9 &
+                          abs(.data$y_value - .data$y_bc_value) < 1e-9)
+
   heatmap_data
 }
 
@@ -202,7 +237,8 @@ render_twsa_heatmap <- function(heatmap_data,
                                  ylab = NULL,
                                  legend_title = "Value",
                                  viridis_option = "viridis",
-                                 show_base_case = TRUE) {
+                                 show_base_case = TRUE,
+                                 caption = NULL) {
 
   # Get parameter display names for axis labels
   x_param_name <- unique(heatmap_data$x_param_display_name)[1]
@@ -243,30 +279,18 @@ render_twsa_heatmap <- function(heatmap_data,
   heatmap_data <- heatmap_data %>%
     mutate(
       x_factor = factor(.data$x_value, levels = x_levels,
-        labels = format(x_levels, big.mark = ",", trim = TRUE)),
+        labels = scales::comma(x_levels)),
       y_factor = factor(.data$y_value, levels = y_levels,
-        labels = format(y_levels, big.mark = ",", trim = TRUE))
+        labels = scales::comma(y_levels))
     )
 
-  # Create base case tile border data (for highlighting with black border)
+  # Create base case tile data for overlay
   base_case_tile <- NULL
-  if (show_base_case && "x_bc_value" %in% names(heatmap_data)) {
-    x_bc <- unique(heatmap_data$x_bc_value)[1]
-    y_bc <- unique(heatmap_data$y_bc_value)[1]
-    if (!is.na(x_bc) && !is.na(y_bc)) {
-      # Find the factor labels for base case values
-      x_bc_label <- format(x_bc, big.mark = ",", trim = TRUE)
-      y_bc_label <- format(y_bc, big.mark = ",", trim = TRUE)
-      # Only create base case tile if the base case is in the grid
-      if (x_bc_label %in% levels(heatmap_data$x_factor) &&
-          y_bc_label %in% levels(heatmap_data$y_factor)) {
-        base_case_tile <- heatmap_data %>%
-          distinct(.data$strategy, .data$group) %>%
-          mutate(
-            x_factor = factor(x_bc_label, levels = levels(heatmap_data$x_factor)),
-            y_factor = factor(y_bc_label, levels = levels(heatmap_data$y_factor))
-          )
-      }
+  if (show_base_case && "is_base_case" %in% names(heatmap_data)) {
+    bc_rows <- heatmap_data %>% filter(.data$is_base_case)
+    if (nrow(bc_rows) > 0) {
+      base_case_tile <- bc_rows %>%
+        distinct(.data$strategy, .data$group, .data$x_factor, .data$y_factor)
     }
   }
 
@@ -282,7 +306,7 @@ render_twsa_heatmap <- function(heatmap_data,
     y = .data$y_factor,
     fill = .data$value
   )) +
-    geom_tile(alpha = 0.9) +
+    geom_tile(alpha = 0.9, color = "gray80", linewidth = 0.3) +
     geom_text(aes(label = .data$label), size = 3, color = "white") +
     scale_fill_viridis_c(option = viridis_option, name = legend_title) +
     scale_x_discrete(expand = c(0, 0)) +
@@ -290,16 +314,19 @@ render_twsa_heatmap <- function(heatmap_data,
     labs(
       title = title,
       x = xlab,
-      y = ylab
+      y = ylab,
+      caption = caption
     ) +
     theme_bw() +
     theme(
       axis.text = element_text(size = 8),
       axis.ticks = element_blank(),
-      legend.position = "right"
+      legend.position = "right",
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank()
     )
 
-  # Add base case tile border (black outline around base case cell)
+  # Add base case tile border (black outline on top)
   if (!is.null(base_case_tile)) {
     p <- p +
       geom_tile(
@@ -308,7 +335,7 @@ render_twsa_heatmap <- function(heatmap_data,
         inherit.aes = FALSE,
         fill = NA,
         color = "black",
-        linewidth = 1
+        linewidth = 0.7
       )
   }
 
@@ -370,7 +397,7 @@ twsa_outcomes_plot <- function(results,
                                strategies = NULL,
                                interventions = NULL,
                                comparators = NULL,
-                               discounted = FALSE,
+                               discounted = TRUE,
                                title = NULL,
                                xlab = NULL,
                                ylab = NULL,
@@ -384,7 +411,10 @@ twsa_outcomes_plot <- function(results,
 
   # Set default legend title
   if (is.null(legend_title)) {
-    legend_title <- summary_name
+    legend_title <- map_names_if_available(
+      summary_name,
+      results$metadata$summaries
+    )
   }
 
   # Prepare data
@@ -584,9 +614,18 @@ twsa_nmb_plot <- function(results,
          call. = FALSE)
   }
 
-  # Create legend title with WTP
-  wtp_formatted <- format(wtp, big.mark = ",")
-  legend_title <- glue("NMB (\u03bb = {wtp_formatted})")
+  # Create legend title and footnote
+  wtp_formatted <- scales::comma(wtp, accuracy = 1)
+  legend_title <- "NMB*"
+
+  # Resolve display names for footnote
+  outcome_label <- health_outcome
+  cost_label <- cost_outcome
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    outcome_label <- map_names(health_outcome, results$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
+  }
+  caption <- glue("* Net Monetary Benefit calculated based on {outcome_label}, {cost_label}, and \u03bb = {wtp_formatted}")
 
   # Render heatmap
   render_twsa_heatmap(
@@ -596,7 +635,8 @@ twsa_nmb_plot <- function(results,
     ylab = ylab,
     legend_title = legend_title,
     viridis_option = viridis_option,
-    show_base_case = show_base_case
+    show_base_case = show_base_case,
+    caption = caption
   )
 }
 
@@ -656,11 +696,23 @@ prepare_twsa_ce_data <- function(results,
     ) %>%
     mutate(
       # Calculate ICER with special case handling
+      # Match the logic in icer() function for consistency
       icer = case_when(
-        abs(.data$delta_outcome) < .Machine$double.eps ~ NaN,  # Equivalent (undefined)
-        .data$delta_outcome < 0 & .data$delta_cost > 0 ~ Inf,  # Dominated
-        .data$delta_outcome > 0 & .data$delta_cost <= 0 ~ 0,   # Dominant (or cost-saving)
-        TRUE ~ .data$delta_cost / .data$delta_outcome          # Normal ICER
+        # Equivalent: no differences at all
+        abs(.data$delta_outcome) < .Machine$double.eps &
+          abs(.data$delta_cost) < .Machine$double.eps ~ NaN,
+        # Dominated (weakly): worse or equal effects at higher or equal cost
+        # with at least one strict detriment
+        (.data$delta_outcome < 0 & .data$delta_cost > 0) |
+          (.data$delta_outcome < 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost > 0) ~ Inf,
+        # Dominant (weakly): better or equal effects at lower or equal cost
+        # with at least one strict improvement
+        (.data$delta_outcome > 0 & .data$delta_cost < 0) |
+          (.data$delta_outcome > 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost < 0) ~ 0,
+        # Normal ICER for remaining cases
+        TRUE ~ .data$delta_cost / .data$delta_outcome
       ),
       # Classify for display
       ce_class = case_when(
@@ -684,7 +736,7 @@ prepare_twsa_ce_data <- function(results,
         .data$ce_class == "equivalent" ~ NA_real_,        # Gray tile
         .data$ce_class == "dominated" ~ max_display,      # High end of scale
         .data$ce_class == "dominant" ~ 0,                 # Low end of scale
-        .data$ce_class == "sw_quadrant" ~ abs(.data$icer), # Show absolute value
+        .data$ce_class == "sw_quadrant" ~ NA_real_,       # Gray tile (flipped comparison)
         TRUE ~ .data$icer                                 # Normal ICER
       ),
       value = .data$display_value  # For render_twsa_heatmap compatibility
@@ -752,30 +804,18 @@ render_twsa_ce_heatmap <- function(ce_data,
   ce_data <- ce_data %>%
     mutate(
       x_factor = factor(.data$x_value, levels = x_levels,
-        labels = format(x_levels, big.mark = ",", trim = TRUE)),
+        labels = scales::comma(x_levels)),
       y_factor = factor(.data$y_value, levels = y_levels,
-        labels = format(y_levels, big.mark = ",", trim = TRUE))
+        labels = scales::comma(y_levels))
     )
 
-  # Create base case tile border data (for highlighting with black border)
+  # Create base case tile data for overlay
   base_case_tile <- NULL
-  if (show_base_case && "x_bc_value" %in% names(ce_data)) {
-    x_bc <- unique(ce_data$x_bc_value)[1]
-    y_bc <- unique(ce_data$y_bc_value)[1]
-    if (!is.na(x_bc) && !is.na(y_bc)) {
-      # Find the factor labels for base case values
-      x_bc_label <- format(x_bc, big.mark = ",", trim = TRUE)
-      y_bc_label <- format(y_bc, big.mark = ",", trim = TRUE)
-      # Only create base case tile if the base case is in the grid
-      if (x_bc_label %in% levels(ce_data$x_factor) &&
-          y_bc_label %in% levels(ce_data$y_factor)) {
-        base_case_tile <- ce_data %>%
-          distinct(.data$strategy, .data$group) %>%
-          mutate(
-            x_factor = factor(x_bc_label, levels = levels(ce_data$x_factor)),
-            y_factor = factor(y_bc_label, levels = levels(ce_data$y_factor))
-          )
-      }
+  if (show_base_case && "is_base_case" %in% names(ce_data)) {
+    bc_rows <- ce_data %>% filter(.data$is_base_case)
+    if (nrow(bc_rows) > 0) {
+      base_case_tile <- bc_rows %>%
+        distinct(.data$strategy, .data$group, .data$x_factor, .data$y_factor)
     }
   }
 
@@ -784,12 +824,21 @@ render_twsa_ce_heatmap <- function(ce_data,
   ce_data <- ce_data %>%
     mutate(
       label = case_when(
-        .data$ce_class == "equivalent" ~ "Equiv.",
-        .data$ce_class == "dominated" ~ "Dom'd",
-        .data$ce_class == "dominant" ~ "Dom't",
+        .data$ce_class == "equivalent" ~ "Equivalent",
+        .data$ce_class == "dominated" ~ "Dominated",
+        .data$ce_class == "dominant" ~ "Dominant",
+        .data$ce_class == "sw_quadrant" ~ paste0(format_cell_value(abs(.data$icer)), "*"),
         TRUE ~ format_cell_value(.data$icer)
       )
     )
+
+  # Generate footnote if SW quadrant cells exist (flipped comparison direction)
+  sw_quadrant_present <- any(ce_data$ce_class == "sw_quadrant")
+  footnote_text <- if (sw_quadrant_present) {
+    "* Intervention is less costly and less effective. ICER represents cost-effectiveness of comparator vs. intervention."
+  } else {
+    NULL
+  }
 
   # Create heatmap with NA handling for equivalent cases
   p <- ggplot(ce_data, aes(
@@ -797,14 +846,14 @@ render_twsa_ce_heatmap <- function(ce_data,
     y = .data$y_factor,
     fill = .data$display_value
   )) +
-    geom_tile(alpha = 0.9) +
+    geom_tile(alpha = 0.9, color = "gray80", linewidth = 0.3) +
     geom_text(aes(label = .data$label), size = 3, color = "white") +
     scale_fill_viridis_c(
       option = viridis_option,
       name = "ICER",
       na.value = "gray80",  # Gray for equivalent/undefined
       labels = function(x) {
-        ifelse(is.na(x), "Equiv.",
+        ifelse(is.na(x), "Equivalent",
                ifelse(x >= max_display * 0.95, "Dominated",
                       ifelse(x == 0, "Dominant", scales::comma(x, accuracy = 1))))
       }
@@ -814,16 +863,20 @@ render_twsa_ce_heatmap <- function(ce_data,
     labs(
       title = title,
       x = xlab,
-      y = ylab
+      y = ylab,
+      caption = footnote_text
     ) +
     theme_bw() +
     theme(
       axis.text = element_text(size = 8),
       axis.ticks = element_blank(),
-      legend.position = "right"
+      legend.position = "right",
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.caption = element_text(hjust = 0, size = 9, face = "italic")
     )
 
-  # Add base case tile border (black outline around base case cell)
+  # Add base case tile border (black outline on top)
   if (!is.null(base_case_tile)) {
     p <- p +
       geom_tile(
@@ -832,7 +885,7 @@ render_twsa_ce_heatmap <- function(ce_data,
         inherit.aes = FALSE,
         fill = NA,
         color = "black",
-        linewidth = 1
+        linewidth = 0.7
       )
   }
 

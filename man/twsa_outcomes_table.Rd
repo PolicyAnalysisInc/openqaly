@@ -12,7 +12,7 @@ twsa_outcomes_table(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE,
+  discounted = TRUE,
   decimals = 2,
   font_size = 11,
   backend = c("flextable", "kable")

@@ -8,11 +8,10 @@ prepare_pairwise_ceac_table_data(
   results,
   outcome_summary,
   cost_summary,
-  intervention = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
-  strategies = NULL,
   decimals = 1,
   font_size = 11
 )
@@ -24,11 +23,9 @@ prepare_pairwise_ceac_table_data(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{intervention}{Reference strategy for comparison (intervention perspective).
-Mutually exclusive with comparator.}
+\item{interventions}{Reference strategies for comparison (intervention perspective).}
 
-\item{comparator}{Reference strategy for comparison (comparator perspective).
-Mutually exclusive with intervention.}
+\item{comparators}{Reference strategies for comparison (comparator perspective).}
 
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as columns}
 
@@ -41,8 +38,6 @@ Mutually exclusive with intervention.}
   \item \code{"all"} or \code{NULL} - All groups + overall
   \item \code{"all_groups"} - All groups without overall
 }}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{decimals}{Number of decimal places for percentages}
 

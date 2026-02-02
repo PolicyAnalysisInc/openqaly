@@ -9,15 +9,35 @@
 #' @return Formatted string with commas and no scientific notation
 #' @keywords internal
 format_param_value <- function(value, digits = 4) {
-  # Use signif() to preserve significant figures for all magnitudes
+  # Handle special cases
+  if (is.null(value) || length(value) == 0) return(NA_character_)
+  if (is.na(value)) return(NA_character_)
+  if (value == 0) return("0")
+
+  # Round to significant figures
   rounded <- signif(value, digits)
+  abs_val <- abs(rounded)
 
-  # Format with commas, no scientific notation
-  formatted <- format(rounded, big.mark = ",", scientific = FALSE, trim = TRUE)
+  # Calculate appropriate accuracy for scales::comma based on magnitude
+  magnitude <- floor(log10(abs_val))
 
-  # Remove unnecessary trailing zeros after decimal point
-  # This regex removes .00, .0, etc. but keeps .5, .50 when significant
-  formatted <- sub("(\\.0+)$", "", formatted)
+  if (abs_val >= 1) {
+    # For values >= 1, limit decimal places based on significant figures needed
+    decimals_needed <- max(0, digits - magnitude - 1)
+    accuracy <- 10^(-decimals_needed)
+  } else {
+    # For values < 1, ensure enough decimal places to show all significant figures
+    accuracy <- 10^(magnitude - digits + 1)
+  }
+
+  # Format with commas and calculated accuracy
+  formatted <- scales::comma(rounded, accuracy = accuracy)
+
+  # Clean up trailing zeros after decimal point
+  if (grepl("\\.", formatted)) {
+    formatted <- sub("0+$", "", formatted)
+    formatted <- sub("\\.$", "", formatted)
+  }
 
   formatted
 }
@@ -255,14 +275,10 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
         .data$is_no_impact & .data$other_is_no_impact & .data$variation == "Low" ~ FALSE,
         TRUE ~ .data$natural_goes_right
       ),
-      # Position labels at bar endpoints with small offset
-      label_x = if_else(
-        .data$goes_right,
-        .data$xmax + x_tick_max * 0.01,
-        .data$xmin - x_tick_max * 0.01
-      ),
-      # Horizontal justification: left-align for right-side, right-align for left-side
-      label_hjust = if_else(.data$goes_right, 0, 1)
+      # Position labels at bar endpoints with hjust-based spacing
+      label_x = if_else(.data$goes_right, .data$xmax, .data$xmin),
+      # Horizontal justification: -0.1 for right-side (gap to left), 1.1 for left-side (gap to right)
+      label_hjust = if_else(.data$goes_right, -0.1, 1.1)
     )
 
   # Create tornado plot using geom_tile with numeric y-axis
@@ -809,7 +825,7 @@ dsa_outcomes_plot <- function(results,
                               strategies = NULL,
                               interventions = NULL,
                               comparators = NULL,
-                              discounted = FALSE,
+                              discounted = TRUE,
                               show_parameter_values = TRUE,
                               drop_zero_impact = TRUE) {
 
@@ -1149,7 +1165,7 @@ dsa_nmb_plot <- function(results,
     cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
   }
 
-  wtp_formatted <- format(wtp, big.mark = ",")
+  wtp_formatted <- scales::comma(wtp)
   nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   # Render tornado plot
@@ -1215,32 +1231,49 @@ detect_variation_error <- function(base_class, variation_icer) {
     return(list(type = "identical", show_bar = FALSE, bar_type = NA_character_, label = NA_character_))
   }
 
-  # Direction change detection
-  base_is_positive <- base_class %in% c("normal", "dominated")
-  variation_is_negative <- is.finite(variation_icer) && variation_icer < 0
+  # Handle flipped base case specially
 
-  base_is_negative <- base_class == "flipped"
-  variation_is_positive <- is.finite(variation_icer) && variation_icer > 0
+  # When base is flipped, the axis shows comparator's perspective:
+  # - Left (toward 0) = Good for comparator
+  # - Right (higher ICER) = Bad for comparator
+  # So dominant/dominated must be inverted from intervention's perspective
+  if (base_class == "flipped") {
+    # Intervention dominant (0) = Comparator dominated = arrow bar to right
+    if (variation_icer == 0) {
+      return(list(type = NULL, show_bar = TRUE, bar_type = "arrow", label = "Dominated"))
+    }
+    # Intervention dominated (+Inf) = Comparator dominant = bar to zero
+    if (is.infinite(variation_icer) && variation_icer > 0) {
+      return(list(type = NULL, show_bar = TRUE, bar_type = "to_zero", label = "Dominant"))
+    }
+    # Positive finite ICER = direction change (intervention now costlier/more effective)
+    if (is.finite(variation_icer) && variation_icer > 0) {
+      return(list(type = "direction_change", show_bar = FALSE, bar_type = NA_character_, label = NA_character_))
+    }
+    # Negative ICER = still in flipped direction, standard bar
+    return(list(type = NULL, show_bar = TRUE, bar_type = "standard", label = NA_character_))
+  }
 
-  if ((base_is_positive && variation_is_negative) ||
-      (base_is_negative && variation_is_positive)) {
+  # Non-flipped base cases: normal, dominated, dominant
+  # Direction change if variation becomes flipped (negative ICER)
+  if (is.finite(variation_icer) && variation_icer < 0) {
     return(list(type = "direction_change", show_bar = FALSE, bar_type = NA_character_, label = NA_character_))
   }
 
   # Dominated variation (+Inf)
   if (is.infinite(variation_icer) && variation_icer > 0) {
-    # If base is also dominated, no bar (same as base)
+    # When base is also dominated, no bar needed (same position)
     if (base_class == "dominated") {
-      return(list(type = NULL, show_bar = FALSE, bar_type = NA_character_, label = NA_character_))
+      return(list(type = NULL, show_bar = FALSE, bar_type = NA_character_, label = "Dominated"))
     }
     return(list(type = NULL, show_bar = TRUE, bar_type = "arrow", label = "Dominated"))
   }
 
   # Dominant variation (0)
   if (variation_icer == 0) {
-    # If base is also dominant, no bar (same as base)
+    # When base is also dominant, no bar needed (same position)
     if (base_class == "dominant") {
-      return(list(type = NULL, show_bar = FALSE, bar_type = NA_character_, label = NA_character_))
+      return(list(type = NULL, show_bar = FALSE, bar_type = NA_character_, label = "Dominant"))
     }
     return(list(type = NULL, show_bar = TRUE, bar_type = "to_zero", label = "Dominant"))
   }
@@ -1268,13 +1301,28 @@ generate_ce_error_message <- function(error_type, variation, icer_value,
   }
 
   if (error_type == "direction_change") {
-    sprintf(
-      "%s value of parameter changes the directionality of ICER and cannot be displayed. ICER of %s reflects comparison of %s vs. %s",
-      variation,
-      format(abs(icer_value), big.mark = ",", nsmall = 0, scientific = FALSE),
-      comparator_name,
-      intervention_name
-    )
+    # Determine direction based on ICER sign
+    # Negative ICER = SW quadrant = comparator more costly/effective
+    # Positive ICER = NE quadrant = intervention more costly/effective (normal requested direction)
+    if (icer_value < 0) {
+      # Flipped direction - comparator vs intervention
+      sprintf(
+        "%s value of parameter changes the directionality of ICER and cannot be displayed. ICER of %s reflects comparison of %s vs. %s",
+        variation,
+        scales::comma(abs(icer_value)),
+        comparator_name,
+        intervention_name
+      )
+    } else {
+      # Normal direction - intervention vs comparator
+      sprintf(
+        "%s value of parameter changes the directionality of ICER and cannot be displayed. ICER of %s reflects comparison of %s vs. %s",
+        variation,
+        scales::comma(abs(icer_value)),
+        intervention_name,
+        comparator_name
+      )
+    }
   } else if (error_type == "identical") {
     sprintf(
       "%s value of parameter results in identical outcomes and costs for %s and %s, resulting in undefined ICER",
@@ -1290,15 +1338,18 @@ generate_ce_error_message <- function(error_type, variation, icer_value,
 
 #' Generate Footnote for Flipped Base Case
 #'
-#' Internal helper to generate footnote text for flipped facets.
+#' Internal helper to generate footnote text for flipped base case facets.
 #'
+#' @param asterisk Character asterisk string (e.g., "*", "**", "***")
 #' @param comparator_name Character display name of comparator
 #' @param intervention_name Character display name of intervention
 #' @return Character footnote text
 #' @keywords internal
-generate_ce_footnote <- function(comparator_name, intervention_name) {
+generate_flipped_base_footnote <- function(asterisk, comparator_name, intervention_name) {
+
   sprintf(
-    "* %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
+    "%s %s is more costly and more effective than %s in base case, plot depicts comparison of %s vs. %s.",
+    asterisk,
     comparator_name,
     intervention_name,
     comparator_name,
@@ -1306,42 +1357,106 @@ generate_ce_footnote <- function(comparator_name, intervention_name) {
   )
 }
 
+#' Generate Footnote for Flipped Bar
+#'
+#' Internal helper to generate footnote text for bars in a flipped facet
+#' that reflect the comparator vs. intervention direction.
+#'
+#' @param asterisk Character asterisk string (e.g., "*", "**", "***")
+#' @param comparator_name Character display name of comparator
+#' @param intervention_name Character display name of intervention
+#' @return Character footnote text
+#' @keywords internal
+generate_flipped_bar_footnote <- function(asterisk, comparator_name, intervention_name) {
+  sprintf(
+    "%s ICER reflects comparison of %s vs. %s.",
+    asterisk,
+    comparator_name,
+    intervention_name
+  )
+}
+
+#' Generate Footnote for Direction Change
+#'
+#' Internal helper to generate footnote text for direction change errors.
+#'
+#' @param asterisk Character asterisk string (e.g., "*", "**", "***")
+#' @param more_costly_name Character display name of the strategy that is more costly/effective
+#' @param less_costly_name Character display name of the other strategy
+#' @return Character footnote text
+#' @keywords internal
+generate_direction_change_footnote <- function(asterisk, more_costly_name, less_costly_name) {
+  sprintf(
+    "%s ICER reflects comparison of %s vs. %s and cannot be displayed on same axis as base case reflecting comparison of %s vs. %s.",
+    asterisk,
+    more_costly_name,
+    less_costly_name,
+    less_costly_name,
+    more_costly_name
+  )
+}
+
+#' Generate Footnote for Identical Outcomes
+#'
+#' Internal helper to generate footnote text for identical (NaN) ICER errors.
+#'
+#' @param asterisk Character asterisk string (e.g., "*", "**", "***")
+#' @param intervention_name Character display name of intervention
+#' @param comparator_name Character display name of comparator
+#' @return Character footnote text
+#' @keywords internal
+generate_identical_footnote <- function(asterisk, intervention_name, comparator_name) {
+  sprintf(
+    "%s ICER is undefined and cannot be displayed due to %s and %s having identical outcomes and costs.",
+    asterisk,
+    intervention_name,
+    comparator_name
+  )
+}
+
 
 #' Format ICER Value for Display
 #'
 #' Internal helper to format ICER values for tornado plot labels.
+#' Appends the provided asterisk string to the label.
 #'
 #' @param icer_value Numeric ICER value
-#' @param is_flipped Logical whether facet has flipped base case
+#' @param asterisk Character asterisk string to append (default: "")
 #' @param decimals Number of decimal places (default: 0)
 #' @return Formatted string
 #' @keywords internal
-format_icer_label <- function(icer_value, is_flipped = FALSE, decimals = 0) {
+format_icer_label <- function(icer_value, asterisk = "", decimals = 0) {
   # Check NaN BEFORE NA because is.na(NaN) returns TRUE
   if (is.nan(icer_value)) {
-    return("Equivalent")
+    return(paste0("Equivalent", asterisk))
   }
   if (is.na(icer_value)) {
     return("")
   }
   if (is.infinite(icer_value) && icer_value > 0) {
-    return("Dominated")
+    return(paste0("Dominated", asterisk))
   }
   if (icer_value == 0) {
-    return("Dominant")
+    return(paste0("Dominant", asterisk))
   }
 
   # Format finite value
-  formatted <- prettyNum(round(abs(icer_value), decimals),
-                         big.mark = ",",
-                         scientific = FALSE)
+  formatted <- scales::comma(round(abs(icer_value), decimals))
 
-  # Add asterisk if flipped facet
-  if (is_flipped) {
-    formatted <- paste0(formatted, "*")
-  }
+  # Add asterisk
+  paste0(formatted, asterisk)
+}
 
-  formatted
+#' Check if ICER is Flipped (SW Quadrant)
+#'
+#' Internal helper to determine if an ICER represents a "flipped" comparison
+#' (comparator more costly and more effective, resulting in negative ICER).
+#'
+#' @param icer_value Numeric ICER value
+#' @return Logical TRUE if ICER is finite and negative
+#' @keywords internal
+is_flipped_icer <- function(icer_value) {
+  is.finite(icer_value) && icer_value < 0
 }
 
 
@@ -1405,7 +1520,153 @@ calculate_displayable_range <- function(low_icer, base_icer, high_icer,
     return(0)
   }
 
-  max(displayable_values) - min(displayable_values)
+  range_val <- max(displayable_values) - min(displayable_values)
+  # Return small positive for zero-range to prevent filtering while preserving order
+  if (range_val == 0) return(1)
+  range_val
+}
+
+
+#' Assign Asterisks Per Facet for DSA CE Plot
+#'
+#' Internal helper to assign asterisks to labels based on order of first occurrence
+#' within each facet. Processes base case first, then bars top-to-bottom (ascending y_base).
+#'
+#' @param tornado_long Long-format tornado data with y_base calculated
+#' @param facet_metadata Facet metadata with base_footnote_type
+#' @param y_spacing Y spacing value used for positioning
+#' @return List with updated tornado_long, facet_metadata, and per-facet footnotes
+#' @keywords internal
+assign_facet_asterisks <- function(tornado_long, facet_metadata, y_spacing) {
+  asterisk_symbols <- c("*", "**", "***")
+
+  # Initialize base_asterisk column in facet_metadata
+  facet_metadata$base_asterisk <- ""
+
+  # Get unique facets (strategy + group combinations)
+  facet_keys <- facet_metadata %>%
+    distinct(.data$strategy, .data$group)
+
+  all_facet_footnotes <- list()
+
+  # Process each facet independently
+  for (i in seq_len(nrow(facet_keys))) {
+    strat <- facet_keys$strategy[i]
+    grp <- facet_keys$group[i]
+
+    # Get facet metadata for this facet
+    facet_meta <- facet_metadata %>%
+      filter(.data$strategy == strat, .data$group == grp)
+
+    # Get tornado data for this facet
+    facet_tornado <- tornado_long %>%
+      filter(.data$strategy == strat, .data$group == grp)
+
+    # Track footnote types and their asterisks
+    footnote_types_seen <- character(0)
+    footnote_map <- list()  # maps type -> asterisk
+
+    # Helper to get or assign asterisk for a footnote type
+    get_asterisk <- function(footnote_type) {
+      if (is.na(footnote_type)) return("")
+      if (footnote_type %in% footnote_types_seen) {
+        return(footnote_map[[footnote_type]])
+      }
+      # Assign next asterisk
+      idx <- length(footnote_types_seen) + 1
+      if (idx > length(asterisk_symbols)) {
+        asterisk <- paste(rep("*", idx), collapse = "")
+      } else {
+        asterisk <- asterisk_symbols[idx]
+      }
+      footnote_types_seen <<- c(footnote_types_seen, footnote_type)
+      footnote_map[[footnote_type]] <<- asterisk
+      return(asterisk)
+    }
+
+    # Step 1: Process base case (always first in reading order)
+    base_footnote_type <- facet_meta$base_footnote_type[1]
+    base_ast <- get_asterisk(base_footnote_type)
+
+    # Update facet_metadata with base asterisk
+    facet_metadata$base_asterisk[
+      facet_metadata$strategy == strat & facet_metadata$group == grp
+    ] <- base_ast
+
+    # Step 2: Process bars in y_base order (ascending = top to bottom on reversed y-axis)
+    if (nrow(facet_tornado) > 0) {
+      # Sort by y_base ascending (top of plot first)
+      facet_tornado_sorted <- facet_tornado %>%
+        arrange(.data$y_base, .data$variation)
+
+      # Assign asterisks row by row
+      for (j in seq_len(nrow(facet_tornado_sorted))) {
+        row_idx <- which(
+          tornado_long$strategy == strat &
+          tornado_long$group == grp &
+          tornado_long$parameter == facet_tornado_sorted$parameter[j] &
+          tornado_long$variation == facet_tornado_sorted$variation[j]
+        )
+
+        if (length(row_idx) > 0) {
+          footnote_type <- tornado_long$footnote_type[row_idx[1]]
+          asterisk <- get_asterisk(footnote_type)
+          tornado_long$asterisk[row_idx] <- asterisk
+        }
+      }
+    }
+
+    # Step 3: Generate footnote texts for this facet
+    facet_footnotes <- character(0)
+    intervention_name <- facet_meta$intervention_name[1]
+    comparator_name <- facet_meta$comparator_name[1]
+    is_flipped <- facet_meta$is_flipped_facet[1]
+
+    for (ft in footnote_types_seen) {
+      ast <- footnote_map[[ft]]
+      if (ft == "flipped_base") {
+        facet_footnotes <- c(facet_footnotes,
+          generate_flipped_base_footnote(ast, comparator_name, intervention_name))
+      } else if (ft == "flipped_bar") {
+        facet_footnotes <- c(facet_footnotes,
+          generate_flipped_bar_footnote(ast, comparator_name, intervention_name))
+      } else if (ft == "direction_change") {
+        # Direction is opposite of base case
+        if (is_flipped) {
+          # Flipped base -> direction change goes to intervention vs comparator
+          facet_footnotes <- c(facet_footnotes,
+            generate_direction_change_footnote(ast, intervention_name, comparator_name))
+        } else {
+          # Normal base -> direction change goes to comparator vs intervention
+          facet_footnotes <- c(facet_footnotes,
+            generate_direction_change_footnote(ast, comparator_name, intervention_name))
+        }
+      } else if (ft == "identical") {
+        facet_footnotes <- c(facet_footnotes,
+          generate_identical_footnote(ast, intervention_name, comparator_name))
+      }
+    }
+
+    # Store footnotes for this facet
+    all_facet_footnotes[[paste(strat, grp, sep = "|||")]] <- facet_footnotes
+  }
+
+  # Add base_asterisk column if it doesn't exist
+  if (!"base_asterisk" %in% names(facet_metadata)) {
+    facet_metadata$base_asterisk <- ""
+  }
+
+  # Generate final base_label with asterisk
+  facet_metadata <- facet_metadata %>%
+    mutate(
+      base_label = paste0(.data$base_label_raw, .data$base_asterisk)
+    )
+
+  list(
+    tornado_long = tornado_long,
+    facet_metadata = facet_metadata,
+    facet_footnotes = all_facet_footnotes
+  )
 }
 
 
@@ -1613,37 +1874,49 @@ prepare_dsa_ce_tornado_data <- function(results,
     high_bar_type <- high_error_info$bar_type
     high_label_auto <- high_error_info$label
 
-    # Generate labels
-    low_label <- if (is.na(low_label_auto)) {
-      format_icer_label(row$low_icer, is_flipped_facet)
+    # Determine footnote types for each variation
+    # - flipped_base: base is flipped AND variation reflects comparator vs intervention
+    #   (negative ICER, or dominated/dominant in flipped context)
+    # - direction_change: variation flipped relative to base case
+    # - identical: variation results in NaN
+
+    # Low variation footnote type
+    low_footnote_type <- NA_character_
+    if (!is.null(low_error_type) && low_error_type == "direction_change") {
+      low_footnote_type <- "direction_change"
+    } else if (!is.null(low_error_type) && low_error_type == "identical") {
+      low_footnote_type <- "identical"
+    } else if (is_flipped_facet && low_show_bar) {
+      # In flipped facet, bars get flipped_bar asterisk (separate from base case)
+      low_footnote_type <- "flipped_bar"
+    }
+
+    # High variation footnote type
+    high_footnote_type <- NA_character_
+    if (!is.null(high_error_type) && high_error_type == "direction_change") {
+      high_footnote_type <- "direction_change"
+    } else if (!is.null(high_error_type) && high_error_type == "identical") {
+      high_footnote_type <- "identical"
+    } else if (is_flipped_facet && high_show_bar) {
+      # In flipped facet, bars get flipped_bar asterisk (separate from base case)
+      high_footnote_type <- "flipped_bar"
+    }
+
+    # Store raw labels without asterisks - asterisks will be added later
+    # based on per-facet ordering
+    low_label_raw <- if (is.na(low_label_auto)) {
+      format_icer_label(row$low_icer, asterisk = "")
     } else {
       low_label_auto
     }
-    high_label <- if (is.na(high_label_auto)) {
-      format_icer_label(row$high_icer, is_flipped_facet)
+    high_label_raw <- if (is.na(high_label_auto)) {
+      format_icer_label(row$high_icer, asterisk = "")
     } else {
       high_label_auto
     }
 
-    # Generate error messages
-    low_error_message <- generate_ce_error_message(
-      low_error_type, "Low", row$low_icer,
-      row$intervention_name, row$comparator_name
-    )
-    high_error_message <- generate_ce_error_message(
-      high_error_type, "High", row$high_icer,
-      row$intervention_name, row$comparator_name
-    )
-
-    # Combined error state
+    # Combined error state (kept for backwards compatibility)
     has_error <- !is.null(low_error_type) || !is.null(high_error_type)
-    combined_error_message <- if (has_error) {
-      msgs <- c(low_error_message, high_error_message)
-      msgs <- msgs[!is.na(msgs)]
-      if (length(msgs) > 0) paste(msgs, collapse = "\n\n") else NA_character_
-    } else {
-      NA_character_
-    }
 
     # Calculate displayable range
     displayable_range <- calculate_displayable_range(
@@ -1671,12 +1944,11 @@ prepare_dsa_ce_tornado_data <- function(results,
       high_error_type = if (is.null(high_error_type)) NA_character_ else high_error_type,
       high_show_bar = high_show_bar,
       high_bar_type = if (is.na(high_bar_type)) NA_character_ else high_bar_type,
-      low_label = low_label,
-      high_label = high_label,
-      low_error_message = low_error_message,
-      high_error_message = high_error_message,
+      low_label_raw = low_label_raw,
+      high_label_raw = high_label_raw,
+      low_footnote_type = low_footnote_type,
+      high_footnote_type = high_footnote_type,
       has_error = has_error,
-      combined_error_message = combined_error_message,
       displayable_range = displayable_range,
       display_low = display_low,
       display_base = display_base,
@@ -1737,6 +2009,7 @@ prepare_dsa_ce_tornado_data <- function(results,
   }
 
   # Create facet metadata
+  # Note: base_label and footnotes will be finalized in render function after y_base ordering
   facet_metadata <- tornado_data %>%
     distinct(.data$strategy, .data$group, .data$intervention_name, .data$comparator_name,
              .data$base_icer, .data$base_class, .data$is_flipped_facet) %>%
@@ -1751,16 +2024,14 @@ prepare_dsa_ce_tornado_data <- function(results,
         ),
         NA_character_
       ),
-      footnote_text = if_else(
-        .data$is_flipped_facet,
-        generate_ce_footnote(.data$comparator_name, .data$intervention_name),
-        NA_character_
-      ),
-      base_label = case_when(
+      # Base case footnote type (flipped_base if base is flipped)
+      base_footnote_type = if_else(.data$is_flipped_facet, "flipped_base", NA_character_),
+      # Raw base case label without asterisk - asterisk added in render based on ordering
+      base_label_raw = case_when(
         .data$base_class == "dominated" ~ "Base Case: Dominated",
         .data$base_class == "dominant" ~ "Base Case: Dominant",
-        .data$base_class == "flipped" ~ paste0("Base Case: ", format_icer_label(.data$base_icer, TRUE)),
-        .data$base_class == "normal" ~ paste0("Base Case: ", format_icer_label(.data$base_icer, FALSE)),
+        .data$base_class == "flipped" ~ paste0("Base Case: ", format_icer_label(.data$base_icer, asterisk = "")),
+        .data$base_class == "normal" ~ paste0("Base Case: ", format_icer_label(.data$base_icer, asterisk = "")),
         TRUE ~ NA_character_
       )
     ) %>%
@@ -1810,12 +2081,55 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       filter(FALSE)  # Empty the data frame
   }
 
-  # If all facets are identical and we have no valid data, return empty plot with error
+  # If no data at all, error
+
   if (nrow(tornado_data) == 0 && nrow(identical_facets) == 0) {
     stop("No valid data for tornado plot")
   }
 
-  # Determine faceting (use facet_metadata to include identical facets)
+  # Case 1: All facets are identical - return clean message with no axes
+  if (nrow(valid_facets) == 0) {
+    msg <- paste(
+      "Tornado plot cannot be displayed because the difference in",
+      "outcomes and costs in the base case is zero,",
+      "resulting in an undefined ICER."
+    )
+    return(
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, label = msg, size = 5, hjust = 0.5, vjust = 0.5) +
+        xlim(0, 1) + ylim(0, 1) +
+        theme_void()
+    )
+  }
+
+  # Case 2: Some identical facets - filter them out and build caption
+  omitted_caption <- NULL
+  if (nrow(identical_facets) > 0) {
+    # Build description of omitted facets
+    has_multiple_groups <- length(unique(facet_metadata$group)) > 1
+    has_multiple_strategies <- length(unique(facet_metadata$strategy)) > 1
+
+    omitted_descriptions <- if (has_multiple_groups && has_multiple_strategies) {
+      paste0(identical_facets$intervention_name, " vs. ", identical_facets$comparator_name,
+             " / ", identical_facets$group)
+    } else if (has_multiple_groups) {
+      identical_facets$group
+    } else {
+      paste0(identical_facets$intervention_name, " vs. ", identical_facets$comparator_name)
+    }
+
+    omitted_caption <- paste0(
+      "The following panels could not be displayed due to identical costs and outcomes ",
+      "resulting in an undefined ICER for the base case: ",
+      paste(omitted_descriptions, collapse = "; "),
+      "."
+    )
+
+    # Replace facet_metadata with valid facets only
+    facet_metadata <- valid_facets
+  }
+
+  # Determine faceting (valid facets only)
   n_groups <- length(unique(facet_metadata$group))
   n_strategies <- length(unique(facet_metadata$strategy))
 
@@ -1869,8 +2183,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     tornado_data$display_high[is.finite(tornado_data$display_high)]
   )
 
-  if (length(finite_icers) == 0) {
-    x_data_max <- 100000  # Default for all-dominated scenarios
+  if (length(finite_icers) == 0 || max(finite_icers, na.rm = TRUE) == 0) {
+    x_data_max <- 100000  # Default for all-dominated/dominant scenarios
   } else {
     x_data_max <- max(finite_icers, na.rm = TRUE)
   }
@@ -1908,20 +2222,69 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       by = c("strategy", "group")
     )
 
-  # Detect same-side parameters
-  # Note: For dominated/dominant variations, display_low or display_high may be NA.
 
-  # These can never be "same-side" since one bar goes to infinity/zero.
-  # Use coalesce to treat NA as FALSE in the comparison.
+  # Detect same-side parameters
+  # For same-side detection, we need to determine the effective direction of each bar:
+  # - "arrow" bars go to the RIGHT (toward dominated position)
+  # - "to_zero" bars go to the LEFT (toward 0)
+  # - "standard" bars go toward their display_value
+  #
+  # Special rule: When a variation equals the base case (zero-width bar), it should be
+  # FORCED to the opposite direction of the other variation's bar.
+  # Exception: dominated base case - everything goes left (no right side available).
   tornado_data <- tornado_data %>%
     mutate(
+      # Detect if variation is at base case (zero-width bar)
+      low_at_base = .data$low_show_bar &
+        .data$low_bar_type == "standard" &
+        abs(.data$display_low - .data$base_display_value) < 1e-9,
+      high_at_base = .data$high_show_bar &
+        .data$high_bar_type == "standard" &
+        abs(.data$display_high - .data$base_display_value) < 1e-9,
+
+      # Natural direction (before forcing)
+      low_natural_right = case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_natural_right = case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+
+      # Force at-base variations to opposite of other bar
+      # Exception: dominated base case - everything goes left
+      low_goes_right = case_when(
+        !.data$low_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$low_at_base & !.data$high_at_base ~ !.data$high_natural_right,
+        TRUE ~ .data$low_natural_right
+      ),
+      high_goes_right = case_when(
+        !.data$high_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$high_at_base & !.data$low_at_base ~ !.data$low_natural_right,
+        TRUE ~ .data$high_natural_right
+      ),
+
+      # Same-side if both bars go in the same direction
+      # Never same-side if either is at base (no overlap from zero-width bar),
+      # unless dominated base case (everything crammed to left edge)
       same_side = (.data$low_show_bar & .data$high_show_bar) &
+        !(!(.data$base_class == "dominated") & (.data$low_at_base | .data$high_at_base)) &
         dplyr::coalesce(
-          (.data$display_low > .data$base_display_value & .data$display_high > .data$base_display_value) |
-            (.data$display_low < .data$base_display_value & .data$display_high < .data$base_display_value),
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
           FALSE
         )
-    )
+    ) %>%
+    select(-"low_at_base", -"high_at_base", -"low_natural_right", -"high_natural_right")
 
   # Reshape to long format for bars
   tornado_long <- tornado_data %>%
@@ -1939,13 +2302,19 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
         .data$variation == "Low" ~ .data$low_bar_type,
         TRUE ~ .data$high_bar_type
       ),
-      label = if_else(.data$variation == "Low", .data$low_label, .data$high_label),
+      label_raw = if_else(.data$variation == "Low", .data$low_label_raw, .data$high_label_raw),
       error_type = if_else(.data$variation == "Low", .data$low_error_type, .data$high_error_type),
+      footnote_type = if_else(.data$variation == "Low", .data$low_footnote_type, .data$high_footnote_type),
       display_value = if_else(
         is.finite(.data$icer_value_num),
         abs(.data$icer_value_num),
         if_else(.data$bar_type == "arrow", dominated_position, NA_real_)
-      )
+      ),
+      # Track other variation's direction for label positioning in same_status_labels
+      other_goes_right = if_else(.data$variation == "Low", .data$high_goes_right, .data$low_goes_right),
+      other_has_bar = if_else(.data$variation == "Low", .data$high_show_bar, .data$low_show_bar),
+      # Initialize asterisk column (will be filled by assign_facet_asterisks)
+      asterisk = ""
     )
 
   # Calculate y positions
@@ -1961,6 +2330,19 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       y_base = dense_rank(desc(interaction(.data$displayable_range, .data$parameter_display_name, lex.order = TRUE))) * y_spacing
     ) %>%
     ungroup()
+
+  # Assign asterisks per facet based on reading order
+  # (base case first, then bars top-to-bottom by y_base)
+  asterisk_result <- assign_facet_asterisks(tornado_long, facet_metadata, y_spacing)
+  tornado_long <- asterisk_result$tornado_long
+  facet_metadata <- asterisk_result$facet_metadata
+  facet_footnotes <- asterisk_result$facet_footnotes
+
+  # Generate final labels with asterisks
+  tornado_long <- tornado_long %>%
+    mutate(
+      label = paste0(.data$label_raw, .data$asterisk)
+    )
 
   # Handle same-side bars
   tornado_long <- tornado_long %>%
@@ -1991,6 +2373,32 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       ),
       x_center = (.data$xmin + .data$xmax) / 2,
       x_width = .data$xmax - .data$xmin
+    )
+
+  # Pre-compute stacking for ALL base-position labels (Layer 7 and Layer 8)
+  # This ensures labels from different layers that go to the same side get stacked
+  tornado_long <- tornado_long %>%
+    mutate(
+      # Determine if this row renders a label at the base position
+      has_base_label = !.data$show_bar & (!is.na(.data$error_type) | !is.na(.data$label)),
+      # Direction for base-position labels
+      base_label_goes_left = .data$base_class == "dominated" | .data$variation == "Low"
+    ) %>%
+    group_by(.data$strategy, .data$group, .data$parameter_display_name, .data$base_label_goes_left) %>%
+    mutate(
+      n_base_labels_same_side = sum(.data$has_base_label),
+      base_label_rank = cumsum(.data$has_base_label) * .data$has_base_label
+    ) %>%
+    ungroup() %>%
+    mutate(
+      base_label_y_offset = case_when(
+        !.data$has_base_label ~ 0,
+        .data$n_base_labels_same_side == 1 ~ 0,
+        .data$base_label_rank == 1 ~ 0.15,
+        .data$base_label_rank == 2 ~ -0.15,
+        TRUE ~ 0
+      ),
+      y_adjusted_base = .data$y_numeric + .data$base_label_y_offset
     )
 
   # Create y-axis labels lookup
@@ -2030,41 +2438,15 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       # Left-justify when base case is in the left 15% of the x-axis to prevent cutoff
       near_left_edge = .data$base_display_value < dominated_position * 0.15,
       label_hjust = case_when(
-        .data$base_class == "dominated" ~ 1,
-        .data$near_left_edge ~ 0,
+        .data$base_class == "dominated" ~ 1.1,
+        .data$near_left_edge ~ -0.1,
         TRUE ~ 0.5
       ),
-      label_x = case_when(
-        .data$base_class == "dominated" ~ .data$base_display_value - (dominated_position * 0.02),
-        .data$near_left_edge ~ .data$base_display_value,
-        TRUE ~ .data$base_display_value
-      )
+      label_x = .data$base_display_value
     )
-
-  # Create error message data for identical facets
-  # These facets will show only an error message, no bars
-  if (nrow(identical_facets) > 0) {
-    identical_facet_errors <- identical_facets %>%
-      select("strategy", "group", "full_chart_error_msg") %>%
-      mutate(
-        # Position error message in center of facet panel
-        x = dominated_position / 2,
-        y = max_y / 2
-      )
-  } else {
-    identical_facet_errors <- NULL
-  }
 
   # Build the plot
   p <- ggplot()
-
-  # Layer 0: Placeholder for identical facets (ensures facet panels appear)
-  if (!is.null(identical_facet_errors)) {
-    p <- p + geom_blank(
-      data = identical_facet_errors,
-      aes(x = .data$x, y = .data$y)
-    )
-  }
 
   # Layer 1: Standard bars
   if (nrow(standard_bars) > 0) {
@@ -2178,21 +2560,30 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     filter(.data$show_bar, !is.na(.data$label)) %>%
     mutate(
       is_no_impact = abs(.data$display_value - .data$base_display_value) < .Machine$double.eps * 100,
-      natural_goes_right = .data$display_value > .data$base_display_value,
-      natural_goes_left = .data$display_value < .data$base_display_value
+      # Effective direction considers bar_type: arrow always goes right, to_zero always goes left
+      effective_goes_right = case_when(
+        .data$bar_type == "arrow" ~ TRUE,
+        .data$bar_type == "to_zero" ~ FALSE,
+        TRUE ~ .data$display_value > .data$base_display_value
+      ),
+      effective_goes_left = case_when(
+        .data$bar_type == "arrow" ~ FALSE,
+        .data$bar_type == "to_zero" ~ TRUE,
+        TRUE ~ .data$display_value < .data$base_display_value
+      )
     ) %>%
     # Get info about the OTHER variation for each parameter
     group_by(.data$strategy, .data$group, .data$parameter_display_name) %>%
     mutate(
       # For Low variation, check what High does; for High, check what Low does
       other_goes_right = case_when(
-        .data$variation == "Low" ~ any(.data$variation == "High" & .data$natural_goes_right),
-        .data$variation == "High" ~ any(.data$variation == "Low" & .data$natural_goes_right),
+        .data$variation == "Low" ~ any(.data$variation == "High" & .data$effective_goes_right),
+        .data$variation == "High" ~ any(.data$variation == "Low" & .data$effective_goes_right),
         TRUE ~ FALSE
       ),
       other_goes_left = case_when(
-        .data$variation == "Low" ~ any(.data$variation == "High" & .data$natural_goes_left),
-        .data$variation == "High" ~ any(.data$variation == "Low" & .data$natural_goes_left),
+        .data$variation == "Low" ~ any(.data$variation == "High" & .data$effective_goes_left),
+        .data$variation == "High" ~ any(.data$variation == "Low" & .data$effective_goes_left),
         TRUE ~ FALSE
       ),
       other_is_no_impact = case_when(
@@ -2204,9 +2595,12 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     ungroup() %>%
     mutate(
       # Determine label direction with tiebreaker for no-impact bars
+      # Exception: dominated base case - everything goes left (no right side available)
       goes_right = case_when(
-        # Normal case: bar has impact, use actual direction
-        !.data$is_no_impact ~ .data$natural_goes_right,
+        # Dominated base: everything goes left
+        .data$base_class == "dominated" ~ FALSE,
+        # Normal case: bar has impact, use actual effective direction
+        !.data$is_no_impact ~ .data$effective_goes_right,
         # No-impact bar, other has impact going left: this goes right
         .data$is_no_impact & .data$other_goes_left ~ TRUE,
         # No-impact bar, other has impact going right: this goes left
@@ -2215,21 +2609,23 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
         .data$is_no_impact & .data$other_is_no_impact & .data$variation == "High" ~ TRUE,
         .data$is_no_impact & .data$other_is_no_impact & .data$variation == "Low" ~ FALSE,
         # Fallback (shouldn't reach here)
-        TRUE ~ .data$natural_goes_right
+        TRUE ~ .data$effective_goes_right
       ),
       is_arrow = .data$bar_type == "arrow",
       is_to_zero = .data$bar_type == "to_zero",
       label_x = case_when(
-        .data$is_arrow ~ dominated_position - arrow_head_width - x_tick_max * 0.01,
-        .data$is_to_zero ~ .data$xmin + x_tick_max * 0.01,
-        .data$goes_right ~ .data$xmax + x_tick_max * 0.01,
-        TRUE ~ .data$xmin - x_tick_max * 0.01
+        .data$is_arrow ~ dominated_position - arrow_head_width,
+        .data$is_to_zero ~ .data$xmin,
+        .data$goes_right ~ .data$xmax,
+        TRUE ~ .data$xmin
       ),
       label_hjust = case_when(
-        .data$is_arrow ~ 1,
-        .data$is_to_zero ~ 0,
-        .data$goes_right ~ 0,
-        TRUE ~ 1
+        .data$is_arrow ~ 1.1,
+        # to_zero at dominant base: go opposite (left) if other bar goes right
+        .data$is_to_zero & .data$base_class == "dominant" & .data$other_goes_right ~ 1.1,
+        .data$is_to_zero ~ -0.1,
+        .data$goes_right ~ -0.1,
+        TRUE ~ 1.1
       )
     )
 
@@ -2244,63 +2640,64 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
   }
 
   # Layer 7: Error labels for variations that can't display bars
-  # Verbose labels explaining why bar isn't shown, with ICER for direction change
+  # Asterisks already assigned by assign_facet_asterisks()
   error_label_data <- tornado_long %>%
     filter(!.data$show_bar, !is.na(.data$error_type)) %>%
     mutate(
       # Format ICER value for direction change message
       formatted_icer = scales::comma(abs(.data$icer_value_num), accuracy = 1),
+      # Determine if label goes left or right of base line
+      # Low variations go left (hjust 1.1), High go right (hjust -0.1)
+      # Exception: when base is dominated (right edge), both must go left
+      label_goes_left = .data$base_class == "dominated" | .data$variation == "Low",
+      # Single-line error labels with pre-computed asterisks
       error_label = dplyr::case_when(
         .data$error_type == "direction_change" ~
-          paste0("Bar could not be displayed for ", tolower(.data$variation),
-                 " parameter value because\ndirectionality of ICER changed relative to base case.\nICER of ",
-                 .data$formatted_icer, " reflects comparison of ",
-                 if_else(.data$is_flipped_facet,
-                         paste0(.data$intervention_name, " vs. ", .data$comparator_name),
-                         paste0(.data$comparator_name, " vs. ", .data$intervention_name)),
-                 "."),
+          paste0("$", .data$formatted_icer, .data$asterisk),
         .data$error_type == "identical" ~
-          paste0("Bar could not be displayed for ", tolower(.data$variation),
-                 " parameter value because\nICER is undefined when costs and outcomes are identical\nbetween ",
-                 .data$intervention_name, " and ", .data$comparator_name, "."),
+          paste0("Identical", .data$asterisk),
         TRUE ~ NA_character_
       ),
-      # Position: offset from base case line so label outline doesn't overlap
-      # Low variations go left, High go right
-      label_x = if_else(.data$variation == "Low",
-        .data$base_display_value - x_tick_max * 0.02,
-        .data$base_display_value + x_tick_max * 0.02
-      ),
-      label_hjust = if_else(.data$variation == "Low", 1, 0)
+      label_x = .data$base_display_value,
+      label_hjust = if_else(.data$label_goes_left, 1.1, -0.1)
     ) %>%
     filter(!is.na(.data$error_label))
 
   if (nrow(error_label_data) > 0) {
-    p <- p + geom_label(
+    p <- p + geom_text(
       data = error_label_data,
-      aes(x = .data$label_x, y = .data$y_numeric, label = .data$error_label,
+      aes(x = .data$label_x, y = .data$y_adjusted_base, label = .data$error_label,
           hjust = .data$label_hjust),
       vjust = 0.5,
-      size = 2.5,
-      fill = "white",
-      color = "black",
-      label.size = 0.3,
-      label.padding = unit(0.15, "lines")
+      size = 2.5
     )
   }
 
-  # Layer 8: Error message for identical facets
-  if (!is.null(identical_facet_errors)) {
-    p <- p + geom_label(
-      data = identical_facet_errors,
-      aes(x = .data$x, y = .data$y, label = .data$full_chart_error_msg),
-      size = 5,
-      color = "black",
-      fill = "white",
-      label.size = 0.5,
-      label.padding = unit(0.25, "lines"),
-      hjust = 0.5,
-      vjust = 0
+  # Layer 8: Labels for variations matching base status (no bar needed)
+  # When variation matches base (dominant->dominant or dominated->dominated),
+  # show_bar = FALSE but label exists - need to render these labels
+  # Stacking is pre-computed in y_adjusted_base to coordinate with Layer 7
+  same_status_labels <- tornado_long %>%
+    filter(!.data$show_bar, !is.na(.data$label), is.na(.data$error_type)) %>%
+    mutate(
+      # For dominant base case: if other variation has a bar, force label opposite to that bar
+      # This prevents label collision when one bar goes right and one variation is dominant
+      label_goes_left = case_when(
+        .data$base_class == "dominated" ~ TRUE,  # Everything left for dominated base
+        .data$base_class == "dominant" & .data$other_has_bar & !is.na(.data$other_goes_right) ~ .data$other_goes_right,  # If other goes right, this goes left
+        TRUE ~ .data$variation == "Low"  # Default: Low left, High right
+      ),
+      label_x = .data$base_display_value,
+      label_hjust = if_else(.data$label_goes_left, 1.1, -0.1)
+    )
+
+  if (nrow(same_status_labels) > 0) {
+    p <- p + geom_text(
+      data = same_status_labels,
+      aes(x = .data$label_x, y = .data$y_adjusted_base, label = .data$label,
+          hjust = .data$label_hjust),
+      vjust = 0.5,
+      size = 2.5
     )
   }
 
@@ -2330,23 +2727,53 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     p <- p + scale_fill_manual(values = c("Low" = "#F8766D", "High" = "#00BFC4"))
   }
 
-  # Generate footnotes
-  footnotes <- facet_metadata %>%
-    filter(!is.na(.data$footnote_text)) %>%
-    pull(.data$footnote_text) %>%
-    unique()
+  # Layer 9: Per-facet footnotes (single label with all footnotes combined)
+  footnote_data_list <- list()
+  for (i in seq_len(nrow(facet_metadata))) {
+    strat <- facet_metadata$strategy[i]
+    grp <- facet_metadata$group[i]
+    facet_key <- paste(strat, grp, sep = "|||")
 
-  # Add error footnotes if any
-  if (nrow(error_label_data) > 0) {
-    error_footnotes <- tornado_data %>%
-      filter(.data$has_error) %>%
-      pull(.data$combined_error_message) %>%
-      unique() %>%
-      na.omit()
-    footnotes <- c(footnotes, error_footnotes)
+    if (facet_key %in% names(facet_footnotes)) {
+      fn_texts <- facet_footnotes[[facet_key]]
+      if (length(fn_texts) > 0) {
+        # Get max_y for this facet from tornado_long
+        facet_max_y <- tornado_long %>%
+          filter(.data$strategy == strat, .data$group == grp) %>%
+          pull(.data$y_base) %>%
+          max(na.rm = TRUE)
+
+        if (!is.finite(facet_max_y)) facet_max_y <- max_y
+
+        # Combine all footnotes into single string
+        combined_footnotes <- paste(fn_texts, collapse = "\n")
+
+        footnote_data_list[[length(footnote_data_list) + 1]] <- tibble(
+          strategy = strat,
+          group = grp,
+          x = 0,
+          y = facet_max_y + 0.8,  # Position below lowest bar
+          footnote_text = combined_footnotes
+        )
+      }
+    }
   }
 
-  footnote_text <- if (length(footnotes) > 0) paste(footnotes, collapse = "\n") else NULL
+  if (length(footnote_data_list) > 0) {
+    footnote_data <- bind_rows(footnote_data_list)
+    p <- p + geom_label(
+      data = footnote_data,
+      aes(x = .data$x, y = .data$y, label = .data$footnote_text),
+      hjust = 0,
+      vjust = 0,
+      size = 2.2,
+      fontface = "italic",
+      fill = "white",
+      color = "black",
+      linewidth = 0.3,
+      label.padding = unit(0.3, "lines")
+    )
+  }
 
   # Labels
   p <- p +
@@ -2354,13 +2781,13 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       y = NULL,
       x = "ICER",
       fill = "Parameter Value",
-      caption = footnote_text
+      caption = omitted_caption
     ) +
     theme_bw() +
     theme(
       axis.text.y = element_text(size = 8),
       legend.position = "bottom",
-      plot.caption = element_text(hjust = 0, size = 9, face = "italic")
+      plot.caption = element_text(hjust = 0, size = 9, margin = margin(t = 15))
     )
 
   # Add faceting

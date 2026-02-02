@@ -12,7 +12,6 @@ calculate_nmb(
   interventions = NULL,
   comparators = NULL,
   wtp = NULL,
-  discounted = FALSE,
   use_display_names = TRUE,
   return_components = FALSE
 )
@@ -34,9 +33,6 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{wtp}{Optional override for willingness-to-pay value. If NULL, attempts to extract from
 outcome summary metadata. Must be numeric and positive.}
-
-\item{discounted}{Logical. If TRUE, use discounted values. If FALSE (default),
-use undiscounted values}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for entities}
 

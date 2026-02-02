@@ -189,49 +189,48 @@ test_that("psa_scatter_plot() axis limits include origin", {
 # Tests for pairwise_ceac_plot()
 # ============================================================================
 
-test_that("pairwise_ceac_plot() returns ggplot object with comparator", {
+test_that("pairwise_ceac_plot() returns ggplot object with comparators", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   p <- pairwise_ceac_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparators = strategies[1]
   )
   expect_s3_class(p, "ggplot")
 })
 
-test_that("pairwise_ceac_plot() returns ggplot object with intervention", {
+test_that("pairwise_ceac_plot() returns ggplot object with interventions", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   p <- pairwise_ceac_plot(
     results, "total_qalys", "total_cost",
-    intervention = strategies[1]
+    interventions = strategies[1]
   )
   expect_s3_class(p, "ggplot")
 })
 
-test_that("pairwise_ceac_plot() errors when neither comparator nor intervention provided", {
+test_that("pairwise_ceac_plot() errors when neither comparators nor interventions provided", {
   results <- get_cached_psa_results()
 
   expect_error(
     pairwise_ceac_plot(results, "total_qalys", "total_cost"),
-    "comparator.*intervention|intervention.*comparator|must be provided"
+    "comparators.*interventions|interventions.*comparators|must be provided"
   )
 })
 
-test_that("pairwise_ceac_plot() errors when both comparator and intervention provided", {
+test_that("pairwise_ceac_plot() works with both comparators and interventions (N×M)", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
-  expect_error(
-    pairwise_ceac_plot(
-      results, "total_qalys", "total_cost",
-      comparator = strategies[1],
-      intervention = strategies[2]
-    ),
-    "not both|Only one"
+  # When both provided, creates explicit N×M comparisons
+  p <- pairwise_ceac_plot(
+    results, "total_qalys", "total_cost",
+    comparators = strategies[1],
+    interventions = strategies[2]
   )
+  expect_s3_class(p, "ggplot")
 })
 
 test_that("pairwise_ceac_plot() has reference line at y=0.5", {
@@ -240,7 +239,7 @@ test_that("pairwise_ceac_plot() has reference line at y=0.5", {
 
   p <- pairwise_ceac_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparators = strategies[1]
   )
   built <- ggplot_build(p)
 
@@ -365,24 +364,24 @@ test_that("evpi_plot() accepts pre-calculated EVPI data", {
 # Tests for pairwise_psa_scatter_plot()
 # ============================================================================
 
-test_that("pairwise_psa_scatter_plot() returns ggplot object with comparator", {
+test_that("pairwise_psa_scatter_plot() returns ggplot object with comparators", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   p <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparators = strategies[1]
   )
   expect_s3_class(p, "ggplot")
 })
 
-test_that("pairwise_psa_scatter_plot() returns ggplot object with intervention", {
+test_that("pairwise_psa_scatter_plot() returns ggplot object with interventions", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
   p <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    intervention = strategies[1]
+    interventions = strategies[1]
   )
   expect_s3_class(p, "ggplot")
 })
@@ -392,22 +391,21 @@ test_that("pairwise_psa_scatter_plot() errors when neither provided", {
 
   expect_error(
     pairwise_psa_scatter_plot(results, "total_qalys", "total_cost"),
-    "comparator.*intervention|intervention.*comparator|must be provided"
+    "comparators.*interventions|interventions.*comparators|must be provided"
   )
 })
 
-test_that("pairwise_psa_scatter_plot() errors when both provided", {
+test_that("pairwise_psa_scatter_plot() works with both interventions and comparators (N x M)", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
-  expect_error(
-    pairwise_psa_scatter_plot(
-      results, "total_qalys", "total_cost",
-      comparator = strategies[1],
-      intervention = strategies[2]
-    ),
-    "not both|Only one"
+  # Should work when both are provided (N x M mode)
+  p <- pairwise_psa_scatter_plot(
+    results, "total_qalys", "total_cost",
+    comparators = strategies[1],
+    interventions = strategies[2]
   )
+  expect_s3_class(p, "ggplot")
 })
 
 test_that("pairwise_psa_scatter_plot() WTP threshold adds coloring", {
@@ -416,12 +414,12 @@ test_that("pairwise_psa_scatter_plot() WTP threshold adds coloring", {
 
   p_without <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     wtp = NULL
   )
   p_with <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     wtp = 50000
   )
 
@@ -453,7 +451,7 @@ test_that("pairwise_psa_scatter_plot() NMB classification is correct", {
 
   p <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     wtp = wtp_test
   )
   built <- ggplot_build(p)
@@ -486,10 +484,10 @@ test_that("pairwise_psa_scatter_plot() creates facets for multiple comparisons",
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
-  # With comparator mode, should create facet for each other strategy
+  # With comparators mode, should create facet for each other strategy
   p <- pairwise_psa_scatter_plot(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparators = strategies[1]
   )
   built <- ggplot_build(p)
 
@@ -512,53 +510,77 @@ test_that("pairwise_psa_scatter_plot() creates facets for multiple comparisons",
 
 test_that("nmb_density_plot() returns ggplot object", {
   results <- get_cached_psa_results()
-  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = 50000)
+  strategies <- results$metadata$strategies$name
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    comparators = strategies[1]
+  )
   expect_s3_class(p, "ggplot")
 })
 
-test_that("nmb_density_plot() calculates NMB correctly", {
+test_that("nmb_density_plot() calculates incremental NMB correctly", {
   results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
 
   wtp_test <- 50000
-  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = wtp_test)
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = wtp_test,
+    comparators = strategies[1]
+  )
+
   built <- ggplot_build(p)
 
   # Get the density layer data
   density_data <- built$data[[1]]
 
-  # NMB x values should be on expected scale (outcome * wtp - cost)
-  # Just verify we have reasonable x range (NMB can be negative or positive)
+  # Incremental NMB x values should span negative and positive
+  # (or at least have a reasonable range)
   expect_true(min(density_data$x) < max(density_data$x))
 })
 
-test_that("nmb_density_plot() respects strategies filter", {
+test_that("nmb_density_plot() requires interventions or comparators", {
   results <- get_cached_psa_results()
-  strategies <- results$metadata$strategies$display_name
 
-  # Filter to first strategy only
-  p <- nmb_density_plot(
-    results, "total_qalys", "total_cost",
-    wtp = 50000,
-    strategies = strategies[1]
+  # Should error when neither provided
+
+  expect_error(
+    nmb_density_plot(results, "total_qalys", "total_cost", wtp = 50000),
+    "At least one of 'interventions' or 'comparators' must be provided"
   )
-  built <- ggplot_build(p)
-  density_data <- built$data[[1]]
+})
 
-  # Should only have one strategy (one unique fill color)
-  expect_equal(length(unique(density_data$fill)), 1)
+test_that("nmb_density_plot() rejects strategies with interventions/comparators", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  # Should error when both strategies and comparators provided
+  expect_error(
+    nmb_density_plot(
+      results, "total_qalys", "total_cost",
+      wtp = 50000,
+      strategies = strategies[1],
+      comparators = strategies[2]
+    ),
+    "'strategies' parameter cannot be used with 'interventions' or 'comparators'"
+  )
 })
 
 test_that("nmb_density_plot() show_mean adds vertical lines", {
   results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
 
   p_without <- nmb_density_plot(
     results, "total_qalys", "total_cost",
     wtp = 50000,
+    comparators = strategies[1],
     show_mean = FALSE
   )
   p_with <- nmb_density_plot(
     results, "total_qalys", "total_cost",
     wtp = 50000,
+    comparators = strategies[1],
     show_mean = TRUE
   )
 
@@ -571,9 +593,14 @@ test_that("nmb_density_plot() show_mean adds vertical lines", {
 
 test_that("nmb_density_plot() title includes WTP value", {
   results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
 
   wtp_test <- 75000
-  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = wtp_test)
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = wtp_test,
+    comparators = strategies[1]
+  )
 
   # Title should mention the WTP value
   expect_true(grepl("75,000", p$labels$title) || grepl("75000", p$labels$title))
@@ -581,11 +608,13 @@ test_that("nmb_density_plot() title includes WTP value", {
 
 test_that("nmb_density_plot() custom title is applied", {
   results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
 
   custom_title <- "My Custom NMB Plot"
   p <- nmb_density_plot(
     results, "total_qalys", "total_cost",
     wtp = 50000,
+    comparators = strategies[1],
     title = custom_title
   )
 
@@ -594,10 +623,12 @@ test_that("nmb_density_plot() custom title is applied", {
 
 test_that("nmb_density_plot() respects alpha parameter", {
   results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
 
   p <- nmb_density_plot(
     results, "total_qalys", "total_cost",
     wtp = 50000,
+    comparators = strategies[1],
     alpha = 0.7
   )
   built <- ggplot_build(p)
@@ -608,11 +639,277 @@ test_that("nmb_density_plot() respects alpha parameter", {
   expect_equal(unique(density_data$alpha), 0.7)
 })
 
-test_that("nmb_density_plot() x-axis has proper labels", {
+test_that("nmb_density_plot() x-axis has incremental NMB label", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    comparators = strategies[1]
+  )
+
+  # Default x label should be "Incremental Net Monetary Benefit"
+  expect_equal(p$labels$x, "Incremental Net Monetary Benefit")
+})
+
+test_that("nmb_density_plot() includes reference line at zero", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    comparators = strategies[1]
+  )
+  built <- ggplot_build(p)
+
+  # Should have a vline layer at x=0
+  # Layer 2 should be the reference line (after density)
+  vline_data <- built$data[[2]]
+  expect_true(0 %in% vline_data$xintercept)
+})
+
+test_that("nmb_density_plot() creates multiple comparisons with interventions", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  # Use first strategy as intervention, should compare to all others
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    interventions = strategies[1]
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+
+  # Should have comparisons for n-1 strategies
+  n_comparisons <- length(unique(density_data$fill))
+  expect_equal(n_comparisons, length(strategies) - 1)
+})
+
+# ============================================================================
+# Tests for get_psa_outcome_simulations()
+# ============================================================================
+
+test_that("get_psa_outcome_simulations() returns correct columns in absolute mode", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  data <- get_psa_outcome_simulations(
+    results, "total_qalys",
+    strategies = strategies
+  )
+
+  expect_true(tibble::is_tibble(data))
+  expect_true(all(c("simulation", "strategy", "group", "outcome") %in% names(data)))
+  expect_false("comparison" %in% names(data))
+})
+
+test_that("get_psa_outcome_simulations() returns correct columns in difference mode", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  data <- get_psa_outcome_simulations(
+    results, "total_qalys",
+    comparators = strategies[1]
+  )
+
+  expect_true(tibble::is_tibble(data))
+  expect_true(all(c("simulation", "comparison", "group", "outcome") %in% names(data)))
+  expect_false("strategy" %in% names(data))
+})
+
+test_that("get_psa_outcome_simulations() validates mutual exclusivity", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  expect_error(
+    get_psa_outcome_simulations(
+      results, "total_qalys",
+      strategies = strategies[1],
+      comparators = strategies[2]
+    ),
+    "'strategies' parameter cannot be used with 'interventions' or 'comparators'"
+  )
+})
+
+test_that("get_psa_outcome_simulations() requires at least one mode", {
   results <- get_cached_psa_results()
 
-  p <- nmb_density_plot(results, "total_qalys", "total_cost", wtp = 50000)
+  expect_error(
+    get_psa_outcome_simulations(results, "total_qalys"),
+    "Either 'strategies'"
+  )
+})
 
-  # Default x label should be "Net Monetary Benefit"
-  expect_equal(p$labels$x, "Net Monetary Benefit")
+test_that("get_psa_outcome_simulations() calculates differences correctly", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  # Get absolute data for both strategies
+  abs_data <- get_psa_outcome_simulations(
+    results, "total_qalys",
+    strategies = strategies[1:2]
+  )
+
+  # Get difference data
+  diff_data <- get_psa_outcome_simulations(
+    results, "total_qalys",
+    interventions = strategies[2],
+    comparators = strategies[1]
+  )
+
+  # Calculate expected difference manually
+  strat1_outcomes <- abs_data %>%
+    filter(.data$strategy == strategies[1]) %>%
+    arrange(.data$simulation)
+  strat2_outcomes <- abs_data %>%
+    filter(.data$strategy == strategies[2]) %>%
+    arrange(.data$simulation)
+
+  expected_diff <- strat2_outcomes$outcome - strat1_outcomes$outcome
+
+  actual_diff <- diff_data %>%
+    arrange(.data$simulation) %>%
+    pull(.data$outcome)
+
+  expect_equal(actual_diff, expected_diff, tolerance = 1e-10)
+})
+
+# ============================================================================
+# Tests for outcome_density_plot()
+# ============================================================================
+
+test_that("outcome_density_plot() returns ggplot object in absolute mode", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies
+  )
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("outcome_density_plot() returns ggplot object in difference mode", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    comparators = strategies[1]
+  )
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("outcome_density_plot() does NOT include reference line at zero", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    comparators = strategies[1],
+    show_mean = FALSE
+  )
+  built <- ggplot_build(p)
+
+  # Should only have one layer (density) when show_mean is FALSE
+  # No vline at zero should exist
+  expect_equal(length(built$data), 1)
+})
+
+test_that("outcome_density_plot() show_mean adds vertical lines", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p_without <- outcome_density_plot(
+    results, "total_qalys",
+    comparators = strategies[1],
+    show_mean = FALSE
+  )
+  p_with <- outcome_density_plot(
+    results, "total_qalys",
+    comparators = strategies[1],
+    show_mean = TRUE
+  )
+
+  built_without <- ggplot_build(p_without)
+  built_with <- ggplot_build(p_with)
+
+  # With mean lines should have more layers
+  expect_gt(length(built_with$data), length(built_without$data))
+})
+
+test_that("outcome_density_plot() uses delta symbol in difference mode x-label", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    comparators = strategies[1]
+  )
+
+  # X label should contain delta symbol
+
+  expect_true(grepl("\u0394", p$labels$x))
+})
+
+test_that("outcome_density_plot() does not use delta in absolute mode x-label", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies
+  )
+
+  # X label should NOT contain delta symbol
+  expect_false(grepl("\u0394", p$labels$x))
+})
+
+test_that("outcome_density_plot() respects alpha parameter", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies,
+    alpha = 0.7
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+
+  expect_true("alpha" %in% names(density_data))
+  expect_equal(unique(density_data$alpha), 0.7)
+})
+
+test_that("outcome_density_plot() custom title is applied", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  custom_title <- "My Custom Outcome Plot"
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies,
+    title = custom_title
+  )
+
+  expect_equal(p$labels$title, custom_title)
+})
+
+test_that("outcome_density_plot() creates multiple comparisons with interventions", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    interventions = strategies[1]
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+
+  # Should have comparisons for n-1 strategies
+  n_comparisons <- length(unique(density_data$fill))
+  expect_equal(n_comparisons, length(strategies) - 1)
 })

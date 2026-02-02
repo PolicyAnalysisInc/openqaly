@@ -9,8 +9,7 @@ get_psa_simulations(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
-  discounted = FALSE
+  strategies = NULL
 )
 }
 \arguments{
@@ -31,8 +30,6 @@ get_psa_simulations(
 }}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A tibble with columns: simulation, strategy, group, cost, outcome

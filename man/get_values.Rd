@@ -11,7 +11,7 @@ get_values(
   strategies = NULL,
   values = NULL,
   value_type = c("all", "cost", "outcome"),
-  discounted = FALSE,
+  discounted = TRUE,
   cycles = NULL,
   time_unit = c("cycle", "day", "week", "month", "year"),
   use_display_names = TRUE,
@@ -41,7 +41,7 @@ get_values(
 
 \item{value_type}{Filter by value type: "all" (default), "cost", or "outcome"}
 
-\item{discounted}{Logical. If TRUE, use discounted values. If FALSE (default),
+\item{discounted}{Logical. If TRUE (default), use discounted values. If FALSE,
 use undiscounted values}
 
 \item{cycles}{Integer vector of cycles to include (NULL for all)}

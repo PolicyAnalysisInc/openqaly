@@ -33,7 +33,7 @@ prepare_scenario_outcomes_table_data <- function(results,
                                                   interventions = NULL,
                                                   comparators = NULL,
                                                   decimals = 2,
-                                                  discounted = FALSE,
+                                                  discounted = TRUE,
                                                   font_size = 11) {
 
   # Use prepare_scenario_bar_data which handles all the extraction and comparison logic
@@ -233,7 +233,7 @@ scenario_outcomes_table <- function(results,
                                      interventions = NULL,
                                      comparators = NULL,
                                      decimals = 2,
-                                     discounted = FALSE,
+                                     discounted = TRUE,
                                      font_size = 11) {
 
   table_spec <- prepare_scenario_outcomes_table_data(
@@ -306,66 +306,91 @@ prepare_scenario_ce_table_data <- function(results,
     ) %>%
     rename(delta_outcome = "value") %>%
     mutate(
+      # Calculate ICER with special case handling
+      # Match the logic in icer() function for consistency
       icer = case_when(
-        abs(.data$delta_outcome) < .Machine$double.eps ~ NaN,
-        .data$delta_outcome < 0 & .data$delta_cost > 0 ~ Inf,
-        .data$delta_outcome > 0 & .data$delta_cost <= 0 ~ 0,
+        # Identical: no differences at all
+        abs(.data$delta_outcome) < .Machine$double.eps &
+          abs(.data$delta_cost) < .Machine$double.eps ~ NaN,
+        # Dominated (weakly): worse or equal effects at higher or equal cost
+        # with at least one strict detriment
+        (.data$delta_outcome < 0 & .data$delta_cost > 0) |
+          (.data$delta_outcome < 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost > 0) ~ Inf,
+        # Dominant (weakly): better or equal effects at lower or equal cost
+        # with at least one strict improvement
+        (.data$delta_outcome > 0 & .data$delta_cost < 0) |
+          (.data$delta_outcome > 0 & abs(.data$delta_cost) < .Machine$double.eps) |
+          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost < 0) ~ 0,
+        # Normal ICER for remaining cases
         TRUE ~ .data$delta_cost / .data$delta_outcome
       ),
       # Classify for display
-      # SW quadrant: intervention cheaper but worse (delta_cost < 0 AND delta_outcome < 0)
+      # Flipped (SW quadrant): intervention cheaper but worse (delta_cost < 0 AND delta_outcome < 0)
       ce_class = case_when(
-        is.nan(.data$icer) ~ "equivalent",
+        is.nan(.data$icer) ~ "identical",
         is.infinite(.data$icer) & .data$icer > 0 ~ "dominated",
         .data$icer == 0 ~ "dominant",
-        .data$delta_outcome < 0 & .data$delta_cost < 0 ~ "sw_quadrant",
+        .data$delta_outcome < 0 & .data$delta_cost < 0 ~ "flipped",
         TRUE ~ "normal"
       )
     )
 
-  # Determine base case classification for direction change detection
-  base_case_class <- ce_data %>%
-    filter(.data$scenario_name == "Base Case") %>%
-    pull(.data$ce_class) %>%
-    first()
-
-  # Detect direction changes relative to base case
+  # Extract intervention/comparator names from strategy label for footnotes
   ce_data <- ce_data %>%
-    mutate(
-      has_direction_change = case_when(
-        .data$scenario_name == "Base Case" ~ FALSE,
-        # Base is normal/dominated (positive direction) and scenario is sw_quadrant (flipped)
-        base_case_class %in% c("normal", "dominated") & .data$ce_class == "sw_quadrant" ~ TRUE,
-        # Base is sw_quadrant and scenario is normal/dominated
-        base_case_class == "sw_quadrant" & .data$ce_class %in% c("normal", "dominated") ~ TRUE,
-        TRUE ~ FALSE
-      ),
-      icer_display = case_when(
-        is.nan(.data$icer) ~ "Equivalent",
-        is.infinite(.data$icer) & .data$icer > 0 ~ "Dominated",
-        .data$icer == 0 ~ "Dominant",
-        .data$has_direction_change ~ paste0(format(round(abs(.data$icer), decimals), big.mark = ",", scientific = FALSE), "*"),
-        TRUE ~ format(round(.data$icer, decimals), big.mark = ",", scientific = FALSE)
-      )
-    )
-
-  # Extract intervention/comparator names from strategy label and collect footnotes
-  direction_change_footnotes <- ce_data %>%
-    filter(.data$has_direction_change) %>%
     mutate(
       parts = strsplit(as.character(.data$strategy), " vs\\. "),
       intervention_name = sapply(.data$parts, `[`, 1),
-      comparator_name = sapply(.data$parts, `[`, 2),
-      footnote_text = sprintf(
-        "* %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
-        .data$comparator_name, .data$intervention_name,
-        .data$comparator_name, .data$intervention_name
-      )
+      comparator_name = sapply(.data$parts, `[`, 2)
     ) %>%
-    distinct(.data$footnote_text) %>%
-    pull(.data$footnote_text)
+    select(-"parts")
 
-  footnotes <- unique(direction_change_footnotes)
+  # Determine footnote order based on first occurrence in display order
+  # Display order: scenario_id order (Base Case first)
+  special_cases <- ce_data %>%
+    filter(.data$ce_class %in% c("flipped", "identical")) %>%
+    mutate(sort_order = if_else(.data$is_base_case, 0L, as.integer(.data$scenario_id))) %>%
+    arrange(.data$sort_order) %>%
+    pull(.data$ce_class) %>%
+    unique()
+
+  # Assign asterisks: first type gets *, second gets **
+  asterisk_map <- if (length(special_cases) > 0) {
+    stats::setNames(c("*", "**")[seq_along(special_cases)], special_cases)
+  } else {
+    character(0)
+  }
+
+  # Generate display values
+  # Tables: flipped gets asterisk only (no comparison direction text), identical has no asterisk
+  ce_data <- ce_data %>%
+    mutate(
+      icer_display = case_when(
+        .data$ce_class == "identical" ~ "Identical",
+        .data$ce_class == "dominated" ~ "Dominated",
+        .data$ce_class == "dominant" ~ "Dominant",
+        .data$ce_class == "flipped" ~ paste0(
+          scales::comma(round(abs(.data$icer), decimals)),
+          "*"
+        ),
+        TRUE ~ scales::comma(round(.data$icer, decimals))
+      )
+    )
+
+  # Build footnotes - only for flipped ICERs in tables
+  footnotes <- c()
+  if ("flipped" %in% special_cases) {
+    flipped_footnotes <- ce_data %>%
+      filter(.data$ce_class == "flipped") %>%
+      distinct(.data$intervention_name, .data$comparator_name) %>%
+      mutate(
+        footnote = sprintf("* %s is more costly & more effective than %s. ICER represents cost-effectiveness of %s vs. %s.",
+                           .data$comparator_name, .data$intervention_name,
+                           .data$comparator_name, .data$intervention_name)
+      ) %>%
+      pull(.data$footnote)
+    footnotes <- c(footnotes, flipped_footnotes)
+  }
 
   # Get unique strategies and groups
   strategies_display <- unique(ce_data$strategy)
@@ -382,8 +407,8 @@ prepare_scenario_ce_table_data <- function(results,
     result_data <- ce_data %>%
       mutate(
         sort_order = if_else(.data$is_base_case, 0L, as.integer(.data$scenario_id)),
-        delta_cost_fmt = format(round(.data$delta_cost, 2), big.mark = ",", scientific = FALSE),
-        delta_outcome_fmt = format(round(.data$delta_outcome, 4), big.mark = ",", scientific = FALSE)
+        delta_cost_fmt = scales::comma(round(.data$delta_cost, 2), accuracy = 0.01),
+        delta_outcome_fmt = scales::comma(round(.data$delta_outcome, 4), accuracy = 0.0001)
       ) %>%
       arrange(.data$sort_order) %>%
       select("scenario_name", "strategy", "delta_cost_fmt", "delta_outcome_fmt", "icer_display")
@@ -482,8 +507,8 @@ prepare_scenario_ce_table_data <- function(results,
         filter(.data$group == grp) %>%
         mutate(
           sort_order = if_else(.data$is_base_case, 0L, as.integer(.data$scenario_id)),
-          delta_cost_fmt = format(round(.data$delta_cost, 2), big.mark = ",", scientific = FALSE),
-          delta_outcome_fmt = format(round(.data$delta_outcome, 4), big.mark = ",", scientific = FALSE)
+          delta_cost_fmt = scales::comma(round(.data$delta_cost, 2), accuracy = 0.01),
+          delta_outcome_fmt = scales::comma(round(.data$delta_outcome, 4), accuracy = 0.0001)
         ) %>%
         arrange(.data$sort_order) %>%
         select("scenario_name", "strategy", "delta_cost_fmt", "delta_outcome_fmt", "icer_display") %>%
@@ -580,15 +605,16 @@ prepare_scenario_ce_table_data <- function(results,
 #' incremental outcome, and ICER.
 #'
 #' **ICER Cell Formatting:**
-#' - Positive finite: Formatted ICER value
-#' - Negative finite: Formatted value with asterisk (direction change)
+#' - Normal: Formatted ICER value
+#' - Flipped: Formatted value with asterisk and reversed comparison direction
 #' - Dominated (+Inf): "Dominated"
 #' - Dominant (0): "Dominant"
-#' - Equivalent (NaN): "Equivalent"
+#' - Identical (NaN): "Identical" with asterisk
 #'
-#' **Direction Change Handling:**
-#' - Cells showing direction change (SW quadrant) get asterisk
-#' - Footnote explains the asterisk
+#' **Special Case Handling:**
+#' - Flipped ICERs (SW quadrant) show value with asterisk and "(comparator vs. intervention)"
+#' - Identical scenarios show "Identical" with asterisk
+#' - Footnotes explain the asterisks, ordered by first occurrence
 #'
 #' @examples
 #' \dontrun{
@@ -734,7 +760,7 @@ prepare_scenario_nmb_table_data <- function(results,
     for (col in strategies_display) {
       if (is.numeric(result_data[[col]])) {
         rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- format(rounded_vals, big.mark = ",", nsmall = decimals, scientific = FALSE)
+        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
       }
     }
 
@@ -783,7 +809,7 @@ prepare_scenario_nmb_table_data <- function(results,
       for (col in strategies_display) {
         if (is.numeric(grp_data[[col]])) {
           rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- format(rounded_vals, big.mark = ",", nsmall = decimals, scientific = FALSE)
+          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 

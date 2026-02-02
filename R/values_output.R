@@ -100,7 +100,7 @@ map_value_names <- function(names, metadata, field = "name") {
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param values Character vector of value names to include (NULL for all)
 #' @param value_type Filter by value type: "all" (default), "cost", or "outcome"
-#' @param discounted Logical. If TRUE, use discounted values. If FALSE (default),
+#' @param discounted Logical. If TRUE (default), use discounted values. If FALSE,
 #'   use undiscounted values
 #' @param cycles Integer vector of cycles to include (NULL for all)
 #' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
@@ -139,7 +139,7 @@ get_values <- function(results,
                       strategies = NULL,
                       values = NULL,
                       value_type = c("all", "cost", "outcome"),
-                      discounted = FALSE,
+                      discounted = TRUE,
                       cycles = NULL,
                       time_unit = c("cycle", "day", "week", "month", "year"),
                       use_display_names = TRUE,
@@ -552,7 +552,7 @@ get_summaries <- function(results,
                          summaries = NULL,
                          values = NULL,
                          value_type = c("all", "cost", "outcome"),
-                         discounted = FALSE,
+                         discounted = TRUE,
                          use_display_names = TRUE,
                          interventions = NULL,
                          comparators = NULL) {
@@ -773,8 +773,6 @@ get_summaries <- function(results,
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
 #' @param wtp Optional override for willingness-to-pay value. If NULL, attempts to extract from
 #'   outcome summary metadata. Must be numeric and positive.
-#' @param discounted Logical. If TRUE, use discounted values. If FALSE (default),
-#'   use undiscounted values
 #' @param use_display_names Logical. If TRUE (default), use display names for entities
 #' @param return_components Logical. If TRUE, returns breakdown of Outcome Benefit,
 #'   Cost Difference, and Total. If FALSE (default), returns only total NMB.
@@ -823,7 +821,6 @@ calculate_nmb <- function(results,
                           interventions = NULL,
                           comparators = NULL,
                           wtp = NULL,
-                          discounted = FALSE,
                           use_display_names = TRUE,
                           return_components = FALSE) {
 
@@ -832,13 +829,13 @@ calculate_nmb <- function(results,
     stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
-  # Get outcome and cost summaries
+  # Get outcome and cost summaries (always discounted for CE analysis)
   outcome_data <- get_summaries(
     results,
     groups = groups,
     summaries = outcome_summary,
     value_type = "outcome",
-    discounted = discounted,
+    discounted = TRUE,
     use_display_names = use_display_names
   )
 
@@ -847,7 +844,7 @@ calculate_nmb <- function(results,
     groups = groups,
     summaries = cost_summary,
     value_type = "cost",
-    discounted = discounted,
+    discounted = TRUE,
     use_display_names = use_display_names
   )
 

@@ -217,7 +217,7 @@ twsa_vbp_plot <- function(results,
   }
 
   # Create legend title with WTP
-  wtp_formatted <- format(wtp, big.mark = ",")
+  wtp_formatted <- scales::comma(wtp)
   legend_title <- glue("VBP (\u03bb = {wtp_formatted})")
 
   # Render heatmap

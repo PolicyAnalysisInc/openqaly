@@ -23,7 +23,7 @@ prepare_dsa_outcomes_table_data <- function(results,
                                             interventions = NULL,
                                             comparators = NULL,
                                             decimals = 2,
-                                            discounted = FALSE,
+                                            discounted = TRUE,
                                             font_size = 11) {
 
   # Extract DSA summaries
@@ -58,8 +58,6 @@ prepare_dsa_outcomes_table_data <- function(results,
   # Calculate differences if interventions/comparators provided
   differences_created <- FALSE
   if (!is.null(interventions) || !is.null(comparators)) {
-    intervention_strategy <- if (!is.null(interventions)) interventions else comparators
-
     # Pivot to get strategies as columns
     data_wide <- combined_data %>%
       pivot_wider(
@@ -70,54 +68,75 @@ prepare_dsa_outcomes_table_data <- function(results,
 
     # Get all strategies
     all_strategies <- unique(dsa_data$strategy)
-    other_strategies <- setdiff(all_strategies, intervention_strategy)
 
-    # Create comparison labels using display names
-    # intervention_strategy and other_strategies are technical names
-    intervention_mapped <- map_names(intervention_strategy, results$metadata$strategies, "display_name")
-    other_mapped <- map_names(other_strategies, results$metadata$strategies, "display_name")
+    # Determine comparison pairs (N×M pattern)
+    comparison_pairs <- list()
 
-    # Create comparison labels
-    if (!is.null(interventions)) {
-      comparison_labels <- paste0(intervention_mapped, " vs. ", other_mapped)
+    if (!is.null(interventions) && !is.null(comparators)) {
+      # Both provided: N×M explicit comparisons
+      for (int_strat in interventions) {
+        for (comp_strat in comparators) {
+          if (int_strat != comp_strat) {
+            comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+              intervention = int_strat,
+              comparator = comp_strat
+            )
+          }
+        }
+      }
+    } else if (!is.null(interventions)) {
+      # Intervention only: each intervention vs all others
+      for (int_strat in interventions) {
+        other_strategies <- setdiff(all_strategies, int_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = other
+          )
+        }
+      }
     } else {
-      comparison_labels <- paste0(other_mapped, " vs. ", intervention_mapped)
+      # Comparator only: all others vs each comparator
+      for (comp_strat in comparators) {
+        other_strategies <- setdiff(all_strategies, comp_strat)
+        for (other in other_strategies) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = other,
+            comparator = comp_strat
+          )
+        }
+      }
     }
 
-    # Calculate differences
+    # Calculate differences for each comparison pair
     diff_data <- list()
-    for (i in seq_along(other_strategies)) {
-      other <- other_strategies[i]
-      comp_label <- comparison_labels[i]
+    for (pair in comparison_pairs) {
+      int_strat <- pair$intervention
+      comp_strat <- pair$comparator
 
-      low_int_col <- paste0("low_", intervention_strategy)
-      low_other_col <- paste0("low_", other)
-      base_int_col <- paste0("base_", intervention_strategy)
-      base_other_col <- paste0("base_", other)
-      high_int_col <- paste0("high_", intervention_strategy)
-      high_other_col <- paste0("high_", other)
+      # Create comparison label using display names
+      int_mapped <- map_names(int_strat, results$metadata$strategies, "display_name")
+      comp_mapped <- map_names(comp_strat, results$metadata$strategies, "display_name")
+      comp_label <- paste0(int_mapped, " vs. ", comp_mapped)
 
-      if (!is.null(interventions)) {
-        diff_df <- data_wide %>%
-          mutate(
-            strategy = comp_label,
-            low = !!sym(low_int_col) - !!sym(low_other_col),
-            base = !!sym(base_int_col) - !!sym(base_other_col),
-            high = !!sym(high_int_col) - !!sym(high_other_col)
-          ) %>%
-          select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high")
-      } else {
-        diff_df <- data_wide %>%
-          mutate(
-            strategy = comp_label,
-            low = !!sym(low_other_col) - !!sym(low_int_col),
-            base = !!sym(base_other_col) - !!sym(base_int_col),
-            high = !!sym(high_other_col) - !!sym(high_int_col)
-          ) %>%
-          select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high")
-      }
+      # Column names with strategy suffixes
+      low_int_col <- paste0("low_", int_strat)
+      low_comp_col <- paste0("low_", comp_strat)
+      base_int_col <- paste0("base_", int_strat)
+      base_comp_col <- paste0("base_", comp_strat)
+      high_int_col <- paste0("high_", int_strat)
+      high_comp_col <- paste0("high_", comp_strat)
 
-      diff_data[[i]] <- diff_df
+      diff_df <- data_wide %>%
+        mutate(
+          strategy = comp_label,
+          low = !!sym(low_int_col) - !!sym(low_comp_col),
+          base = !!sym(base_int_col) - !!sym(base_comp_col),
+          high = !!sym(high_int_col) - !!sym(high_comp_col)
+        ) %>%
+        select("group", "parameter", "parameter_display_name", "strategy", "low", "base", "high")
+
+      diff_data[[length(diff_data) + 1]] <- diff_df
     }
 
     combined_data <- bind_rows(diff_data)
@@ -181,7 +200,7 @@ prepare_dsa_outcomes_table_data <- function(results,
       if (is.numeric(result_data[[col]])) {
         rounded_vals <- round(result_data[[col]], decimals)
         rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-        result_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE)
+        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
       }
     }
 
@@ -259,7 +278,7 @@ prepare_dsa_outcomes_table_data <- function(results,
         if (is.numeric(grp_data[[col]])) {
           rounded_vals <- round(grp_data[[col]], decimals)
           rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          grp_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE)
+          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 
@@ -381,7 +400,7 @@ dsa_outcomes_table <- function(results,
                                interventions = NULL,
                                comparators = NULL,
                                decimals = 2,
-                               discounted = FALSE,
+                               discounted = TRUE,
                                font_size = 11,
                                table_format = c("flextable", "kable")) {
 
@@ -565,7 +584,7 @@ prepare_dsa_nmb_table_data <- function(results,
       if (is.numeric(result_data[[col]])) {
         rounded_vals <- round(result_data[[col]], decimals)
         rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-        result_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE, big.mark = ",")
+        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
       }
     }
 
@@ -643,7 +662,7 @@ prepare_dsa_nmb_table_data <- function(results,
         if (is.numeric(grp_data[[col]])) {
           rounded_vals <- round(grp_data[[col]], decimals)
           rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          grp_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE, big.mark = ",")
+          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 
@@ -797,40 +816,40 @@ dsa_nmb_table <- function(results,
 # ============================================================================
 
 
-#' Detect Direction Change for CE Table
+#' Check if ICER Has Flipped Directionality
 #'
-#' Internal helper to detect direction change between base case and variation ICER.
-#' Direction change only occurs with finite-to-finite sign changes.
+#' Internal helper to check if an ICER value represents a flipped comparison
+#' (SW quadrant - comparator is more costly & more effective than intervention).
+#' For tables, asterisk should appear when ICER differs from REQUESTED direction,
+#' which is indicated by negative ICER values in our encoding.
 #'
-#' @param base_icer Numeric base case ICER
-#' @param variation_icer Numeric variation ICER
-#' @return Logical TRUE if direction change detected
+#' @param icer_value Numeric ICER value
+#' @return Logical TRUE if ICER is flipped (negative)
 #' @keywords internal
-detect_direction_change <- function(base_icer, variation_icer) {
-  # Skip if either value is special (NaN, Inf, 0, NA)
-  if (is.na(base_icer) || is.na(variation_icer)) return(FALSE)
-  if (is.nan(base_icer) || is.nan(variation_icer)) return(FALSE)
-  if (is.infinite(base_icer) || is.infinite(variation_icer)) return(FALSE)
-  if (base_icer == 0 || variation_icer == 0) return(FALSE)
+is_flipped_icer <- function(icer_value) {
+  # Skip if value is special (NaN, Inf, 0, NA)
+  if (is.na(icer_value)) return(FALSE)
+  if (is.nan(icer_value)) return(FALSE)
+  if (is.infinite(icer_value)) return(FALSE)
+  if (icer_value == 0) return(FALSE)
 
-  # Direction change: positive -> negative OR negative -> positive
-  base_positive <- base_icer > 0
-  variation_positive <- variation_icer > 0
-
-  return(base_positive != variation_positive)
+  # Flipped = negative ICER (SW quadrant)
+  return(icer_value < 0)
 }
 
 
 #' Format CE Table Cell Value
 #'
 #' Internal helper to format ICER values for table cells.
+#' Asterisk is added when the ICER differs from the REQUESTED direction
+#' (i.e., when ICER is negative indicating SW quadrant / flipped comparison).
 #'
 #' @param icer_value Numeric ICER value
-#' @param base_icer Numeric base case ICER (for direction change detection)
 #' @param decimals Number of decimal places
+#' @param add_asterisk Logical whether to add asterisk for flipped ICERs (default TRUE)
 #' @return Formatted string
 #' @keywords internal
-format_ce_cell <- function(icer_value, base_icer, decimals = 0) {
+format_ce_cell <- function(icer_value, decimals = 0, add_asterisk = TRUE) {
   # Check NaN BEFORE NA because is.na(NaN) returns TRUE
   if (is.nan(icer_value)) {
     return("Equivalent")
@@ -846,12 +865,12 @@ format_ce_cell <- function(icer_value, base_icer, decimals = 0) {
   }
 
   # Format finite value
-  formatted <- prettyNum(round(abs(icer_value), decimals),
-                         big.mark = ",",
-                         scientific = FALSE)
+  formatted <- scales::comma(round(abs(icer_value), decimals))
 
-  # Add asterisk if direction change detected OR if value itself is negative
-  if (detect_direction_change(base_icer, icer_value) || icer_value < 0) {
+  # Add asterisk if ICER is flipped (negative = SW quadrant)
+  # This indicates the comparison differs from the user's requested direction
+  # Only add asterisk for parameter VARIATIONS, not base case (per requirements)
+  if (add_asterisk && is_flipped_icer(icer_value)) {
     formatted <- paste0(formatted, "*")
   }
 
@@ -1031,22 +1050,25 @@ prepare_dsa_ce_table_data <- function(results,
     inner_join(high_data, by = c("strategy", "group", "parameter", "parameter_display_name")) %>%
     inner_join(base_data, by = c("strategy", "group"))
 
-  # Format cells and detect direction changes
+  # Format cells and detect flipped ICERs (which need asterisks)
+  # Asterisk appears when ICER differs from REQUESTED direction (negative = SW quadrant)
   ce_data <- ce_data %>%
     rowwise() %>%
     mutate(
-      low_formatted = format_ce_cell(.data$low_icer, .data$base_icer, decimals),
-      base_formatted = format_ce_cell(.data$base_icer, .data$base_icer, decimals),
-      high_formatted = format_ce_cell(.data$high_icer, .data$base_icer, decimals),
-      has_direction_change = detect_direction_change(.data$base_icer, .data$low_icer) ||
-        detect_direction_change(.data$base_icer, .data$high_icer) ||
-        (.data$base_icer < 0 && is.finite(.data$base_icer))
+      low_formatted = format_ce_cell(.data$low_icer, decimals),
+      # Base case never gets asterisk - only parameter VARIATIONS get asterisks (per requirements)
+      base_formatted = format_ce_cell(.data$base_icer, decimals, add_asterisk = FALSE),
+      high_formatted = format_ce_cell(.data$high_icer, decimals),
+      # Track if any VARIATION ICER is flipped (for footnote generation)
+      # Only Low/High variations get asterisks, so only they trigger footnotes
+      has_flipped_icer = is_flipped_icer(.data$low_icer) ||
+        is_flipped_icer(.data$high_icer)
     ) %>%
     ungroup()
 
-  # Collect footnotes for direction changes
+  # Collect footnotes for flipped ICERs
   footnote_data <- ce_data %>%
-    filter(.data$has_direction_change) %>%
+    filter(.data$has_flipped_icer) %>%
     distinct(.data$intervention_name, .data$comparator_name) %>%
     mutate(
       footnote_text = sprintf(

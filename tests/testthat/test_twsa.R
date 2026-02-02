@@ -195,6 +195,57 @@ test_that("multiple TWSA analyses can be defined", {
 })
 
 # ============================================================================
+# Strategy/Group Targeting Validation Tests
+# ============================================================================
+
+test_that("add_twsa_variable errors when group-specific variable used without specifying group", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, group = "young") %>%
+    add_variable("cost", 2000, group = "old") %>%
+    add_twsa("Test")
+
+  expect_error(
+    add_twsa_variable(model, "Test", "cost", type = "range", min = 500, max = 1500, steps = 3),
+    "defined for specific group"
+  )
+
+  # Should work when group is specified
+  model_ok <- add_twsa_variable(model, "Test", "cost", type = "range",
+                                 min = 500, max = 1500, steps = 3, group = "young")
+  expect_equal(model_ok$twsa_analyses[[1]]$parameters[[1]]$group, "young")
+})
+
+test_that("add_twsa_variable errors when strategy-specific variable used without specifying strategy", {
+  model <- define_model("markov") %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_variable("c_treatment", 1000, strategy = "treatment") %>%
+    add_twsa("Test")
+
+  expect_error(
+    add_twsa_variable(model, "Test", "c_treatment", type = "range", min = 500, max = 1500, steps = 3),
+    "defined for specific strategy"
+  )
+
+  # Should work when strategy is specified
+  model_ok <- add_twsa_variable(model, "Test", "c_treatment", type = "range",
+                                 min = 500, max = 1500, steps = 3, strategy = "treatment")
+  expect_equal(model_ok$twsa_analyses[[1]]$parameters[[1]]$strategy, "treatment")
+})
+
+test_that("add_twsa_variable allows non-specific variables without strategy/group", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_twsa("Test")
+
+  # Should work without specifying strategy or group
+  model_ok <- add_twsa_variable(model, "Test", "cost", type = "range",
+                                 min = 500, max = 1500, steps = 3)
+  expect_equal(model_ok$twsa_analyses[[1]]$parameters[[1]]$strategy, "")
+  expect_equal(model_ok$twsa_analyses[[1]]$parameters[[1]]$group, "")
+})
+
+# ============================================================================
 # Range Type Parameter Validation Tests
 # ============================================================================
 
@@ -366,4 +417,58 @@ test_that("print_twsa handles empty model", {
   output <- capture.output(print_twsa(model))
 
   expect_true(any(grepl("No TWSA analyses defined", output)))
+})
+
+# ============================================================================
+# Strategy-Specific Parameter Tests
+# ============================================================================
+
+test_that("build_twsa_segments uses correct bc values for strategy-specific parameters", {
+  # Use example model which has strategy-specific c_treatment
+  # c_treatment is 500 for seritinib, 3000 for volantor, 5000 for cendralimab
+  model_path <- system.file("models", "example_markov", package = "openqaly")
+  if (model_path == "") {
+    model_path <- "inst/models/example_markov"
+  }
+  model <- read_model(model_path)
+
+  # Add TWSA with strategy-specific parameter using bc-relative bounds
+  model <- model |>
+    add_twsa("Cost Sensitivity") |>
+    add_twsa_variable("Cost Sensitivity", "c_treatment",
+                      type = "range", min = bc * 0.5, max = bc * 1.5, steps = 3,
+                      strategy = "volantor") |>
+    add_twsa_variable("Cost Sensitivity", "u_mild",
+                      type = "range", min = 0.7, max = 0.9, steps = 3)
+
+  parsed_model <- parse_model(model)
+  segments <- build_twsa_segments(parsed_model)
+
+  # Filter to non-base-case segments
+  twsa_segs <- segments %>% filter(!is.na(twsa_name))
+
+  # Check volantor segments have correct c_treatment range (bc=3000)
+  volantor_segs <- twsa_segs %>% filter(strategy == "volantor")
+  volantor_x_values <- unique(volantor_segs$x_value)
+
+  # Expected: 1500, 3000, 4500 (bc * 0.5, bc, bc * 1.5 where bc = 3000)
+  expect_true(1500 %in% volantor_x_values)
+  expect_true(3000 %in% volantor_x_values)
+  expect_true(4500 %in% volantor_x_values)
+
+  # Check x_bc_value is correct for volantor
+  expect_equal(unique(volantor_segs$x_bc_value), 3000)
+
+  # Check that volantor segments have c_treatment in parameter_overrides
+  volantor_first <- volantor_segs[1, ]
+  expect_true("c_treatment" %in% names(volantor_first$parameter_overrides[[1]]))
+
+  # Check that seritinib segments do NOT have c_treatment in parameter_overrides
+  # (since c_treatment with strategy="volantor" doesn't apply to seritinib)
+  seritinib_segs <- twsa_segs %>% filter(strategy == "seritinib")
+  seritinib_first <- seritinib_segs[1, ]
+  expect_false("c_treatment" %in% names(seritinib_first$parameter_overrides[[1]]))
+
+  # seritinib should only have u_mild overrides
+  expect_true("u_mild" %in% names(seritinib_first$parameter_overrides[[1]]))
 })

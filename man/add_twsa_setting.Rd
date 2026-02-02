@@ -14,7 +14,8 @@ add_twsa_setting(
   radius = NULL,
   steps = NULL,
   values = NULL,
-  display_name = NULL
+  display_name = NULL,
+  include_base_case = TRUE
 )
 }
 \arguments{
@@ -37,6 +38,10 @@ add_twsa_setting(
 \item{values}{For type="custom": numeric vector of values to use}
 
 \item{display_name}{Optional display name for plots and tables}
+
+\item{include_base_case}{Logical. If TRUE (default), ensures the base case
+value is included in the parameter grid. If the base case value is already
+present in the values, no duplicate is added.}
 }
 \value{
 The modified model object

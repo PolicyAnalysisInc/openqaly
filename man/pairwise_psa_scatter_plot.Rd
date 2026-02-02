@@ -8,8 +8,8 @@ pairwise_psa_scatter_plot(
   results,
   outcome_summary,
   cost_summary,
-  intervention = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   wtp = NULL,
   groups = "overall",
   strategies = NULL,
@@ -21,20 +21,15 @@ pairwise_psa_scatter_plot(
 )
 }
 \arguments{
-\item{results}{A openqaly PSA results object, or pre-calculated CEAC data
-from calculate_incremental_ceac()}
+\item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (required if results is
-a model object)}
+\item{outcome_summary}{Name of the outcome summary}
 
-\item{cost_summary}{Name of the cost summary (required if results is a
-model object)}
+\item{cost_summary}{Name of the cost summary}
 
-\item{intervention}{Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-Mutually exclusive with comparator.}
+\item{interventions}{Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).}
 
-\item{comparator}{Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-Mutually exclusive with intervention.}
+\item{comparators}{Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).}
 
 \item{wtp}{Numeric WTP threshold for cost-effectiveness evaluation. When provided,
 points are colored by cost-effectiveness status and a WTP threshold line is drawn.
@@ -43,8 +38,6 @@ Default is NULL (no coloring or threshold line)}
 \item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
 "all" includes overall + all groups, "all_groups" includes all groups without overall,
 specific group name(s) filter to those groups (triggers faceting by group)}
-
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
 
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 
@@ -71,18 +64,26 @@ This function creates incremental cost-effectiveness planes showing PSA simulati
 results for pairwise comparisons. The comparator is always at the origin (0, 0),
 and each point represents one simulation's incremental cost and outcome.
 
-Both intervention and comparator modes display each comparison in a separate panel.
+\strong{Comparison Modes:}
 
-\strong{Intervention mode} (intervention = 'A'): Each panel shows intervention A
-compared to one other strategy
-- X-axis: Incremental outcome (A - comparator)
-- Y-axis: Incremental cost (A - comparator)
-- Panel labels: "A vs. Strategy B", "A vs. Strategy C", etc.
+When interventions and/or comparators are specified:
+\itemize{
+  \item Both as single values: shows one comparison (intervention - comparator)
+  \item One as vector, other NULL: shows each vs. all others
+  \item Both as vectors (N x M mode): shows all pairwise comparisons (excluding self)
+}
 
-\strong{Comparator mode} (comparator = 'B'): Each panel shows one strategy compared to B
-- X-axis: Incremental outcome (strategy - B)
-- Y-axis: Incremental cost (strategy - B)
-- Panel labels: "Strategy A vs. B", "Strategy C vs. B", etc.
+\strong{Interventions mode} (interventions = c('A', 'B')): Each panel shows an
+intervention compared to other strategies
+- X-axis: Incremental outcome (intervention - comparator)
+- Y-axis: Incremental cost (intervention - comparator)
+- Panel labels: "A vs. Strategy C", "B vs. Strategy C", etc.
+
+\strong{Comparators mode} (comparators = c('C')): Each panel shows one strategy
+compared to the comparator
+- X-axis: Incremental outcome (strategy - comparator)
+- Y-axis: Incremental cost (strategy - comparator)
+- Panel labels: "Strategy A vs. C", "Strategy B vs. C", etc.
 
 \strong{WTP Threshold}: When wtp is provided:
 - Points are colored by cost-effectiveness: green if NMB > 0, red if NMB <= 0
@@ -103,22 +104,28 @@ psa_results <- run_psa(model, n_sim = 1000)
 
 # Comparator perspective: Each strategy vs control in separate panels
 pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-                          comparator = "control")
+                          comparators = "control")
 
 # With WTP threshold showing cost-effectiveness
 pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-                          comparator = "control",
+                          comparators = "control",
                           wtp = 100000)
 
 # Intervention perspective: New treatment vs others
 pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-                          intervention = "new_treatment",
+                          interventions = "new_treatment",
                           wtp = 50000)
 
-# All groups with intervention mode (facet_grid)
+# N x M explicit comparisons
 pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-                          intervention = "new_treatment",
-                          group = NULL,
+                          interventions = c("treatment_a", "treatment_b"),
+                          comparators = "control",
+                          wtp = 100000)
+
+# All groups with multiple comparisons (facet_grid)
+pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
+                          interventions = "new_treatment",
+                          groups = "all",
                           wtp = 100000)
 }
 

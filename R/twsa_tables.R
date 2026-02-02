@@ -37,7 +37,7 @@ prepare_twsa_outcomes_table_data <- function(results,
                                      strategies = NULL,
                                      interventions = NULL,
                                      comparators = NULL,
-                                     discounted = FALSE,
+                                     discounted = TRUE,
                                      decimals = 2,
                                      font_size = 11) {
 
@@ -257,7 +257,7 @@ twsa_outcomes_table <- function(results,
                         strategies = NULL,
                         interventions = NULL,
                         comparators = NULL,
-                        discounted = FALSE,
+                        discounted = TRUE,
                         decimals = 2,
                         font_size = 11,
                         backend = c("flextable", "kable")) {
@@ -307,7 +307,7 @@ twsa_outcomes_table <- function(results,
   for (i in seq_along(x_values)) {
     row2[[i + 1]] <- list(
       span = 1,
-      text = format(x_values[i], big.mark = ",", scientific = FALSE),
+      text = scales::comma(x_values[i]),
       borders = c(0, 0, 1, 1)
     )
   }
@@ -384,7 +384,7 @@ render_twsa_grid_table <- function(prepared, font_size, backend) {
   for (i in seq_along(x_values)) {
     row2[[i + 1]] <- list(
       span = 1,
-      text = format(x_values[i], big.mark = ",", scientific = FALSE),
+      text = scales::comma(x_values[i]),
       borders = c(0, 0, 1, 1)
     )
   }
@@ -504,8 +504,7 @@ prepare_twsa_nmb_table_data <- function(results,
       for (col in x_cols) {
         if (is.numeric(wide_data[[col]])) {
           rounded_vals <- round(wide_data[[col]], decimals)
-          wide_data[[col]] <- format(rounded_vals, nsmall = decimals,
-                                      big.mark = ",", scientific = FALSE, trim = TRUE)
+          wide_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 

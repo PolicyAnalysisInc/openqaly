@@ -8,12 +8,10 @@ calculate_pairwise_ceac(
   results,
   outcome_summary,
   cost_summary,
-  intervention = NULL,
-  comparator = NULL,
+  interventions = NULL,
+  comparators = NULL,
   wtp = seq(0, 1e+05, by = 5000),
-  groups = "overall",
-  strategies = NULL,
-  discounted = FALSE
+  groups = "overall"
 )
 }
 \arguments{
@@ -23,11 +21,9 @@ calculate_pairwise_ceac(
 
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{intervention}{Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-Mutually exclusive with comparator.}
+\item{interventions}{Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).}
 
-\item{comparator}{Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-Mutually exclusive with intervention.}
+\item{comparators}{Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).}
 
 \item{wtp}{Numeric vector of WTP thresholds to evaluate. Default is
 seq(0, 100000, by = 5000)}
@@ -41,10 +37,6 @@ seq(0, 100000, by = 5000)}
   \item \code{"all"} or \code{NULL} - All groups + overall
   \item \code{"all_groups"} - All groups without overall
 }}
-
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
 }
 \value{
 A tibble with columns:

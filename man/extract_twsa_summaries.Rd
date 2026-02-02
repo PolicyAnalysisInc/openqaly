@@ -12,7 +12,7 @@ extract_twsa_summaries(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE
+  discounted = TRUE
 )
 }
 \arguments{

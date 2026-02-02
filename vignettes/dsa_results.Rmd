@@ -612,7 +612,7 @@ The `comparators` parameter controls which comparisons are shown:
 
 By default, the plot shows each individual comparator plus an "All Comparators" aggregate facet:
 
-```{r, fig.width=12, fig.height=5}
+```{r, fig.width=12, fig.height=8}
 dsa_vbp_plot(dsa_vbp_results)
 ```
 
@@ -631,7 +631,7 @@ dsa_vbp_plot(
 
 Use `comparators = "all_comparators"` to show each individual comparator without the aggregate:
 
-```{r, fig.width=10, fig.height=5}
+```{r, fig.width=10, fig.height=8}
 dsa_vbp_plot(
   dsa_vbp_results,
   comparators = "all_comparators"
@@ -673,7 +673,7 @@ dsa_vbp_plot(
 
 #### All comparators by subgroup
 
-```{r, fig.width=16, fig.height=8}
+```{r, fig.width=20, fig.height=12}
 dsa_vbp_plot(
   dsa_vbp_results,
   groups = "all_groups"

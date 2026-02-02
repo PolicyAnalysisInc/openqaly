@@ -17,7 +17,6 @@
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param show_optimal Logical. Highlight optimal strategy at each WTP?
 #' @param decimals Number of decimal places for percentages
 #' @param font_size Font size for rendering
 #'
@@ -29,7 +28,6 @@ prepare_incremental_ceac_table_data <- function(results,
                                                 wtp_thresholds = c(0, 20000, 50000, 100000),
                                                 groups = "overall",
                                                 strategies = NULL,
-                                                show_optimal = TRUE,
                                                 decimals = 1,
                                                 font_size = 11) {
 
@@ -84,16 +82,6 @@ prepare_incremental_ceac_table_data <- function(results,
         values_from = "probability_pct"
       ) %>%
       arrange(.data$wtp)
-  }
-
-  # Identify optimal strategies if requested
-  optimal_strategies <- NULL
-  if (show_optimal) {
-    optimal_strategies <- ceac_data %>%
-      group_by(.data$group, .data$wtp) %>%
-      slice_max(.data$probability, n = 1, with_ties = FALSE) %>%
-      ungroup() %>%
-      select("group", "wtp", "strategy")
   }
 
   # Format WTP column as dollar amounts
@@ -201,46 +189,13 @@ prepare_incremental_ceac_table_data <- function(results,
     column_widths <- c(NA, rep(NA, n_strategies))
   }
 
-  # Identify cells to highlight (optimal strategies)
-  highlighted_cells <- list()
-  if (show_optimal && !is.null(optimal_strategies)) {
-    for (i in seq_len(nrow(optimal_strategies))) {
-      opt <- optimal_strategies[i, ]
-
-      # Find row index (by WTP)
-      row_idx <- which(pivot_data$wtp == opt$wtp)
-
-      if (length(row_idx) > 0) {
-        # Find column index (by group_strategy combination)
-        if (has_multiple_groups) {
-          # Find the strategy column within the group's columns
-          # Column structure: WTP, spacer1, Group1_Strat1, Group1_Strat2, ..., spacer2, Group2_Strat1, ...
-          # Calculate position: 1 (WTP) + group_index * (1 spacer + n_strategies) + strategy_position
-          group_idx <- which(groups_display == opt$group)
-          strat_idx <- which(strategies_display == opt$strategy)
-          if (length(group_idx) > 0 && length(strat_idx) > 0) {
-            col_idx <- 1 + group_idx * (1 + n_strategies) - n_strategies + strat_idx
-            highlighted_cells[[length(highlighted_cells) + 1]] <- c(row_idx, col_idx)
-          }
-        } else {
-          # Simple mode: column position is 1 (WTP) + strategy position
-          strat_idx <- which(strategies_display == opt$strategy)
-          if (length(strat_idx) > 0) {
-            col_idx <- 1 + strat_idx
-            highlighted_cells[[length(highlighted_cells) + 1]] <- c(row_idx, col_idx)
-          }
-        }
-      }
-    }
-  }
-
   # Return clean spec
   create_simple_table_spec(
     headers = headers,
     data = result_cols,
     column_alignments = column_alignments,
     column_widths = column_widths,
-    special_rows = list(highlighted_cells = highlighted_cells),
+    special_rows = list(),
     font_size = font_size,
     font_family = "Helvetica"
   )
@@ -268,7 +223,6 @@ prepare_incremental_ceac_table_data <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param show_optimal Logical. Highlight optimal strategy at each WTP?
 #' @param decimals Number of decimal places for percentages (default: 1)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
@@ -305,7 +259,6 @@ incremental_ceac_table <- function(results,
                                    wtp_thresholds = c(0, 20000, 50000, 100000),
                                    groups = "overall",
                                    strategies = NULL,
-                                   show_optimal = TRUE,
                                    decimals = 1,
                                    font_size = 11,
                                    table_format = c("flextable", "kable")) {
@@ -320,7 +273,6 @@ incremental_ceac_table <- function(results,
     wtp_thresholds = wtp_thresholds,
     groups = groups,
     strategies = strategies,
-    show_optimal = show_optimal,
     decimals = decimals,
     font_size = font_size
   )
@@ -365,14 +317,13 @@ prepare_psa_summary_table_data <- function(results,
                                           cost_decimals = 0,
                                           font_size = 11) {
 
-  # Get PSA simulation data (always use discounted for CE-related summary)
+  # Get PSA simulation data (always uses discounted values for CE-related summary)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = TRUE
+    strategies = strategies
   )
 
   # Calculate summary statistics (expanded to include median, IQR, min, max)
@@ -425,29 +376,33 @@ prepare_psa_summary_table_data <- function(results,
 
   # Formatting helper functions (uses decimal places, not sigfigs)
   format_with_ci <- function(mean_val, lower, upper, decimals, use_comma = FALSE) {
-    big_mark <- if (use_comma) "," else ""
-    paste0(
-      format(round(mean_val, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE),
-      " (",
-      format(round(lower, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE),
-      " - ",
-      format(round(upper, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE),
-      ")"
-    )
+    fmt <- function(v) {
+      if (use_comma) {
+        scales::comma(round(v, decimals), accuracy = 10^(-decimals))
+      } else {
+        format(round(v, decimals), nsmall = decimals, trim = TRUE)
+      }
+    }
+    paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
   }
 
   format_range <- function(min_val, max_val, decimals, use_comma = FALSE) {
-    big_mark <- if (use_comma) "," else ""
-    paste0(
-      format(round(min_val, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE),
-      " - ",
-      format(round(max_val, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE)
-    )
+    fmt <- function(v) {
+      if (use_comma) {
+        scales::comma(round(v, decimals), accuracy = 10^(-decimals))
+      } else {
+        format(round(v, decimals), nsmall = decimals, trim = TRUE)
+      }
+    }
+    paste0(fmt(min_val), " - ", fmt(max_val))
   }
 
   format_numeric <- function(val, decimals, use_comma = FALSE) {
-    big_mark <- if (use_comma) "," else ""
-    format(round(val, decimals), nsmall = decimals, big.mark = big_mark, trim = TRUE)
+    if (use_comma) {
+      scales::comma(round(val, decimals), accuracy = 10^(-decimals))
+    } else {
+      format(round(val, decimals), nsmall = decimals, trim = TRUE)
+    }
   }
 
   # Get unique strategies and groups (preserve order from metadata)
@@ -503,7 +458,7 @@ prepare_psa_summary_table_data <- function(results,
   # Add WTP rows
   for (wtp_val in pce_wtp) {
     wtp_id <- paste0("pce_", wtp_val)
-    wtp_label <- paste0("\u03bb = $", format(wtp_val, big.mark = ",", scientific = FALSE))
+    wtp_label <- paste0("\u03bb = $", scales::comma(wtp_val))
     row_labels_ordered <- c(row_labels_ordered, wtp_id)
     row_labels_display <- c(row_labels_display, wtp_label)
   }
@@ -825,10 +780,8 @@ psa_summary_table <- function(results,
 #' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param intervention Reference strategy for comparison (intervention perspective).
-#'   Mutually exclusive with comparator.
-#' @param comparator Reference strategy for comparison (comparator perspective).
-#'   Mutually exclusive with intervention.
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#' @param comparators Reference strategies for comparison (comparator perspective).
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
 #' @param groups Group selection:
 #'   \itemize{
@@ -839,7 +792,6 @@ psa_summary_table <- function(results,
 #'     \item \code{"all"} or \code{NULL} - All groups + overall
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
-#' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places for percentages
 #' @param font_size Font size for rendering
 #'
@@ -848,11 +800,10 @@ psa_summary_table <- function(results,
 prepare_pairwise_ceac_table_data <- function(results,
                                              outcome_summary,
                                              cost_summary,
-                                             intervention = NULL,
-                                             comparator = NULL,
+                                             interventions = NULL,
+                                             comparators = NULL,
                                              wtp_thresholds = c(0, 20000, 50000, 100000),
                                              groups = "overall",
-                                             strategies = NULL,
                                              decimals = 1,
                                              font_size = 11) {
 
@@ -862,44 +813,18 @@ prepare_pairwise_ceac_table_data <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    intervention = intervention,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     wtp = wtp_thresholds,
-    groups = groups,
-    strategies = strategies
+    groups = groups
   )
 
-  # Determine reference name and label direction
-  reference_name <- unique(ceac_data$comparator)[1]
-  comparison_label <- if (!is.null(comparator)) {
-    paste0("P > ", reference_name)
-  } else {
-    paste0("P(", reference_name, " >)")
-  }
-
   # Get unique comparisons and groups
-  comparisons_display <- unique(ceac_data$strategy)
+  comparisons_display <- unique(ceac_data$comparison)
   groups_display <- unique(ceac_data$group)
 
   # Reorder groups: Overall first, then model definition order
   groups_display <- get_group_order(groups_display, results$metadata)
-
-  # Reorder comparisons according to original strategy order from metadata
-  # Comparisons may have "vs. " prefix in intervention mode
-  if (!is.null(results$metadata$strategies)) {
-    strategy_order <- results$metadata$strategies$display_name
-    # Check if comparisons have "vs. " prefix
-    has_vs_prefix <- any(grepl("^vs\\. ", comparisons_display))
-    if (has_vs_prefix) {
-      # Strip prefix, reorder, add prefix back
-      comparison_strategies <- sub("^vs\\. ", "", comparisons_display)
-      ordered_strategies <- strategy_order[strategy_order %in% comparison_strategies]
-      comparisons_display <- paste0("vs. ", ordered_strategies)
-    } else {
-      # Direct ordering
-      comparisons_display <- strategy_order[strategy_order %in% comparisons_display]
-    }
-  }
 
   n_comparisons <- length(comparisons_display)
   n_groups <- length(groups_display)
@@ -907,19 +832,8 @@ prepare_pairwise_ceac_table_data <- function(results,
   # Determine if we have multiple groups
   has_multiple_groups <- n_groups > 1 || is.null(groups)
 
-  # Build full "X vs. Y" comparison labels for column headers
-  comparison_labels <- character(length(comparisons_display))
-  for (i in seq_along(comparisons_display)) {
-    comp <- comparisons_display[i]
-    if (!is.null(comparator)) {
-      # Comparator mode: strategy vs. comparator
-      comparison_labels[i] <- paste(comp, "vs.", reference_name)
-    } else {
-      # Referent mode: comparator vs. strategy (strip "vs. " prefix)
-      strategy_name <- sub("^vs\\. ", "", comp)
-      comparison_labels[i] <- paste(reference_name, "vs.", strategy_name)
-    }
-  }
+  # Use comparison labels directly (already in "X vs. Y" format)
+  comparison_labels <- comparisons_display
 
   # Pivot to wide format: WTP in rows, comparisons in columns
   if (has_multiple_groups) {
@@ -928,7 +842,7 @@ prepare_pairwise_ceac_table_data <- function(results,
       mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
         id_cols = "wtp",
-        names_from = c("group", "strategy"),
+        names_from = c("group", "comparison"),
         names_sep = "_",
         values_from = "probability_pct"
       ) %>%
@@ -939,7 +853,7 @@ prepare_pairwise_ceac_table_data <- function(results,
       mutate(probability_pct = .data$probability * 100) %>%
       pivot_wider(
         id_cols = "wtp",
-        names_from = "strategy",
+        names_from = "comparison",
         values_from = "probability_pct"
       ) %>%
       arrange(.data$wtp)
@@ -1071,10 +985,10 @@ prepare_pairwise_ceac_table_data <- function(results,
 #' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param intervention Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-#'   Mutually exclusive with comparator.
-#' @param comparator Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-#'   Mutually exclusive with intervention.
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Can be a single strategy or vector of strategies.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Can be a single strategy or vector of strategies.
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns.
 #'   Default is c(0, 20000, 50000, 100000)
 #' @param groups Group selection:
@@ -1086,7 +1000,6 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'     \item \code{"all"} or \code{NULL} - All groups + overall
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
-#' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places for percentages (default: 1)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
@@ -1097,9 +1010,8 @@ prepare_pairwise_ceac_table_data <- function(results,
 #' Pairwise comparisons calculate P(intervention > comparator) for each pair.
 #' The table displays these probabilities at selected WTP thresholds.
 #'
-#' \strong{Intervention mode}: Shows P(intervention > each other strategy)
-#'
-#' \strong{Comparator mode}: Shows P(each other strategy > comparator)
+#' At least one of interventions or comparators must be provided. If both are
+#' provided, N×M explicit comparisons are generated.
 #'
 #' A probability > 50% indicates higher likelihood of being cost-effective
 #' in the comparison.
@@ -1116,15 +1028,15 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'
 #' # Comparator perspective: Compare strategies to control
 #' pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-#'                     comparator = "control")
+#'                     comparators = "control")
 #'
 #' # Intervention perspective: Compare new treatment to others
 #' pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-#'                     intervention = "new_treatment")
+#'                     interventions = "new_treatment")
 #'
 #' # Custom WTP thresholds
 #' pairwise_ceac_table(psa_results, "total_qalys", "total_cost",
-#'                     comparator = "control",
+#'                     comparators = "control",
 #'                     wtp_thresholds = c(0, 30000, 50000, 75000, 100000))
 #' }
 #'
@@ -1132,11 +1044,10 @@ prepare_pairwise_ceac_table_data <- function(results,
 pairwise_ceac_table <- function(results,
                                 outcome_summary,
                                 cost_summary,
-                                intervention = NULL,
-                                comparator = NULL,
+                                interventions = NULL,
+                                comparators = NULL,
                                 wtp_thresholds = c(0, 20000, 50000, 100000),
                                 groups = "overall",
-                                strategies = NULL,
                                 decimals = 1,
                                 font_size = 11,
                                 table_format = c("flextable", "kable")) {
@@ -1148,11 +1059,10 @@ pairwise_ceac_table <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    intervention = intervention,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     wtp_thresholds = wtp_thresholds,
     groups = groups,
-    strategies = strategies,
     decimals = decimals,
     font_size = font_size
   )
@@ -1415,14 +1325,13 @@ prepare_ce_quadrant_table_data <- function(results,
                                            decimals = 1,
                                            font_size = 11) {
 
-  # Get PSA simulation data (always use discounted for CE-related analysis)
+  # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = TRUE
+    strategies = strategies
   )
 
   # Validate comparator exists
@@ -1883,6 +1792,813 @@ psa_parameters_table <- function(results,
     variables = variables,
     group = group,
     strategies = strategies,
+    decimals = decimals,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Prepare PSA Outcomes Table Data
+#'
+#' Internal helper function that prepares PSA outcome simulation statistics
+#' for rendering. Creates a transposed table with strategies/comparisons as
+#' columns and statistics as rows.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param decimals Number of decimal places
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_psa_outcomes_table_data <- function(results,
+                                            outcome_summary,
+                                            groups = "overall",
+                                            strategies = NULL,
+                                            interventions = NULL,
+                                            comparators = NULL,
+                                            discounted = TRUE,
+                                            decimals = 2,
+                                            font_size = 11) {
+
+  # Validate mutual exclusivity
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("Cannot specify 'strategies' together with 'interventions' or 'comparators'. ",
+         "Use either 'strategies' for absolute values, or 'interventions'/'comparators' for differences.")
+  }
+
+  # Default to all strategies if nothing specified
+  if (is.null(strategies) && is.null(interventions) && is.null(comparators)) {
+    # Get all available strategies
+    all_strats <- unique(results$aggregated$strategy)
+    if (!is.null(results$metadata$strategies)) {
+      strategies <- results$metadata$strategies$display_name
+    } else {
+      strategies <- all_strats
+    }
+  }
+
+  # Get PSA outcome simulations using existing helper
+  outcome_data <- get_psa_outcome_simulations(
+    results = results,
+    outcome_summary = outcome_summary,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted
+  )
+
+  # Determine if absolute mode (has 'strategy') or difference mode (has 'comparison')
+  is_difference_mode <- "comparison" %in% names(outcome_data)
+  col_var <- if (is_difference_mode) "comparison" else "strategy"
+
+  # Calculate summary statistics
+  summary_stats <- outcome_data %>%
+    group_by(across(all_of(c(col_var, "group")))) %>%
+    summarize(
+      mean_val = mean(.data$outcome, na.rm = TRUE),
+      sd_val = sd(.data$outcome, na.rm = TRUE),
+      ci_lower = quantile(.data$outcome, 0.025, na.rm = TRUE),
+      ci_upper = quantile(.data$outcome, 0.975, na.rm = TRUE),
+      median_val = median(.data$outcome, na.rm = TRUE),
+      q25 = quantile(.data$outcome, 0.25, na.rm = TRUE),
+      q75 = quantile(.data$outcome, 0.75, na.rm = TRUE),
+      min_val = min(.data$outcome, na.rm = TRUE),
+      max_val = max(.data$outcome, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Get unique column values and groups
+  col_values <- unique(summary_stats[[col_var]])
+  groups_display <- unique(summary_stats$group)
+
+  # Preserve factor levels if present
+  if (is.factor(summary_stats[[col_var]])) {
+    col_values <- levels(summary_stats[[col_var]])
+  }
+  if (is.factor(summary_stats$group)) {
+    groups_display <- levels(summary_stats$group)
+  } else {
+    groups_display <- get_group_order(groups_display, results$metadata)
+  }
+
+  n_cols <- length(col_values)
+  n_groups <- length(groups_display)
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
+
+  # Formatting helper functions
+  format_with_ci <- function(mean_val, lower, upper, decs) {
+    fmt <- function(v) {
+      format(round(v, decs), nsmall = decs, trim = TRUE)
+    }
+    paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
+  }
+
+  format_range <- function(min_val, max_val, decs) {
+    fmt <- function(v) {
+      format(round(v, decs), nsmall = decs, trim = TRUE)
+    }
+    paste0(fmt(min_val), " - ", fmt(max_val))
+  }
+
+  format_numeric <- function(val, decs) {
+    format(round(val, decs), nsmall = decs, trim = TRUE)
+  }
+
+  # Row labels
+  row_labels <- c("Mean (95% CI)", "SD", "Median (IQR)", "Range")
+
+  # Build data for each column value and group
+  row_data_list <- list()
+
+  for (col_val in col_values) {
+    for (grp in groups_display) {
+      stat_row <- summary_stats %>%
+        filter(.data[[col_var]] == col_val, .data$group == grp)
+
+      if (nrow(stat_row) == 0) next
+      stat_row <- stat_row[1, ]
+
+      values_col <- c(
+        format_with_ci(stat_row$mean_val, stat_row$ci_lower,
+                       stat_row$ci_upper, decimals),
+        format_numeric(stat_row$sd_val, decimals),
+        format_with_ci(stat_row$median_val, stat_row$q25,
+                       stat_row$q75, decimals),
+        format_range(stat_row$min_val, stat_row$max_val, decimals)
+      )
+
+      row_data_list[[paste0(col_val, "_", grp)]] <- tibble(
+        row_label = row_labels,
+        col_value = col_val,
+        group = grp,
+        value = values_col
+      )
+    }
+  }
+
+  row_data_long <- bind_rows(row_data_list)
+
+  # Build table structure based on mode
+  if (!has_multiple_groups) {
+    # Single group mode: [Row Label, ColVal1, ColVal2, ...]
+    pivot_data <- row_data_long %>%
+      pivot_wider(
+        names_from = "col_value",
+        values_from = "value",
+        id_cols = "row_label"
+      ) %>%
+      mutate(row_label = factor(.data$row_label, levels = row_labels)) %>%
+      arrange(.data$row_label) %>%
+      mutate(row_label = as.character(.data$row_label))
+
+    # Reorder columns to match col_values order
+    pivot_data <- pivot_data %>%
+      select(" " := "row_label", all_of(as.character(col_values)))
+
+    # Build headers
+    headers <- list()
+    row1 <- list(list(span = 1, text = "", borders = c(1, 0, 1, 0)))
+    for (col_val in col_values) {
+      row1[[length(row1) + 1]] <- list(span = 1, text = as.character(col_val), borders = c(1, 0, 1, 0))
+    }
+    headers[[1]] <- row1
+
+    column_alignments <- c("left", rep("right", n_cols))
+    column_widths <- rep(NA, n_cols + 1)
+
+  } else {
+    # Multiple groups mode: [Row Label, spacer, Group1-Col1, Group1-Col2, spacer, Group2-Col1, ...]
+    result_cols <- data.frame(row_label = row_labels, stringsAsFactors = FALSE)
+    colnames(result_cols) <- " "
+
+    for (i in seq_along(groups_display)) {
+      # Add spacer column
+      spacer_col <- data.frame(rep("", length(row_labels)), stringsAsFactors = FALSE)
+      names(spacer_col) <- paste0("spacer_", i)
+      result_cols <- cbind(result_cols, spacer_col)
+
+      # Add group's column values
+      grp <- groups_display[i]
+      for (col_val in col_values) {
+        col_data <- row_data_long %>%
+          filter(.data$col_value == col_val, .data$group == grp) %>%
+          mutate(row_label = factor(.data$row_label, levels = row_labels)) %>%
+          arrange(.data$row_label) %>%
+          pull(.data$value)
+
+        if (length(col_data) == 0) {
+          col_data <- rep("", length(row_labels))
+        }
+
+        col_df <- data.frame(col_data, stringsAsFactors = FALSE)
+        names(col_df) <- paste0(grp, "_", col_val)
+        result_cols <- cbind(result_cols, col_df)
+      }
+    }
+
+    pivot_data <- as_tibble(result_cols)
+
+    # Build two-level headers
+    headers <- list()
+
+    # Row 1: Group names spanning columns
+    row1 <- list(list(span = 1, text = "", borders = c(1, 0, 1, 0)))
+    for (i in seq_along(groups_display)) {
+      row1[[length(row1) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
+      row1[[length(row1) + 1]] <- list(
+        span = n_cols,
+        text = groups_display[i],
+        borders = c(1, 0, 1, 0)
+      )
+    }
+    headers[[1]] <- row1
+
+    # Row 2: Column value names
+    row2 <- list(list(span = 1, text = "", borders = c(0, 0, 1, 0)))
+    for (i in seq_along(groups_display)) {
+      row2[[length(row2) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
+      for (col_val in col_values) {
+        row2[[length(row2) + 1]] <- list(span = 1, text = as.character(col_val), borders = c(0, 0, 1, 0))
+      }
+    }
+    headers[[2]] <- row2
+
+    # Column alignments and widths
+    column_alignments <- "left"  # Row label column
+    column_widths <- NA
+
+    for (i in seq_along(groups_display)) {
+      column_alignments <- c(column_alignments, "center")  # spacer
+      column_widths <- c(column_widths, 0.2)
+      for (j in seq_len(n_cols)) {
+        column_alignments <- c(column_alignments, "right")
+        column_widths <- c(column_widths, NA)
+      }
+    }
+  }
+
+  # Return clean spec
+  create_simple_table_spec(
+    headers = headers,
+    data = pivot_data,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = list(),
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' PSA Outcomes Table
+#'
+#' Creates a table showing summary statistics for outcome values from PSA
+#' simulations. Displays mean, SD, median (IQR), and range for each strategy
+#' or comparison.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary (e.g., "qalys")
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param strategies Character vector of strategies to include (NULL for all).
+#'   Cannot be used with interventions/comparators.
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. Use for outcome differences. Cannot be used with strategies.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. Use for outcome differences. Cannot be used with strategies.
+#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param decimals Number of decimal places (default: 2)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The table displays summary statistics for each strategy (absolute mode) or
+#' comparison (difference mode). Statistics include:
+#' \itemize{
+#'   \item Mean (95% CI): Mean outcome with 2.5th and 97.5th percentiles
+#'   \item SD: Standard deviation
+#'   \item Median (IQR): Median with interquartile range
+#'   \item Range: Minimum to maximum values
+#' }
+#'
+#' Use \code{strategies} for absolute outcome values per strategy, or
+#' \code{interventions}/\code{comparators} for outcome differences between pairs.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_markov", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # Outcomes table for all strategies
+#' psa_outcomes_table(psa_results, "qalys")
+#'
+#' # Outcome differences relative to comparator
+#' psa_outcomes_table(psa_results, "qalys", comparators = "seritinib")
+#'
+#' # Undiscounted outcomes by group
+#' psa_outcomes_table(psa_results, "qalys", discounted = FALSE, groups = "all_groups")
+#' }
+#'
+#' @export
+psa_outcomes_table <- function(results,
+                               outcome_summary,
+                               groups = "overall",
+                               strategies = NULL,
+                               interventions = NULL,
+                               comparators = NULL,
+                               discounted = TRUE,
+                               decimals = 2,
+                               font_size = 11,
+                               table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_psa_outcomes_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    decimals = decimals,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Prepare PSA NMB Table Data
+#'
+#' Internal helper function that prepares PSA incremental NMB statistics
+#' for rendering. Creates a transposed table with comparisons as columns
+#' and statistics as rows.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param wtp Willingness-to-pay threshold
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param interventions Character vector of reference strategies for intervention perspective
+#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param decimals Number of decimal places
+#' @param font_size Font size for rendering
+#'
+#' @return List with prepared data and metadata for render_table()
+#' @keywords internal
+prepare_psa_nmb_table_data <- function(results,
+                                       outcome_summary,
+                                       cost_summary,
+                                       wtp,
+                                       groups = "overall",
+                                       interventions = NULL,
+                                       comparators = NULL,
+                                       decimals = 0,
+                                       font_size = 11) {
+
+  # Validate interventions/comparators - at least one required
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided. ",
+         "NMB is calculated as differences between strategies.")
+  }
+
+  # Get PSA simulation data (always uses discounted for NMB)
+  psa_data <- get_psa_simulations(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    groups = groups,
+    strategies = NULL  # Get all strategies for comparison
+  )
+
+  # Get all strategies
+  all_strategies <- unique(psa_data$strategy)
+
+  # Helper function to resolve strategy names
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
+      strategy_map <- results$metadata$strategies
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
+      if (length(matched_display) > 0 && !is.na(matched_display[1])) {
+        return(matched_display[1])
+      }
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  # Resolve user-provided interventions/comparators to display names
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  # Determine comparison pairs
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N x M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    # Comparator only: all others vs each comparator
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
+
+  # Calculate incremental NMB for each comparison pair
+  nmb_data_list <- list()
+
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+    comp_label <- paste0(int_strat, " vs. ", comp_strat)
+
+    # Get data for intervention and comparator
+    int_data <- psa_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("simulation", "group", int_cost = "cost", int_outcome = "outcome")
+
+    comp_data <- psa_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("simulation", "group", comp_cost = "cost", comp_outcome = "outcome")
+
+    # Join and calculate incremental NMB
+    pair_data <- int_data %>%
+      inner_join(comp_data, by = c("simulation", "group")) %>%
+      mutate(
+        d_outcome = .data$int_outcome - .data$comp_outcome,
+        d_cost = .data$int_cost - .data$comp_cost,
+        nmb = .data$d_outcome * wtp - .data$d_cost,
+        comparison = comp_label
+      ) %>%
+      select("simulation", "group", "comparison", "nmb")
+
+    nmb_data_list[[length(nmb_data_list) + 1]] <- pair_data
+  }
+
+  nmb_data <- bind_rows(nmb_data_list)
+
+  # Calculate summary statistics
+  summary_stats <- nmb_data %>%
+    group_by(.data$comparison, .data$group) %>%
+    summarize(
+      mean_val = mean(.data$nmb, na.rm = TRUE),
+      sd_val = sd(.data$nmb, na.rm = TRUE),
+      ci_lower = quantile(.data$nmb, 0.025, na.rm = TRUE),
+      ci_upper = quantile(.data$nmb, 0.975, na.rm = TRUE),
+      median_val = median(.data$nmb, na.rm = TRUE),
+      q25 = quantile(.data$nmb, 0.25, na.rm = TRUE),
+      q75 = quantile(.data$nmb, 0.75, na.rm = TRUE),
+      min_val = min(.data$nmb, na.rm = TRUE),
+      max_val = max(.data$nmb, na.rm = TRUE),
+      p_positive = mean(.data$nmb > 0, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Get unique comparisons and groups
+  comparisons_display <- unique(summary_stats$comparison)
+  groups_display <- unique(summary_stats$group)
+
+  # Preserve order from comparison_pairs
+  comparisons_display <- sapply(comparison_pairs, function(p) {
+    paste0(p$intervention, " vs. ", p$comparator)
+  })
+
+  # Apply group ordering
+  groups_display <- get_group_order(groups_display, results$metadata)
+
+  n_comparisons <- length(comparisons_display)
+  n_groups <- length(groups_display)
+  has_multiple_groups <- n_groups > 1 || is.null(groups)
+
+  # Formatting helper functions (with comma formatting for monetary values)
+  format_with_ci <- function(mean_val, lower, upper, decs) {
+    fmt <- function(v) {
+      scales::comma(round(v, decs), accuracy = 10^(-decs))
+    }
+    paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
+  }
+
+  format_range <- function(min_val, max_val, decs) {
+    fmt <- function(v) {
+      scales::comma(round(v, decs), accuracy = 10^(-decs))
+    }
+    paste0(fmt(min_val), " - ", fmt(max_val))
+  }
+
+  format_numeric <- function(val, decs) {
+    scales::comma(round(val, decs), accuracy = 10^(-decs))
+  }
+
+  format_pct <- function(val) {
+    paste0(format(round(val * 100, 1), nsmall = 1), "%")
+  }
+
+  # Row labels
+  row_labels <- c("Mean (95% CI)", "SD", "Median (IQR)", "Range", "P(NMB > 0)")
+
+  # Build data for each comparison and group
+  row_data_list <- list()
+
+  for (comp in comparisons_display) {
+    for (grp in groups_display) {
+      stat_row <- summary_stats %>%
+        filter(.data$comparison == comp, .data$group == grp)
+
+      if (nrow(stat_row) == 0) next
+      stat_row <- stat_row[1, ]
+
+      values_col <- c(
+        format_with_ci(stat_row$mean_val, stat_row$ci_lower,
+                       stat_row$ci_upper, decimals),
+        format_numeric(stat_row$sd_val, decimals),
+        format_with_ci(stat_row$median_val, stat_row$q25,
+                       stat_row$q75, decimals),
+        format_range(stat_row$min_val, stat_row$max_val, decimals),
+        format_pct(stat_row$p_positive)
+      )
+
+      row_data_list[[paste0(comp, "_", grp)]] <- tibble(
+        row_label = row_labels,
+        comparison = comp,
+        group = grp,
+        value = values_col
+      )
+    }
+  }
+
+  row_data_long <- bind_rows(row_data_list)
+
+  # Build table structure based on mode
+  if (!has_multiple_groups) {
+    # Single group mode: [Row Label, Comparison1, Comparison2, ...]
+    pivot_data <- row_data_long %>%
+      pivot_wider(
+        names_from = "comparison",
+        values_from = "value",
+        id_cols = "row_label"
+      ) %>%
+      mutate(row_label = factor(.data$row_label, levels = row_labels)) %>%
+      arrange(.data$row_label) %>%
+      mutate(row_label = as.character(.data$row_label))
+
+    # Reorder columns to match comparisons order
+    pivot_data <- pivot_data %>%
+      select(" " := "row_label", all_of(comparisons_display))
+
+    # Build headers
+    headers <- list()
+    row1 <- list(list(span = 1, text = "", borders = c(1, 0, 1, 0)))
+    for (comp in comparisons_display) {
+      row1[[length(row1) + 1]] <- list(span = 1, text = comp, borders = c(1, 0, 1, 0))
+    }
+    headers[[1]] <- row1
+
+    column_alignments <- c("left", rep("right", n_comparisons))
+    column_widths <- rep(NA, n_comparisons + 1)
+
+  } else {
+    # Multiple groups mode
+    result_cols <- data.frame(row_label = row_labels, stringsAsFactors = FALSE)
+    colnames(result_cols) <- " "
+
+    for (i in seq_along(groups_display)) {
+      # Add spacer column
+      spacer_col <- data.frame(rep("", length(row_labels)), stringsAsFactors = FALSE)
+      names(spacer_col) <- paste0("spacer_", i)
+      result_cols <- cbind(result_cols, spacer_col)
+
+      # Add group's comparison columns
+      grp <- groups_display[i]
+      for (comp in comparisons_display) {
+        comp_data <- row_data_long %>%
+          filter(.data$comparison == comp, .data$group == grp) %>%
+          mutate(row_label = factor(.data$row_label, levels = row_labels)) %>%
+          arrange(.data$row_label) %>%
+          pull(.data$value)
+
+        if (length(comp_data) == 0) {
+          comp_data <- rep("", length(row_labels))
+        }
+
+        col_df <- data.frame(comp_data, stringsAsFactors = FALSE)
+        names(col_df) <- paste0(grp, "_", comp)
+        result_cols <- cbind(result_cols, col_df)
+      }
+    }
+
+    pivot_data <- as_tibble(result_cols)
+
+    # Build two-level headers
+    headers <- list()
+
+    # Row 1: Group names spanning columns
+    row1 <- list(list(span = 1, text = "", borders = c(1, 0, 1, 0)))
+    for (i in seq_along(groups_display)) {
+      row1[[length(row1) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
+      row1[[length(row1) + 1]] <- list(
+        span = n_comparisons,
+        text = groups_display[i],
+        borders = c(1, 0, 1, 0)
+      )
+    }
+    headers[[1]] <- row1
+
+    # Row 2: Comparison names
+    row2 <- list(list(span = 1, text = "", borders = c(0, 0, 1, 0)))
+    for (i in seq_along(groups_display)) {
+      row2[[length(row2) + 1]] <- list(span = 1, text = "", borders = c(0, 0, 0, 0))  # spacer
+      for (comp in comparisons_display) {
+        row2[[length(row2) + 1]] <- list(span = 1, text = comp, borders = c(0, 0, 1, 0))
+      }
+    }
+    headers[[2]] <- row2
+
+    # Column alignments and widths
+    column_alignments <- "left"  # Row label column
+    column_widths <- NA
+
+    for (i in seq_along(groups_display)) {
+      column_alignments <- c(column_alignments, "center")  # spacer
+      column_widths <- c(column_widths, 0.2)
+      for (j in seq_len(n_comparisons)) {
+        column_alignments <- c(column_alignments, "right")
+        column_widths <- c(column_widths, NA)
+      }
+    }
+  }
+
+  # Return clean spec
+  create_simple_table_spec(
+    headers = headers,
+    data = pivot_data,
+    column_alignments = column_alignments,
+    column_widths = column_widths,
+    special_rows = list(),
+    font_size = font_size,
+    font_family = "Helvetica"
+  )
+}
+
+
+#' PSA Incremental NMB Table
+#'
+#' Creates a table showing summary statistics for incremental net monetary
+#' benefit (NMB) from PSA simulations. Displays mean, SD, median (IQR), range,
+#' and probability of positive NMB for each comparison.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary (e.g., "qalys")
+#' @param cost_summary Name of the cost summary (e.g., "costs")
+#' @param wtp Willingness-to-pay threshold for NMB calculation
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. At least one of interventions or comparators required.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. At least one of interventions or comparators required.
+#' @param decimals Number of decimal places (default: 0, appropriate for monetary values)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The table displays summary statistics for incremental NMB for each pairwise
+#' comparison. Statistics include:
+#' \itemize{
+#'   \item Mean (95% CI): Mean incremental NMB with 2.5th and 97.5th percentiles
+#'   \item SD: Standard deviation
+#'   \item Median (IQR): Median with interquartile range
+#'   \item Range: Minimum to maximum values
+#'   \item P(NMB > 0): Probability that incremental NMB is positive (i.e., the
+#'     intervention is cost-effective at the given WTP)
+#' }
+#'
+#' Incremental NMB is calculated as: (outcome_intervention - outcome_comparator) * WTP -
+#' (cost_intervention - cost_comparator). A positive NMB indicates the intervention
+#' is cost-effective at the given WTP threshold.
+#'
+#' NMB calculations always use discounted values as this is a cost-effectiveness measure.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_markov", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # NMB relative to comparator
+#' psa_nmb_table(psa_results, "qalys", "costs", wtp = 50000, comparators = "seritinib")
+#'
+#' # NMB for specific intervention
+#' psa_nmb_table(psa_results, "qalys", "costs", wtp = 100000, interventions = "volantor")
+#'
+#' # NMB by group
+#' psa_nmb_table(psa_results, "qalys", "costs", wtp = 50000,
+#'               comparators = "seritinib", groups = "all_groups")
+#' }
+#'
+#' @export
+psa_nmb_table <- function(results,
+                          outcome_summary,
+                          cost_summary,
+                          wtp,
+                          groups = "overall",
+                          interventions = NULL,
+                          comparators = NULL,
+                          decimals = 0,
+                          font_size = 11,
+                          table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_psa_nmb_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary,
+    wtp = wtp,
+    groups = groups,
+    interventions = interventions,
+    comparators = comparators,
     decimals = decimals,
     font_size = font_size
   )

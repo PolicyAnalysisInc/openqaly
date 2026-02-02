@@ -16,7 +16,8 @@ add_twsa_variable(
   values = NULL,
   strategy = "",
   group = "",
-  display_name = NULL
+  display_name = NULL,
+  include_base_case = TRUE
 )
 }
 \arguments{
@@ -43,6 +44,10 @@ add_twsa_variable(
 \item{group}{Optional group name to limit the variable to specific group}
 
 \item{display_name}{Optional display name for plots and tables}
+
+\item{include_base_case}{Logical. If TRUE (default), ensures the base case
+value is included in the parameter grid. If the base case value is already
+present in the values, no duplicate is added.}
 }
 \value{
 The modified model object

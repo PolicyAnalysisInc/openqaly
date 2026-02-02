@@ -4,12 +4,7 @@
 \alias{extract_psa_summaries}
 \title{Extract PSA Summary Values}
 \usage{
-extract_psa_summaries(
-  source_data,
-  summary_name,
-  value_type,
-  discounted = FALSE
-)
+extract_psa_summaries(source_data, summary_name, value_type, discounted = TRUE)
 }
 \arguments{
 \item{source_data}{PSA results data with simulation column}
@@ -18,7 +13,7 @@ extract_psa_summaries(
 
 \item{value_type}{Type of value: "cost" or "outcome"}
 
-\item{discounted}{Logical. Use discounted values?}
+\item{discounted}{Logical. Use discounted values? Default TRUE.}
 }
 \value{
 A tibble with simulation, strategy, group, and amount columns

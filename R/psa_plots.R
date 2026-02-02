@@ -170,14 +170,13 @@ psa_scatter_plot <- function(results,
                              ylab = NULL,
                              legend_position = "right") {
 
-  # Get PSA simulation data (always use discounted for CE-related analysis)
+  # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = TRUE
+    strategies = strategies
   )
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -286,11 +285,22 @@ psa_scatter_plot <- function(results,
 #' Creates a line plot showing the probability from pairwise comparisons at
 #' different WTP thresholds.
 #'
-#' @inheritParams incremental_ceac_plot
-#' @param intervention Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-#'   Mutually exclusive with comparator.
-#' @param comparator Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-#'   Mutually exclusive with intervention.
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the outcome summary
+#' @param cost_summary Name of the cost summary
+#' @param interventions Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).
+#' @param comparators Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).
+#' @param wtp_range Numeric vector with min and max WTP values for x-axis.
+#'   Default is c(0, 100000)
+#' @param wtp_step Step size for WTP thresholds. Default is 5000
+#' @param groups Group selection: "overall" (default) uses overall/aggregated results,
+#'   "all" includes overall + all groups, "all_groups" includes all groups without overall,
+#'   specific group name(s) filter to those groups (triggers faceting by group)
+#' @param title Plot title. If NULL, auto-generated
+#' @param xlab X-axis label. Default is "Willingness to Pay"
+#' @param ylab Y-axis label. Default is "Probability of Cost-Effectiveness"
+#' @param legend_position Legend position: "bottom" (default), "right", "top",
+#'   "left", or "none"
 #'
 #' @return A ggplot2 object
 #'
@@ -325,16 +335,20 @@ psa_scatter_plot <- function(results,
 pairwise_ceac_plot <- function(results,
                               outcome_summary,
                               cost_summary,
-                              intervention = NULL,
-                              comparator = NULL,
+                              interventions = NULL,
+                              comparators = NULL,
                               wtp_range = c(0, 100000),
                               wtp_step = 5000,
                               groups = "overall",
-                              strategies = NULL,
                               title = NULL,
                               xlab = "Willingness to Pay",
-                              ylab = NULL,
+                              ylab = "Probability of Cost-Effectiveness",
                               legend_position = "bottom") {
+
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
+  }
 
   # Generate WTP sequence
   wtp_seq <- seq(wtp_range[1], wtp_range[2], by = wtp_step)
@@ -344,45 +358,63 @@ pairwise_ceac_plot <- function(results,
     results = results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
-    intervention = intervention,
-    comparator = comparator,
+    interventions = interventions,
+    comparators = comparators,
     wtp = wtp_seq,
-    groups = groups,
-    strategies = strategies
+    groups = groups
   )
 
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(pairwise_data$group), results$metadata)
   pairwise_data <- pairwise_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
-  # Set y-axis label if not provided
-  if (is.null(ylab)) {
-    reference_name <- unique(pairwise_data$comparator)[1]
-    if (!is.null(intervention)) {
-      ylab <- paste0("Probability of Cost-Effectiveness for ", reference_name)
-    } else {
-      ylab <- paste0("Probability of Cost-Effectiveness vs. ", reference_name)
-    }
-  }
-
-  # Create plot
-  p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
-    geom_line(linewidth = 1) +
-    geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
-    scale_y_continuous(limits = c(0, 1), labels = percent) +
-    scale_x_continuous(labels = comma) +
-    theme_bw() +
-    labs(
-      title = title,
-      x = xlab,
-      y = ylab,
-      color = if (!is.null(intervention)) "Comparator" else "Strategy"
-    )
-
-  # Facet if multiple groups
+  # Get counts for adaptive faceting (matching pairwise_ce_plot pattern)
   n_groups <- length(unique(pairwise_data$group))
-  if (n_groups > 1) {
-    p <- p + facet_wrap(~ group, scales = "fixed")
+  n_comparisons <- length(unique(pairwise_data$comparison))
+
+  # Determine plot mode based on number of comparisons
+  if (n_comparisons <= 5) {
+    # Few comparisons: color by comparison, facet by group only
+    p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability, color = .data$comparison)) +
+      geom_line(linewidth = 1) +
+      geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
+      scale_y_continuous(limits = c(0, 1), labels = percent) +
+      scale_x_continuous(labels = comma) +
+      theme_bw() +
+      labs(
+        title = title,
+        x = xlab,
+        y = ylab,
+        color = "Comparison"
+      )
+
+    # Facet by group if multiple groups
+    if (n_groups > 1) {
+      p <- p + facet_wrap(~ group, scales = "fixed")
+    }
+
+  } else {
+    # Many comparisons: facet by comparison (and group if multiple)
+    p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability)) +
+      geom_line(linewidth = 1, color = "blue") +
+      geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
+      scale_y_continuous(limits = c(0, 1), labels = percent) +
+      scale_x_continuous(labels = comma) +
+      theme_bw() +
+      labs(
+        title = title,
+        x = xlab,
+        y = ylab
+      )
+
+    # Add faceting
+    if (n_groups > 1) {
+      # Multi-group: facet_grid with group on rows, comparison on columns
+      p <- p + facet_grid(group ~ comparison, scales = "fixed")
+    } else {
+      # Single group: facet_wrap by comparison
+      p <- p + facet_wrap(~ comparison, scales = "fixed")
+    }
   }
 
   # Set legend position
@@ -698,21 +730,14 @@ evpi_plot <- function(results,
   y_breaks <- breaks_fn(y_range)
   y_limits <- range(y_breaks)
 
-  # Get number of groups for styling decisions
+  # Get number of groups for faceting decisions
   n_groups <- length(unique(evpi_data$group))
 
-  # Create base plot
-  # For multiple groups, color by group; otherwise use default styling
-  if (n_groups > 1) {
-    p <- ggplot(evpi_data, aes(x = .data$wtp, y = .data$evpi, color = .data$group, group = .data$group)) +
-      geom_line(linewidth = 1) +
-      geom_point(size = 2) +
-      labs(color = "Group")
-  } else {
-    p <- ggplot(evpi_data, aes(x = .data$wtp, y = .data$evpi)) +
-      geom_line(linewidth = 1) +
-      geom_point(size = 2)
-  }
+  # Create base plot - use consistent styling regardless of group count
+  # When faceted, each panel shows one line so coloring by group is redundant
+  p <- ggplot(evpi_data, aes(x = .data$wtp, y = .data$evpi, group = .data$group)) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 2)
 
   p <- p +
     scale_y_continuous(
@@ -768,18 +793,26 @@ evpi_plot <- function(results,
 #' results for pairwise comparisons. The comparator is always at the origin (0, 0),
 #' and each point represents one simulation's incremental cost and outcome.
 #'
-#' Both intervention and comparator modes display each comparison in a separate panel.
+#' \strong{Comparison Modes:}
 #'
-#' \strong{Intervention mode} (intervention = 'A'): Each panel shows intervention A
-#' compared to one other strategy
-#' - X-axis: Incremental outcome (A - comparator)
-#' - Y-axis: Incremental cost (A - comparator)
-#' - Panel labels: "A vs. Strategy B", "A vs. Strategy C", etc.
+#' When interventions and/or comparators are specified:
+#' \itemize{
+#'   \item Both as single values: shows one comparison (intervention - comparator)
+#'   \item One as vector, other NULL: shows each vs. all others
+#'   \item Both as vectors (N x M mode): shows all pairwise comparisons (excluding self)
+#' }
 #'
-#' \strong{Comparator mode} (comparator = 'B'): Each panel shows one strategy compared to B
-#' - X-axis: Incremental outcome (strategy - B)
-#' - Y-axis: Incremental cost (strategy - B)
-#' - Panel labels: "Strategy A vs. B", "Strategy C vs. B", etc.
+#' \strong{Interventions mode} (interventions = c('A', 'B')): Each panel shows an
+#' intervention compared to other strategies
+#' - X-axis: Incremental outcome (intervention - comparator)
+#' - Y-axis: Incremental cost (intervention - comparator)
+#' - Panel labels: "A vs. Strategy C", "B vs. Strategy C", etc.
+#'
+#' \strong{Comparators mode} (comparators = c('C')): Each panel shows one strategy
+#' compared to the comparator
+#' - X-axis: Incremental outcome (strategy - comparator)
+#' - Y-axis: Incremental cost (strategy - comparator)
+#' - Panel labels: "Strategy A vs. C", "Strategy B vs. C", etc.
 #'
 #' \strong{WTP Threshold}: When wtp is provided:
 #' - Points are colored by cost-effectiveness: green if NMB > 0, red if NMB <= 0
@@ -800,22 +833,28 @@ evpi_plot <- function(results,
 #'
 #' # Comparator perspective: Each strategy vs control in separate panels
 #' pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-#'                           comparator = "control")
+#'                           comparators = "control")
 #'
 #' # With WTP threshold showing cost-effectiveness
 #' pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-#'                           comparator = "control",
+#'                           comparators = "control",
 #'                           wtp = 100000)
 #'
 #' # Intervention perspective: New treatment vs others
 #' pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-#'                           intervention = "new_treatment",
+#'                           interventions = "new_treatment",
 #'                           wtp = 50000)
 #'
-#' # All groups with intervention mode (facet_grid)
+#' # N x M explicit comparisons
 #' pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
-#'                           intervention = "new_treatment",
-#'                           group = NULL,
+#'                           interventions = c("treatment_a", "treatment_b"),
+#'                           comparators = "control",
+#'                           wtp = 100000)
+#'
+#' # All groups with multiple comparisons (facet_grid)
+#' pairwise_psa_scatter_plot(psa_results, "total_qalys", "total_cost",
+#'                           interventions = "new_treatment",
+#'                           groups = "all",
 #'                           wtp = 100000)
 #' }
 #'
@@ -823,8 +862,8 @@ evpi_plot <- function(results,
 pairwise_psa_scatter_plot <- function(results,
                                       outcome_summary,
                                       cost_summary,
-                                      intervention = NULL,
-                                      comparator = NULL,
+                                      interventions = NULL,
+                                      comparators = NULL,
                                       wtp = NULL,
                                       groups = "overall",
                                       strategies = NULL,
@@ -835,123 +874,139 @@ pairwise_psa_scatter_plot <- function(results,
                                       legend_position = "right") {
 
   # 1. Parameter Validation
-  if (is.null(intervention) && is.null(comparator)) {
-    stop("One of 'intervention' or 'comparator' must be provided")
-  }
-  if (!is.null(intervention) && !is.null(comparator)) {
-    stop("Only one of 'intervention' or 'comparator' should be provided, not both")
+  # Validate strategies is mutually exclusive with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
+         "Use interventions/comparators vectors to specify exact comparisons.")
   }
 
-  # Determine which strategy is fixed and the comparison mode
-  fixed_strategy <- if (!is.null(comparator)) comparator else intervention
-  use_intervention <- !is.null(intervention)
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
+  }
 
   # 2. Data Preparation
-  # Get PSA simulation data (always use discounted for CE-related analysis)
+  # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = TRUE
+    strategies = strategies
   )
 
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(psa_data$group), results$metadata)
   psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
-  # Check fixed strategy exists
+  # Get all strategies from data (already has display names)
   all_strategies <- unique(psa_data$strategy)
 
-  # Try to find fixed strategy by matching against display names
-  if (!fixed_strategy %in% all_strategies) {
-    # If not found, try mapping technical name to display name
+  # Helper function to resolve strategy names (technical -> display if needed)
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    # Try mapping technical name to display name
     if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
-      # Try mapping: technical name -> display name
       strategy_map <- results$metadata$strategies
-      matched_display <- strategy_map$display_name[strategy_map$name == fixed_strategy]
-
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
       if (length(matched_display) > 0 && !is.na(matched_display[1])) {
-        fixed_strategy <- matched_display[1]
-      } else {
-        stop(sprintf("Fixed strategy '%s' not found in results", fixed_strategy))
+        return(matched_display[1])
       }
-    } else {
-      stop(sprintf("Fixed strategy '%s' not found in results", fixed_strategy))
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  # Resolve user-provided interventions/comparators to display names
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  # 3. Determine comparison pairs
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N x M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    # Comparator only: all others vs each comparator
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
     }
   }
 
-  # Get unique groups and other strategies
-  groups <- unique(psa_data$group)
-  all_strategies <- unique(psa_data$strategy)
-  other_strategies <- setdiff(all_strategies, fixed_strategy)
+  # 4. Calculate incremental values for each comparison pair
+  incremental_data_list <- list()
 
-  if (length(other_strategies) == 0) {
-    stop("No other strategies to compare")
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    # Create comparison label
+    comp_label <- paste0(int_strat, " vs. ", comp_strat)
+
+    # Get data for intervention and comparator
+    int_data <- psa_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("simulation", "group", int_outcome = "outcome", int_cost = "cost")
+
+    comp_data <- psa_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("simulation", "group", comp_outcome = "outcome", comp_cost = "cost")
+
+    # Join and calculate incremental values
+    pair_data <- int_data %>%
+      inner_join(comp_data, by = c("simulation", "group")) %>%
+      mutate(
+        doutcome = .data$int_outcome - .data$comp_outcome,
+        dcost = .data$int_cost - .data$comp_cost,
+        comparison = comp_label
+      ) %>%
+      select("simulation", "group", "comparison", "doutcome", "dcost")
+
+    incremental_data_list[[length(incremental_data_list) + 1]] <- pair_data
   }
 
-  # Create grid of all (simulation, group, other_strategy) combinations
-  comparison_grid <- expand.grid(
-    simulation = unique(psa_data$simulation),
-    group = groups,
-    other_strategy = other_strategies,
-    KEEP.OUT.ATTRS = FALSE,
-    stringsAsFactors = FALSE
-  )
+  # Combine all comparison data
+  incremental_data <- bind_rows(incremental_data_list)
 
-  # Join with fixed strategy data
-  fixed_data <- psa_data %>%
-    filter(.data$strategy == fixed_strategy) %>%
-    select("simulation", "group", cost_fixed = "cost", outcome_fixed = "outcome")
-
-  comparison_data <- comparison_grid %>%
-    left_join(fixed_data, by = c("simulation", "group"))
-
-  # Join with other strategies data
-  other_data <- psa_data %>%
-    filter(.data$strategy != fixed_strategy) %>%
-    select("simulation", "group", "strategy", cost_other = "cost", outcome_other = "outcome")
-
-  comparison_data <- comparison_data %>%
-    left_join(other_data, by = c("simulation", "group", "other_strategy" = "strategy"))
-
-  # Calculate incremental values based on mode
-  if (use_intervention) {
-    # Intervention mode: intervention - comparator (fixed - other)
-    incremental_data <- comparison_data %>%
-      mutate(
-        doutcome = .data$outcome_fixed - .data$outcome_other,
-        dcost = .data$cost_fixed - .data$cost_other,
-        strategy = .data$other_strategy
-      )
-  } else {
-    # Comparator mode: intervention - comparator (other - fixed)
-    incremental_data <- comparison_data %>%
-      mutate(
-        doutcome = .data$outcome_other - .data$outcome_fixed,
-        dcost = .data$cost_other - .data$cost_fixed,
-        strategy = .data$other_strategy
-      )
-  }
-
+  # Preserve comparison order as factor
+  comparison_order <- unique(incremental_data$comparison)
   incremental_data <- incremental_data %>%
-    select("simulation", "group", "strategy", "doutcome", "dcost")
-
-  # Strategy and group names are already display names from get_psa_simulations
-  # Store fixed strategy for labeling
-  fixed_strategy_display <- fixed_strategy
-
-  # 3. Create comparison labels for both modes
-  if (use_intervention) {
-    # Intervention mode: "Intervention vs. Strategy"
-    incremental_data <- incremental_data %>%
-      mutate(comparison = paste(fixed_strategy_display, "vs.", .data$strategy))
-  } else {
-    # Comparator mode: "Strategy vs. Comparator"
-    incremental_data <- incremental_data %>%
-      mutate(comparison = paste(.data$strategy, "vs.", fixed_strategy_display))
-  }
+    mutate(comparison = factor(.data$comparison, levels = comparison_order))
 
   # 4. Calculate cost-effectiveness if wtp provided
   if (!is.null(wtp)) {
@@ -1068,15 +1123,19 @@ pairwise_psa_scatter_plot <- function(results,
 }
 
 
-#' Net Monetary Benefit Density Plot
+#' Incremental Net Monetary Benefit Density Plot
 #'
-#' Creates a density plot showing the distribution of Net Monetary Benefit (NMB)
-#' by strategy at a given willingness-to-pay threshold.
+#' Creates a density plot showing the distribution of incremental Net Monetary
+#' Benefit (NMB) relative to a comparator at a given willingness-to-pay threshold.
 #'
 #' @param results A openqaly PSA results object
 #' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary (e.g., "total_cost")
 #' @param wtp Willingness-to-pay threshold for NMB calculation
+#' @param interventions Character vector of intervention strategy name(s).
+#'   Can be combined with comparators for N x M comparisons.
+#' @param comparators Character vector of comparator strategy name(s).
+#'   Can be combined with interventions for N x M comparisons.
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (aggregated, default)
@@ -1086,8 +1145,9 @@ pairwise_psa_scatter_plot <- function(results,
 #'     \item \code{"all"} or \code{NULL} - All groups + overall
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
-#' @param strategies Character vector of strategies to include (NULL for all)
-#' @param show_mean Logical. Show vertical lines at mean NMB per strategy?
+#' @param strategies Character vector of strategies to include (NULL for all).
+#'   Mutually exclusive with interventions/comparators.
+#' @param show_mean Logical. Show vertical lines at mean incremental NMB per comparison?
 #' @param alpha Transparency for density fill (default: 0.4)
 #' @param title Optional plot title
 #' @param xlab Optional x-axis label
@@ -1096,13 +1156,25 @@ pairwise_psa_scatter_plot <- function(results,
 #' @return A ggplot object
 #'
 #' @details
-#' Net Monetary Benefit is calculated as:
-#' \deqn{NMB = \lambda \times Outcomes - Costs}
+#' Incremental Net Monetary Benefit is calculated as:
+#' \deqn{\Delta NMB = \lambda \times \Delta Outcomes - \Delta Costs}
 #'
-#' where \eqn{\lambda} is the willingness-to-pay threshold. Higher NMB indicates
-#' better value. The density plot shows the full distribution of NMB values
-#' across all PSA simulations, providing insight into the uncertainty around
-#' each strategy's value.
+#' where \eqn{\lambda} is the willingness-to-pay threshold and \eqn{\Delta}
+#' represents the difference between intervention and comparator. Positive
+#' incremental NMB indicates the intervention is cost-effective at the given
+#' WTP threshold.
+#'
+#' **Comparison Modes:**
+#'
+#' When interventions and/or comparators are specified:
+#' \itemize{
+#'   \item Both as single values: shows one comparison (intervention - comparator)
+#'   \item One as vector, other NULL: shows each vs. all others
+#'   \item Both as vectors (N x M mode): shows all pairwise comparisons (excluding self)
+#' }
+#'
+#' A vertical dashed line at x = 0 indicates the threshold for cost-effectiveness:
+#' positive values indicate the intervention is cost-effective.
 #'
 #' NMB calculations always use discounted values as this is a cost-effectiveness measure.
 #'
@@ -1111,12 +1183,13 @@ pairwise_psa_scatter_plot <- function(results,
 #' model <- read_model(system.file("models/example_psm", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
-#' # NMB density at WTP = $50,000
-#' nmb_density_plot(psa_results, "total_qalys", "total_cost", wtp = 50000)
-#'
-#' # With custom styling
+#' # Incremental NMB density relative to a comparator
 #' nmb_density_plot(psa_results, "total_qalys", "total_cost",
-#'                  wtp = 100000, show_mean = TRUE, alpha = 0.5)
+#'                  wtp = 50000, comparators = "control")
+#'
+#' # Intervention perspective
+#' nmb_density_plot(psa_results, "total_qalys", "total_cost",
+#'                  wtp = 100000, interventions = "new_treatment", show_mean = TRUE)
 #' }
 #'
 #' @export
@@ -1124,6 +1197,8 @@ nmb_density_plot <- function(results,
                              outcome_summary,
                              cost_summary,
                              wtp,
+                             interventions = NULL,
+                             comparators = NULL,
                              groups = "overall",
                              strategies = NULL,
                              show_mean = TRUE,
@@ -1132,37 +1207,165 @@ nmb_density_plot <- function(results,
                              xlab = NULL,
                              legend_position = "right") {
 
-  # Get PSA simulation data (always use discounted for NMB - cost-effectiveness measure)
+  # Validate that strategies is mutually exclusive with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
+         "Use interventions/comparators vectors to specify exact comparisons.")
+  }
+
+  # Require at least one of interventions or comparators
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided. ",
+         "NMB is a comparative measure and requires a reference strategy.")
+  }
+
+  # Get PSA simulation data (always uses discounted values for NMB - cost-effectiveness measure)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = TRUE
+    strategies = strategies
   )
 
   # Apply consistent group ordering (Overall first, then model order)
   group_levels <- get_group_order(unique(psa_data$group), results$metadata)
   psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
 
-  # Calculate NMB for each simulation
-  psa_data <- psa_data %>%
-    mutate(nmb = .data$outcome * wtp - .data$cost)
+  # Get all strategies from data (already has display names)
+  all_strategies <- unique(psa_data$strategy)
+
+  # Helper function to resolve strategy names (technical -> display if needed)
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    # Try mapping technical name to display name
+    if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
+      strategy_map <- results$metadata$strategies
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
+      if (length(matched_display) > 0 && !is.na(matched_display[1])) {
+        return(matched_display[1])
+      }
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  # Resolve user-provided interventions/comparators to display names
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  # Determine comparison pairs
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N x M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    # Comparator only: all others vs each comparator
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
+
+  # Calculate incremental NMB for each comparison pair
+  incremental_data_list <- list()
+
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    # Create comparison label (strategies are already display names)
+    comp_label <- paste0(int_strat, " vs. ", comp_strat)
+
+    # Get data for intervention and comparator
+    int_data <- psa_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("simulation", "group", int_outcome = "outcome", int_cost = "cost")
+
+    comp_data <- psa_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("simulation", "group", comp_outcome = "outcome", comp_cost = "cost")
+
+    # Join and calculate incremental NMB
+    pair_data <- int_data %>%
+      inner_join(comp_data, by = c("simulation", "group")) %>%
+      mutate(
+        delta_outcome = .data$int_outcome - .data$comp_outcome,
+        delta_cost = .data$int_cost - .data$comp_cost,
+        nmb = .data$delta_outcome * wtp - .data$delta_cost,
+        strategy = comp_label
+      ) %>%
+      select("simulation", "group", "strategy", "nmb")
+
+    incremental_data_list[[length(incremental_data_list) + 1]] <- pair_data
+  }
+
+  # Combine all comparison data
+  plot_data <- bind_rows(incremental_data_list)
+
+  # Preserve comparison order as factor
+  strategy_order <- unique(plot_data$strategy)
+  plot_data <- plot_data %>%
+    mutate(strategy = factor(.data$strategy, levels = strategy_order))
+
+  # Map group display names
+  if (!is.null(results$metadata) && !is.null(results$metadata$groups)) {
+    plot_data$group <- map_names(as.character(plot_data$group),
+                                  results$metadata$groups, "display_name")
+    # Reapply group factor with correct order
+    group_levels_mapped <- map_names(group_levels, results$metadata$groups, "display_name")
+    plot_data <- plot_data %>%
+      mutate(group = factor(.data$group, levels = group_levels_mapped))
+  }
 
   # Set default x-axis label if not provided
   if (is.null(xlab)) {
-    xlab <- "Net Monetary Benefit"
+    xlab <- "Incremental Net Monetary Benefit"
   }
 
   # Set default title if not provided
   if (is.null(title)) {
-    title <- paste0("NMB Distribution at WTP = ", dollar(wtp))
+    title <- paste0("Incremental NMB Distribution at WTP = ", dollar(wtp))
   }
 
   # Create density plot
-  p <- ggplot(psa_data, aes(x = .data$nmb, fill = .data$strategy, color = .data$strategy)) +
+  p <- ggplot(plot_data, aes(x = .data$nmb, fill = .data$strategy, color = .data$strategy)) +
     geom_density(alpha = alpha) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
     scale_x_continuous(labels = comma) +
     scale_y_continuous(labels = number) +
     theme_bw() +
@@ -1170,13 +1373,13 @@ nmb_density_plot <- function(results,
       title = title,
       x = xlab,
       y = "Density",
-      fill = "Strategy",
-      color = "Strategy"
+      fill = "Comparison",
+      color = "Comparison"
     )
 
   # Add mean lines if requested
   if (show_mean) {
-    mean_data <- psa_data %>%
+    mean_data <- plot_data %>%
       group_by(.data$strategy, .data$group) %>%
       summarize(
         mean_nmb = mean(.data$nmb, na.rm = TRUE),
@@ -1193,10 +1396,160 @@ nmb_density_plot <- function(results,
       )
   }
 
-  # Facet if multiple groups
-  n_groups <- length(unique(psa_data$group))
-  if (n_groups > 1) {
-    p <- p + facet_wrap(~ group, scales = "free_y")
+  # Faceting based on number of groups and comparisons
+  n_groups <- length(unique(plot_data$group))
+  n_strategies <- length(unique(plot_data$strategy))
+
+  if (n_groups > 1 && n_strategies > 1) {
+    p <- p + facet_wrap(vars(.data$strategy, .data$group), ncol = n_groups, scales = "free_y")
+  } else if (n_groups > 1) {
+    p <- p + facet_wrap(vars(.data$group), scales = "free_y")
+  } else if (n_strategies > 1) {
+    p <- p + facet_wrap(vars(.data$strategy), scales = "free_y")
+  }
+
+  # Set legend position
+  if (legend_position != "default") {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  p
+}
+
+
+#' Outcome Density Plot
+#'
+#' Creates a density plot of outcome values from PSA simulations. Can display
+#' either absolute outcome distributions per strategy or distributions of
+#' outcome differences between intervention/comparator pairs.
+#'
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome_summary Name of the outcome summary to plot (e.g., "total_qalys")
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param groups Which groups to include. Options: "overall" (default), "all",
+#'   "all_groups", or a character vector of specific group names.
+#' @param strategies Character vector of strategies to include. For absolute outcome
+#'   values. Cannot be used with \code{interventions} or \code{comparators}.
+#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param show_mean Logical. Add vertical dashed lines at means? Default TRUE.
+#' @param alpha Numeric. Transparency level for density fill (0-1). Default 0.4.
+#' @param title Character. Plot title. If NULL (default), auto-generated.
+#' @param xlab Character. X-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "right".
+#'
+#' @return A ggplot object
+#'
+#' @export
+outcome_density_plot <- function(results,
+                                 outcome_summary,
+                                 interventions = NULL,
+                                 comparators = NULL,
+                                 groups = "overall",
+                                 strategies = NULL,
+                                 discounted = TRUE,
+                                 show_mean = TRUE,
+                                 alpha = 0.4,
+                                 title = NULL,
+                                 xlab = NULL,
+                                 legend_position = "right") {
+
+  # Get data from getter (handles all validation and data retrieval)
+  plot_data <- get_psa_outcome_simulations(
+    results,
+    outcome_summary = outcome_summary,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted
+  )
+
+  # Determine if absolute or difference mode
+  is_difference_mode <- !is.null(interventions) || !is.null(comparators)
+
+  # Get outcome display name for labels
+  outcome_label <- outcome_summary
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    summary_meta <- results$metadata$summaries %>%
+      filter(.data$name == outcome_summary)
+    if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
+      outcome_label <- summary_meta$display_name[1]
+    }
+  }
+
+  # Set default x-axis label
+  if (is.null(xlab)) {
+    if (is_difference_mode) {
+      xlab <- paste0("\u0394 ", outcome_label)
+    } else {
+      xlab <- outcome_label
+    }
+  }
+
+  # Set default title
+  if (is.null(title)) {
+    if (is_difference_mode) {
+      title <- paste0("Incremental ", outcome_label, " Distribution")
+    } else {
+      title <- paste0(outcome_label, " Distribution")
+    }
+  }
+
+  # Determine column and legend labels based on mode
+  if (is_difference_mode) {
+    fill_col <- "comparison"
+    legend_label <- "Comparison"
+  } else {
+    fill_col <- "strategy"
+    legend_label <- "Strategy"
+  }
+
+  # Create density plot (NO geom_vline at 0)
+  p <- ggplot(plot_data, aes(x = .data$outcome, fill = .data[[fill_col]], color = .data[[fill_col]])) +
+    geom_density(alpha = alpha) +
+    scale_x_continuous(labels = number) +
+    scale_y_continuous(labels = number) +
+    theme_bw() +
+    labs(
+      title = title,
+      x = xlab,
+      y = "Density",
+      fill = legend_label,
+      color = legend_label
+    )
+
+  # Add mean lines if requested
+  if (show_mean) {
+    mean_data <- plot_data %>%
+      group_by(.data[[fill_col]], .data$group) %>%
+      summarize(
+        mean_outcome = mean(.data$outcome, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    p <- p +
+      geom_vline(
+        data = mean_data,
+        aes(xintercept = .data$mean_outcome, color = .data[[fill_col]]),
+        linetype = "dashed",
+        linewidth = 0.8,
+        show.legend = FALSE
+      )
+  }
+
+  # Faceting based on number of groups and strategies/comparisons
+  n_groups <- length(unique(plot_data$group))
+  n_strategies <- length(unique(plot_data[[fill_col]]))
+
+  if (n_groups > 1 && n_strategies > 1) {
+    p <- p + facet_wrap(vars(.data[[fill_col]], .data$group), ncol = n_groups, scales = "free_y")
+  } else if (n_groups > 1) {
+    p <- p + facet_wrap(vars(.data$group), scales = "free_y")
+  } else if (n_strategies > 1) {
+    p <- p + facet_wrap(vars(.data[[fill_col]]), scales = "free_y")
   }
 
   # Set legend position

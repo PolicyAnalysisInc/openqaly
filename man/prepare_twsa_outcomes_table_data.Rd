@@ -12,7 +12,7 @@ prepare_twsa_outcomes_table_data(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE,
+  discounted = TRUE,
   decimals = 2,
   font_size = 11
 )

@@ -435,3 +435,183 @@ test_that("Variable display names validation - edge cases", {
 
   expect_no_error(openqaly:::check_tbl(na_vars, spec, "Variables"))
 })
+
+# PSA Sampling Validation Tests
+
+test_that("add_variable with sampling errors when strategy-specific variable defined without strategy", {
+  model <- define_model("markov") %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_variable("c_treatment", 1000, strategy = "treatment")
+
+  # Adding another definition with sampling but without strategy should error
+  expect_error(
+    add_variable(model, "c_treatment", 1500, sampling = normal(1500, 100)),
+    "already has strategy-specific definitions"
+  )
+
+  # Should work when strategy is specified
+  model_ok <- add_variable(model, "c_treatment", 1500, strategy = "treatment",
+                            sampling = normal(1500, 100))
+  expect_true(grepl("normal", model_ok$variables$sampling[2]))
+})
+
+test_that("add_variable with sampling errors when group-specific variable defined without group", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, group = "young") %>%
+    add_variable("cost", 2000, group = "old")
+
+  # Adding another definition with sampling but without group should error
+  expect_error(
+    add_variable(model, "cost", 1500, sampling = normal(1500, 100)),
+    "already has group-specific definitions"
+  )
+
+  # Should work when group is specified
+  model_ok <- add_variable(model, "cost", 1500, group = "young",
+                            sampling = normal(1500, 100))
+  expect_true(grepl("normal", model_ok$variables$sampling[3]))
+})
+
+test_that("add_variable with sampling allows non-specific variables", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000)
+
+  # Adding sampling to a non-strategy/group-specific variable should work
+  model_ok <- add_variable(model, "cost", 1500, sampling = normal(1500, 100))
+  expect_equal(nrow(model_ok$variables), 2)
+  expect_true(grepl("normal", model_ok$variables$sampling[2]))
+})
+
+# =============================================================================
+# Custom PSM Builder Tests
+# =============================================================================
+
+test_that("define_model accepts custom_psm type", {
+  expect_no_error(define_model("custom_psm"))
+  model <- define_model("custom_psm")
+  expect_equal(model$settings$model_type, "custom_psm")
+})
+
+test_that("custom_psm model initializes with correct structure", {
+  model <- define_model("custom_psm")
+
+  # States should have 3 columns (same as PSM)
+  expect_equal(ncol(model$states), 3)
+  expect_true(all(c("name", "display_name", "description") %in% colnames(model$states)))
+
+ # Transitions should have 2 columns (state, formula)
+  expect_equal(ncol(model$transitions), 2)
+  expect_true(all(c("state", "formula") %in% colnames(model$transitions)))
+})
+
+test_that("add_state works for custom_psm", {
+  model <- define_model("custom_psm") |>
+    add_state("alive") |>
+    add_state("dead")
+
+  expect_equal(nrow(model$states), 2)
+  expect_equal(ncol(model$states), 3)
+  expect_equal(model$states$name, c("alive", "dead"))
+})
+
+test_that("add_state rejects Markov parameters for custom_psm", {
+  model <- define_model("custom_psm")
+
+  expect_error(
+    add_state(model, "alive", initial_prob = 1),
+    "initial_prob"
+  )
+  expect_error(
+    add_state(model, "alive", state_group = "group1"),
+    "state_group"
+  )
+})
+
+test_that("add_custom_psm_transition creates correct structure", {
+  model <- define_model("custom_psm") |>
+    add_state("alive") |>
+    add_state("dead") |>
+    add_custom_psm_transition("alive", 0.9) |>
+    add_custom_psm_transition("dead", C)
+
+  expect_equal(nrow(model$transitions), 2)
+  expect_true(all(c("state", "formula") %in% colnames(model$transitions)))
+  expect_equal(model$transitions$state, c("alive", "dead"))
+  expect_equal(model$transitions$formula, c("0.9", "C"))
+})
+
+test_that("add_custom_psm_transition captures expressions", {
+  model <- define_model("custom_psm") |>
+    add_state("alive") |>
+    add_state("dead") |>
+    add_custom_psm_transition("alive", surv_prob(pfs_dist, month))
+
+  expect_equal(model$transitions$formula[1], "surv_prob(pfs_dist, month)")
+})
+
+test_that("add_custom_psm_transition rejects non-custom_psm models", {
+  model_markov <- define_model("markov")
+  expect_error(
+    add_custom_psm_transition(model_markov, "state1", 0.5),
+    "Custom PSM models"
+  )
+
+  model_psm <- define_model("psm")
+  expect_error(
+    add_custom_psm_transition(model_psm, "state1", 0.5),
+    "Custom PSM models"
+  )
+})
+
+test_that("add_transition rejects custom_psm models", {
+  model <- define_model("custom_psm")
+  expect_error(
+    add_transition(model, "from", "to", 0.5),
+    "Custom PSM"
+  )
+})
+
+test_that("add_value rejects transitional values for custom_psm", {
+  model <- define_model("custom_psm") |>
+    add_state("alive") |>
+    add_state("dead")
+
+  # Transitional values (both state and destination) should be rejected
+  expect_error(
+    add_value(model, "cost", 100, state = "alive", destination = "dead", type = "cost"),
+    "transitional values"
+  )
+
+  # Residency values (state only) should work
+  expect_no_error(
+    add_value(model, "cost", 100, state = "alive", type = "cost")
+  )
+
+  # Model-level values should work
+  expect_no_error(
+    add_value(model, "admin", 50, type = "cost")
+  )
+})
+
+test_that("custom_psm model runs end-to-end via builder", {
+  model <- define_model("custom_psm") |>
+    set_settings(
+      timeframe = 10,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_state("alive") |>
+    add_state("dead") |>
+    add_strategy("default") |>
+    add_group("patients") |>
+    add_custom_psm_transition("alive", 0.8) |>
+    add_custom_psm_transition("dead", C) |>
+    add_value("qalys", 1, state = "alive", type = "outcome") |>
+    add_summary("total_qalys", "qalys", type = "outcome")
+
+  results <- run_model(model)
+  expect_true(!is.null(results$aggregated))
+  expect_true(!is.null(results$aggregated$collapsed_trace))
+})

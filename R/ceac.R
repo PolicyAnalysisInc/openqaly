@@ -20,7 +20,6 @@
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A tibble with columns:
 #'   \item{wtp}{Willingness-to-pay threshold}
@@ -64,8 +63,7 @@ calculate_incremental_ceac <- function(results,
                                        cost_summary,
                                        wtp = seq(0, 100000, by = 5000),
                                        groups = "overall",
-                                       strategies = NULL,
-                                       discounted = FALSE) {
+                                       strategies = NULL) {
 
   # Check if results have PSA simulations
   if (!"simulation" %in% names(results$aggregated) &&
@@ -74,14 +72,13 @@ calculate_incremental_ceac <- function(results,
                "Use run_psa() instead of run_model()."))
   }
 
-  # Extract PSA simulation data
+  # Extract PSA simulation data (always discounted for CE analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = discounted
+    strategies = strategies
   )
 
   # Get unique groups and strategies
@@ -167,8 +164,7 @@ get_psa_simulations <- function(results,
                                outcome_summary,
                                cost_summary,
                                groups = "overall",
-                               strategies = NULL,
-                               discounted = FALSE) {
+                               strategies = NULL) {
 
   # Determine source data based on groups selection
   # Handle special values: "overall", "all", "all_groups", NULL
@@ -236,21 +232,19 @@ get_psa_simulations <- function(results,
     stop("No simulation data found. Ensure model was run with run_psa().")
   }
 
-  # Extract cost summaries
+  # Extract cost summaries (always discounted for CE analysis)
   cost_data <- extract_psa_summaries(
     source_data,
     summary_name = cost_summary,
-    value_type = "cost",
-    discounted = discounted
+    value_type = "cost"
   ) %>%
     rename(cost = "amount")
 
-  # Extract outcome summaries
+  # Extract outcome summaries (always discounted for CE analysis)
   outcome_data <- extract_psa_summaries(
     source_data,
     summary_name = outcome_summary,
-    value_type = "outcome",
-    discounted = discounted
+    value_type = "outcome"
   ) %>%
     rename(outcome = "amount")
 
@@ -277,6 +271,254 @@ get_psa_simulations <- function(results,
 }
 
 
+#' Get PSA Outcome Simulations
+#'
+#' Extract simulation-level outcome data from PSA results for density plots.
+#' Supports both absolute mode (raw outcomes per strategy) and difference mode
+#' (outcome differences between intervention/comparator pairs).
+#'
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome_summary Name of the outcome summary to extract (e.g., "total_qalys")
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param groups Which groups to include. Options: "overall" (default), "all",
+#'   "all_groups", or a character vector of specific group names.
+#' @param strategies Character vector of strategies to include. For absolute outcome
+#'   values. Cannot be used with \code{interventions} or \code{comparators}.
+#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#'
+#' @return A tibble with columns:
+#'   \itemize{
+#'     \item \code{simulation}: simulation index
+#'     \item \code{strategy} (absolute mode) or \code{comparison} (difference mode): strategy/comparison label
+#'     \item \code{group}: group name
+#'     \item \code{outcome}: outcome value (raw or difference)
+#'   }
+#'
+#' @export
+get_psa_outcome_simulations <- function(results,
+                                        outcome_summary,
+                                        interventions = NULL,
+                                        comparators = NULL,
+                                        groups = "overall",
+                                        strategies = NULL,
+                                        discounted = TRUE) {
+
+  # Validate mutual exclusivity of strategies vs interventions/comparators
+
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
+         "Use strategies for absolute values or interventions/comparators for differences.")
+  }
+
+  # Require at least one mode to be specified
+  if (is.null(strategies) && is.null(interventions) && is.null(comparators)) {
+    stop("Either 'strategies' (for absolute values) or at least one of ",
+         "'interventions'/'comparators' (for differences) must be provided.")
+  }
+
+  # Determine source data based on groups selection (same logic as get_psa_simulations)
+  if (!is.null(groups) && length(groups) == 1 && groups %in% c("aggregated", "overall")) {
+    source_data <- results$aggregated
+    if (!"group" %in% names(source_data) || all(source_data$group == "_aggregated")) {
+      source_data <- source_data %>% mutate(group = "Overall")
+    }
+  } else if (is.null(groups) || (length(groups) == 1 && groups == "all")) {
+    source_data <- bind_rows(
+      results$aggregated %>% mutate(group = "Overall"),
+      results$segments
+    )
+  } else if (length(groups) == 1 && groups == "all_groups") {
+    source_data <- results$segments
+  } else {
+    has_overall <- "overall" %in% tolower(groups)
+    specific_groups <- groups[!tolower(groups) %in% c("overall", "aggregated")]
+
+    source_data <- NULL
+
+    if (has_overall) {
+      overall_data <- results$aggregated
+      if (!"group" %in% names(overall_data)) {
+        overall_data <- overall_data %>% mutate(group = "Overall")
+      }
+      source_data <- overall_data
+    }
+
+    if (length(specific_groups) > 0) {
+      for (g in specific_groups) {
+        check_group_exists(g, results)
+      }
+      if (!is.null(results$segments) && nrow(results$segments) > 0) {
+        segment_data <- results$segments %>%
+          filter(.data$group %in% specific_groups)
+        source_data <- if (is.null(source_data)) segment_data else bind_rows(source_data, segment_data)
+      } else if (!has_overall) {
+        stop(sprintf("No segment data available for groups: %s", paste(specific_groups, collapse = ", ")))
+      }
+    }
+
+    if (is.null(source_data) || nrow(source_data) == 0) {
+      stop("No data found for specified groups")
+    }
+  }
+
+  # Check for simulation column
+  if (!"simulation" %in% names(source_data)) {
+    stop("No simulation data found. Ensure model was run with run_psa().")
+  }
+
+  # Extract outcome summaries
+  outcome_data <- extract_psa_summaries(
+    source_data,
+    summary_name = outcome_summary,
+    value_type = "outcome",
+    discounted = discounted
+  ) %>%
+    rename(outcome = "amount")
+
+  # Map display names if metadata available
+  if (!is.null(results$metadata)) {
+    if (!is.null(results$metadata$strategies)) {
+      outcome_data$strategy <- map_names(outcome_data$strategy,
+                                         results$metadata$strategies,
+                                         "display_name")
+    }
+    if (!is.null(results$metadata$groups)) {
+      outcome_data$group <- map_names(outcome_data$group,
+                                      results$metadata$groups,
+                                      "display_name")
+    }
+  }
+
+  # Apply consistent group ordering
+  group_levels <- get_group_order(unique(outcome_data$group), results$metadata)
+  outcome_data <- outcome_data %>% mutate(group = factor(.data$group, levels = group_levels))
+
+  # Get all strategies (already display names)
+  all_strategies <- unique(outcome_data$strategy)
+
+  # Helper function to resolve strategy names (technical -> display if needed)
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
+      strategy_map <- results$metadata$strategies
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
+      if (length(matched_display) > 0 && !is.na(matched_display[1])) {
+        return(matched_display[1])
+      }
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  # ABSOLUTE MODE: Return raw outcomes per strategy
+  if (!is.null(strategies)) {
+    # Resolve and filter strategies
+    resolved_strategies <- sapply(strategies, resolve_strategy, USE.NAMES = FALSE)
+    psa_data <- outcome_data %>%
+      filter(.data$strategy %in% resolved_strategies) %>%
+      mutate(strategy = factor(.data$strategy, levels = resolved_strategies))
+
+    return(psa_data)
+  }
+
+  # DIFFERENCE MODE: Calculate pairwise outcome differences
+  # Resolve user-provided interventions/comparators to display names
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  # Determine comparison pairs
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N x M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Intervention only: each intervention vs all others
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    # Comparator only: all others vs each comparator
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
+
+  # Calculate outcome differences for each comparison pair
+  diff_data_list <- list()
+
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    # Create comparison label
+    comp_label <- paste0(int_strat, " vs. ", comp_strat)
+
+    # Get data for intervention and comparator
+    int_data <- outcome_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("simulation", "group", int_outcome = "outcome")
+
+    comp_data <- outcome_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("simulation", "group", comp_outcome = "outcome")
+
+    # Join and calculate outcome difference
+    pair_data <- int_data %>%
+      inner_join(comp_data, by = c("simulation", "group")) %>%
+      mutate(
+        outcome = .data$int_outcome - .data$comp_outcome,
+        comparison = comp_label
+      ) %>%
+      select("simulation", "group", "comparison", "outcome")
+
+    diff_data_list[[length(diff_data_list) + 1]] <- pair_data
+  }
+
+  # Combine all comparison data
+  plot_data <- bind_rows(diff_data_list)
+
+  # Preserve comparison order as factor
+  comparison_order <- unique(plot_data$comparison)
+  plot_data <- plot_data %>%
+    mutate(comparison = factor(.data$comparison, levels = comparison_order))
+
+  plot_data
+}
+
+
 #' Extract PSA Summary Values
 #'
 #' Helper function to extract summary values from PSA simulation data.
@@ -284,7 +526,7 @@ get_psa_simulations <- function(results,
 #' @param source_data PSA results data with simulation column
 #' @param summary_name Name of the summary to extract
 #' @param value_type Type of value: "cost" or "outcome"
-#' @param discounted Logical. Use discounted values?
+#' @param discounted Logical. Use discounted values? Default TRUE.
 #'
 #' @return A tibble with simulation, strategy, group, and amount columns
 #'
@@ -292,7 +534,7 @@ get_psa_simulations <- function(results,
 extract_psa_summaries <- function(source_data,
                                  summary_name,
                                  value_type,
-                                 discounted = FALSE) {
+                                 discounted = TRUE) {
 
   # Determine which column to use
   summary_col <- if (discounted) "summaries_discounted" else "summaries"
@@ -333,11 +575,22 @@ extract_psa_summaries <- function(source_data,
 #' Calculates the probability that one strategy is more cost-effective than
 #' another at different WTP thresholds.
 #'
-#' @inheritParams calculate_incremental_ceac
-#' @param intervention Reference strategy for comparison (intervention perspective: A vs. B, A vs. C).
-#'   Mutually exclusive with comparator.
-#' @param comparator Reference strategy for comparison (comparator perspective: B vs. A, C vs. A).
-#'   Mutually exclusive with intervention.
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
+#' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
+#' @param interventions Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).
+#' @param comparators Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).
+#' @param wtp Numeric vector of WTP thresholds to evaluate. Default is
+#'   seq(0, 100000, by = 5000)
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
 #'
 #' @return A tibble with columns:
 #'   \item{wtp}{Willingness-to-pay threshold}
@@ -383,129 +636,147 @@ extract_psa_summaries <- function(source_data,
 calculate_pairwise_ceac <- function(results,
                                    outcome_summary,
                                    cost_summary,
-                                   intervention = NULL,
-                                   comparator = NULL,
+                                   interventions = NULL,
+                                   comparators = NULL,
                                    wtp = seq(0, 100000, by = 5000),
-                                   groups = "overall",
-                                   strategies = NULL,
-                                   discounted = FALSE) {
+                                   groups = "overall") {
 
-  # Validate that exactly one of intervention or comparator is provided
-  if (is.null(intervention) && is.null(comparator)) {
-    stop("One of 'intervention' or 'comparator' must be provided")
-  }
-  if (!is.null(intervention) && !is.null(comparator)) {
-    stop("Only one of 'intervention' or 'comparator' should be provided, not both")
+  # Validate that at least one of interventions or comparators is provided
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
-  # Determine which strategy is fixed and the comparison mode
-  fixed_strategy <- if (!is.null(comparator)) comparator else intervention
-  use_intervention <- !is.null(intervention)
-
-  # Get PSA simulation data
+  # Get PSA simulation data (always discounted for CE analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = discounted
+    strategies = NULL
   )
 
-  # Check fixed strategy exists
+  # Get all strategies in the data
   all_strategies <- unique(psa_data$strategy)
 
-  # Try to find fixed strategy by matching against display names
-  if (!fixed_strategy %in% all_strategies) {
-    # If not found, try mapping technical name to display name
+ # Helper function to resolve strategy names (technical -> display if needed)
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    # Try mapping technical name to display name
     if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
-      # Try mapping: technical name -> display name
       strategy_map <- results$metadata$strategies
-      matched_display <- strategy_map$display_name[strategy_map$name == fixed_strategy]
-
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
       if (length(matched_display) > 0 && !is.na(matched_display[1])) {
-        fixed_strategy <- matched_display[1]
-      } else {
-        stop(sprintf("Fixed strategy '%s' not found in results", fixed_strategy))
+        return(matched_display[1])
       }
-    } else {
-      stop(sprintf("Fixed strategy '%s' not found in results", fixed_strategy))
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  # Resolve all provided strategy names
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  # Generate comparison pairs using same logic as calculate_pairwise_ce
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    # Both provided: N×M explicit comparisons
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        # Skip self-comparisons
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    # Interventions only: each intervention vs all others
+    for (int_strat in interventions) {
+      for (comp_strat in setdiff(all_strategies, int_strat)) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = comp_strat
+        )
+      }
+    }
+  } else {
+    # Comparators only: all others vs each comparator
+    for (comp_strat in comparators) {
+      for (int_strat in setdiff(all_strategies, comp_strat)) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = comp_strat
+        )
+      }
     }
   }
 
-  # Get unique groups and other strategies
-  groups <- unique(psa_data$group)
-  all_strategies <- unique(psa_data$strategy)
-  other_strategies <- setdiff(all_strategies, fixed_strategy)
-
-  if (length(other_strategies) == 0) {
-    stop("No other strategies to compare")
+  if (length(comparison_pairs) == 0) {
+    stop("No valid comparison pairs generated")
   }
 
-  # Create grid of all (simulation, group, comparison) combinations
+  # Get unique groups
+  unique_groups <- unique(psa_data$group)
   n_sim <- length(unique(psa_data$simulation))
-  n_groups <- length(groups)
-  n_comparisons <- length(other_strategies)
+  n_groups <- length(unique_groups)
+  n_comparisons <- length(comparison_pairs)
 
+  # Create grid of all (simulation, group, comparison_idx) combinations
   comparison_grid <- expand.grid(
     simulation = unique(psa_data$simulation),
-    group = groups,
-    other_strategy = other_strategies,
+    group = unique_groups,
+    comparison_idx = seq_along(comparison_pairs),
     KEEP.OUT.ATTRS = FALSE,
     stringsAsFactors = FALSE
   )
 
-  # Join with fixed strategy data
-  fixed_data <- psa_data %>%
-    filter(.data$strategy == fixed_strategy) %>%
-    select("simulation", "group", cost_fixed = "cost", outcome_fixed = "outcome")
+  # Add intervention and comparator names from comparison pairs
+  comparison_grid <- comparison_grid %>%
+    mutate(
+      intervention = sapply(.data$comparison_idx, function(i) comparison_pairs[[i]]$intervention),
+      comparator = sapply(.data$comparison_idx, function(i) comparison_pairs[[i]]$comparator)
+    )
+
+  # Join with intervention data
+  int_data <- psa_data %>%
+    select("simulation", "group", "strategy", cost_int = "cost", outcome_int = "outcome")
 
   comparison_data <- comparison_grid %>%
-    left_join(fixed_data, by = c("simulation", "group"))
+    left_join(int_data, by = c("simulation", "group", "intervention" = "strategy"))
 
-  # Join with other strategies data
-  other_data <- psa_data %>%
-    filter(.data$strategy != fixed_strategy) %>%
-    select("simulation", "group", "strategy", cost_other = "cost", outcome_other = "outcome")
-
-  comparison_data <- comparison_data %>%
-    left_join(other_data, by = c("simulation", "group", "other_strategy" = "strategy"))
-
-  # Assign intervention and comparator based on mode
-  if (use_intervention) {
-    comparison_data <- comparison_data %>%
-      mutate(
-        cost_intervention = .data$cost_fixed,
-        cost_comp = .data$cost_other,
-        outcome_intervention = .data$outcome_fixed,
-        outcome_comp = .data$outcome_other
-      )
-  } else {
-    comparison_data <- comparison_data %>%
-      mutate(
-        cost_intervention = .data$cost_other,
-        cost_comp = .data$cost_fixed,
-        outcome_intervention = .data$outcome_other,
-        outcome_comp = .data$outcome_fixed
-      )
-  }
+  # Join with comparator data
+  comp_data <- psa_data %>%
+    select("simulation", "group", "strategy", cost_comp = "cost", outcome_comp = "outcome")
 
   comparison_data <- comparison_data %>%
-    arrange(.data$simulation, .data$group, .data$other_strategy)
+    left_join(comp_data, by = c("simulation", "group", "comparator" = "strategy"))
+
+  comparison_data <- comparison_data %>%
+    arrange(.data$simulation, .data$group, .data$comparison_idx)
 
   # Reshape to matrices for vectorized calculation
   n_cols <- n_groups * n_comparisons
-  cost_intervention_mat <- matrix(comparison_data$cost_intervention, nrow = n_sim, ncol = n_cols, byrow = TRUE)
+  cost_int_mat <- matrix(comparison_data$cost_int, nrow = n_sim, ncol = n_cols, byrow = TRUE)
   cost_comp_mat <- matrix(comparison_data$cost_comp, nrow = n_sim, ncol = n_cols, byrow = TRUE)
-  outcome_intervention_mat <- matrix(comparison_data$outcome_intervention, nrow = n_sim, ncol = n_cols, byrow = TRUE)
+  outcome_int_mat <- matrix(comparison_data$outcome_int, nrow = n_sim, ncol = n_cols, byrow = TRUE)
   outcome_comp_mat <- matrix(comparison_data$outcome_comp, nrow = n_sim, ncol = n_cols, byrow = TRUE)
 
   # Vectorized probability calculation across all WTP values
-  # Result: matrix with rows = (group, comparison) pairs, columns = WTP values
-  # Use lapply + do.call(cbind) to avoid sapply simplifying to a vector when n_cols = 1
   probs_list <- lapply(wtp, function(w) {
     # Calculate incremental NMB: P(intervention > comparator)
-    delta_nmb <- (outcome_intervention_mat - outcome_comp_mat) * w - (cost_intervention_mat - cost_comp_mat)
+    delta_nmb <- (outcome_int_mat - outcome_comp_mat) * w - (cost_int_mat - cost_comp_mat)
     colMeans(delta_nmb > 0)
   })
   probs_matrix <- do.call(cbind, probs_list)
@@ -516,8 +787,8 @@ calculate_pairwise_ceac <- function(results,
 
   # Convert back to tibble with proper labels
   comparison_labels <- comparison_grid %>%
-    distinct(.data$group, .data$other_strategy) %>%
-    arrange(.data$group, .data$other_strategy)
+    distinct(.data$group, .data$comparison_idx, .data$intervention, .data$comparator) %>%
+    arrange(.data$group, .data$comparison_idx)
 
   # Expand to include all WTP values with correct probability extraction
   result <- comparison_labels %>%
@@ -526,18 +797,18 @@ calculate_pairwise_ceac <- function(results,
     mutate(probability = probs_matrix[cbind(.data$row_id, .data$wtp_idx)]) %>%
     transmute(
       wtp = .data$wtp,
-      strategy = .data$other_strategy,
+      intervention = .data$intervention,
+      comparator = .data$comparator,
       probability = .data$probability,
-      group = .data$group,
-      comparator = fixed_strategy
+      group = .data$group
     )
 
-  # Map display names if metadata available and requested
+  # Map display names if metadata available
   if (!is.null(results$metadata)) {
     if (!is.null(results$metadata$strategies)) {
-      result$strategy <- map_names(result$strategy,
-                                   results$metadata$strategies,
-                                   "display_name")
+      result$intervention <- map_names(result$intervention,
+                                       results$metadata$strategies,
+                                       "display_name")
       result$comparator <- map_names(result$comparator,
                                      results$metadata$strategies,
                                      "display_name")
@@ -549,13 +820,12 @@ calculate_pairwise_ceac <- function(results,
     }
   }
 
-  # For intervention mode, prepend "vs. " to clarify these are comparators
-  if (use_intervention) {
-    result$strategy <- paste0("vs. ", result$strategy)
-  }
+  # Create comparison label for faceting/coloring
+  result <- result %>%
+    mutate(comparison = paste(.data$intervention, "vs.", .data$comparator))
 
   result %>%
-    select("wtp", "strategy", "probability", "group", "comparator")
+    select("wtp", "intervention", "comparator", "comparison", "probability", "group")
 }
 
 
@@ -582,7 +852,6 @@ calculate_pairwise_ceac <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
 #'
 #' @return A tibble with columns:
 #'   \item{wtp}{Willingness-to-pay threshold}
@@ -627,8 +896,7 @@ calculate_evpi <- function(results,
                            cost_summary,
                            wtp = seq(0, 100000, by = 5000),
                            groups = "overall",
-                           strategies = NULL,
-                           discounted = FALSE) {
+                           strategies = NULL) {
 
   # Check if results have PSA simulations
   if (!"simulation" %in% names(results$aggregated) &&
@@ -637,14 +905,13 @@ calculate_evpi <- function(results,
                "Use run_psa() instead of run_model()."))
   }
 
-  # Extract PSA simulation data
+  # Extract PSA simulation data (always discounted for CE analysis)
   psa_data <- get_psa_simulations(
     results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
-    discounted = discounted
+    strategies = strategies
   )
 
   # Get unique groups

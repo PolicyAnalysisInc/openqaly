@@ -3,60 +3,11 @@ context("DSA Plots")
 # ============================================================================
 # Test Fixtures
 # ============================================================================
+# Model builders and cached results are defined in setup.R
 
-# Build a simple DSA model with multiple parameters
-build_simple_dsa_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10,
-      timeframe = 10,
-      timeframe_unit = "years",
-      cycle_length = 1,
-      cycle_length_unit = "years"
-    ) %>%
-    add_strategy("standard") %>%
-    add_strategy("new_treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    # Variables with DSA specifications
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 2000, strategy = "standard") %>%
-    add_variable("c_treatment", 8000, strategy = "new_treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    # DSA parameter specifications
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_healthy", low = 800, high = 1200,
-                     display_name = "Cost (Healthy)") %>%
-    add_dsa_variable("u_healthy", low = 0.8, high = 1.0,
-                     display_name = "Utility (Healthy)") %>%
-    # Transitions
-    add_transition("healthy", "sick", "p_sick") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy", "1 - p_sick - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    # Summaries
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
-
+# Local alias for backward compatibility with existing tests
 get_example_dsa_results <- function() {
-  model <- build_simple_dsa_model()
-  run_dsa(model)
+  get_cached_dsa_results()
 }
 
 # ============================================================================
@@ -417,8 +368,7 @@ test_that("extract_parameter_values() extracts from variable overrides", {
 # ============================================================================
 
 test_that("DSA plots workflow with example model", {
-  model <- build_simple_dsa_model()
-  results <- run_dsa(model)
+  results <- get_cached_dsa_results()
   strategies <- results$metadata$strategies$display_name
 
   # DSA outcomes plot
@@ -700,41 +650,8 @@ test_that("dsa_nmb_plot works with drop_zero_impact = FALSE", {
 # ============================================================================
 
 test_that("render_tornado_plot uses half-height stacked bars when both values on same side", {
-  # Create DSA model with a parameter where both low and high produce same-side results
-  model <- define_model("markov") %>%
-    set_settings(
-      n_cycles = 10,
-      timeframe = 10,
-      timeframe_unit = "years",
-      cycle_length = 1,
-      cycle_length_unit = "years"
-    ) %>%
-    add_strategy("standard") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    # Variable that affects outcomes positively
-    add_variable("u_healthy", 0.8) %>%
-    add_variable("u_sick", 0.5) %>%
-    # DSA specification where both low AND high are ABOVE base case
-    # (both increase utility, so QALYs will be higher in both cases)
-    add_dsa_variable("u_healthy", low = 0.85, high = 0.95,
-                     display_name = "Utility (Both Above Base)") %>%
-    # Transitions
-    add_transition("healthy", "sick", "0.1") %>%
-    add_transition("healthy", "dead", "0.05") %>%
-    add_transition("healthy", "healthy", "0.85") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    # Values
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    # Summary
-    add_summary("total_qalys", "qalys")
-
-  results <- run_dsa(model)
+  # Use cached DSA model with a parameter where both low and high produce same-side results
+  results <- get_cached_same_side_bars_dsa_results()
 
   # Build the plot
   p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
@@ -858,60 +775,10 @@ test_that("get_setting_unit_suffix() handles NULL settings", {
   expect_equal(openqaly:::get_setting_unit_suffix("discount_cost", NULL), "")
 })
 
-# Build a model with DSA settings to test unit formatting in labels
-build_dsa_settings_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      timeframe = 10,
-      timeframe_unit = "years",
-      cycle_length = 1,
-      cycle_length_unit = "years",
-      discount_cost = 3,
-      discount_outcomes = 3
-    ) %>%
-    add_strategy("standard") %>%
-    add_strategy("new_treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 2000, strategy = "standard") %>%
-    add_variable("c_treatment", 8000, strategy = "new_treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    # DSA variables (should have no unit suffix)
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    # DSA settings (should have appropriate unit suffixes)
-    add_dsa_setting("discount_cost", low = 0, high = 5,
-                    display_name = "Cost Discount") %>%
-    add_dsa_setting("timeframe", low = 5, high = 20,
-                    display_name = "Time Horizon") %>%
-    # Transitions
-    add_transition("healthy", "sick", "p_sick") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy", "1 - p_sick - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    # Summaries
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
+# Model builder build_dsa_settings_model() is defined in setup.R
 
 test_that("dsa_outcomes_plot() shows % suffix for discount settings in labels", {
-  model <- build_dsa_settings_model()
-  results <- run_dsa(model)
+  results <- get_cached_dsa_settings_results()
 
   # Use drop_zero_impact = FALSE because discount_cost has zero impact on QALYs
   # (cost discounting only affects cost summaries, not outcome summaries)
@@ -928,8 +795,7 @@ test_that("dsa_outcomes_plot() shows % suffix for discount settings in labels", 
 })
 
 test_that("dsa_outcomes_plot() shows time unit suffix for timeframe setting", {
-  model <- build_dsa_settings_model()
-  results <- run_dsa(model)
+  results <- get_cached_dsa_settings_results()
 
   p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
   built <- ggplot_build(p)
@@ -944,8 +810,7 @@ test_that("dsa_outcomes_plot() shows time unit suffix for timeframe setting", {
 })
 
 test_that("dsa_outcomes_plot() shows no unit suffix for variable parameters", {
-  model <- build_dsa_settings_model()
-  results <- run_dsa(model)
+  results <- get_cached_dsa_settings_results()
 
   p <- dsa_outcomes_plot(results, "total_qalys", strategies = "standard")
   built <- ggplot_build(p)
@@ -966,244 +831,15 @@ test_that("dsa_outcomes_plot() shows no unit suffix for variable parameters", {
 
 
 # ============================================================================
-# CE Test Fixtures - Models that produce specific ICER scenarios
+# CE Test Fixtures - Models defined in setup.R
 # ============================================================================
-
-# Normal ICER: Treatment more costly AND more effective (NE quadrant)
-build_normal_icer_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) %>%
-    add_strategy("control") %>%
-    add_strategy("treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 0, strategy = "control") %>%
-    add_variable("c_treatment", 10000, strategy = "treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    add_variable("treatment_effect", 1.0, strategy = "control") %>%
-    add_variable("treatment_effect", 0.5, strategy = "treatment") %>%
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_treatment", low = 5000, high = 15000,
-                     display_name = "Treatment Cost", strategy = "treatment") %>%
-    add_dsa_variable("u_sick", low = 0.3, high = 0.7,
-                     display_name = "Utility (Sick)") %>%
-    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy",
-                   "1 - p_sick * treatment_effect - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
-
-# Dominated: Treatment more costly AND less effective (SE quadrant, ICER = Inf)
-build_dominated_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) %>%
-    add_strategy("control") %>%
-    add_strategy("treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 0, strategy = "control") %>%
-    add_variable("c_treatment", 10000, strategy = "treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    add_variable("treatment_effect", 1.0, strategy = "control") %>%
-    add_variable("treatment_effect", 1.5, strategy = "treatment") %>%
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_treatment", low = 5000, high = 15000,
-                     display_name = "Treatment Cost", strategy = "treatment") %>%
-    add_dsa_variable("treatment_effect", low = 1.2, high = 2.0,
-                     display_name = "Treatment Harm", strategy = "treatment") %>%
-    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy",
-                   "1 - p_sick * treatment_effect - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
-
-# Dominant: Treatment less costly AND more effective (NW quadrant, ICER = 0)
-build_dominant_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) %>%
-    add_strategy("control") %>%
-    add_strategy("treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 5000, strategy = "control") %>%
-    add_variable("c_treatment", 1000, strategy = "treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    add_variable("treatment_effect", 1.0, strategy = "control") %>%
-    add_variable("treatment_effect", 0.3, strategy = "treatment") %>%
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_treatment", low = 500, high = 2000,
-                     display_name = "Treatment Cost", strategy = "treatment") %>%
-    add_dsa_variable("treatment_effect", low = 0.1, high = 0.5,
-                     display_name = "Treatment Effect", strategy = "treatment") %>%
-    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy",
-                   "1 - p_sick * treatment_effect - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
-
-# Flipped: Treatment less costly BUT less effective (SW quadrant, negative ICER)
-build_flipped_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) %>%
-    add_strategy("control") %>%
-    add_strategy("treatment") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 8000, strategy = "control") %>%
-    add_variable("c_treatment", 2000, strategy = "treatment") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    add_variable("treatment_effect", 1.0, strategy = "control") %>%
-    add_variable("treatment_effect", 1.3, strategy = "treatment") %>%
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_treatment", low = 1000, high = 3000,
-                     display_name = "Treatment Cost", strategy = "treatment") %>%
-    add_dsa_variable("treatment_effect", low = 1.1, high = 1.5,
-                     display_name = "Treatment Effect", strategy = "treatment") %>%
-    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy",
-                   "1 - p_sick * treatment_effect - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
-
-# Multiple strategies model (3 strategies)
-build_multi_strategy_model <- function() {
-  define_model("markov") %>%
-    set_settings(
-      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) %>%
-    add_strategy("control") %>%
-    add_strategy("treatment_a") %>%
-    add_strategy("treatment_b") %>%
-    add_state("healthy", initial_prob = 1) %>%
-    add_state("sick", initial_prob = 0) %>%
-    add_state("dead", initial_prob = 0) %>%
-    add_variable("p_sick", 0.1) %>%
-    add_variable("p_death", 0.05) %>%
-    add_variable("c_healthy", 1000) %>%
-    add_variable("c_sick", 5000) %>%
-    add_variable("c_treatment", 0, strategy = "control") %>%
-    add_variable("c_treatment", 8000, strategy = "treatment_a") %>%
-    add_variable("c_treatment", 15000, strategy = "treatment_b") %>%
-    add_variable("u_healthy", 0.9) %>%
-    add_variable("u_sick", 0.5) %>%
-    add_variable("treatment_effect", 1.0, strategy = "control") %>%
-    add_variable("treatment_effect", 0.6, strategy = "treatment_a") %>%
-    add_variable("treatment_effect", 0.3, strategy = "treatment_b") %>%
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Prob. Getting Sick") %>%
-    add_dsa_variable("c_treatment", low = 5000, high = 12000,
-                     display_name = "Treatment A Cost", strategy = "treatment_a") %>%
-    add_dsa_variable("c_treatment", low = 10000, high = 20000,
-                     display_name = "Treatment B Cost", strategy = "treatment_b") %>%
-    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
-    add_transition("healthy", "dead", "p_death") %>%
-    add_transition("healthy", "healthy",
-                   "1 - p_sick * treatment_effect - p_death") %>%
-    add_transition("sick", "dead", "0.2") %>%
-    add_transition("sick", "sick", "0.8") %>%
-    add_transition("dead", "dead", "1") %>%
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
-}
 
 # ============================================================================
 # Tests for dsa_ce_plot() - Cost-Effectiveness Tornado Plot
 # ============================================================================
 
 test_that("dsa_ce_plot() works with normal ICER scenario", {
-  model <- build_normal_icer_model()
-  results <- run_dsa(model)
+  results <- get_cached_normal_icer_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment", comparators = "control")
@@ -1215,8 +851,7 @@ test_that("dsa_ce_plot() works with normal ICER scenario", {
 })
 
 test_that("dsa_ce_plot() works with dominated scenario", {
-  model <- build_dominated_model()
-  results <- run_dsa(model)
+  results <- get_cached_dominated_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment", comparators = "control",
@@ -1228,8 +863,7 @@ test_that("dsa_ce_plot() works with dominated scenario", {
 })
 
 test_that("dsa_ce_plot() works with dominant scenario", {
-  model <- build_dominant_model()
-  results <- run_dsa(model)
+  results <- get_cached_dominant_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment", comparators = "control",
@@ -1241,8 +875,7 @@ test_that("dsa_ce_plot() works with dominant scenario", {
 })
 
 test_that("dsa_ce_plot() works with flipped scenario", {
-  model <- build_flipped_model()
-  results <- run_dsa(model)
+  results <- get_cached_flipped_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment", comparators = "control",
@@ -1254,8 +887,7 @@ test_that("dsa_ce_plot() works with flipped scenario", {
 })
 
 test_that("dsa_ce_plot() works with multiple strategies", {
-  model <- build_multi_strategy_model()
-  results <- run_dsa(model)
+  results <- get_cached_multi_strategy_dsa_results()
 
   # All interventions vs control
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
@@ -1267,8 +899,7 @@ test_that("dsa_ce_plot() works with multiple strategies", {
 })
 
 test_that("dsa_ce_plot() works with specific intervention and comparator", {
-  model <- build_multi_strategy_model()
-  results <- run_dsa(model)
+  results <- get_cached_multi_strategy_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment_a", comparators = "control",
@@ -1277,8 +908,7 @@ test_that("dsa_ce_plot() works with specific intervention and comparator", {
 })
 
 test_that("dsa_ce_plot() requires interventions or comparators", {
-  model <- build_normal_icer_model()
-  results <- run_dsa(model)
+  results <- get_cached_normal_icer_dsa_results()
 
   expect_error(
     dsa_ce_plot(results, "total_qalys", "total_cost"),
@@ -1287,8 +917,7 @@ test_that("dsa_ce_plot() requires interventions or comparators", {
 })
 
 test_that("dsa_ce_plot() show_parameter_values option works", {
-  model <- build_normal_icer_model()
-  results <- run_dsa(model)
+  results <- get_cached_normal_icer_dsa_results()
 
   p_with <- dsa_ce_plot(results, "total_qalys", "total_cost",
                         interventions = "treatment", comparators = "control",
@@ -1302,8 +931,7 @@ test_that("dsa_ce_plot() show_parameter_values option works", {
 })
 
 test_that("dsa_ce_plot() drop_zero_impact option works", {
-  model <- build_normal_icer_model()
-  results <- run_dsa(model)
+  results <- get_cached_normal_icer_dsa_results()
 
   p <- dsa_ce_plot(results, "total_qalys", "total_cost",
                    interventions = "treatment", comparators = "control",
@@ -1356,10 +984,14 @@ test_that("detect_variation_error() returns correct error states", {
 
 test_that("format_icer_label() formats values correctly", {
   expect_equal(openqaly:::format_icer_label(50000), "50,000")
-  expect_equal(openqaly:::format_icer_label(50000, is_flipped = TRUE), "50,000*")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "50,000*")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "50,000**")
   expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
+  expect_equal(openqaly:::format_icer_label(Inf, asterisk = "*"), "Dominated*")
   expect_equal(openqaly:::format_icer_label(0), "Dominant")
+  expect_equal(openqaly:::format_icer_label(0, asterisk = "*"), "Dominant*")
   expect_equal(openqaly:::format_icer_label(NaN), "Equivalent")
+  expect_equal(openqaly:::format_icer_label(NaN, asterisk = "*"), "Equivalent*")
   expect_equal(openqaly:::format_icer_label(NA_real_), "")
 })
 
@@ -1382,8 +1014,438 @@ test_that("generate_ce_error_message() creates correct messages", {
   ))
 })
 
-test_that("generate_ce_footnote() creates correct footnote", {
-  footnote <- openqaly:::generate_ce_footnote("Control", "Treatment A")
-  expect_true(grepl("Control is more costly", footnote))
-  expect_true(grepl("more effective than Treatment A", footnote))
+test_that("generate_flipped_base_footnote() creates correct footnote", {
+  footnote <- openqaly:::generate_flipped_base_footnote("*", "Control", "Treatment A")
+  expect_equal(
+    footnote,
+    "* Control is more costly and more effective than Treatment A in base case, plot depicts comparison of Control vs. Treatment A."
+  )
+})
+
+test_that("generate_flipped_bar_footnote() creates correct footnote", {
+  footnote <- openqaly:::generate_flipped_bar_footnote("**", "Control", "Treatment A")
+  expect_equal(
+    footnote,
+    "** ICER reflects comparison of Control vs. Treatment A."
+  )
+})
+
+test_that("generate_direction_change_footnote() creates correct footnote", {
+  footnote <- openqaly:::generate_direction_change_footnote("**", "Control", "Treatment A")
+  expect_equal(
+    footnote,
+    "** ICER reflects comparison of Control vs. Treatment A and cannot be displayed on same axis as base case reflecting comparison of Treatment A vs. Control."
+  )
+})
+
+test_that("generate_identical_footnote() creates correct footnote", {
+  footnote <- openqaly:::generate_identical_footnote("*", "Treatment A", "Control")
+  expect_equal(
+    footnote,
+    "* ICER is undefined and cannot be displayed due to Treatment A and Control having identical outcomes and costs."
+  )
+})
+
+test_that("detect_variation_error() handles same-as-base cases", {
+  # Dominated base with dominated variation - no bar
+  result <- openqaly:::detect_variation_error("dominated", Inf)
+  expect_false(result$show_bar)
+
+  # Dominant base with dominant variation - no bar
+  result <- openqaly:::detect_variation_error("dominant", 0)
+  expect_false(result$show_bar)
+})
+
+# ============================================================================
+# Tests for CE Asterisk Logic
+# ============================================================================
+
+test_that("format_icer_label() adds asterisk based on asterisk parameter", {
+  # No asterisk parameter - no asterisk
+  expect_equal(openqaly:::format_icer_label(50000), "50,000")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = ""), "50,000")
+
+  # With asterisk parameter - asterisk added
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "50,000*")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "50,000**")
+
+  # Special values also get asterisks when provided
+  expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
+  expect_equal(openqaly:::format_icer_label(Inf, asterisk = "*"), "Dominated*")
+  expect_equal(openqaly:::format_icer_label(0), "Dominant")
+  expect_equal(openqaly:::format_icer_label(0, asterisk = "*"), "Dominant*")
+  expect_equal(openqaly:::format_icer_label(NaN), "Equivalent")
+  expect_equal(openqaly:::format_icer_label(NaN, asterisk = "*"), "Equivalent*")
+})
+
+test_that("is_flipped_icer() correctly identifies flipped ICERs", {
+  # Negative finite ICER = flipped (SW quadrant)
+  expect_true(openqaly:::is_flipped_icer(-25000))
+  expect_true(openqaly:::is_flipped_icer(-0.01))
+
+  # Positive finite ICER = not flipped
+  expect_false(openqaly:::is_flipped_icer(50000))
+  expect_false(openqaly:::is_flipped_icer(0.01))
+
+  # Zero is not flipped
+
+  expect_false(openqaly:::is_flipped_icer(0))
+
+  # Inf is not flipped (and not finite)
+  expect_false(openqaly:::is_flipped_icer(Inf))
+  expect_false(openqaly:::is_flipped_icer(-Inf))
+
+  # NaN is not flipped
+  expect_false(openqaly:::is_flipped_icer(NaN))
+})
+
+test_that("detect_variation_error() handles dominant base case correctly", {
+  # According to requirements, dominant is in Group A (requested direction)
+  # along with normal and dominated. SW quadrant (flipped) is Group B.
+
+  # Dominant base with normal variation - no direction change (both in Group A)
+  result <- openqaly:::detect_variation_error("dominant", 50000)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+
+  # Dominant base with dominated variation - no direction change (both in Group A)
+  result <- openqaly:::detect_variation_error("dominant", Inf)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+
+  # Dominant base with flipped variation - SHOULD be direction change
+  # (dominant is Group A, flipped/negative is Group B)
+  result <- openqaly:::detect_variation_error("dominant", -50000)
+  expect_equal(result$type, "direction_change")
+  expect_false(result$show_bar)
+
+  # Flipped base with dominant variation - intervention dominant = comparator dominated
+  # Should show arrow bar to right with "Dominated" label (from comparator's perspective)
+  result <- openqaly:::detect_variation_error("flipped", 0)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "arrow")
+  expect_equal(result$label, "Dominated")
+})
+
+test_that("detect_variation_error() handles flipped base case correctly", {
+  # When base case is flipped, axis shows comparator's perspective:
+
+  # - Left (toward 0) = Good for comparator
+  # - Right (higher ICER) = Bad for comparator
+  # So dominant/dominated labels must be inverted from intervention's perspective
+
+
+  # Flipped base with intervention dominant (0) = Comparator dominated
+  # Should show arrow bar extending to right with "Dominated" label
+  result <- openqaly:::detect_variation_error("flipped", 0)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "arrow")
+  expect_equal(result$label, "Dominated")
+
+  # Flipped base with intervention dominated (+Inf) = Comparator dominant
+  # Should show to_zero bar extending to left with "Dominant" label
+  result <- openqaly:::detect_variation_error("flipped", Inf)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "to_zero")
+  expect_equal(result$label, "Dominant")
+
+  # Flipped base with positive finite ICER = direction change
+  # (intervention now costlier/more effective, opposite of flipped base)
+  result <- openqaly:::detect_variation_error("flipped", 50000)
+  expect_equal(result$type, "direction_change")
+  expect_false(result$show_bar)
+
+  # Flipped base with negative ICER = still in flipped direction, standard bar
+  result <- openqaly:::detect_variation_error("flipped", -25000)
+  expect_null(result$type)
+  expect_true(result$show_bar)
+  expect_equal(result$bar_type, "standard")
+
+  # Flipped base with NaN variation = identical error
+  result <- openqaly:::detect_variation_error("flipped", NaN)
+  expect_equal(result$type, "identical")
+  expect_false(result$show_bar)
+})
+
+test_that("same-side detection works correctly for flipped base with arrow/to_zero bars", {
+  # When base is flipped and both variations result in bars going the same direction,
+
+  # they should be detected as same-side for proper vertical stacking.
+
+  # Create mock tornado data with flipped base case
+  # Scenario: Both low and high variations make intervention dominant (ICER=0)
+  # In flipped context, this means both bars go RIGHT (arrow type)
+  mock_data <- tibble::tibble(
+    strategy = "A vs B",
+    group = "All",
+    parameter = "test_param",
+    parameter_display_name = "Test Param",
+    low_icer = 0,  # Intervention dominant
+    high_icer = 0,  # Intervention dominant
+    base_icer = -50000,  # Flipped base
+    base_class = "flipped",
+    low_show_bar = TRUE,
+    high_show_bar = TRUE,
+    low_bar_type = "arrow",  # Goes right (dominated from comparator's view)
+    high_bar_type = "arrow",  # Goes right
+    display_low = NA_real_,  # NA because ICER is 0
+    display_high = NA_real_,  # NA because ICER is 0
+    base_display_value = 50000  # abs(-50000)
+  )
+
+  # Apply same-side detection logic
+  result <- mock_data %>%
+    dplyr::mutate(
+      low_goes_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_goes_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      same_side = (.data$low_show_bar & .data$high_show_bar) &
+        dplyr::coalesce(
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
+          FALSE
+        )
+    )
+
+  # Both arrow bars should be detected as same-side
+  expect_true(result$same_side)
+
+  # Test opposite directions: one arrow (right), one to_zero (left)
+  mock_data2 <- mock_data %>%
+    dplyr::mutate(
+      low_bar_type = "arrow",   # Goes right
+      high_bar_type = "to_zero" # Goes left
+    )
+
+  result2 <- mock_data2 %>%
+    dplyr::mutate(
+      low_goes_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_goes_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      same_side = (.data$low_show_bar & .data$high_show_bar) &
+        dplyr::coalesce(
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
+          FALSE
+        )
+    )
+
+  # Arrow and to_zero go opposite directions, NOT same-side
+  expect_false(result2$same_side)
+})
+
+test_that("at-base variations are forced opposite to other bar direction", {
+  # When a variation equals the base case (zero-width bar), it should be
+  # FORCED to the opposite direction of the other variation's bar.
+  # Exception: dominated base case - everything goes left.
+
+  # Scenario 1: Flipped base, high goes right (arrow), low at base
+
+  # Low should be forced LEFT (opposite of high)
+  mock_data <- tibble::tibble(
+    strategy = "A vs B",
+    group = "All",
+    parameter = "test_param",
+    parameter_display_name = "Test Param",
+    base_class = "flipped",
+    low_show_bar = TRUE,
+    high_show_bar = TRUE,
+    low_bar_type = "standard",
+    high_bar_type = "arrow",  # Goes right
+    display_low = 50000,  # Equal to base
+    display_high = NA_real_,
+    base_display_value = 50000
+  )
+
+  # Apply the forcing logic
+  result <- mock_data %>%
+    dplyr::mutate(
+      low_at_base = .data$low_show_bar &
+        .data$low_bar_type == "standard" &
+        abs(.data$display_low - .data$base_display_value) < 1e-9,
+      high_at_base = .data$high_show_bar &
+        .data$high_bar_type == "standard" &
+        abs(.data$display_high - .data$base_display_value) < 1e-9,
+      low_natural_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_natural_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      low_goes_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$low_at_base & !.data$high_at_base ~ !.data$high_natural_right,
+        TRUE ~ .data$low_natural_right
+      ),
+      high_goes_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$high_at_base & !.data$low_at_base ~ !.data$low_natural_right,
+        TRUE ~ .data$high_natural_right
+      ),
+      same_side = (.data$low_show_bar & .data$high_show_bar) &
+        !(!(.data$base_class == "dominated") & (.data$low_at_base | .data$high_at_base)) &
+        dplyr::coalesce(
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
+          FALSE
+        )
+    )
+
+  # Low should be forced LEFT (opposite of high's RIGHT)
+  expect_false(result$low_goes_right)
+  expect_true(result$high_goes_right)
+  # Should NOT be same-side: opposite directions AND low is at base
+  expect_false(result$same_side)
+
+  # Scenario 2: Dominated base case - everything goes left, at-base exemption applies
+  mock_data2 <- mock_data %>%
+    dplyr::mutate(base_class = "dominated")
+
+  result2 <- mock_data2 %>%
+    dplyr::mutate(
+      low_at_base = .data$low_show_bar &
+        .data$low_bar_type == "standard" &
+        abs(.data$display_low - .data$base_display_value) < 1e-9,
+      high_at_base = .data$high_show_bar &
+        .data$high_bar_type == "standard" &
+        abs(.data$display_high - .data$base_display_value) < 1e-9,
+      low_natural_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_natural_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      low_goes_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$low_at_base & !.data$high_at_base ~ !.data$high_natural_right,
+        TRUE ~ .data$low_natural_right
+      ),
+      high_goes_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$high_at_base & !.data$low_at_base ~ !.data$low_natural_right,
+        TRUE ~ .data$high_natural_right
+      ),
+      same_side = (.data$low_show_bar & .data$high_show_bar) &
+        !(!(.data$base_class == "dominated") & (.data$low_at_base | .data$high_at_base)) &
+        dplyr::coalesce(
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
+          FALSE
+        )
+    )
+
+  # Both should go left for dominated base case
+  expect_false(result2$low_goes_right)
+  expect_false(result2$high_goes_right)
+  # Should be same-side: dominated base exempts at-base exclusion
+  expect_true(result2$same_side)
+
+  # Scenario 3: Normal base, both at base → NOT same-side
+  mock_data3 <- tibble::tibble(
+    strategy = "A vs B",
+    group = "All",
+    parameter = "test_param",
+    parameter_display_name = "Test Param",
+    base_class = "normal",
+    low_show_bar = TRUE,
+    high_show_bar = TRUE,
+    low_bar_type = "standard",
+    high_bar_type = "standard",
+    display_low = 50000,
+    display_high = 50000,
+    base_display_value = 50000
+  )
+
+  result3 <- mock_data3 %>%
+    dplyr::mutate(
+      low_at_base = .data$low_show_bar &
+        .data$low_bar_type == "standard" &
+        abs(.data$display_low - .data$base_display_value) < 1e-9,
+      high_at_base = .data$high_show_bar &
+        .data$high_bar_type == "standard" &
+        abs(.data$display_high - .data$base_display_value) < 1e-9,
+      low_natural_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$low_bar_type == "arrow" ~ TRUE,
+        .data$low_bar_type == "to_zero" ~ FALSE,
+        .data$low_bar_type == "standard" ~ .data$display_low > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      high_natural_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$high_bar_type == "arrow" ~ TRUE,
+        .data$high_bar_type == "to_zero" ~ FALSE,
+        .data$high_bar_type == "standard" ~ .data$display_high > .data$base_display_value,
+        TRUE ~ NA
+      ),
+      low_goes_right = dplyr::case_when(
+        !.data$low_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$low_at_base & !.data$high_at_base ~ !.data$high_natural_right,
+        TRUE ~ .data$low_natural_right
+      ),
+      high_goes_right = dplyr::case_when(
+        !.data$high_show_bar ~ NA,
+        .data$base_class == "dominated" ~ FALSE,
+        .data$high_at_base & !.data$low_at_base ~ !.data$low_natural_right,
+        TRUE ~ .data$high_natural_right
+      ),
+      same_side = (.data$low_show_bar & .data$high_show_bar) &
+        !(!(.data$base_class == "dominated") & (.data$low_at_base | .data$high_at_base)) &
+        dplyr::coalesce(
+          (.data$low_goes_right == TRUE & .data$high_goes_right == TRUE) |
+            (.data$low_goes_right == FALSE & .data$high_goes_right == FALSE),
+          FALSE
+        )
+    )
+
+  # Both at base with non-dominated base → NOT same-side
+  expect_true(result3$low_at_base)
+  expect_true(result3$high_at_base)
+  expect_false(result3$same_side)
 })

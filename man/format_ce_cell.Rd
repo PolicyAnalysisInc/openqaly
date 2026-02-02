@@ -4,19 +4,21 @@
 \alias{format_ce_cell}
 \title{Format CE Table Cell Value}
 \usage{
-format_ce_cell(icer_value, base_icer, decimals = 0)
+format_ce_cell(icer_value, decimals = 0, add_asterisk = TRUE)
 }
 \arguments{
 \item{icer_value}{Numeric ICER value}
 
-\item{base_icer}{Numeric base case ICER (for direction change detection)}
-
 \item{decimals}{Number of decimal places}
+
+\item{add_asterisk}{Logical whether to add asterisk for flipped ICERs (default TRUE)}
 }
 \value{
 Formatted string
 }
 \description{
 Internal helper to format ICER values for table cells.
+Asterisk is added when the ICER differs from the REQUESTED direction
+(i.e., when ICER is negative indicating SW quadrant / flipped comparison).
 }
 \keyword{internal}

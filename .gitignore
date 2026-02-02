@@ -6,3 +6,5 @@ launch.json
 .claude
 inst/doc
 *.tar.gz
+scratch/
+.vscode/

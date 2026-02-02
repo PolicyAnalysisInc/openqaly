@@ -11,7 +11,6 @@ incremental_ceac_table(
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
   strategies = NULL,
-  show_optimal = TRUE,
   decimals = 1,
   font_size = 11,
   table_format = c("flextable", "kable")
@@ -38,8 +37,6 @@ Default is c(0, 20000, 50000, 100000)}
 }}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{show_optimal}{Logical. Highlight optimal strategy at each WTP?}
 
 \item{decimals}{Number of decimal places for percentages (default: 1)}
 

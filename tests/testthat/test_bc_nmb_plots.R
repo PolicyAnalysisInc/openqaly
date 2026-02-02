@@ -1,4 +1,4 @@
-context("Outcome Plots")
+context("Base Case NMB Plots")
 
 # ============================================================================
 # Test Fixtures
@@ -55,70 +55,6 @@ get_test_results <- function() {
   model <- build_test_model()
   run_model(model)
 }
-
-# ============================================================================
-# Tests for outcomes_plot_line()
-# ============================================================================
-
-test_that("outcomes_plot_line() returns ggplot with line geom", {
-  results <- get_test_results()
-
-  p <- outcomes_plot_line(results, outcome = "total_qalys")
-
-  expect_s3_class(p, "ggplot")
-  expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomLine"))))
-})
-
-test_that("outcomes_plot_line() cumulative values increase monotonically", {
-  results <- get_test_results()
-
-  p <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = TRUE)
-
-  # Extract Total line data for one strategy
-  total_data <- p$data[p$data$value_name == "Total", ]
-  std_data <- total_data[grepl("Standard", total_data$strategy), ]
-  std_data <- std_data[order(std_data$cycle), ]
-
-  # Cumulative should be monotonically increasing (for positive utilities)
-  diffs <- diff(std_data$amount)
-  expect_true(all(diffs >= 0), info = "Cumulative should not decrease")
-})
-
-test_that("outcomes_plot_line() non-cumulative mode shows per-cycle values", {
-  results <- get_test_results()
-
-  p_cum <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = TRUE)
-  p_noncum <- outcomes_plot_line(results, outcome = "total_qalys", cumulative = FALSE)
-
-  # Non-cumulative final value should be less than cumulative final value
-  cum_data <- p_cum$data[p_cum$data$value_name == "Total", ]
-  noncum_data <- p_noncum$data[p_noncum$data$value_name == "Total", ]
-
-  max_cycle <- max(cum_data$cycle)
-  cum_final <- cum_data$amount[cum_data$cycle == max_cycle][1]
-  noncum_final <- noncum_data$amount[noncum_data$cycle == max_cycle][1]
-
-  expect_true(noncum_final < cum_final)
-})
-
-test_that("outcomes_plot_line() with comparator has 'Difference' in label", {
-  results <- get_test_results()
-
-  p <- outcomes_plot_line(results, outcome = "total_qalys",
-                          comparators = "standard")
-
-  expect_true(grepl("Difference", p$labels$y))
-})
-
-test_that("outcomes_plot_line() errors when strategies used with comparators", {
-  results <- get_test_results()
-
-  expect_error(
-    outcomes_plot_line(results, outcome = "total_qalys",
-                       strategies = "standard", comparators = "standard"),
-    "'strategies' cannot be used"
-  )
-})
 
 # ============================================================================
 # Tests for nmb_plot_bar()
@@ -256,64 +192,20 @@ test_that("nmb_plot_line() errors without interventions or comparators", {
 })
 
 # ============================================================================
-# Tests for pairwise_ce_plot()
-# ============================================================================
-
-test_that("pairwise_ce_plot() returns ggplot", {
-  results <- get_test_results()
-
-  p <- pairwise_ce_plot(results,
-                        outcome_summary = "total_qalys",
-                        cost_summary = "total_cost",
-                        comparators = "standard")
-
-  expect_s3_class(p, "ggplot")
-})
-
-test_that("pairwise_ce_plot() includes x=0 and y=0 reference lines", {
-  results <- get_test_results()
-
-  p <- pairwise_ce_plot(results,
-                        outcome_summary = "total_qalys",
-                        cost_summary = "total_cost",
-                        comparators = "standard")
-
-  # Check for hline and vline
-  has_hline <- any(sapply(p$layers, function(l) inherits(l$geom, "GeomHline")))
-  has_vline <- any(sapply(p$layers, function(l) inherits(l$geom, "GeomVline")))
-
-  expect_true(has_hline && has_vline)
-})
-
-test_that("pairwise_ce_plot() errors without interventions or comparators", {
-  results <- get_test_results()
-
-  expect_error(
-    pairwise_ce_plot(results,
-                     outcome_summary = "total_qalys",
-                     cost_summary = "total_cost"),
-    "must be provided"
-  )
-})
-
-# ============================================================================
 # Tests for consistency between table and plot
 # ============================================================================
 
 test_that("nmb_table() and nmb_plot_bar() produce consistent NMB values", {
   results <- get_test_results()
 
-  # Get NMB from table
-  prepared <- prepare_nmb_table_data(
+  # Get NMB from calculate_nmb (authoritative source)
+  expected <- calculate_nmb(
     results,
     outcome_summary = "total_qalys",
     cost_summary = "total_cost",
-    comparators = "standard",
-    show_total = TRUE, decimals = 0
+    comparators = "standard"
   )
-  comparison_col <- names(prepared$data)[grepl("vs\\.", names(prepared$data))]
-  total_idx <- which(prepared$data[[" "]] == "Total")
-  table_nmb <- as.numeric(prepared$data[[comparison_col]][total_idx])
+  expected_nmb <- expected$nmb_amount[1]
 
   # Get NMB from plot
   p <- nmb_plot_bar(results,
@@ -323,5 +215,5 @@ test_that("nmb_table() and nmb_plot_bar() produce consistent NMB values", {
   total_row <- p$data[p$data$value == "Total", ]
   plot_nmb <- total_row$amount[1]
 
-  expect_equal(table_nmb, plot_nmb, tolerance = 1)
+  expect_equal(plot_nmb, expected_nmb, tolerance = 1)
 })

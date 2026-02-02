@@ -4,12 +4,12 @@
 \alias{format_icer_label}
 \title{Format ICER Value for Display}
 \usage{
-format_icer_label(icer_value, is_flipped = FALSE, decimals = 0)
+format_icer_label(icer_value, asterisk = "", decimals = 0)
 }
 \arguments{
 \item{icer_value}{Numeric ICER value}
 
-\item{is_flipped}{Logical whether facet has flipped base case}
+\item{asterisk}{Character asterisk string to append (default: "")}
 
 \item{decimals}{Number of decimal places (default: 0)}
 }
@@ -18,5 +18,6 @@ Formatted string
 }
 \description{
 Internal helper to format ICER values for tornado plot labels.
+Appends the provided asterisk string to the label.
 }
 \keyword{internal}

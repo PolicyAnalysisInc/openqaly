@@ -11,7 +11,7 @@ get_summaries(
   summaries = NULL,
   values = NULL,
   value_type = c("all", "cost", "outcome"),
-  discounted = FALSE,
+  discounted = TRUE,
   use_display_names = TRUE,
   interventions = NULL,
   comparators = NULL
@@ -38,7 +38,7 @@ get_summaries(
 
 \item{value_type}{Filter by value type: "all" (default), "cost", or "outcome"}
 
-\item{discounted}{Logical. If TRUE, use discounted values. If FALSE (default),
+\item{discounted}{Logical. If TRUE (default), use discounted values. If FALSE,
 use undiscounted values}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for all entities

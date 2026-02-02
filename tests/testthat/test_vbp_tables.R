@@ -2,26 +2,8 @@ context("VBP Tables")
 
 # ============================================================================
 # Test Fixtures
+# Uses get_cached_vbp_results() from setup.R for performance
 # ============================================================================
-
-get_example_model <- function() {
-  model_path <- system.file("models", "example_psm", package = "openqaly")
-  if (model_path == "") {
-    model_path <- "inst/models/example_psm"
-  }
-  read_model(model_path)
-}
-
-run_example_vbp <- function() {
-  model <- get_example_model()
-  run_vbp(
-    model,
-    price_variable = "c_drug",
-    intervention_strategy = "targeted",
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost"
-  )
-}
 
 # ============================================================================
 # 1. Helper Function Tests
@@ -65,7 +47,7 @@ test_that("generate_vbp_wtp_sequence() handles zero/negative default WTP", {
 # ============================================================================
 
 test_that("prepare_vbp_table_data() returns valid table spec", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   prepared <- openqaly:::prepare_vbp_table_data(vbp_results)
 
   # Check it's a valid table spec
@@ -77,7 +59,7 @@ test_that("prepare_vbp_table_data() returns valid table spec", {
 })
 
 test_that("prepare_vbp_table_data() includes all comparators by default", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   prepared <- openqaly:::prepare_vbp_table_data(vbp_results)
 
   # Should have WTP column + comparator columns
@@ -87,7 +69,7 @@ test_that("prepare_vbp_table_data() includes all comparators by default", {
 })
 
 test_that("prepare_vbp_table_data() filters comparators correctly", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   comparators <- unique(vbp_results$vbp_equations$comparator)
 
   if (length(comparators) >= 1) {
@@ -102,7 +84,7 @@ test_that("prepare_vbp_table_data() filters comparators correctly", {
 })
 
 test_that("prepare_vbp_table_data() errors on invalid comparator", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   expect_error(
     openqaly:::prepare_vbp_table_data(
@@ -114,7 +96,7 @@ test_that("prepare_vbp_table_data() errors on invalid comparator", {
 })
 
 test_that("prepare_vbp_table_data() uses custom WTP thresholds", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   custom_wtp <- c(0, 25000, 50000, 75000)
 
   prepared <- openqaly:::prepare_vbp_table_data(
@@ -127,7 +109,7 @@ test_that("prepare_vbp_table_data() uses custom WTP thresholds", {
 })
 
 test_that("prepare_vbp_table_data() includes 'All Comparators' column", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   n_comparators <- nrow(vbp_results$vbp_equations)
 
   # Only test if there are multiple comparators
@@ -144,7 +126,7 @@ test_that("prepare_vbp_table_data() includes 'All Comparators' column", {
 })
 
 test_that("prepare_vbp_table_data() can exclude 'All Comparators' column", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   prepared <- openqaly:::prepare_vbp_table_data(
     vbp_results,
@@ -160,7 +142,7 @@ test_that("prepare_vbp_table_data() can exclude 'All Comparators' column", {
 # ============================================================================
 
 test_that("'All Comparators' column is minimum of individual comparator VBPs", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   n_comparators <- nrow(vbp_results$vbp_equations)
 
   # Only test if there are multiple comparators
@@ -198,7 +180,7 @@ test_that("'All Comparators' column is minimum of individual comparator VBPs", {
 test_that("vbp_table() returns flextable object by default", {
   skip_if_not_installed("flextable")
 
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   tbl <- vbp_table(vbp_results, table_format = "flextable")
 
   expect_s3_class(tbl, "flextable")
@@ -207,14 +189,14 @@ test_that("vbp_table() returns flextable object by default", {
 test_that("vbp_table() returns kable object when requested", {
   skip_if_not_installed("kableExtra")
 
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   tbl <- vbp_table(vbp_results, table_format = "kable")
 
   expect_true(inherits(tbl, "knitr_kable") || is.character(tbl))
 })
 
 test_that("vbp_table() respects decimals parameter", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   prepared_0 <- openqaly:::prepare_vbp_table_data(vbp_results, decimals = 0)
   prepared_2 <- openqaly:::prepare_vbp_table_data(vbp_results, decimals = 2)
@@ -230,7 +212,7 @@ test_that("vbp_table() respects decimals parameter", {
 # ============================================================================
 
 test_that("vbp_table() works with 'overall' group", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   prepared <- openqaly:::prepare_vbp_table_data(
     vbp_results,
@@ -242,7 +224,7 @@ test_that("vbp_table() works with 'overall' group", {
 })
 
 test_that("prepare_vbp_table_data() errors on invalid group", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   expect_error(
     openqaly:::prepare_vbp_table_data(
@@ -258,7 +240,7 @@ test_that("prepare_vbp_table_data() errors on invalid group", {
 # ============================================================================
 
 test_that("vbp_table() uses 'vs. X' format for comparator columns", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   comparators <- unique(vbp_results$vbp_equations$comparator)
 
   prepared <- openqaly:::prepare_vbp_table_data(
@@ -272,7 +254,7 @@ test_that("vbp_table() uses 'vs. X' format for comparator columns", {
 })
 
 test_that("vbp_table() first column is 'WTP'", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
 
   prepared <- openqaly:::prepare_vbp_table_data(vbp_results)
 
@@ -284,7 +266,7 @@ test_that("vbp_table() first column is 'WTP'", {
 # ============================================================================
 
 test_that("vbp_table() maps comparator names to display names", {
-  vbp_results <- run_example_vbp()
+  vbp_results <- get_cached_vbp_results()
   prepared <- openqaly:::prepare_vbp_table_data(vbp_results)
 
   # Check that table is created successfully with display name mapping

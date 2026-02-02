@@ -11,7 +11,6 @@ prepare_incremental_ceac_table_data(
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
   strategies = NULL,
-  show_optimal = TRUE,
   decimals = 1,
   font_size = 11
 )
@@ -36,8 +35,6 @@ prepare_incremental_ceac_table_data(
 }}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
-
-\item{show_optimal}{Logical. Highlight optimal strategy at each WTP?}
 
 \item{decimals}{Number of decimal places for percentages}
 

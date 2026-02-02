@@ -13,7 +13,7 @@ NULL
 #'
 #' Initialize a new openqaly model object with the specified type.
 #'
-#' @param type Character string specifying the model type ("markov" or "psm")
+#' @param type Character string specifying the model type ("markov", "psm", or "custom_psm")
 #'
 #' @return An oq_model_builder object that can be piped to other builder functions
 #'
@@ -21,11 +21,13 @@ NULL
 #' @examples
 #' model <- define_model("markov")
 #' model <- define_model("psm")
+#' model <- define_model("custom_psm")
 define_model <- function(type = "markov") {
-  type <- match.arg(tolower(type), c("markov", "psm"))
+  type <- match.arg(tolower(type), c("markov", "psm", "custom_psm"))
 
   # Type-specific state initialization
-  states_init <- if (type == "psm") {
+  # PSM and Custom PSM use same 3-column state structure
+  states_init <- if (type %in% c("psm", "custom_psm")) {
     tibble(
       name = character(0),
       display_name = character(0),
@@ -49,6 +51,11 @@ define_model <- function(type = "markov") {
     tibble(
       endpoint = character(0),
       time_unit = character(0),
+      formula = character(0)
+    )
+  } else if (type == "custom_psm") {
+    tibble(
+      state = character(0),
       formula = character(0)
     )
   } else {
@@ -216,22 +223,22 @@ add_state <- function(model, name, display_name = NULL,
   # Get immutable model type
   model_type <- tolower(model$settings$model_type)
 
-  if (model_type == "psm") {
-    # PSM: Reject Markov-specific parameters
+  if (model_type %in% c("psm", "custom_psm")) {
+    # PSM and Custom PSM: Reject Markov-specific parameters
     if (!is.null(initial_prob)) {
-      stop("PSM models don't use initial_prob parameter. Remove it from add_state() call.")
+      stop("PSM/Custom PSM models don't use initial_prob parameter. Remove it from add_state() call.")
     }
     if (!is.null(state_group)) {
-      stop("PSM models don't use state_group parameter. Remove it from add_state() call.")
+      stop("PSM/Custom PSM models don't use state_group parameter. Remove it from add_state() call.")
     }
     if (share_state_time != FALSE) {
-      stop("PSM models don't use share_state_time parameter. Remove it from add_state() call.")
+      stop("PSM/Custom PSM models don't use share_state_time parameter. Remove it from add_state() call.")
     }
     if (!is.null(state_cycle_limit)) {
-      stop("PSM models don't use state_cycle_limit parameter. Remove it from add_state() call.")
+      stop("PSM/Custom PSM models don't use state_cycle_limit parameter. Remove it from add_state() call.")
     }
 
-    # Create PSM state (3 columns only)
+    # Create PSM/Custom PSM state (3 columns only)
     new_state <- tibble(
       name = name,
       display_name = display_name %||% name,
@@ -282,11 +289,13 @@ add_state <- function(model, name, display_name = NULL,
 #'   add_transition("sick", "dead", 0.2)
 add_transition <- function(model, from_state, to_state, formula) {
   # Check model type for appropriate structure
-  is_psm <- !is.null(model$settings$model_type) &&
-            tolower(model$settings$model_type) == "psm"
+  model_type <- tolower(model$settings$model_type %||% "markov")
 
-  if (is_psm) {
+  if (model_type == "psm") {
     stop("For PSM models, use add_psm_transition() instead")
+  }
+  if (model_type == "custom_psm") {
+    stop("For Custom PSM models, use add_custom_psm_transition() instead")
   }
 
   # Capture the formula expression using NSE
@@ -350,6 +359,60 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
   return(model)
 }
 
+#' Add Custom PSM Transition
+#'
+#' Add a state probability formula for a Custom PSM model. Each state must have
+#' exactly one probability formula that defines the probability of being in that
+#' state at each cycle.
+#'
+#' @param model An oq_model_builder object (must be type "custom_psm")
+#' @param state Character string for the state name (must exist in model states)
+#' @param formula An unquoted R expression for the state probability.
+#'   Use `C` for complement (1 - sum of other states). Only one state can use `C`.
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("custom_psm") |>
+#'   add_state("alive") |>
+#'   add_state("progressed") |>
+#'   add_state("dead") |>
+#'   add_custom_psm_transition("alive", surv_prob(pfs_dist, month)) |>
+#'   add_custom_psm_transition("progressed", surv_prob(os_dist, month) - surv_prob(pfs_dist, month)) |>
+#'   add_custom_psm_transition("dead", C)
+add_custom_psm_transition <- function(model, state, formula) {
+  # Check model type
+  is_custom_psm <- !is.null(model$settings$model_type) &&
+    tolower(model$settings$model_type) == "custom_psm"
+
+  if (!is_custom_psm) {
+    stop("add_custom_psm_transition() is only for Custom PSM models. ",
+         "Use add_transition() for Markov or add_psm_transition() for standard PSM.")
+  }
+
+  # Capture the formula expression using NSE
+  formula_quo <- enquo(formula)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
+
+  new_trans <- tibble(
+    state = state,
+    formula = formula_str
+  )
+
+  model$transitions <- bind_rows(model$transitions, new_trans)
+
+  # Incremental validation
+  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+
+  return(model)
+}
+
 #' Add Values to Model
 #'
 #' Add one or more values to the model. Uses NSE to capture formula expressions.
@@ -372,6 +435,17 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
 add_value <- function(model, name, formula, state = NA, destination = NA,
                      display_name = NULL, description = NULL,
                      type = "outcome") {
+
+  # Check for transitional values in custom_psm (not supported)
+  model_type <- tolower(model$settings$model_type %||% "markov")
+  if (model_type == "custom_psm") {
+    has_state <- !is.na(state) && state != "NA"
+    has_dest <- !is.na(destination) && destination != "NA"
+    if (has_state && has_dest) {
+      stop("Custom PSM models do not support transitional values (both state and destination). ",
+           "Use residency values (state only) or model-level values (no state/destination).")
+    }
+  }
 
   # Capture the formula expression using NSE
   formula_quo <- enquo(formula)
@@ -488,6 +562,45 @@ add_variable <- function(model, name, formula, display_name = NULL,
   # Convert NULL to empty string for consistency
   if (is.null(display_name)) {
     display_name <- ""
+  }
+
+  # If sampling is provided, validate strategy/group targeting
+  # This ensures PSA sampling distributions are properly targeted
+  if (sampling_str != "") {
+    existing_vars <- model$variables[model$variables$name == name, ]
+    if (nrow(existing_vars) > 0) {
+      # Check if any existing definition has strategy-specific values
+      existing_strategies <- unique(existing_vars$strategy[existing_vars$strategy != ""])
+      if (length(existing_strategies) > 0 && strategy == "") {
+        stop(sprintf(
+          paste0(
+            "Variable '%s' already has strategy-specific definitions: %s\n",
+            "You must specify which strategy this sampling applies to using the 'strategy' parameter.\n",
+            "Example: add_variable(\"%s\", ..., strategy = \"%s\", sampling = ...)"
+          ),
+          name,
+          paste(existing_strategies, collapse = ", "),
+          name,
+          existing_strategies[1]
+        ), call. = FALSE)
+      }
+
+      # Check if any existing definition has group-specific values
+      existing_groups <- unique(existing_vars$group[existing_vars$group != ""])
+      if (length(existing_groups) > 0 && group == "") {
+        stop(sprintf(
+          paste0(
+            "Variable '%s' already has group-specific definitions: %s\n",
+            "You must specify which group this sampling applies to using the 'group' parameter.\n",
+            "Example: add_variable(\"%s\", ..., group = \"%s\", sampling = ...)"
+          ),
+          name,
+          paste(existing_groups, collapse = ", "),
+          name,
+          existing_groups[1]
+        ), call. = FALSE)
+      }
+    }
   }
 
   new_var <- tibble(
@@ -803,6 +916,68 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   model
 }
 
+#' Validate Variable Targeting for Sensitivity Analyses
+#'
+#' Checks if a variable requires strategy and/or group specification when used
+#' in sensitivity analyses. If the variable is defined with specific strategies
+#' or groups, this validation ensures the user explicitly specifies which
+#' strategy/group to target.
+#'
+#' @param model A model object (oq_model_builder or parsed)
+#' @param variable Character string naming the variable
+#' @param strategy Strategy specification (empty string if not provided)
+#' @param group Group specification (empty string if not provided)
+#' @param analysis_type Character string for error message (e.g., "DSA", "TWSA")
+#' @param add_function_name Character string for example in error message
+#'
+#' @return Invisible NULL if valid, stops with error if invalid
+#' @keywords internal
+validate_variable_targeting <- function(model, variable, strategy, group,
+                                         analysis_type, add_function_name) {
+  matching_vars <- model$variables[model$variables$name == variable, ]
+  if (nrow(matching_vars) == 0) return(invisible(NULL))
+
+  # Check group-specific
+  non_na_groups <- matching_vars$group[!is.na(matching_vars$group)]
+  has_group_specific <- length(non_na_groups) > 0 && any(non_na_groups != "")
+  if (has_group_specific && group == "") {
+    defined_groups <- unique(non_na_groups[non_na_groups != ""])
+    stop(sprintf(
+      paste0(
+        "Variable '%s' is defined for specific group(s): %s\n",
+        "You must specify which group to vary using the 'group' parameter.\n",
+        "Example: %s(\"%s\", ..., group = \"%s\")"
+      ),
+      variable,
+      paste(defined_groups, collapse = ", "),
+      add_function_name,
+      variable,
+      defined_groups[1]
+    ), call. = FALSE)
+  }
+
+  # Check strategy-specific
+  non_na_strategies <- matching_vars$strategy[!is.na(matching_vars$strategy)]
+  has_strategy_specific <- length(non_na_strategies) > 0 && any(non_na_strategies != "")
+  if (has_strategy_specific && strategy == "") {
+    defined_strategies <- unique(non_na_strategies[non_na_strategies != ""])
+    stop(sprintf(
+      paste0(
+        "Variable '%s' is defined for specific strategy(ies): %s\n",
+        "You must specify which strategy to vary using the 'strategy' parameter.\n",
+        "Example: %s(\"%s\", ..., strategy = \"%s\")"
+      ),
+      variable,
+      paste(defined_strategies, collapse = ", "),
+      add_function_name,
+      variable,
+      defined_strategies[1]
+    ), call. = FALSE)
+  }
+
+  invisible(NULL)
+}
+
 #' Add Deterministic Sensitivity Analysis Variable to Model
 #'
 #' Define a variable to include in deterministic sensitivity analysis (DSA).
@@ -881,27 +1056,9 @@ add_dsa_variable <- function(model, variable, low, high,
     stop("variable must be a single character string")
   }
 
-  # Check if variable is group-specific and require group specification
-  matching_vars <- model$variables[model$variables$name == variable, ]
-  if (nrow(matching_vars) > 0) {
-    # Handle NA values: treat NA as not group-specific
-    non_na_groups <- matching_vars$group[!is.na(matching_vars$group)]
-    has_group_specific <- length(non_na_groups) > 0 && any(non_na_groups != "")
-    if (has_group_specific && group == "") {
-      defined_groups <- unique(non_na_groups[non_na_groups != ""])
-      stop(sprintf(
-        paste0(
-          "Variable '%s' is defined for specific group(s): %s\n",
-          "You must specify which group to vary using the 'group' parameter.\n",
-          "Example: add_dsa_variable(\"%s\", low = ..., high = ..., group = \"%s\")"
-        ),
-        variable,
-        paste(defined_groups, collapse = ", "),
-        variable,
-        defined_groups[1]
-      ), call. = FALSE)
-    }
-  }
+  # Validate strategy/group targeting for strategy/group-specific variables
+  validate_variable_targeting(model, variable, strategy, group,
+                              "DSA", "add_dsa_variable")
 
   # Check for existing DSA parameter with same name/strategy/group and replace if found
   if (length(model$dsa_parameters) > 0) {
@@ -1158,6 +1315,10 @@ add_scenario_variable <- function(model, scenario, variable, value,
     stop("variable must be a single character string", call. = FALSE)
   }
 
+  # Validate strategy/group targeting for strategy/group-specific variables
+  validate_variable_targeting(model, variable, strategy, group,
+                              "Scenario", "add_scenario_variable")
+
   # Find scenario index
   scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
   if (length(scenario_idx) == 0) {
@@ -1363,6 +1524,9 @@ add_twsa <- function(model, name, description = NULL) {
 #' @param strategy Optional strategy name to limit the variable to specific strategy
 #' @param group Optional group name to limit the variable to specific group
 #' @param display_name Optional display name for plots and tables
+#' @param include_base_case Logical. If TRUE (default), ensures the base case
+#'   value is included in the parameter grid. If the base case value is already
+#'   present in the values, no duplicate is added.
 #'
 #' @return The modified model object
 #'
@@ -1392,7 +1556,8 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
                                radius = NULL, steps = NULL,
                                values = NULL,
                                strategy = "", group = "",
-                               display_name = NULL) {
+                               display_name = NULL,
+                               include_base_case = TRUE) {
   # Validate inputs
   if (!is.character(twsa_name) || length(twsa_name) != 1) {
     stop("twsa_name must be a single character string", call. = FALSE)
@@ -1400,6 +1565,10 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
   if (!is.character(variable) || length(variable) != 1) {
     stop("variable must be a single character string", call. = FALSE)
   }
+
+  # Validate strategy/group targeting for strategy/group-specific variables
+  validate_variable_targeting(model, variable, strategy, group,
+                              "TWSA", "add_twsa_variable")
 
   # Find TWSA index
   twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
@@ -1484,7 +1653,8 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
     values = values_formula,
     strategy = as.character(strategy),
     group = as.character(group),
-    display_name = display_name
+    display_name = display_name,
+    include_base_case = include_base_case
   )
 
   # Add to TWSA's parameters list
@@ -1519,6 +1689,9 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
 #' @param steps For type="range" or "radius": number of steps
 #' @param values For type="custom": numeric vector of values to use
 #' @param display_name Optional display name for plots and tables
+#' @param include_base_case Logical. If TRUE (default), ensures the base case
+#'   value is included in the parameter grid. If the base case value is already
+#'   present in the values, no duplicate is added.
 #'
 #' @return The modified model object
 #'
@@ -1537,7 +1710,8 @@ add_twsa_setting <- function(model, twsa_name, setting, type,
                               min = NULL, max = NULL,
                               radius = NULL, steps = NULL,
                               values = NULL,
-                              display_name = NULL) {
+                              display_name = NULL,
+                              include_base_case = TRUE) {
   # Validate inputs
   if (!is.character(twsa_name) || length(twsa_name) != 1) {
     stop("twsa_name must be a single character string", call. = FALSE)
@@ -1590,7 +1764,8 @@ add_twsa_setting <- function(model, twsa_name, setting, type,
     radius = radius,
     steps = steps,
     values = values,
-    display_name = display_name %||% setting
+    display_name = display_name %||% setting,
+    include_base_case = include_base_case
   )
 
   # Add to TWSA's parameters list

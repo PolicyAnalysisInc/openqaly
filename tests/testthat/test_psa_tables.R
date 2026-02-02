@@ -86,31 +86,6 @@ test_that("prepare_incremental_ceac_table_data() formats WTP as dollars", {
   expect_true(all(grepl("^\\$", wtp_vals)))
 })
 
-test_that("prepare_incremental_ceac_table_data() highlights optimal when show_optimal=TRUE", {
-  results <- get_cached_psa_results()
-
-  prepared <- prepare_incremental_ceac_table_data(
-    results, "total_qalys", "total_cost",
-    show_optimal = TRUE
-  )
-
-  # Should have highlighted_cells in special_rows
-  expect_true(length(prepared$special_rows$highlighted_cells) > 0)
-})
-
-test_that("prepare_incremental_ceac_table_data() no highlights when show_optimal=FALSE", {
-  results <- get_cached_psa_results()
-
-  prepared <- prepare_incremental_ceac_table_data(
-    results, "total_qalys", "total_cost",
-    show_optimal = FALSE
-  )
-
-  # Should have empty or no highlighted_cells
-  expect_true(is.null(prepared$special_rows$highlighted_cells) ||
-              length(prepared$special_rows$highlighted_cells) == 0)
-})
-
 test_that("prepare_incremental_ceac_table_data() sets correct column alignments", {
   results <- get_cached_psa_results()
 
@@ -282,7 +257,7 @@ test_that("prepare_psa_summary_table_data() formats costs with commas", {
 # Tests for pairwise_ceac_table()
 # ============================================================================
 
-test_that("pairwise_ceac_table() works in comparator mode", {
+test_that("pairwise_ceac_table() works with comparators", {
   results <- get_cached_psa_results()
 
   # Get first strategy as comparator
@@ -290,46 +265,49 @@ test_that("pairwise_ceac_table() works in comparator mode", {
 
   tbl <- pairwise_ceac_table(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     table_format = "kable"
   )
 
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
-test_that("pairwise_ceac_table() works in intervention mode", {
+test_that("pairwise_ceac_table() works with interventions", {
   results <- get_cached_psa_results()
 
   strategies <- results$metadata$strategies$display_name
 
   tbl <- pairwise_ceac_table(
     results, "total_qalys", "total_cost",
-    intervention = strategies[1],
+    interventions = strategies[1],
     table_format = "kable"
   )
 
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
-test_that("pairwise_ceac_table() errors when neither comparator nor intervention provided", {
+test_that("pairwise_ceac_table() errors when neither comparators nor interventions provided", {
   results <- get_cached_psa_results()
 
   expect_error(
     pairwise_ceac_table(results, "total_qalys", "total_cost"),
-    "comparator.*intervention|intervention.*comparator|must be provided"
+    "comparators.*interventions|interventions.*comparators|must be provided"
   )
 })
 
-test_that("pairwise_ceac_table() errors when both comparator and intervention provided", {
+test_that("pairwise_ceac_table() works with both comparators and interventions (N×M)", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$display_name
 
-  expect_error(
-    pairwise_ceac_table(results, "total_qalys", "total_cost",
-                        comparator = strategies[1],
-                        intervention = strategies[2]),
-    "not both|Only one"
+  # When both provided, creates explicit N×M comparisons
+  tbl <- pairwise_ceac_table(
+    results, "total_qalys", "total_cost",
+    comparators = strategies[1],
+    interventions = strategies[2],
+    table_format = "kable"
   )
+
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
 test_that("pairwise_ceac_table() respects table_format = 'flextable'", {
@@ -339,7 +317,7 @@ test_that("pairwise_ceac_table() respects table_format = 'flextable'", {
 
   tbl <- pairwise_ceac_table(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     table_format = "flextable"
   )
 
@@ -356,7 +334,7 @@ test_that("prepare_pairwise_ceac_table_data() generates comparison labels with '
 
   prepared <- prepare_pairwise_ceac_table_data(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1]
+    comparators = strategies[1]
   )
 
   # Headers should contain "vs." in comparison labels
@@ -371,7 +349,7 @@ test_that("prepare_pairwise_ceac_table_data() single group has one header row", 
 
   prepared <- prepare_pairwise_ceac_table_data(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     groups = "overall"
   )
 
@@ -385,7 +363,7 @@ test_that("prepare_pairwise_ceac_table_data() formats WTP as dollars", {
 
   prepared <- prepare_pairwise_ceac_table_data(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     wtp_thresholds = c(50000, 100000)
   )
 
@@ -401,7 +379,7 @@ test_that("prepare_pairwise_ceac_table_data() respects custom wtp_thresholds", {
 
   prepared <- prepare_pairwise_ceac_table_data(
     results, "total_qalys", "total_cost",
-    comparator = strategies[1],
+    comparators = strategies[1],
     wtp_thresholds = custom_wtp
   )
 

@@ -221,7 +221,7 @@ prepare_dsa_vbp_table_data <- function(results,
     for (col in setdiff(colnames(result_data), "parameter_display_name")) {
       if (is.numeric(result_data[[col]])) {
         rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, big.mark = ",", trim = TRUE)
+        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
       }
     }
 
@@ -292,7 +292,7 @@ prepare_dsa_vbp_table_data <- function(results,
       for (col in setdiff(colnames(grp_data), "parameter_display_name")) {
         if (is.numeric(grp_data[[col]])) {
           rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, big.mark = ",", trim = TRUE)
+          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 

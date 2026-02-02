@@ -7,7 +7,7 @@
 define_model(type = "markov")
 }
 \arguments{
-\item{type}{Character string specifying the model type ("markov" or "psm")}
+\item{type}{Character string specifying the model type ("markov", "psm", or "custom_psm")}
 }
 \value{
 An oq_model_builder object that can be piped to other builder functions
@@ -18,4 +18,5 @@ Initialize a new openqaly model object with the specified type.
 \examples{
 model <- define_model("markov")
 model <- define_model("psm")
+model <- define_model("custom_psm")
 }

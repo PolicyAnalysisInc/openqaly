@@ -30,9 +30,7 @@ model$variables <- model$variables %>%
     name == "p_mild" ~ "beta(bc, bc * 0.2)",
     name == "p_severe" ~ "beta(bc, bc * 0.2)",
     name == "p_death_severe" ~ "beta(bc, bc * 0.25)",
-    name == "c_mild" ~ "gamma(bc, bc * 0.2)",
     name == "c_severe" ~ "gamma(bc, bc * 0.2)",
-    name == "u_mild" ~ "beta(bc, bc * 0.1)",
     name == "u_severe" ~ "beta(bc, bc * 0.15)",
     TRUE ~ sampling
   ))
@@ -105,183 +103,159 @@ The `run_psa()` function executes the model for each Monte Carlo simulation, sam
 psa_results <- run_psa(model, n_sim = 1000, seed = 123)
 ```
 
-## PSA Scatter Plots
+## Outcome Results
 
-Scatter plots visualize simulation results on the cost-effectiveness plane.
+### Outcome Density Plot
 
-### Cost-Effectiveness Scatter Plot
+The `outcome_density_plot()` function creates density plots of outcome values from PSA simulations. It can display either absolute outcome distributions per strategy or distributions of outcome differences between intervention/comparator pairs.
 
-The `psa_scatter_plot()` function shows costs vs outcomes for all simulations.
+#### Basic usage (absolute mode)
 
-#### Basic usage
+Display outcome distributions for all strategies.
 
 ```{r, fig.width=9, fig.height=6}
-psa_scatter_plot(
+outcome_density_plot(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs"
+  strategies = c("seritinib", "volantor", "cendralimab")
 )
 ```
 
 #### Filtering to specific strategies
 
 ```{r, fig.width=9, fig.height=6}
-psa_scatter_plot(
+outcome_density_plot(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  strategies = c("standard", "new_treatment")
+  strategies = c("seritinib", "volantor")
 )
 ```
 
-#### Hiding mean points
+#### Incremental mode (comparator perspective)
+
+Show outcome differences relative to a comparator.
 
 ```{r, fig.width=9, fig.height=6}
-psa_scatter_plot(
+outcome_density_plot(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  show_means = FALSE
+  comparators = "seritinib"
 )
 ```
 
-### Pairwise Incremental Scatter Plot
-
-The `pairwise_psa_scatter_plot()` function shows incremental costs and outcomes relative to a comparator.
-
-#### Basic incremental CE plane
+#### Incremental mode (intervention perspective)
 
 ```{r, fig.width=9, fig.height=6}
-pairwise_psa_scatter_plot(
+outcome_density_plot(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  comparator = "standard"
+  interventions = "volantor"
 )
 ```
 
-#### With WTP threshold line
+#### Multiple comparisons
+
+Compare multiple interventions against a common comparator.
 
 ```{r, fig.width=9, fig.height=6}
-pairwise_psa_scatter_plot(
+outcome_density_plot(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  comparator = "standard",
-  wtp = 50000
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib"
 )
 ```
 
-## CEAC Plots
+#### Hiding mean lines
 
-Cost-effectiveness acceptability curves (CEACs) show the probability of being cost-effective across willingness-to-pay (WTP) thresholds.
+```{r, fig.width=9, fig.height=6}
+outcome_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  show_mean = FALSE
+)
+```
 
-### Incremental CEAC
+#### Undiscounted outcomes
 
-The `incremental_ceac_plot()` function shows the probability that each strategy has the highest net monetary benefit.
+```{r, fig.width=9, fig.height=6}
+outcome_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  discounted = FALSE
+)
+```
+
+#### Results by population subgroup
+
+Use `groups = "all_groups"` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
+outcome_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  groups = "all_groups"
+)
+```
+
+Use `groups = "all"` to include both the overall population and all subgroups.
+
+```{r, fig.width=9, fig.height=6}
+outcome_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  groups = "all"
+)
+```
+
+### PSA Outcomes Table
+
+The `psa_outcomes_table()` function displays summary statistics for outcome values from PSA simulations, including mean, SD, median (IQR), and range.
 
 #### Basic usage
 
-```{r, fig.width=9, fig.height=6}
-incremental_ceac_plot(
+```{r}
+psa_outcomes_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  outcome_summary = "qalys"
 )
 ```
 
-#### Custom WTP range
+#### Outcome differences relative to comparator
 
-```{r, fig.width=9, fig.height=6}
-incremental_ceac_plot(
+```{r}
+psa_outcomes_table(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  wtp_range = c(0, 200000),
-  wtp_step = 5000
+  comparators = "seritinib"
 )
 ```
 
-### Pairwise CEAC
+#### Undiscounted outcomes
 
-The `pairwise_ceac_plot()` function shows the probability that an intervention is cost-effective compared to a specific comparator.
-
-#### Intervention perspective
-
-```{r, fig.width=9, fig.height=6}
-pairwise_ceac_plot(
+```{r}
+psa_outcomes_table(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  intervention = "new_treatment"
+  discounted = FALSE
 )
 ```
 
-#### Comparator perspective
+#### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
-pairwise_ceac_plot(
+```{r}
+psa_outcomes_table(
   psa_results,
   outcome_summary = "qalys",
-  cost_summary = "costs",
-  comparator = "standard"
+  groups = "all_groups"
 )
 ```
 
-## EVPI Plot
-
-The expected value of perfect information (EVPI) represents the maximum amount a decision maker should pay to eliminate all parameter uncertainty.
-
-### Basic EVPI plot
-
-```{r, fig.width=9, fig.height=6}
-evpi_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
-)
-```
-
-### Custom WTP range
-
-```{r, fig.width=9, fig.height=6}
-evpi_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
-  wtp_range = c(0, 200000),
-  wtp_step = 5000
-)
-```
-
-## NMB Density Plot
-
-The `nmb_density_plot()` function shows the distribution of net monetary benefit across simulations.
-
-### Basic usage
-
-```{r, fig.width=9, fig.height=6}
-nmb_density_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
-  wtp = 50000
-)
-```
-
-### With mean lines
-
-```{r, fig.width=9, fig.height=6}
-nmb_density_plot(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
-  wtp = 50000,
-  show_mean = TRUE
-)
-```
-
-## PSA Tables
+## Cost-Effectiveness Results
 
 ### PSA Summary Table
 
@@ -315,7 +289,202 @@ psa_summary_table(
   psa_results,
   outcome_summary = "qalys",
   cost_summary = "costs",
-  strategies = c("standard", "new_treatment")
+  strategies = c("seritinib", "volantor")
+)
+```
+
+#### Results by population subgroup
+
+```{r}
+psa_summary_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all_groups"
+)
+```
+
+### CE Scatter Plot
+
+Scatter plots visualize simulation results on the cost-effectiveness plane.
+
+The `psa_scatter_plot()` function shows costs vs outcomes for all simulations.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  strategies = c("seritinib", "volantor")
+)
+```
+
+#### Hiding mean points
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  show_means = FALSE
+)
+```
+
+#### Results by population subgroup
+
+Use `groups = "all_groups"` to display results for each population subgroup separately.
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all_groups"
+)
+```
+
+Use `groups = "all"` to include both the overall population and all subgroups.
+
+```{r, fig.width=9, fig.height=6}
+psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all"
+)
+```
+
+### Pairwise Incremental Scatter Plot
+
+The `pairwise_psa_scatter_plot()` function shows incremental costs and outcomes relative to a comparator.
+
+#### Basic incremental CE plane
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "seritinib"
+)
+```
+
+#### With WTP threshold line
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "seritinib",
+  wtp = 50000
+)
+```
+
+#### Multiple interventions
+
+Compare multiple interventions against a common comparator.
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib",
+  wtp = 50000
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=6}
+pairwise_psa_scatter_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "seritinib",
+  groups = "all_groups"
+)
+```
+
+### CE Quadrant Table
+
+The `ce_quadrant_table()` function shows the percentage of simulations falling into each quadrant of the cost-effectiveness plane relative to a comparator.
+
+#### Basic usage
+
+```{r}
+ce_quadrant_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "Seritinib"
+)
+```
+
+#### Results by population subgroup
+
+```{r}
+ce_quadrant_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparator = "Seritinib",
+  groups = "all_groups"
+)
+```
+
+## Cost-Effectiveness Acceptability Curves (CEAC)
+
+Cost-effectiveness acceptability curves (CEACs) show the probability of being cost-effective across willingness-to-pay (WTP) thresholds.
+
+### Incremental CEAC Plot
+
+The `incremental_ceac_plot()` function shows the probability that each strategy has the highest net monetary benefit.
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### Custom WTP range
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp_range = c(0, 200000),
+  wtp_step = 5000
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=6}
+incremental_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all_groups"
 )
 ```
 
@@ -333,17 +502,6 @@ incremental_ceac_table(
 )
 ```
 
-#### With optimal strategy highlighting
-
-```{r}
-incremental_ceac_table(
-  psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
-  show_optimal = TRUE
-)
-```
-
 #### Custom WTP thresholds
 
 ```{r}
@@ -352,6 +510,57 @@ incremental_ceac_table(
   outcome_summary = "qalys",
   cost_summary = "costs",
   wtp_thresholds = c(20000, 50000, 100000, 150000, 200000)
+)
+```
+
+#### Results by population subgroup
+
+```{r}
+incremental_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all_groups"
+)
+```
+
+### Pairwise CEAC Plot
+
+The `pairwise_ceac_plot()` function shows the probability that an intervention is cost-effective compared to a specific comparator.
+
+#### Intervention perspective
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = "volantor"
+)
+```
+
+#### Comparator perspective
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  comparators = "seritinib"
+)
+```
+
+#### Multiple comparisons
+
+Compare multiple interventions against a common comparator.
+
+```{r, fig.width=9, fig.height=6}
+pairwise_ceac_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib"
 )
 ```
 
@@ -366,7 +575,7 @@ pairwise_ceac_table(
   psa_results,
   outcome_summary = "qalys",
   cost_summary = "costs",
-  intervention = "new_treatment"
+  interventions = "volantor"
 )
 ```
 
@@ -377,13 +586,178 @@ pairwise_ceac_table(
   psa_results,
   outcome_summary = "qalys",
   cost_summary = "costs",
-  comparator = "standard"
+  comparators = "seritinib"
+)
+```
+
+#### Multiple comparisons
+
+```{r}
+pairwise_ceac_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib"
+)
+```
+
+## Net Monetary Benefit (NMB)
+
+### Incremental NMB Density Plot
+
+The `nmb_density_plot()` function shows the distribution of incremental net monetary benefit across simulations relative to a comparator strategy.
+
+#### Basic usage (comparator mode)
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  comparators = "seritinib"
+)
+```
+
+#### Hiding mean lines
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  comparators = "seritinib",
+  show_mean = FALSE
+)
+```
+
+#### Intervention mode
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 100000,
+  interventions = "volantor"
+)
+```
+
+#### Multiple comparisons
+
+Compare multiple interventions against a common comparator.
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib"
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=6}
+nmb_density_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  comparators = "seritinib",
+  groups = "all_groups"
+)
+```
+
+### PSA Incremental NMB Table
+
+The `psa_nmb_table()` function displays summary statistics for incremental net monetary benefit from PSA simulations, including mean, SD, median (IQR), range, and probability of positive NMB.
+
+#### Comparator perspective
+
+```{r}
+psa_nmb_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  comparators = "seritinib"
+)
+```
+
+#### Intervention perspective
+
+```{r}
+psa_nmb_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 100000,
+  interventions = "volantor"
+)
+```
+
+#### Results by population subgroup
+
+```{r}
+psa_nmb_table(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp = 50000,
+  comparators = "seritinib",
+  groups = "all_groups"
+)
+```
+
+## Expected Value of Perfect Information (EVPI)
+
+The expected value of perfect information (EVPI) represents the maximum amount a decision maker should pay to eliminate all parameter uncertainty.
+
+### EVPI Plot
+
+#### Basic usage
+
+```{r, fig.width=9, fig.height=6}
+evpi_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs"
+)
+```
+
+#### Custom WTP range
+
+```{r, fig.width=9, fig.height=6}
+evpi_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  wtp_range = c(0, 200000),
+  wtp_step = 5000
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=6}
+evpi_plot(
+  psa_results,
+  outcome_summary = "qalys",
+  cost_summary = "costs",
+  groups = "all_groups"
 )
 ```
 
 ### EVPI Table
 
 The `evpi_table()` function presents EVPI values at selected WTP thresholds.
+
+#### Basic usage
 
 ```{r}
 evpi_table(
@@ -393,18 +767,18 @@ evpi_table(
 )
 ```
 
-### CE Quadrant Table
-
-The `ce_quadrant_table()` function shows the percentage of simulations falling into each quadrant of the cost-effectiveness plane relative to a comparator.
+#### Results by population subgroup
 
 ```{r}
-ce_quadrant_table(
+evpi_table(
   psa_results,
   outcome_summary = "qalys",
   cost_summary = "costs",
-  comparator = "Standard Care"
+  groups = "all_groups"
 )
 ```
+
+## Parameter Diagnostics
 
 ### PSA Parameters Table
 
@@ -425,7 +799,7 @@ The `psa_parameter_scatter_matrix()` function creates a scatterplot matrix showi
 psa_parameter_scatter_matrix(
   psa_results,
   variables = c("p_mild", "p_severe", "u_mild", "u_severe"),
-  strategies = "standard"
+  strategies = "seritinib",
+  group = "low_risk"
 )
 ```
-

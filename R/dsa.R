@@ -673,7 +673,7 @@ extract_dsa_summaries <- function(results,
                                   strategies = NULL,
                                   interventions = NULL,
                                   comparators = NULL,
-                                  discounted = FALSE) {
+                                  discounted = TRUE) {
 
   value_type <- match.arg(value_type)
 

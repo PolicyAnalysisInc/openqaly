@@ -12,7 +12,7 @@ prepare_scenario_outcomes_table_data(
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
-  discounted = FALSE,
+  discounted = TRUE,
   font_size = 11
 )
 }

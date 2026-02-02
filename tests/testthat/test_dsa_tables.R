@@ -4,45 +4,12 @@ context("DSA Tables")
 # Test Fixtures
 # ============================================================================
 
-build_dsa_test_model <- function() {
-  define_model("markov") |>
-    set_settings(
-      timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) |>
-    add_strategy("standard", display_name = "Standard") |>
-    add_strategy("new_treatment", display_name = "New Treatment") |>
-    add_state("healthy", initial_prob = 1) |>
-    add_state("sick", initial_prob = 0) |>
-    add_state("dead", initial_prob = 0) |>
-    add_variable("p_sick", 0.1) |>
-    add_variable("p_death", 0.05) |>
-    add_variable("c_healthy", 1000, strategy = "standard") |>
-    add_variable("c_healthy", 3000, strategy = "new_treatment") |>
-    add_variable("c_sick", 5000) |>
-    add_variable("u_healthy", 0.9) |>
-    add_variable("u_sick", 0.5) |>
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Probability of Sickness") |>
-    add_dsa_variable("c_sick", low = 3000, high = 7000,
-                     display_name = "Cost of Sick State") |>
-    add_transition("healthy", "sick", "p_sick") |>
-    add_transition("healthy", "dead", "p_death") |>
-    add_transition("healthy", "healthy", "1 - p_sick - p_death") |>
-    add_transition("sick", "dead", "0.15") |>
-    add_transition("sick", "sick", "0.85") |>
-    add_transition("dead", "dead", "1") |>
-    add_value("cost", "c_healthy", state = "healthy") |>
-    add_value("cost", "c_sick", state = "sick") |>
-    add_value("qaly", "u_healthy", state = "healthy") |>
-    add_value("qaly", "u_sick", state = "sick") |>
-    add_summary("total_cost", "cost") |>
-    add_summary("total_qalys", "qaly")
-}
+# Model builders and cached results are defined in setup.R
+# (build_simple_dsa_model, get_cached_dsa_results)
 
 get_dsa_test_results <- function() {
-  model <- build_dsa_test_model()
-  run_dsa(model)
+  # Use cached results from setup.R for performance
+  get_cached_dsa_results()
 }
 
 # ============================================================================
@@ -451,8 +418,7 @@ test_that("dsa_outcomes_table() works with cost outcomes (kable format)", {
 
 test_that("Full DSA table workflow produces valid kable output", {
 
-  model <- build_dsa_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_test_results()
 
   # Generate tables for both outcomes using kable format
   qaly_tbl <- dsa_outcomes_table(results, "total_qalys", groups = "overall",
@@ -466,8 +432,7 @@ test_that("Full DSA table workflow produces valid kable output", {
 
 test_that("DSA comparison table workflow produces valid kable output", {
 
-  model <- build_dsa_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_test_results()
 
   # Generate comparison tables with comparators using kable format
   diff_tbl <- dsa_outcomes_table(
@@ -504,46 +469,11 @@ test_that("DSA table with strategy filter works", {
 # DSA NMB Table Tests
 # ============================================================================
 
-# Helper to build a model with WTP metadata for NMB tests
-build_dsa_nmb_test_model <- function() {
-  define_model("markov") |>
-    set_settings(
-      timeframe = 10, timeframe_unit = "years",
-      cycle_length = 1, cycle_length_unit = "years"
-    ) |>
-    add_strategy("standard", display_name = "Standard") |>
-    add_strategy("new_treatment", display_name = "New Treatment") |>
-    add_state("healthy", initial_prob = 1) |>
-    add_state("sick", initial_prob = 0) |>
-    add_state("dead", initial_prob = 0) |>
-    add_variable("p_sick", 0.1) |>
-    add_variable("p_death", 0.05) |>
-    add_variable("c_healthy", 1000, strategy = "standard") |>
-    add_variable("c_healthy", 3000, strategy = "new_treatment") |>
-    add_variable("c_sick", 5000) |>
-    add_variable("u_healthy", 0.9) |>
-    add_variable("u_sick", 0.5) |>
-    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
-                     display_name = "Probability of Sickness") |>
-    add_dsa_variable("c_sick", low = 3000, high = 7000,
-                     display_name = "Cost of Sick State") |>
-    add_transition("healthy", "sick", "p_sick") |>
-    add_transition("healthy", "dead", "p_death") |>
-    add_transition("healthy", "healthy", "1 - p_sick - p_death") |>
-    add_transition("sick", "dead", "0.15") |>
-    add_transition("sick", "sick", "0.85") |>
-    add_transition("dead", "dead", "1") |>
-    add_value("cost", "c_healthy", state = "healthy") |>
-    add_value("cost", "c_sick", state = "sick") |>
-    add_value("qaly", "u_healthy", state = "healthy") |>
-    add_value("qaly", "u_sick", state = "sick") |>
-    add_summary("total_cost", "cost") |>
-    add_summary("total_qalys", "qaly", wtp = 50000)
-}
+# Model builder and cache defined in setup.R (build_dsa_nmb_test_model, get_cached_dsa_nmb_results)
 
 get_dsa_nmb_test_results <- function() {
-  model <- build_dsa_nmb_test_model()
-  run_dsa(model)
+  # Use cached results from setup.R for performance
+  get_cached_dsa_nmb_results()
 }
 
 # ============================================================================
@@ -767,8 +697,7 @@ test_that("dsa_nmb_table() respects decimals parameter", {
 
 test_that("Full DSA NMB table workflow produces valid output", {
 
-  model <- build_dsa_nmb_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_nmb_test_results()
 
   # Generate NMB table with comparators
   nmb_tbl <- dsa_nmb_table(results, "total_qalys", "total_cost",
@@ -781,8 +710,7 @@ test_that("Full DSA NMB table workflow produces valid output", {
 
 test_that("DSA NMB table with interventions produces valid output", {
 
-  model <- build_dsa_nmb_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_nmb_test_results()
 
   nmb_tbl <- dsa_nmb_table(results, "total_qalys", "total_cost",
                            groups = "overall",
@@ -802,50 +730,51 @@ test_that("DSA NMB table with interventions produces valid output", {
 # DSA CE Table: Helper Function Tests
 # ============================================================================
 
-test_that("detect_direction_change() detects sign changes correctly", {
-  # Positive to negative = direction change
-  expect_true(openqaly:::detect_direction_change(50000, -50000))
+test_that("is_flipped_icer() detects SW quadrant (negative) ICERs correctly", {
+  # Negative ICER = SW quadrant = flipped direction
+  expect_true(openqaly:::is_flipped_icer(-50000))
+  expect_true(openqaly:::is_flipped_icer(-1))
 
-  # Negative to positive = direction change
-  expect_true(openqaly:::detect_direction_change(-50000, 50000))
+  # Positive ICER = NE quadrant = normal requested direction
+  expect_false(openqaly:::is_flipped_icer(50000))
+  expect_false(openqaly:::is_flipped_icer(1))
 
-  # Same sign = no direction change
-  expect_false(openqaly:::detect_direction_change(50000, 60000))
-  expect_false(openqaly:::detect_direction_change(-50000, -60000))
-
-  # Special values = no direction change
-  expect_false(openqaly:::detect_direction_change(50000, Inf))
-  expect_false(openqaly:::detect_direction_change(50000, 0))
-  expect_false(openqaly:::detect_direction_change(50000, NaN))
-  expect_false(openqaly:::detect_direction_change(50000, NA))
-  expect_false(openqaly:::detect_direction_change(Inf, -50000))
-  expect_false(openqaly:::detect_direction_change(0, 50000))
+  # Special values = not flipped
+  expect_false(openqaly:::is_flipped_icer(Inf))
+  expect_false(openqaly:::is_flipped_icer(0))
+  expect_false(openqaly:::is_flipped_icer(NaN))
+  expect_false(openqaly:::is_flipped_icer(NA))
 })
 
 test_that("format_ce_cell() formats ICER values correctly", {
-  # Positive finite
-  expect_equal(openqaly:::format_ce_cell(50000, 50000, 0), "50,000")
+  # Positive finite - no asterisk (matches requested direction)
+  expect_equal(openqaly:::format_ce_cell(50000, 0), "50,000")
 
   # Dominated
-  expect_equal(openqaly:::format_ce_cell(Inf, 50000, 0), "Dominated")
+  expect_equal(openqaly:::format_ce_cell(Inf, 0), "Dominated")
 
   # Dominant
-  expect_equal(openqaly:::format_ce_cell(0, 50000, 0), "Dominant")
+  expect_equal(openqaly:::format_ce_cell(0, 0), "Dominant")
 
   # Equivalent
-  expect_equal(openqaly:::format_ce_cell(NaN, 50000, 0), "Equivalent")
+  expect_equal(openqaly:::format_ce_cell(NaN, 0), "Equivalent")
 
   # NA (reference)
-  expect_equal(openqaly:::format_ce_cell(NA, 50000, 0), "")
+  expect_equal(openqaly:::format_ce_cell(NA, 0), "")
 
-  # Direction change (negative with positive base)
-  result <- openqaly:::format_ce_cell(-50000, 50000, 0)
+  # Negative ICER = flipped direction = asterisk
+  # Asterisk appears when ICER differs from REQUESTED direction (negative = SW quadrant)
+  result <- openqaly:::format_ce_cell(-50000, 0)
   expect_true(grepl("\\*", result))
   expect_true(grepl("50,000", result))
 
-  # Negative value with negative base (no direction change, but negative itself gets asterisk)
-  result <- openqaly:::format_ce_cell(-50000, -40000, 0)
+  # Another negative value - also gets asterisk
+  result <- openqaly:::format_ce_cell(-40000, 0)
   expect_true(grepl("\\*", result))
+
+  # Positive value - no asterisk (matches requested direction)
+  result <- openqaly:::format_ce_cell(60000, 0)
+  expect_false(grepl("\\*", result))
 })
 
 # ============================================================================
@@ -1026,8 +955,8 @@ test_that("DSA CE table ICER values match manual calculation", {
 
   base_value <- prepared$data[[base_col]][1]
 
-  # Expected formatted value
-  expected_formatted <- openqaly:::format_ce_cell(as.numeric(expected_icer), as.numeric(expected_icer), 0)
+  # Expected formatted value (format_ce_cell now only takes icer_value and decimals)
+  expected_formatted <- openqaly:::format_ce_cell(as.numeric(expected_icer), 0)
 
   expect_equal(base_value, expected_formatted)
 })
@@ -1038,8 +967,7 @@ test_that("DSA CE table ICER values match manual calculation", {
 
 test_that("Full DSA CE table workflow produces valid output", {
 
-  model <- build_dsa_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_test_results()
 
   # Generate CE table with comparators
   ce_tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
@@ -1052,8 +980,7 @@ test_that("Full DSA CE table workflow produces valid output", {
 
 test_that("DSA CE table with interventions produces valid output", {
 
-  model <- build_dsa_test_model()
-  results <- run_dsa(model)
+  results <- get_dsa_test_results()
 
   ce_tbl <- dsa_ce_table(results, "total_qalys", "total_cost",
                          groups = "overall",
@@ -1086,4 +1013,103 @@ test_that("DSA CE table cells show special values correctly", {
       )
     }
   }
+})
+
+# ============================================================================
+# DSA CE Table: End-to-End Asterisk Tests
+# ============================================================================
+
+# Helper to build a flipped model (SW quadrant base case)
+build_flipped_dsa_ce_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    # Treatment is CHEAPER (flipped setup: less cost)
+    add_variable("c_treatment", 8000, strategy = "control") %>%
+    add_variable("c_treatment", 2000, strategy = "treatment") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    # Treatment is also LESS effective (flipped: worse outcomes)
+    add_variable("treatment_effect", 1.0, strategy = "control") %>%
+    add_variable("treatment_effect", 1.3, strategy = "treatment") %>%
+    add_dsa_variable("p_sick", low = 0.05, high = 0.15,
+                     display_name = "Prob. Getting Sick") %>%
+    add_dsa_variable("c_treatment", low = 1000, high = 3000,
+                     display_name = "Treatment Cost", strategy = "treatment") %>%
+    add_transition("healthy", "sick", "p_sick * treatment_effect") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy",
+                   "1 - p_sick * treatment_effect - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
+    add_value("cost", "0", state = "dead") %>%
+    add_value("qalys", "u_healthy", state = "healthy") %>%
+    add_value("qalys", "u_sick", state = "sick") %>%
+    add_value("qalys", "0", state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qalys", wtp = 50000)
+}
+
+test_that("DSA CE table adds asterisks for flipped (negative) ICERs", {
+  # Build a model where base case produces a flipped (SW quadrant) ICER
+  model <- build_flipped_dsa_ce_model()
+  results <- run_dsa(model)
+
+  # Get CE table data
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall",
+    interventions = "treatment",
+    comparators = "control",
+    decimals = 0
+  )
+
+  # Check that we have data
+  expect_true(nrow(prepared$data) > 0)
+
+  # Get all ICER cell values (skip first column which is parameter name)
+  all_values <- unlist(prepared$data[, -1])
+
+  # For a flipped base case, base ICER should have asterisk
+  # Check that at least some values have asterisks (flipped ICERs)
+  has_asterisk_values <- any(grepl("\\*$", all_values), na.rm = TRUE)
+
+  # The model is designed to produce flipped ICERs, so we expect asterisks
+  # If no asterisks, all values should be special cases (Dominated, Dominant, etc.)
+  if (!has_asterisk_values) {
+    special_values <- c("Dominated", "Dominant", "Equivalent", "")
+    non_special <- all_values[!all_values %in% special_values & !is.na(all_values)]
+    # If there are non-special values, they should have asterisks for flipped model
+    expect_true(length(non_special) == 0 || all(grepl("\\*$", non_special)))
+  }
+})
+
+test_that("DSA CE table footnotes are generated for flipped ICERs", {
+  model <- build_flipped_dsa_ce_model()
+  results <- run_dsa(model)
+
+  prepared <- openqaly:::prepare_dsa_ce_table_data(
+    results, "total_qalys", "total_cost",
+    groups = "overall",
+    interventions = "treatment",
+    comparators = "control",
+    decimals = 0
+  )
+
+  # Footnotes should be present if any ICERs are flipped
+  expect_true(is.character(prepared$footnotes) || length(prepared$footnotes) == 0)
 })

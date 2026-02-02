@@ -62,7 +62,7 @@ prepare_scenario_vbp_table_data <- function(results,
     for (col in comparators_display) {
       if (is.numeric(result_data[[col]])) {
         rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- format(rounded_vals, big.mark = ",", nsmall = decimals, scientific = FALSE)
+        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
       }
     }
 
@@ -116,7 +116,7 @@ prepare_scenario_vbp_table_data <- function(results,
       for (col in comparators_display) {
         if (is.numeric(grp_data[[col]])) {
           rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- format(rounded_vals, big.mark = ",", nsmall = decimals, scientific = FALSE)
+          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
         }
       }
 

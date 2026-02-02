@@ -1,38 +1,16 @@
 context("DSA+VBP")
 
-# ============================================================================
-# Test Fixtures
-# ============================================================================
-
-get_example_model <- function() {
-  model_path <- system.file("models", "example_psm", package = "openqaly")
-  if (model_path == "") {
-    model_path <- "inst/models/example_psm"
-  }
-  read_model(model_path)
-}
-
-run_example_dsa_vbp <- function() {
-  model <- get_example_model()
-
-  # Add DSA parameters (use u_pfs, NOT c_drug since c_drug is the VBP price variable)
-  model <- model %>%
-    add_dsa_variable("u_pfs", low = bc * 0.8, high = bc * 1.2)
-
-  run_dsa(
-    model,
-    vbp_price_variable = "c_drug",
-    vbp_intervention = "targeted"
-  )
-}
+# Uses cached fixtures from setup.R:
+# - get_cached_dsa_vbp_results() for test results
+# - get_cached_dsa_vbp_model() for fresh model (NMB test)
+# - build_dsa_vbp_model() for validation tests requiring fresh models
 
 # ============================================================================
 # 1. Validation Tests
 # ============================================================================
 
 test_that("run_dsa() errors when vbp_intervention missing but vbp_price_variable set", {
-  model <- get_example_model() %>%
-    add_dsa_variable("u_pfs", low = bc * 0.8, high = bc * 1.2)
+  model <- build_dsa_vbp_model()
 
   expect_error(
     run_dsa(
@@ -44,7 +22,10 @@ test_that("run_dsa() errors when vbp_intervention missing but vbp_price_variable
 })
 
 test_that("run_dsa() errors on invalid VBP intervention strategy", {
-  model <- get_example_model() %>%
+  # Need fresh model with different DSA variable for this test
+  model_path <- system.file("models", "example_psm", package = "openqaly")
+  if (model_path == "") model_path <- "inst/models/example_psm"
+  model <- read_model(model_path) %>%
     add_dsa_variable("c_drug", low = 0, high = 1000, strategy = "targeted")
 
   expect_error(
@@ -58,7 +39,10 @@ test_that("run_dsa() errors on invalid VBP intervention strategy", {
 })
 
 test_that("run_dsa() errors on invalid VBP price variable", {
-  model <- get_example_model() %>%
+  # Need fresh model with different DSA variable for this test
+  model_path <- system.file("models", "example_psm", package = "openqaly")
+  if (model_path == "") model_path <- "inst/models/example_psm"
+  model <- read_model(model_path) %>%
     add_dsa_variable("c_drug", low = 0, high = 1000, strategy = "targeted")
 
   expect_error(
@@ -78,7 +62,7 @@ test_that("run_dsa() errors on invalid VBP price variable", {
 test_that("run_dsa() with VBP returns all expected components", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expect_true("segments" %in% names(result))
   expect_true("aggregated" %in% names(result))
@@ -90,7 +74,7 @@ test_that("run_dsa() with VBP returns all expected components", {
 test_that("dsa_vbp_equations has correct column structure", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expected_cols <- c(
     "run_id", "parameter", "parameter_display_name", "parameter_type",
@@ -108,7 +92,7 @@ test_that("dsa_vbp_equations has correct column structure", {
 test_that("vbp_spec preserves input parameters", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expect_equal(result$vbp_spec$price_variable, "c_drug")
   expect_equal(result$vbp_spec$intervention_strategy, "targeted")
@@ -122,7 +106,7 @@ test_that("vbp_spec preserves input parameters", {
 test_that("DSA+VBP creates 3x segments per DSA run", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Check vbp_price_level exists
   expect_true("vbp_price_level" %in% names(result$segments))
@@ -134,7 +118,7 @@ test_that("DSA+VBP creates 3x segments per DSA run", {
 test_that("DSA+VBP segments have correct price overrides", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Intervention segments should have price overrides
   int_segs <- result$segments %>%
@@ -160,7 +144,7 @@ test_that("DSA+VBP segments have correct price overrides", {
 test_that("DSA+VBP comparator segments have no price overrides", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   comp_segs <- result$segments %>%
     filter(.data$strategy == "chemo")
@@ -183,7 +167,7 @@ test_that("DSA+VBP comparator segments have no price overrides", {
 test_that("VBP equations: vbp_slope = outcome_difference / cost_slope", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
   eq <- result$dsa_vbp_equations[1, ]
 
   expected <- eq$outcome_difference / eq$cost_slope
@@ -193,7 +177,7 @@ test_that("VBP equations: vbp_slope = outcome_difference / cost_slope", {
 test_that("VBP equations: vbp_intercept = -cost_intercept / cost_slope", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
   eq <- result$dsa_vbp_equations[1, ]
 
   expected <- -eq$cost_intercept / eq$cost_slope
@@ -203,7 +187,7 @@ test_that("VBP equations: vbp_intercept = -cost_intercept / cost_slope", {
 test_that("VBP equations exist for all DSA runs", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Get all DSA run_ids
   dsa_run_ids <- unique(result$dsa_metadata$run_id)
@@ -222,7 +206,7 @@ test_that("VBP equations exist for all DSA runs", {
 test_that("calculate_dsa_vbp_price() applies formula correctly", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Get first equation
   eq <- result$dsa_vbp_equations %>%
@@ -239,7 +223,7 @@ test_that("calculate_dsa_vbp_price() applies formula correctly", {
 test_that("calculate_dsa_vbp_price() at WTP=0 equals intercept", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   eq <- result$dsa_vbp_equations %>%
     filter(.data$run_id == 1, .data$group == "overall") %>%
@@ -252,7 +236,7 @@ test_that("calculate_dsa_vbp_price() at WTP=0 equals intercept", {
 test_that("calculate_dsa_vbp_price() is linear with WTP", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   eq <- result$dsa_vbp_equations %>%
     filter(.data$run_id == 1, .data$group == "overall") %>%
@@ -271,7 +255,7 @@ test_that("calculate_dsa_vbp_price() is linear with WTP", {
 test_that("calculate_dsa_vbp_price() with NULL comparator returns minimum VBP", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Calculate VBP for all comparators individually
   all_comparators <- unique(result$dsa_vbp_equations %>%
@@ -291,7 +275,7 @@ test_that("calculate_dsa_vbp_price() with NULL comparator returns minimum VBP", 
 test_that("calculate_dsa_vbp_price() works for different DSA runs", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Get comparator
   comp <- result$dsa_vbp_equations %>%
@@ -329,7 +313,7 @@ test_that("calculate_dsa_vbp_price() errors on missing VBP equations", {
 test_that("calculate_dsa_vbp_price() errors on invalid run_id", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expect_error(
     calculate_dsa_vbp_price(result, 50000, run_id = 9999),
@@ -340,7 +324,7 @@ test_that("calculate_dsa_vbp_price() errors on invalid run_id", {
 test_that("calculate_dsa_vbp_price() errors on invalid comparator", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expect_error(
     calculate_dsa_vbp_price(result, 50000, "nonexistent", run_id = 1),
@@ -351,7 +335,7 @@ test_that("calculate_dsa_vbp_price() errors on invalid comparator", {
 test_that("calculate_dsa_vbp_price() errors on invalid group", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   expect_error(
     calculate_dsa_vbp_price(result, 50000, run_id = 1, group = "nonexistent"),
@@ -366,7 +350,7 @@ test_that("calculate_dsa_vbp_price() errors on invalid group", {
 test_that("extract_dsa_summaries filters out VBP sub-simulations", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Extract summaries
   summaries <- openqaly:::extract_dsa_summaries(
@@ -394,21 +378,9 @@ test_that("extract_dsa_summaries filters out VBP sub-simulations", {
 test_that("DSA+VBP correctness: low/base/high VBP all yield NMB=0", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  model <- get_example_model()
-
-  # Add DSA parameter (u_pfs utility, NOT c_drug which is the VBP price)
-  # DSA varies u_pfs while VBP calculates price for c_drug
-  model <- model %>%
-    add_dsa_variable("u_pfs", low = bc * 0.8, high = bc * 1.2)
-
-  # Run DSA+VBP
-  results <- run_dsa(
-    model,
-    vbp_price_variable = "c_drug",
-    vbp_intervention = "targeted",
-    vbp_outcome_summary = "total_qalys",
-    vbp_cost_summary = "total_cost"
-  )
+  # Use cached model and results instead of building fresh
+  model <- get_cached_dsa_vbp_model()
+  results <- get_cached_dsa_vbp_results()
 
   wtp <- 50000
 
@@ -488,7 +460,7 @@ test_that("DSA+VBP correctness: low/base/high VBP all yield NMB=0", {
 test_that("dsa_vbp_plot() creates valid ggplot object", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   p <- dsa_vbp_plot(result, wtp = 50000)
 
@@ -510,7 +482,7 @@ test_that("dsa_vbp_plot() errors on results without VBP", {
 test_that("dsa_vbp_plot() works with specific comparator", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   p <- dsa_vbp_plot(result, wtp = 50000, comparators = "chemo")
 
@@ -524,7 +496,7 @@ test_that("dsa_vbp_plot() works with specific comparator", {
 test_that("dsa_vbp_table() creates table with correct structure", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  result <- run_example_dsa_vbp()
+  result <- get_cached_dsa_vbp_results()
 
   # Should not error
   tbl <- dsa_vbp_table(result, wtp = 50000)
@@ -551,11 +523,8 @@ test_that("dsa_vbp_table() errors on results without VBP", {
 test_that("run_dsa() without VBP params works as before", {
   skip_if(Sys.getenv("QUICK_TEST") == "true")
 
-  model <- get_example_model() %>%
-    add_dsa_variable("c_drug", low = bc * 0.5, high = bc * 1.5, strategy = "targeted")
-
-  # Run standard DSA (no VBP params)
-  result <- run_dsa(model)
+  # Use cached standard DSA results (no VBP)
+  result <- get_cached_dsa_results()
 
   # Should NOT have VBP-specific fields
   expect_null(result$dsa_vbp_equations)

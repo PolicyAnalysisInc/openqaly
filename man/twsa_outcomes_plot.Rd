@@ -12,7 +12,7 @@ twsa_outcomes_plot(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = FALSE,
+  discounted = TRUE,
   title = NULL,
   xlab = NULL,
   ylab = NULL,
