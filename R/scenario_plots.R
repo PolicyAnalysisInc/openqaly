@@ -737,29 +737,33 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
 
   # Add notched polygon arrows for dominated scenarios (DSA CE style)
   if (nrow(dominated_data) > 0) {
+    # Use do() with bind_cols() to access columns via .$ without R CMD check notes
     arrow_polygons <- dominated_data %>%
       rowwise() %>%
-      mutate(
-        polygon_data = list(tibble(
-          x = c(
-            0,                                          # Left bottom
-            dominated_position - arrow_head_width,     # Right before arrow
-            dominated_position - arrow_head_width,     # Arrow notch bottom
-            dominated_position,                        # Arrow tip
-            dominated_position - arrow_head_width,     # Arrow notch top
-            dominated_position - arrow_head_width,     # Right after arrow
-            0                                          # Left top
-          ),
-          y = c(
-            y_numeric - 0.35,                          # Left bottom
-            y_numeric - 0.35,                          # Right before arrow
-            y_numeric - 0.35 - arrow_notch_y,          # Arrow notch bottom
-            y_numeric,                                  # Arrow tip
-            y_numeric + 0.35 + arrow_notch_y,          # Arrow notch top
-            y_numeric + 0.35,                          # Right after arrow
-            y_numeric + 0.35                           # Left top
-          )
-        ))
+      do(
+        bind_cols(
+          .,
+          tibble(polygon_data = list(tibble(
+            x = c(
+              0,                                          # Left bottom
+              dominated_position - arrow_head_width,     # Right before arrow
+              dominated_position - arrow_head_width,     # Arrow notch bottom
+              dominated_position,                        # Arrow tip
+              dominated_position - arrow_head_width,     # Arrow notch top
+              dominated_position - arrow_head_width,     # Right after arrow
+              0                                          # Left top
+            ),
+            y = c(
+              .$y_numeric - 0.35,                        # Left bottom
+              .$y_numeric - 0.35,                        # Right before arrow
+              .$y_numeric - 0.35 - arrow_notch_y,        # Arrow notch bottom
+              .$y_numeric,                               # Arrow tip
+              .$y_numeric + 0.35 + arrow_notch_y,        # Arrow notch top
+              .$y_numeric + 0.35,                        # Right after arrow
+              .$y_numeric + 0.35                         # Left top
+            )
+          )))
+        )
       ) %>%
       ungroup()
 

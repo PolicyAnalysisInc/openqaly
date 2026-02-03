@@ -522,7 +522,7 @@ prepare_dsa_tornado_data <- function(results,
     results,
     summary_name = summary_name,
     value_type = "all",
-    group = groups,
+    groups = groups,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,
@@ -1722,7 +1722,7 @@ prepare_dsa_ce_tornado_data <- function(results,
       by = c("run_id", "strategy", "group"),
       suffix = c("", "_outcome")
     ) %>%
-    rename(cost = amount)
+    rename(cost = "amount")
 
   # Get all strategies in the data
   all_strategies <- unique(combined_data$strategy)
@@ -2492,31 +2492,33 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
   # Layer 3: Arrow bars (using geom_polygon for arrow shape)
   if (nrow(arrow_bars) > 0) {
 
-    # Note: In rowwise() + mutate() with list(), .data$ doesn't work inside list()
-    # Access columns directly by name instead
+    # Use do() with bind_cols() to access columns via .$ without R CMD check notes
     arrow_polygons <- arrow_bars %>%
       rowwise() %>%
-      mutate(
-        polygon_data = list(tibble(
-          x = c(
-            xmin,                                          # Left bottom
-            dominated_position - arrow_head_width,         # Right before arrow
-            dominated_position - arrow_head_width,         # Arrow notch bottom
-            dominated_position,                            # Arrow tip
-            dominated_position - arrow_head_width,         # Arrow notch top
-            dominated_position - arrow_head_width,         # Right after arrow
-            xmin                                           # Left top
-          ),
-          y = c(
-            y_numeric - bar_height/2,
-            y_numeric - bar_height/2,
-            y_numeric - bar_height/2 - arrow_notch_y,
-            y_numeric,
-            y_numeric + bar_height/2 + arrow_notch_y,
-            y_numeric + bar_height/2,
-            y_numeric + bar_height/2
-          )
-        ))
+      do(
+        bind_cols(
+          .,
+          tibble(polygon_data = list(tibble(
+            x = c(
+              .$xmin,                                        # Left bottom
+              dominated_position - arrow_head_width,         # Right before arrow
+              dominated_position - arrow_head_width,         # Arrow notch bottom
+              dominated_position,                            # Arrow tip
+              dominated_position - arrow_head_width,         # Arrow notch top
+              dominated_position - arrow_head_width,         # Right after arrow
+              .$xmin                                         # Left top
+            ),
+            y = c(
+              .$y_numeric - .$bar_height/2,
+              .$y_numeric - .$bar_height/2,
+              .$y_numeric - .$bar_height/2 - arrow_notch_y,
+              .$y_numeric,
+              .$y_numeric + .$bar_height/2 + arrow_notch_y,
+              .$y_numeric + .$bar_height/2,
+              .$y_numeric + .$bar_height/2
+            )
+          )))
+        )
       ) %>%
       ungroup()
 

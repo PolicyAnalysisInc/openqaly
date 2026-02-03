@@ -779,6 +779,8 @@ evpi_plot <- function(results,
 #' cost-effectiveness status when a WTP threshold is provided.
 #'
 #' @inheritParams pairwise_ceac_plot
+#' @param strategies Character vector of strategies to include (NULL for all).
+#'   Mutually exclusive with interventions/comparators.
 #' @param wtp Numeric WTP threshold for cost-effectiveness evaluation. When provided,
 #'   points are colored by cost-effectiveness status and a WTP threshold line is drawn.
 #'   Default is NULL (no coloring or threshold line)

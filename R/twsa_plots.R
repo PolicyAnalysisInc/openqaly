@@ -444,12 +444,12 @@ twsa_outcomes_plot <- function(results,
 #' Helper to map names if metadata available
 #'
 #' @param names Names to map
-#' @param metadata_df Metadata dataframe with name and display_name columns
+#' @param strategies_metadata Strategies metadata with name and display_name columns
 #' @return Mapped names or original if metadata unavailable
 #' @keywords internal
-map_names_if_available <- function(names, metadata_df) {
-  if (is.null(metadata_df)) return(names)
-  map_names(names, metadata_df, "display_name")
+map_names_if_available <- function(names, strategies_metadata) {
+  if (is.null(strategies_metadata)) return(names)
+  map_names(names, strategies_metadata, "display_name")
 }
 
 #' Prepare TWSA NMB Data

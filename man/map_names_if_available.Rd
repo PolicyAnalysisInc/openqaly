@@ -4,14 +4,12 @@
 \alias{map_names_if_available}
 \title{Map Names If Available}
 \usage{
-map_names_if_available(names, metadata_df)
+map_names_if_available(names, strategies_metadata)
 
-map_names_if_available(names, metadata_df)
+map_names_if_available(names, strategies_metadata)
 }
 \arguments{
 \item{names}{Names to map}
-
-\item{metadata_df}{Metadata dataframe with name and display_name columns}
 
 \item{strategies_metadata}{Strategies metadata with name and display_name columns}
 }

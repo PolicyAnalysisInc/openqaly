@@ -201,9 +201,9 @@ prepare_dsa_vbp_tornado_data <- function(results,
     ) %>%
     inner_join(base_data, by = c("strategy", "group")) %>%
     rename(
-      low_override = override_value_low,
-      high_override = override_value_high,
-      base = base_vbp
+      low_override = "override_value_low",
+      high_override = "override_value_high",
+      base = "base_vbp"
     ) %>%
     mutate(range = pmax(.data$low, .data$base, .data$high) -
              pmin(.data$low, .data$base, .data$high))

@@ -149,7 +149,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   calculated_trace_and_values <- calculate_psm_custom_trace_and_values(
     state_prob_formulas,
     uneval_values,
-    ns,
+    eval_vars,
     model_value_names,
     unique(model$states$name),
     model$settings$n_cycles,

@@ -545,6 +545,9 @@ trace_plot_area <- function(res,
 #' Alternative to stacked area charts for easier comparison of individual states.
 #'
 #' @inheritParams trace_plot_area
+#' @param by_state Logical. If TRUE (default), lines are colored by state
+#'   and faceted by strategy. If FALSE, lines are colored by strategy
+#'   and faceted by state.
 #'
 #' @return A ggplot2 object
 #'

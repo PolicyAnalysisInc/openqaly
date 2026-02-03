@@ -27,6 +27,10 @@ vector of groups, "all" (all groups plus aggregated), "all_groups"
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
+\item{by_state}{Logical. If TRUE (default), lines are colored by state
+and faceted by strategy. If FALSE, lines are colored by strategy
+and faceted by state.}
+
 \item{proportional}{Logical. If TRUE, show as percentages (0-100%). If FALSE
 (default), show as probabilities (0-1)}
 

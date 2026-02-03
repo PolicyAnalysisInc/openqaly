@@ -1,5 +1,5 @@
 
-#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone
+#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone `:=`
 #' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
 #' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr openqalysurv
 #' @importFrom Rcpp sourceCpp

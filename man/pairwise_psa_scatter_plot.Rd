@@ -39,6 +39,9 @@ Default is NULL (no coloring or threshold line)}
 "all" includes overall + all groups, "all_groups" includes all groups without overall,
 specific group name(s) filter to those groups (triggers faceting by group)}
 
+\item{strategies}{Character vector of strategies to include (NULL for all).
+Mutually exclusive with interventions/comparators.}
+
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 
 \item{title}{Plot title. If NULL, auto-generated}

@@ -938,7 +938,7 @@ prepare_dsa_ce_table_data <- function(results,
       by = c("run_id", "strategy", "group"),
       suffix = c("", "_outcome")
     ) %>%
-    rename(cost = amount)
+    rename(cost = "amount")
 
   # Get all strategies in the data
   all_strategies <- unique(combined_data$strategy)
