@@ -78,7 +78,8 @@ discontinuation_model <- define_model("custom_psm") |>
   add_strategy("treatment", display_name = "Active Treatment") |>
   add_strategy("bsc", display_name = "Best Supportive Care") |>
   # Groups
-  add_group("all", display_name = "All Patients") |>
+  add_group("younger", display_name = "Age < 65") |>
+  add_group("older", display_name = "Age >= 65") |>
   # Survival distributions defined as variables
   add_variable("pfs_dist", define_surv_param("weibull", shape = 1.2, scale = 24)) |>
   add_variable("os_dist", define_surv_param("weibull", shape = 1.1, scale = 36)) |>
@@ -133,7 +134,7 @@ disc_results <- run_model(discontinuation_model)
 
 ```{r disc-trace, fig.width=9, fig.height=6}
 # State occupancy over time
-trace_plot(disc_results)
+trace_plot_area(disc_results)
 ```
 
 ```{r disc-outcomes, fig.width=9, fig.height=6}
@@ -141,7 +142,7 @@ outcomes_plot_bar(disc_results, outcome = "qalys")
 ```
 
 ```{r disc-table}
-outcomes_table(disc_results, outcome = "total_cost")
+outcomes_table(disc_results, outcome = "qalys")
 ```
 
 ---
@@ -179,14 +180,15 @@ response_model <- define_model("custom_psm") |>
   ) |>
   # States (4 states for response model)
   add_state("response", display_name = "Response") |>
-  add_state("refractory", display_name = "Refractory") |>
   add_state("relapse", display_name = "Relapse") |>
+  add_state("refractory", display_name = "Refractory") |>
   add_state("dead", display_name = "Dead") |>
   # Strategies with different response rates
   add_strategy("new_tx", display_name = "New Treatment") |>
   add_strategy("soc", display_name = "Standard of Care") |>
   # Groups
-  add_group("all", display_name = "All Patients") |>
+  add_group("low_risk", display_name = "Low Risk") |>
+  add_group("high_risk", display_name = "High Risk") |>
   # Response rates by strategy
   add_variable("p_response", 0.65, strategy = "new_tx") |>
   add_variable("p_response", 0.40, strategy = "soc") |>
@@ -237,7 +239,7 @@ response_results <- run_model(response_model)
 ### Viewing Results
 
 ```{r response-trace, fig.width=9, fig.height=6}
-trace_plot(response_results)
+trace_plot_area(response_results)
 ```
 
 ```{r response-outcomes, fig.width=9, fig.height=6}
@@ -245,7 +247,7 @@ outcomes_plot_bar(response_results, outcome = "qalys")
 ```
 
 ```{r response-table}
-outcomes_table(response_results, outcome = "total_cost")
+outcomes_table(response_results, outcome = "qalys")
 ```
 
 ---

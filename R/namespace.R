@@ -1,9 +1,9 @@
-create_namespace <- function(model, segment) {
-  
+create_namespace <- function(model, segment, include_cycle_zero = FALSE) {
+
   # Calculate cycle lengths and times in days/weeks/months/years
-  # for each model cycle. 
+  # for each model cycle.
   cl_vars <- cycle_length_variables(model$settings)
-  time_vars <- time_variables(model$settings, model$states)
+  time_vars <- time_variables(model$settings, model$states, include_cycle_zero = include_cycle_zero)
   unit_vars <- time_unit_variables(model$settings)
 
   # Create a "namespace" which will contain evaluated

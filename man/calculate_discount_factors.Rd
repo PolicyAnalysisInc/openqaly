@@ -9,7 +9,7 @@ calculate_discount_factors(n_cycles, discount_rate, cycle_length_years = 1)
 \arguments{
 \item{n_cycles}{Number of cycles}
 
-\item{discount_rate}{Annual discount rate as a percentage (e.g., 3.5 for 3.5%)}
+\item{discount_rate}{Annual discount rate as a percentage (e.g., 3.5 for 3.5\%)}
 
 \item{cycle_length_years}{Length of each cycle in years (e.g., 1/12 for monthly, 1/52 for weekly)}
 }

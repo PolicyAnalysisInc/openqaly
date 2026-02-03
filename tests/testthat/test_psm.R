@@ -1370,8 +1370,8 @@ test_that("calculate_psm_custom_trace_and_values computes complement correctly",
     C = openqaly:::as.oq_formula("C")
   )
 
-  # Create namespace with single row - the function sets cycle for each iteration
-  ns_df <- data.frame(cycle = 0, state_cycle = 1)
+  # Create namespace with cycles 0:n_cycles (n_cycles + 1 rows)
+  ns_df <- data.frame(cycle = 0:n_cycles, state_cycle = rep(1, n_cycles + 1))
   namespace <- list(df = ns_df, env = new.env())
   class(namespace) <- "namespace"
 
@@ -1409,8 +1409,8 @@ test_that("calculate_psm_custom_trace_and_values trace sums to 1", {
     dead = openqaly:::as.oq_formula("C")  # Complement
   )
 
-  # Single row namespace - function sets cycle for each iteration
-  ns_df <- data.frame(cycle = 0, state_cycle = 1)
+  # Namespace with cycles 0:n_cycles (n_cycles + 1 rows)
+  ns_df <- data.frame(cycle = 0:n_cycles, state_cycle = rep(1, n_cycles + 1))
   namespace <- list(df = ns_df, env = new.env())
   class(namespace) <- "namespace"
 
@@ -1455,8 +1455,8 @@ test_that("calculate_psm_custom_trace_and_values handles variables in namespace"
     dead = openqaly:::as.oq_formula("C")
   )
 
-  # Single row namespace
-  ns_df <- data.frame(cycle = 0, state_cycle = 1)
+  # Namespace with cycles 0:n_cycles (n_cycles + 1 rows)
+  ns_df <- data.frame(cycle = 0:n_cycles, state_cycle = rep(1, n_cycles + 1))
   namespace <- list(df = ns_df, env = ns_env)
   class(namespace) <- "namespace"
 
@@ -1764,8 +1764,8 @@ test_that("Custom PSM handles negative complement gracefully", {
     C = openqaly:::as.oq_formula("C")     # Complement would be -0.2
   )
 
-  # Single row namespace
-  ns_df <- data.frame(cycle = 0, state_cycle = 1)
+  # Namespace with cycles 0:n_cycles (n_cycles + 1 rows)
+  ns_df <- data.frame(cycle = 0:n_cycles, state_cycle = rep(1, n_cycles + 1))
   namespace <- list(df = ns_df, env = new.env())
   class(namespace) <- "namespace"
 

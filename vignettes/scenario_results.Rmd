@@ -86,34 +86,32 @@ model <- model %>%
   add_scenario("High Efficacy", description = "Superior treatment response") %>%
   add_scenario_variable("High Efficacy", "u_mild", 0.95) %>%
   add_scenario_variable("High Efficacy", "u_severe", 0.80) %>%
-  add_scenario_variable("High Efficacy", "hr_progression", 0.5) %>%
   # Scenario 4: Low Efficacy - reduced clinical benefit
   add_scenario("Low Efficacy", description = "Reduced treatment response") %>%
   add_scenario_variable("Low Efficacy", "u_mild", 0.78) %>%
   add_scenario_variable("Low Efficacy", "u_severe", 0.45) %>%
-  add_scenario_variable("Low Efficacy", "hr_progression", 1.5) %>%
   # Scenario 5: High Cost - expensive treatment
   add_scenario("High Cost", description = "Premium pricing scenario") %>%
-  add_scenario_variable("High Cost", "c_treatment", 15000) %>%
+  add_scenario_variable("High Cost", "c_treatment", 15000, strategy = "seritinib") %>%
   add_scenario_variable("High Cost", "c_mild", 4000) %>%
   add_scenario_variable("High Cost", "c_severe", 15000) %>%
   # Scenario 6: Low Cost - budget pricing
   add_scenario("Low Cost", description = "Budget pricing scenario") %>%
-  add_scenario_variable("Low Cost", "c_treatment", 2000) %>%
+  add_scenario_variable("Low Cost", "c_treatment", 2000, strategy = "seritinib") %>%
   add_scenario_variable("Low Cost", "c_mild", 1000) %>%
   add_scenario_variable("Low Cost", "c_severe", 4000) %>%
   # Scenario 7: Dominant - better outcomes AND lower costs
   add_scenario("Best Case", description = "Dominant scenario - better and cheaper") %>%
   add_scenario_variable("Best Case", "u_mild", 0.95) %>%
   add_scenario_variable("Best Case", "u_severe", 0.80) %>%
-  add_scenario_variable("Best Case", "c_treatment", 1500) %>%
+  add_scenario_variable("Best Case", "c_treatment", 1500, strategy = "seritinib") %>%
   add_scenario_variable("Best Case", "c_mild", 800) %>%
   add_scenario_variable("Best Case", "c_severe", 3000) %>%
   # Scenario 8: Dominated - worse outcomes AND higher costs
   add_scenario("Worst Case", description = "Dominated scenario - worse and more expensive") %>%
   add_scenario_variable("Worst Case", "u_mild", 0.70) %>%
   add_scenario_variable("Worst Case", "u_severe", 0.40) %>%
-  add_scenario_variable("Worst Case", "c_treatment", 20000) %>%
+  add_scenario_variable("Worst Case", "c_treatment", 20000, strategy = "seritinib") %>%
   add_scenario_variable("Worst Case", "c_mild", 5000) %>%
   add_scenario_variable("Worst Case", "c_severe", 18000)
 ```

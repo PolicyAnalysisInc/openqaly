@@ -54,15 +54,19 @@ get_n_cycles <- function(settings) {
   days_per_cl_unit <- days_per_unit(cl_unit, settings$cycle_length_days, settings$days_per_year)
 
   # Calculate number of cycles
-  ceiling((tf * days_per_tf_unit) / (cl * days_per_cl_unit))
+  as.integer(ceiling((tf * days_per_tf_unit) / (cl * days_per_cl_unit)))
 }
 
 days_per_unit <- function(unit, cycle_length_days, days_per_year) {
   vswitch(
     tolower(unit),
+    "day" = 1,
     "days" = 1,
+    "week" = 7,
     "weeks" = 7,
+    "month" = days_per_year / 12,
     "months" = days_per_year / 12,
+    "year" = days_per_year,
     "years" = days_per_year,
     'cycles' = cycle_length_days
   )
@@ -73,13 +77,13 @@ convert_time <- function(x, from, to, settings) {
 }
 
 # Generate time variables
-time_variables <- function(settings, states) {
+time_variables <- function(settings, states, include_cycle_zero = FALSE) {
 
   n_cycles <- get_n_cycles(settings)
   cl <- get_cycle_length_days(settings)
 
   # For Markov models with tunnel states, calculate max state time
-  # For PSM models, states don't have state_cycle_limit, so use n_cycles
+  # For PSM models, states don't have state_cycle_limit, so st_cycles = 1
   if ("state_cycle_limit_unit" %in% names(states) && "state_cycle_limit" %in% names(states)) {
     st_days <- days_per_unit(states$state_cycle_limit_unit, settings$cycle_length_days, settings$days_per_year) *
         as.numeric(states$state_cycle_limit)
@@ -89,15 +93,27 @@ time_variables <- function(settings, states) {
     st_cycles <- min(n_cycles, max(1, floor(st_days_max / cl)), na.rm = TRUE)
     if (is.na(st_cycles)) st_cycles <- n_cycles
   } else {
-    st_cycles <- n_cycles
+    st_cycles <- 1
   }
   # Create vectors for model time variables
-  cycle_vec <- rep(seq_len(n_cycles), times = st_cycles)
+  # include_cycle_zero adds cycle 0 at the start (used by PSM Custom for trace calculation)
+  if (include_cycle_zero) {
+    cycle_vec <- rep(c(0L, seq_len(n_cycles)), times = st_cycles)
+  } else {
+    cycle_vec <- rep(seq_len(n_cycles), times = st_cycles)
+  }
   day_vec <- cycle_vec * cl
   day_lag_vec <- day_vec - cl
 
   # Create vectors for state time variables
-  state_cycle_vec <- rep(seq_len(st_cycles), each = n_cycles)
+  # When include_cycle_zero, need n_cycles + 1 rows per state cycle
+  n_rows_per_st_cycle <- if (include_cycle_zero) n_cycles + 1 else n_cycles
+  if (include_cycle_zero) {
+    # For cycle 0, state_cycle is also 0; for cycles 1:n_cycles, state_cycle is 1:st_cycles pattern
+    state_cycle_vec <- rep(c(0L, seq_len(st_cycles)), each = n_rows_per_st_cycle)[seq_along(cycle_vec)]
+  } else {
+    state_cycle_vec <- rep(seq_len(st_cycles), each = n_rows_per_st_cycle)
+  }
   state_day_vec <- state_cycle_vec * cl
   state_day_lag_vec <- state_day_vec - cl
 
