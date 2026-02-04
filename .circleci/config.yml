@@ -6,6 +6,8 @@ jobs:
       - image: rocker/verse:latest
     environment:
       R_LIBS_USER: /home/rstudio/R/Library
+      # Forces testthat to show progress even in non-interactive CI
+      TESTTHAT_REPORTER: "summary" 
     steps:
       - checkout
       - restore_cache:
@@ -13,7 +15,7 @@ jobs:
             - r-pkg-cache-{{ arch }}-{{ checksum "DESCRIPTION" }}
             - r-pkg-cache-{{ arch }}-
       - run:
-          name: Install dependencies via pak (Binaries)
+          name: Install dependencies
           command: |
             mkdir -p ${R_LIBS_USER}
             Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/bookworm/latest"))'
@@ -26,10 +28,11 @@ jobs:
             - "/home/rstudio/R/Library"
       - run:
           name: Build and Check package
-          no_output_timeout: 20m
+          no_output_timeout: 40m
           command: |
-            R CMD build .
-            R CMD check --as-cran --no-manual *tar.gz
+            # Using rcmdcheck::rcmdcheck instead of R CMD check
+            # 'quiet = FALSE' streams the test output to your CircleCI console
+            Rscript -e 'rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), error_on = "error", quiet = FALSE)'
       - store_artifacts:
           path: openqaly.Rcheck/
 
@@ -54,11 +57,10 @@ jobs:
             Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
       - run:
           name: Code Coverage
-          # Increased timeout to prevent CircleCI from killing the job during long tests/compilation
-          no_output_timeout: 30m 
+          no_output_timeout: 60m 
           command: |
-            # Clean up any existing objects to ensure a fresh instrumented build
-            Rscript -e 'covr::codecov(quiet = FALSE, clean = FALSE)'
+            # Setting quiet = FALSE here is critical for coverage timeouts
+            Rscript -e 'covr::codecov(quiet = FALSE)'
 
 workflows:
   version: 2
