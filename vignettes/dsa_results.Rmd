@@ -18,6 +18,16 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup, include = FALSE}
+# Detect Environment
+is_cran <- !identical(Sys.getenv("NOT_CRAN"), "true")
+is_ci   <- identical(Sys.getenv("CI"), "true")
+
+# If on CRAN or CI, stop rendering immediately
+if (is_cran || is_ci) {
+  message("Skipping vignette build on CRAN/CI")
+  knitr::knit_exit()
+}
+
 library(openqaly)
 
 model <- read_model(system.file("models", "example_markov", package = "openqaly"))
