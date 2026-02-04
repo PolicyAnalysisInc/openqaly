@@ -5,23 +5,19 @@ jobs:
     docker:
       - image: rocker/verse:latest
     environment:
-      R_LIBS: /home/rstudio/R/Library # Standardizing path for rocker
       R_LIBS_USER: /home/rstudio/R/Library
     steps:
       - checkout
       - restore_cache:
           keys:
-            # Checksum ensures cache resets only when dependencies change
             - r-pkg-cache-{{ arch }}-{{ checksum "DESCRIPTION" }}
             - r-pkg-cache-{{ arch }}-
       - run:
           name: Install dependencies via pak (Binaries)
           command: |
             mkdir -p ${R_LIBS_USER}
-            # Use Posit Binaries to avoid compilation time
             Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/bookworm/latest"))'
             Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
-            # Install your internal packages and local deps in parallel
             Rscript -e 'pak::pkg_install(c("PolicyAnalysisInc/openqalytools", "PolicyAnalysisInc/openqalysurv", "rcmdcheck", "sessioninfo"))'
             Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
       - save_cache:
@@ -30,6 +26,7 @@ jobs:
             - "/home/rstudio/R/Library"
       - run:
           name: Build and Check package
+          no_output_timeout: 20m
           command: |
             R CMD build .
             R CMD check --as-cran --no-manual *tar.gz
@@ -40,7 +37,6 @@ jobs:
     docker:
       - image: rocker/verse:latest
     environment:
-      R_LIBS: /home/rstudio/R/Library
       R_LIBS_USER: /home/rstudio/R/Library
     steps:
       - checkout
@@ -58,7 +54,11 @@ jobs:
             Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
       - run:
           name: Code Coverage
-          command: Rscript -e 'library(covr); codecov()'
+          # Increased timeout to prevent CircleCI from killing the job during long tests/compilation
+          no_output_timeout: 30m 
+          command: |
+            # Clean up any existing objects to ensure a fresh instrumented build
+            Rscript -e 'covr::codecov(quiet = FALSE, clean = FALSE)'
 
 workflows:
   version: 2
