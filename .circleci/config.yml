@@ -1,81 +1,70 @@
-version: 2
+version: 2.1
+
 jobs:
   build_and_test:
-      docker:
-        - image: rocker/verse:latest
-      environment:
-        R_LIBS: ~/R/Library
-      steps:
-        - restore_cache:
-            keys:
-              - r-pkg-cache-{{ arch }}-{{ .Branch }}
-              - r-pkg-cache-{{ arch }}-
-        - checkout
-        - run:
-            name: Install package dependencies
-            command: |
-              mkdir -p ~/R/Library
-              Rscript -e 'install.packages("devtools", repos = "https://cran.case.edu")'
-              Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalytools")'
-              Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalysurv")'
-              Rscript -e 'install.packages("remotes", repos = "https://cran.case.edu")'
-              Rscript -e 'remotes::install_deps(dependencies = TRUE, repos = "https://cran.case.edu")'
-        - run:
-            name: Session information and installed package versions
-            command: |
-              Rscript -e 'sessionInfo()'
-              Rscript -e 'installed.packages()[, c("Package", "Version")]'
-              Rscript -e 'rmarkdown::pandoc_version()'
-        - run:
-            name: Build package
-            command: R CMD build .
-        - run:
-            name: Check package
-            no_output_timeout: 35m
-            command: R CMD check --as-cran --no-manual *tar.gz
-        - store_artifacts:
-            path: openqaly.Rcheck/
-        - save_cache:
-            key: r-pkg-cache-{{ arch }}-{{ .Branch }}
-            paths:
-              - "~/R/Library"
+    docker:
+      - image: rocker/verse:latest
+    environment:
+      R_LIBS_USER: /home/rstudio/R/Library
+      # Forces testthat to show progress even in non-interactive CI
+      TESTTHAT_REPORTER: "summary" 
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - r-pkg-cache-{{ arch }}-{{ checksum "DESCRIPTION" }}
+            - r-pkg-cache-{{ arch }}-
+      - run:
+          name: Install dependencies
+          command: |
+            mkdir -p ${R_LIBS_USER}
+            Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/bookworm/latest"))'
+            Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
+            Rscript -e 'pak::pkg_install(c("PolicyAnalysisInc/openqalytools", "PolicyAnalysisInc/openqalysurv", "rcmdcheck", "sessioninfo"))'
+            Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
+      - save_cache:
+          key: r-pkg-cache-{{ arch }}-{{ checksum "DESCRIPTION" }}
+          paths:
+            - "/home/rstudio/R/Library"
+      - run:
+          name: Build and Check package
+          no_output_timeout: 40m
+          command: |
+            # Using rcmdcheck::rcmdcheck instead of R CMD check
+            # 'quiet = FALSE' streams the test output to your CircleCI console
+            Rscript -e 'rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), error_on = "error", quiet = FALSE)'
+      - store_artifacts:
+          path: openqaly.Rcheck/
+
   build_and_coverage:
     docker:
       - image: rocker/verse:latest
     environment:
-      R_LIBS: ~/R/Library
+      R_LIBS_USER: /home/rstudio/R/Library
     steps:
+      - checkout
       - restore_cache:
           keys:
-            - r-pkg-cache-{{ arch }}-{{ .Branch }}
+            - r-pkg-cache-{{ arch }}-{{ checksum "DESCRIPTION" }}
             - r-pkg-cache-{{ arch }}-
-      - checkout
       - run:
-          name: Install package dependencies
+          name: Install dependencies
           command: |
-            mkdir -p ~/R/Library
-            Rscript -e 'install.packages("devtools", repos = "https://cran.case.edu")'
-            Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalytools")'
-            Rscript -e 'devtools::install_github("PolicyAnalysisInc/openqalysurv")'
-            Rscript -e 'install.packages("remotes", repos = "https://cran.case.edu")'
-            Rscript -e 'remotes::install_deps(dependencies = TRUE, repos = "https://cran.case.edu")'
-      - run:
-          name: Session information and installed package versions
-          command: |
-            Rscript -e 'sessionInfo()'
-            Rscript -e 'installed.packages()[, c("Package", "Version")]'
-            Rscript -e 'rmarkdown::pandoc_version()'
-      - run:
-          name: Build package
-          command: R CMD build .
+            mkdir -p ${R_LIBS_USER}
+            Rscript -e 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/bookworm/latest"))'
+            Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")'
+            Rscript -e 'pak::pkg_install(c("PolicyAnalysisInc/openqalytools", "PolicyAnalysisInc/openqalysurv", "covr"))'
+            Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
       - run:
           name: Code Coverage
-          command: Rscript -e 'library(covr); codecov()'
-          no_output_timeout: 40m
+          no_output_timeout: 60m 
+          command: |
+            # Setting quiet = FALSE here is critical for coverage timeouts
+            Rscript -e 'covr::codecov(quiet = FALSE)'
 
 workflows:
-    version: 2
-    build:
-        jobs:
-            - build_and_test
-            - build_and_coverage
+  version: 2
+  build:
+    jobs:
+      - build_and_test
+      - build_and_coverage
