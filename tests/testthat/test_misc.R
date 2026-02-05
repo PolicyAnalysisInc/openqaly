@@ -289,11 +289,13 @@ test_that("read_model_json handles tables array-of-objects format", {
 
   model <- read_model_json(json_string)
 
-  # Tables should be converted to named list
+  # Tables should be converted to named list with data + description structure
   expect_type(model$tables, "list")
   expect_true("my_table" %in% names(model$tables))
-  expect_equal(nrow(model$tables$my_table), 2)
-  expect_equal(model$tables$my_table$age, c(50, 60))
+  # Access table data from the new structure
+  table_data <- model$tables$my_table$data
+  expect_equal(nrow(table_data), 2)
+  expect_equal(table_data$age, c(50, 60))
 })
 
 # ==============================================================================

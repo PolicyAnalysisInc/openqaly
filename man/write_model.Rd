@@ -4,14 +4,14 @@
 \alias{write_model}
 \title{Write Model to File}
 \usage{
-write_model(model, path, format = c("excel", "json", "r"))
+write_model(model, path, format = c("excel", "json", "r", "yaml"))
 }
 \arguments{
 \item{model}{A oq_model object}
 
 \item{path}{Character string specifying the output path}
 
-\item{format}{Character string specifying the format ("excel", "json", or "r")}
+\item{format}{Character string specifying the format ("excel", "json", "r", or "yaml")}
 }
 \value{
 Invisibly returns the path
@@ -21,7 +21,7 @@ Write a oq_model object to a file in the specified format.
 }
 \details{
 For Excel format, the path should be a folder (will be created if needed).
-For JSON and R formats, the path should include the filename.
+For JSON, R, and YAML formats, the path should include the filename.
 }
 \examples{
 \dontrun{
@@ -33,5 +33,8 @@ write_model(model, "output/my_model.json", format = "json")
 
 # Write to R script
 write_model(model, "output/my_model.R", format = "r")
+
+# Write to YAML file
+write_model(model, "output/my_model.yaml", format = "yaml")
 }
 }

@@ -33,7 +33,8 @@ Imports:
     scales,
     methods,
     flextable,
-    tools
+    tools,
+    yaml
 Depends:
     openqalysurv
 License: AGPL-3

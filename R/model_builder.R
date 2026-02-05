@@ -753,7 +753,11 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
-  model$tables[[name]] <- data
+  # Store as structured list with data and optional description
+  model$tables[[name]] <- list(
+    data = data,
+    description = description
+  )
   model
 }
 
@@ -773,7 +777,11 @@ add_table <- function(model, name, data, description = NULL) {
 #' model <- define_model("markov") |>
 #'   add_script("preprocess", "# Data preprocessing\nlibrary(dplyr)")
 add_script <- function(model, name, code, description = NULL) {
-  model$scripts[[name]] <- code
+  # Store as structured list with code and optional description
+  model$scripts[[name]] <- list(
+    code = code,
+    description = description
+  )
   model
 }
 
