@@ -237,11 +237,14 @@ build_twsa_segments <- function(model) {
     }) %>%
     ungroup()
 
+  # Apply override categories as baseline overrides
+  enriched_segments <- apply_override_categories(model, enriched_segments)
+
   n_segments <- nrow(enriched_segments)
   all_segments <- list()
   run_id <- 1
 
-  # Run 1: Base case - all segments with no overrides
+  # Run 1: Base case - all segments with override category values as baseline
   base_case_segments <- enriched_segments %>%
     mutate(
       run_id = run_id,
@@ -249,14 +252,20 @@ build_twsa_segments <- function(model) {
       x_param_name = NA_character_,
       y_param_name = NA_character_,
       x_value = NA_real_,
-      y_value = NA_real_,
-      parameter_overrides = vector("list", n_segments),
-      setting_overrides = vector("list", n_segments)
+      y_value = NA_real_
     )
-  # Initialize empty lists
-  for (i in seq_len(n_segments)) {
-    base_case_segments$parameter_overrides[[i]] <- list()
-    base_case_segments$setting_overrides[[i]] <- list()
+  # Initialize override columns if not present (from apply_override_categories)
+  if (!"parameter_overrides" %in% names(base_case_segments)) {
+    base_case_segments$parameter_overrides <- vector("list", n_segments)
+    for (i in seq_len(n_segments)) {
+      base_case_segments$parameter_overrides[[i]] <- list()
+    }
+  }
+  if (!"setting_overrides" %in% names(base_case_segments)) {
+    base_case_segments$setting_overrides <- vector("list", n_segments)
+    for (i in seq_len(n_segments)) {
+      base_case_segments$setting_overrides[[i]] <- list()
+    }
   }
   all_segments[[length(all_segments) + 1]] <- base_case_segments
   run_id <- run_id + 1
@@ -360,9 +369,17 @@ build_twsa_segments <- function(model) {
         seg_strategy <- segment$strategy[[1]]
         seg_group <- segment$group[[1]]
 
-        # Build overrides using segment-specific values
-        param_overrides <- list()
-        setting_overrides <- list()
+        # Start with baseline overrides from override categories
+        param_overrides <- if ("parameter_overrides" %in% names(enriched_segments)) {
+          enriched_segments$parameter_overrides[[seg_idx]]
+        } else {
+          list()
+        }
+        setting_overrides <- if ("setting_overrides" %in% names(enriched_segments)) {
+          enriched_segments$setting_overrides[[seg_idx]]
+        } else {
+          list()
+        }
 
         # Get segment-specific values and bc (or NULL if doesn't apply)
         x_values <- x_values_per_segment[[seg_idx]]

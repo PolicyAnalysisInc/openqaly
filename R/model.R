@@ -21,8 +21,14 @@ run_psa <- function(model, n_sim, seed = NULL, ...) {
   # Validate sampling specifications
   validate_sampling_spec(parsed_model)
 
+  # Notify about active overrides
+  notify_active_overrides(parsed_model)
+
   # Get simple segments (strategy × group)
   segments <- get_segments(parsed_model)
+
+  # Apply override categories to segments
+  segments <- apply_override_categories(parsed_model, segments)
 
   # Enrich segments with evaluated variables
   # This is needed so distribution formulas can reference variable values
@@ -84,9 +90,15 @@ run_model <- function(model, ...) {
   # Parse the model
   parsed_model <- parse_model(model, ...)
 
+  # Notify about active overrides
+  notify_active_overrides(parsed_model)
+
   # Get model segments
   if (is.null(dots$newdata)) segments <- get_segments(parsed_model)
   else segments <- dots$newdata
+
+  # Apply override categories to segments
+  segments <- apply_override_categories(parsed_model, segments)
 
   # Split by segment, evaluate each segment in parallel, combine results
   res$segments <- segments %>%
@@ -143,7 +155,8 @@ parse_model <- function(model, ...) {
     summaries = if (nrow(model$summaries) > 0) model$summaries %>%
       select(any_of(c("name", "display_name", "description", "type", "wtp", "values"))) else tibble(),
     values = if (nrow(model$values) > 0) model$values %>%
-      select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) else tibble(),
+      select(any_of(c("name", "display_name", "description", "abbreviation", "type"))) %>%
+      distinct() else tibble(),
     variables = if (nrow(model$variables) > 0) model$variables %>%
       select(any_of(c("name", "display_name", "description", "strategy", "group"))) else tibble()
   )

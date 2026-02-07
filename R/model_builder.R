@@ -123,7 +123,8 @@ define_model <- function(type = "markov") {
     multivariate_sampling = list(),
     dsa_parameters = structure(list(), class = "dsa_parameters"),
     scenarios = list(),
-    twsa_analyses = list()
+    twsa_analyses = list(),
+    override_categories = list()
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -1812,6 +1813,291 @@ print_twsa <- function(model) {
       param <- twsa$parameters[[j]]
       param_display <- param$display_name %||% param$name
       cat(sprintf("       - [%s] %s (%s)\n", param$param_type, param_display, param$type))
+    }
+  }
+  invisible(model)
+}
+
+#' Add an Override Category to Model
+#'
+#' Create a named category for grouping related override controls.
+#' Override categories organize UI controls that allow users to modify
+#' model variables and settings at runtime.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string for the category name (must be unique, case-insensitive)
+#' @param general Logical indicating if this is a system category (default: FALSE)
+#'
+#' @return The modified model object
+#' @export
+add_override_category <- function(model, name, general = FALSE) {
+  # Validate inputs
+  if (!is.character(name) || length(name) != 1 || nchar(trimws(name)) == 0) {
+    stop("Override category name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Check for duplicate category name (case-insensitive)
+  if (length(model$override_categories) > 0) {
+    existing_names <- tolower(sapply(model$override_categories, function(c) c$name))
+    if (tolower(name) %in% existing_names) {
+      stop(sprintf("Override category '%s' already exists", name), call. = FALSE)
+    }
+  }
+
+  # Create new category
+  new_category <- list(
+    name = name,
+    general = as.logical(general),
+    overrides = list()
+  )
+
+  # Add to model
+  model$override_categories <- c(model$override_categories, list(new_category))
+
+  model
+}
+
+#' Create a Dropdown Option for Override Controls
+#'
+#' Helper function to create a dropdown option for use with
+#' \code{\link{add_override}} when \code{input_type = "dropdown"}.
+#'
+#' @param label Display text for the option
+#' @param value Actual value when selected
+#' @param is_base_case Whether this is the default option (default: FALSE)
+#'
+#' @return A list representing a dropdown option
+#' @export
+override_option <- function(label, value, is_base_case = FALSE) {
+  if (!is.character(label) || length(label) != 1 || nchar(trimws(label)) == 0) {
+    stop("Dropdown option label must be a non-empty character string", call. = FALSE)
+  }
+  list(
+    label = label,
+    value = as.character(value),
+    is_base_case = as.logical(is_base_case)
+  )
+}
+
+#' Add an Override Control to a Category
+#'
+#' Define a UI override control that allows users to modify a model variable
+#' or setting at runtime. When the model is rendered in a Shiny UI, these
+#' controls will be displayed to the user.
+#'
+#' @param model An oq_model_builder object
+#' @param category Character string naming the category to add to (must exist)
+#' @param title Character string for the display name
+#' @param name Character string for the variable or setting name to override
+#' @param type Character string: "variable" or "setting"
+#' @param input_type Character string: "numeric", "slider", "dropdown", "formula", or "timeframe"
+#' @param expression Default/initial override value as a string or unquoted expression (uses NSE)
+#' @param description Optional description text
+#' @param strategy Optional strategy name (for variable overrides only)
+#' @param group Optional group name (for variable overrides only)
+#' @param general Logical indicating if this is a system override (default: FALSE)
+#' @param min Numeric minimum (for numeric/slider input types)
+#' @param max Numeric maximum (for numeric/slider input types)
+#' @param step_size Numeric step size (for slider input type)
+#' @param options List of dropdown options (for dropdown input type).
+#'   Each option should be created with \code{\link{override_option}}.
+#'
+#' @return The modified model object
+#' @export
+add_override <- function(model, category, title, name, type = "variable",
+                         input_type = "numeric", expression,
+                         description = NULL, strategy = "", group = "",
+                         general = FALSE,
+                         min = NULL, max = NULL, step_size = NULL,
+                         options = NULL) {
+
+  # Validate category exists
+  if (length(model$override_categories) == 0) {
+    stop(sprintf("Override category '%s' not found. Use add_override_category() first.", category),
+         call. = FALSE)
+  }
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == category)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found. Use add_override_category() first.", category),
+         call. = FALSE)
+  }
+
+  # Validate title
+  if (!is.character(title) || length(title) != 1 || nchar(trimws(title)) == 0) {
+    stop("Override title must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || nchar(trimws(name)) == 0) {
+    stop("Override name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate type
+  if (!type %in% c("variable", "setting")) {
+    stop("Override type must be 'variable' or 'setting'", call. = FALSE)
+  }
+
+  # Validate input_type
+  valid_input_types <- c("numeric", "slider", "dropdown", "formula", "timeframe")
+  if (!input_type %in% valid_input_types) {
+    stop(paste0("Override input_type must be one of: ", paste(valid_input_types, collapse = ", ")),
+         call. = FALSE)
+  }
+
+  # Capture expression using NSE
+  expr_quo <- enquo(expression)
+  expr_val <- quo_get_expr(expr_quo)
+
+  if (is.numeric(expr_val)) {
+    expression_str <- as.character(expr_val)
+  } else if (is.character(expr_val) && length(expr_val) == 1) {
+    expression_str <- expr_val
+  } else {
+    expression_str <- expr_text(expr_val)
+  }
+
+  # Validate expression non-empty
+  if (nchar(trimws(expression_str)) == 0) {
+    stop("Override expression must be non-empty", call. = FALSE)
+  }
+
+  # Validate type-specific rules
+  if (type == "setting") {
+    # Settings don't use strategy/group
+    if (strategy != "" || group != "") {
+      stop("Strategy and group cannot be specified for setting overrides", call. = FALSE)
+    }
+    # Validate setting name
+    valid_settings <- c(
+      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+      "discount_cost", "discount_outcomes", "half_cycle_method",
+      "reduce_state_cycle", "days_per_year"
+    )
+    if (!(name %in% valid_settings)) {
+      stop(sprintf(
+        "Invalid override setting name: '%s'. Valid settings: %s",
+        name, paste(valid_settings, collapse = ", ")
+      ), call. = FALSE)
+    }
+  }
+
+  if (type == "variable") {
+    # Validate variable exists and strategy/group targeting
+    validate_variable_targeting(model, name, strategy, group,
+                                "Override", "add_override")
+  }
+
+  # Validate min < max
+  if (!is.null(min) && !is.null(max)) {
+    if (min >= max) {
+      stop(sprintf("Override min (%s) must be less than max (%s)", min, max), call. = FALSE)
+    }
+  }
+
+  # Validate step_size > 0
+  if (!is.null(step_size) && step_size <= 0) {
+    stop("Override step_size must be greater than 0", call. = FALSE)
+  }
+
+  # Validate dropdown options
+  if (input_type == "dropdown" && !is.null(options) && length(options) == 0) {
+    stop("Dropdown override must have at least one option", call. = FALSE)
+  }
+
+  # Check for duplicate override in this category
+  existing_overrides <- model$override_categories[[cat_idx]]$overrides
+  if (length(existing_overrides) > 0) {
+    for (existing in existing_overrides) {
+      if (existing$type == type && existing$name == name &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        stop(sprintf(
+          "An override for %s '%s'%s%s already exists in category '%s'",
+          type, name,
+          if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+          if (group != "") paste0(" (group: ", group, ")") else "",
+          category
+        ), call. = FALSE)
+      }
+    }
+  }
+
+  # Build input_config with defaults
+  input_config <- switch(input_type,
+    "numeric" = list(
+      min = min %||% 0,
+      max = max %||% 100
+    ),
+    "slider" = list(
+      min = min %||% 0,
+      max = max %||% 1,
+      step_size = step_size %||% 0.05
+    ),
+    "dropdown" = list(
+      options = options %||% list()
+    ),
+    "formula" = list(),
+    "timeframe" = list()
+  )
+
+  # Create override item
+  override_item <- list(
+    title = title,
+    description = description %||% "",
+    type = type,
+    name = name,
+    strategy = as.character(strategy),
+    group = as.character(group),
+    general = as.logical(general),
+    input_type = input_type,
+    overridden_expression = expression_str,
+    input_config = input_config
+  )
+
+  # Add to category
+  model$override_categories[[cat_idx]]$overrides <- c(
+    model$override_categories[[cat_idx]]$overrides,
+    list(override_item)
+  )
+
+  model
+}
+
+#' Print Override Categories Summary
+#'
+#' Displays a formatted summary of override categories and their overrides.
+#'
+#' @param model A model object with override_categories
+#' @return Invisible model
+#' @keywords internal
+print_override_categories <- function(model) {
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(invisible(model))
+  }
+
+  # Count total overrides
+  total_overrides <- sum(sapply(model$override_categories, function(c) length(c$overrides)))
+  if (total_overrides == 0) {
+    return(invisible(model))
+  }
+
+  cat(sprintf("\n  [!] Active overrides (%d):\n", total_overrides))
+  for (cat_item in model$override_categories) {
+    if (length(cat_item$overrides) == 0) next
+    cat(sprintf("    %s:\n", cat_item$name))
+    for (override in cat_item$overrides) {
+      config_str <- switch(override$input_type,
+        "numeric" = sprintf("[numeric: %s-%s]",
+          override$input_config$min, override$input_config$max),
+        "slider" = sprintf("[slider: %s-%s]",
+          override$input_config$min, override$input_config$max),
+        "dropdown" = "[dropdown]",
+        "formula" = "[formula]",
+        "timeframe" = "[timeframe]"
+      )
+      cat(sprintf("      - %s (%s): %s %s\n",
+        override$title, override$name,
+        override$overridden_expression, config_str))
     }
   }
   invisible(model)

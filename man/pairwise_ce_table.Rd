@@ -9,7 +9,6 @@ pairwise_ce_table(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
@@ -25,8 +24,6 @@ pairwise_ce_table(
 \item{cost_summary}{Name of the cost summary}
 
 \item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{interventions}{Character vector of reference strategies for intervention perspective}
 
@@ -52,11 +49,11 @@ model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # Pairwise CE table vs control
-pairwise_ce_table(results, "total_qalys", "total_cost", comparator = "control")
+pairwise_ce_table(results, "total_qalys", "total_cost", comparators = "control")
 
 # For all groups
 pairwise_ce_table(results, "total_qalys", "total_cost", groups = NULL,
-                  comparator = "control")
+                  comparators = "control")
 }
 
 }

@@ -169,6 +169,85 @@ read_model <- function(path) {
     model$twsa_analyses <- list()
   }
 
+  # Read override categories sheets
+  if ("override_categories" %in% names(model)) {
+    cats_df <- model$override_categories
+    overrides_df <- if ("overrides" %in% names(model)) model$overrides else NULL
+    dropdown_df <- if ("override_dropdown_options" %in% names(model)) model$override_dropdown_options else NULL
+
+    model$override_categories <- lapply(seq_len(nrow(cats_df)), function(i) {
+      cat_row <- cats_df[i, ]
+      cat_name <- cat_row$category_name
+
+      # Get overrides for this category
+      overrides_list <- list()
+      if (!is.null(overrides_df)) {
+        cat_overrides <- overrides_df[overrides_df$category_name == cat_name, ]
+        if (nrow(cat_overrides) > 0) {
+          overrides_list <- lapply(seq_len(nrow(cat_overrides)), function(j) {
+            row <- cat_overrides[j, ]
+
+            # Build input_config based on input_type
+            input_config <- list()
+            if (row$input_type %in% c("numeric", "slider")) {
+              if (!is.na(row$config_min) && row$config_min != "") {
+                input_config$min <- as.numeric(row$config_min)
+              }
+              if (!is.na(row$config_max) && row$config_max != "") {
+                input_config$max <- as.numeric(row$config_max)
+              }
+            }
+            if (row$input_type == "slider") {
+              if (!is.na(row$config_step_size) && row$config_step_size != "") {
+                input_config$step_size <- as.numeric(row$config_step_size)
+              }
+            }
+            if (row$input_type == "dropdown" && !is.null(dropdown_df)) {
+              dd_opts <- dropdown_df[dropdown_df$category_name == cat_name &
+                                     dropdown_df$override_title == row$title, ]
+              if (nrow(dd_opts) > 0) {
+                input_config$options <- lapply(seq_len(nrow(dd_opts)), function(k) {
+                  list(
+                    label = dd_opts$label[k],
+                    value = as.character(dd_opts$value[k]),
+                    is_base_case = as.logical(dd_opts$is_base_case[k])
+                  )
+                })
+              } else {
+                input_config$options <- list()
+              }
+            }
+
+            list(
+              title = row$title,
+              description = if (is.na(row$description)) "" else row$description,
+              type = row$type,
+              name = row$name,
+              strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
+              group = if (is.na(row$group) || row$group == "") "" else row$group,
+              general = as.logical(row$general),
+              input_type = row$input_type,
+              overridden_expression = as.character(row$overridden_expression),
+              input_config = input_config
+            )
+          })
+        }
+      }
+
+      list(
+        name = cat_name,
+        general = as.logical(cat_row$general),
+        overrides = overrides_list
+      )
+    })
+
+    # Clean up raw tables
+    model$overrides <- NULL
+    model$override_dropdown_options <- NULL
+  } else {
+    model$override_categories <- list()
+  }
+
   # Read tables from CSV files
   data_path <- file.path(path, 'data')
   if (dir.exists(data_path)) {
@@ -1174,6 +1253,35 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   if (is.null(model$tables)) model$tables <- list()
   if (is.null(model$scripts)) model$scripts <- list()
 
+  # Ensure override_categories exists and is valid
+  if (is.null(model$override_categories)) {
+    model$override_categories <- list()
+  }
+  if (is.list(model$override_categories)) {
+    for (i in seq_along(model$override_categories)) {
+      cat_item <- model$override_categories[[i]]
+      if (is.null(cat_item$name)) cat_item$name <- ""
+      if (is.null(cat_item$general)) cat_item$general <- FALSE
+      if (is.null(cat_item$overrides)) cat_item$overrides <- list()
+      # Validate each override item has required fields
+      for (j in seq_along(cat_item$overrides)) {
+        ovr <- cat_item$overrides[[j]]
+        if (is.null(ovr$title)) ovr$title <- ""
+        if (is.null(ovr$description)) ovr$description <- ""
+        if (is.null(ovr$type)) ovr$type <- "variable"
+        if (is.null(ovr$name)) ovr$name <- ""
+        if (is.null(ovr$strategy)) ovr$strategy <- ""
+        if (is.null(ovr$group)) ovr$group <- ""
+        if (is.null(ovr$general)) ovr$general <- FALSE
+        if (is.null(ovr$input_type)) ovr$input_type <- "numeric"
+        if (is.null(ovr$overridden_expression)) ovr$overridden_expression <- ""
+        if (is.null(ovr$input_config)) ovr$input_config <- list()
+        cat_item$overrides[[j]] <- ovr
+      }
+      model$override_categories[[i]] <- cat_item
+    }
+  }
+
   # Validate group names (no reserved keywords)
   if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
     validate_group_names(model$groups$name)
@@ -1487,6 +1595,121 @@ read_model_json <- function(json_string) {
     model$twsa_analyses <- twsa_list
   } else {
     model$twsa_analyses <- list()
+  }
+
+  # Parse override_categories from JSON
+  if (!is.null(model$override_categories)) {
+    if (is.data.frame(model$override_categories)) {
+      # Simplified by fromJSON into a dataframe
+      oc_list <- list()
+      for (i in seq_len(nrow(model$override_categories))) {
+        row <- model$override_categories[i, ]
+        overrides_raw <- row$overrides[[1]]
+        overrides_list <- list()
+        if (!is.null(overrides_raw) && length(overrides_raw) > 0) {
+          if (is.data.frame(overrides_raw)) {
+            # input_config is a nested data.frame column when fromJSON simplifies
+            ic_df <- overrides_raw$input_config
+            for (j in seq_len(nrow(overrides_raw))) {
+              ovr_row <- overrides_raw[j, ]
+              # Extract input_config for this row from the nested data.frame
+              input_config <- list()
+              if (is.data.frame(ic_df)) {
+                for (col_name in names(ic_df)) {
+                  val <- ic_df[[col_name]]
+                  if (is.list(val)) {
+                    # List columns (e.g., options) - extract element for this row
+                    elem <- val[[j]]
+                    if (!is.null(elem)) {
+                      if (is.data.frame(elem)) {
+                        # Convert data.frame rows to list of lists (dropdown options)
+                        input_config[[col_name]] <- lapply(
+                          seq_len(nrow(elem)),
+                          function(k) as.list(elem[k, ])
+                        )
+                      } else {
+                        input_config[[col_name]] <- elem
+                      }
+                    }
+                  } else {
+                    # Scalar columns (min, max, step_size) - skip NA values
+                    scalar_val <- val[[j]]
+                    if (!is.na(scalar_val)) {
+                      input_config[[col_name]] <- scalar_val
+                    }
+                  }
+                }
+              }
+              overrides_list[[j]] <- list(
+                title = ovr_row$title,
+                description = ovr_row$description %||% "",
+                type = ovr_row$type,
+                name = ovr_row$name,
+                strategy = ovr_row$strategy %||% "",
+                group = ovr_row$group %||% "",
+                general = as.logical(ovr_row$general),
+                input_type = ovr_row$input_type,
+                overridden_expression = as.character(ovr_row$overridden_expression),
+                input_config = input_config
+              )
+            }
+          } else if (is.list(overrides_raw)) {
+            for (j in seq_along(overrides_raw)) {
+              ovr <- overrides_raw[[j]]
+              input_config <- if (is.null(ovr$input_config)) list() else ovr$input_config
+              if (!is.null(input_config$options) && is.data.frame(input_config$options)) {
+                input_config$options <- lapply(seq_len(nrow(input_config$options)), function(k) {
+                  as.list(input_config$options[k, ])
+                })
+              }
+              overrides_list[[j]] <- list(
+                title = ovr$title,
+                description = ovr$description %||% "",
+                type = ovr$type,
+                name = ovr$name,
+                strategy = ovr$strategy %||% "",
+                group = ovr$group %||% "",
+                general = as.logical(ovr$general %||% FALSE),
+                input_type = ovr$input_type,
+                overridden_expression = as.character(ovr$overridden_expression),
+                input_config = input_config
+              )
+            }
+          }
+        }
+        oc_list[[i]] <- list(
+          name = row$name,
+          general = as.logical(row$general),
+          overrides = overrides_list
+        )
+      }
+      model$override_categories <- oc_list
+    } else if (is.list(model$override_categories) && !is.data.frame(model$override_categories)) {
+      # Already in list format, normalize
+      for (i in seq_along(model$override_categories)) {
+        cat_item <- model$override_categories[[i]]
+        if (is.null(cat_item$overrides)) cat_item$overrides <- list()
+        for (j in seq_along(cat_item$overrides)) {
+          ovr <- cat_item$overrides[[j]]
+          if (is.null(ovr$input_config)) ovr$input_config <- list()
+          if (!is.null(ovr$input_config$options) && is.data.frame(ovr$input_config$options)) {
+            ovr$input_config$options <- lapply(seq_len(nrow(ovr$input_config$options)), function(k) {
+              as.list(ovr$input_config$options[k, ])
+            })
+          }
+          ovr$description <- ovr$description %||% ""
+          ovr$strategy <- ovr$strategy %||% ""
+          ovr$group <- ovr$group %||% ""
+          ovr$general <- as.logical(ovr$general %||% FALSE)
+          ovr$overridden_expression <- as.character(ovr$overridden_expression)
+          cat_item$overrides[[j]] <- ovr
+        }
+        cat_item$general <- as.logical(cat_item$general %||% FALSE)
+        model$override_categories[[i]] <- cat_item
+      }
+    }
+  } else {
+    model$override_categories <- list()
   }
 
   # UNIFIED VALIDATION - applies type-specific specs
@@ -2001,6 +2224,34 @@ write_model_json <- function(model) {
     json_model$twsa_analyses <- twsa_array
   }
 
+  # Convert override_categories to array format
+  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
+    oc_array <- lapply(model$override_categories, function(cat_item) {
+      overrides_array <- lapply(cat_item$overrides, function(ovr) {
+        result <- list(
+          title = ovr$title,
+          description = ovr$description %||% "",
+          type = ovr$type,
+          name = ovr$name,
+          strategy = ovr$strategy %||% "",
+          group = ovr$group %||% "",
+          general = ovr$general,
+          input_type = ovr$input_type,
+          overridden_expression = ovr$overridden_expression,
+          input_config = ovr$input_config
+        )
+        result
+      })
+
+      list(
+        name = cat_item$name,
+        general = cat_item$general,
+        overrides = overrides_array
+      )
+    })
+    json_model$override_categories <- oc_array
+  }
+
   # Convert to JSON using jsonlite
   json_string <- toJSON(
     json_model,
@@ -2258,4 +2509,144 @@ apply_parameter_overrides <- function(segment, ns, uneval_vars) {
     filter(!.data$name %in% names(override_vals))
 
   list(ns = ns, uneval_vars = uneval_vars)
+}
+
+#' Parse Override Expression to a Value
+#'
+#' Converts an override's overridden_expression to the appropriate value
+#' for injection into parameter_overrides or setting_overrides.
+#'
+#' @param override An override item list
+#' @return The parsed value (numeric, character, or oq_formula)
+#' @keywords internal
+parse_override_expression <- function(override) {
+  expr_str <- override$overridden_expression
+
+  switch(override$input_type,
+    "numeric" = ,
+    "slider" = {
+      as.numeric(expr_str)
+    },
+    "dropdown" = {
+      # Try numeric first, fall back to character
+      num_val <- suppressWarnings(as.numeric(expr_str))
+      if (!is.na(num_val)) num_val else expr_str
+    },
+    "formula" = {
+      as.oq_formula(expr_str)
+    },
+    "timeframe" = {
+      # Split "value|unit" format
+      parts <- strsplit(expr_str, "\\|")[[1]]
+      list(
+        timeframe = as.numeric(parts[1]),
+        timeframe_unit = if (length(parts) > 1) parts[2] else "years"
+      )
+    },
+    # Default fallback
+    {
+      num_val <- suppressWarnings(as.numeric(expr_str))
+      if (!is.na(num_val)) num_val else expr_str
+    }
+  )
+}
+
+#' Apply Override Categories to Segments
+#'
+#' Injects parameter_overrides and setting_overrides columns into the segments
+#' tibble based on active override definitions from model$override_categories.
+#'
+#' @param model Parsed model object with override_categories
+#' @param segments Segments tibble from get_segments()
+#' @return Modified segments tibble with parameter_overrides and setting_overrides columns
+#' @keywords internal
+apply_override_categories <- function(model, segments) {
+  # If no override categories or no overrides, return segments unchanged
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(segments)
+  }
+
+  # Count total overrides
+  total_overrides <- sum(sapply(model$override_categories, function(c) length(c$overrides)))
+  if (total_overrides == 0) {
+    return(segments)
+  }
+
+  # Initialize override columns if not present
+  if (!"parameter_overrides" %in% names(segments)) {
+    segments$parameter_overrides <- lapply(seq_len(nrow(segments)), function(i) list())
+  }
+  if (!"setting_overrides" %in% names(segments)) {
+    segments$setting_overrides <- lapply(seq_len(nrow(segments)), function(i) list())
+  }
+
+  for (seg_idx in seq_len(nrow(segments))) {
+    seg_strategy <- segments$strategy[[seg_idx]]
+    seg_group <- segments$group[[seg_idx]]
+
+    for (cat_item in model$override_categories) {
+      for (override in cat_item$overrides) {
+        if (override$type == "variable") {
+          # Check if override applies to this segment
+          applies <- TRUE
+          if (!is.na(override$strategy) && override$strategy != "" &&
+              override$strategy != seg_strategy) {
+            applies <- FALSE
+          }
+          if (!is.na(override$group) && override$group != "" &&
+              override$group != seg_group) {
+            applies <- FALSE
+          }
+
+          if (applies) {
+            parsed_val <- parse_override_expression(override)
+            segments$parameter_overrides[[seg_idx]][[override$name]] <- parsed_val
+          }
+        } else if (override$type == "setting") {
+          # Settings are global - apply to all segments
+          if (override$input_type == "timeframe") {
+            parsed_val <- parse_override_expression(override)
+            segments$setting_overrides[[seg_idx]][["timeframe"]] <- parsed_val$timeframe
+            segments$setting_overrides[[seg_idx]][["timeframe_unit"]] <- parsed_val$timeframe_unit
+          } else {
+            parsed_val <- parse_override_expression(override)
+            segments$setting_overrides[[seg_idx]][[override$name]] <- parsed_val
+          }
+        }
+      }
+    }
+  }
+
+  segments
+}
+
+#' Emit Override Notification Message
+#'
+#' Prints an informational message about active overrides being applied.
+#'
+#' @param model Model object with override_categories
+#' @keywords internal
+notify_active_overrides <- function(model) {
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(invisible(NULL))
+  }
+
+  overrides_info <- list()
+  for (cat_item in model$override_categories) {
+    for (override in cat_item$overrides) {
+      overrides_info <- c(overrides_info, list(override))
+    }
+  }
+
+  if (length(overrides_info) == 0) {
+    return(invisible(NULL))
+  }
+
+  lines <- sprintf("Note: Model has %d active override(s) that will be applied:", length(overrides_info))
+  for (ovr in overrides_info) {
+    lines <- c(lines, sprintf("  - %s = %s (%s override)",
+      ovr$name, ovr$overridden_expression, ovr$type))
+  }
+  message(paste(lines, collapse = "\n"))
+  invisible(NULL)
 }

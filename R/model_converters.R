@@ -328,6 +328,79 @@ write_model_excel <- function(model, path) {
     wb_list$twsa_parameters <- params_df
   }
 
+  # Add override categories sheets
+  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
+    categories_df <- tibble(category_name = character(), general = logical())
+    overrides_df <- tibble(
+      category_name = character(),
+      title = character(),
+      description = character(),
+      type = character(),
+      name = character(),
+      strategy = character(),
+      group = character(),
+      general = logical(),
+      input_type = character(),
+      overridden_expression = character(),
+      config_min = character(),
+      config_max = character(),
+      config_step_size = character()
+    )
+    dropdown_options_df <- tibble(
+      category_name = character(),
+      override_title = character(),
+      label = character(),
+      value = character(),
+      is_base_case = logical()
+    )
+
+    for (cat_item in model$override_categories) {
+      categories_df <- bind_rows(categories_df, tibble(
+        category_name = cat_item$name,
+        general = cat_item$general
+      ))
+
+      for (ovr in cat_item$overrides) {
+        overrides_df <- bind_rows(overrides_df, tibble(
+          category_name = cat_item$name,
+          title = ovr$title,
+          description = ovr$description %||% "",
+          type = ovr$type,
+          name = ovr$name,
+          strategy = ovr$strategy %||% "",
+          group = ovr$group %||% "",
+          general = ovr$general,
+          input_type = ovr$input_type,
+          overridden_expression = ovr$overridden_expression,
+          config_min = if (!is.null(ovr$input_config$min)) as.character(ovr$input_config$min) else "",
+          config_max = if (!is.null(ovr$input_config$max)) as.character(ovr$input_config$max) else "",
+          config_step_size = if (!is.null(ovr$input_config$step_size)) as.character(ovr$input_config$step_size) else ""
+        ))
+
+        # Collect dropdown options
+        if (ovr$input_type == "dropdown" && !is.null(ovr$input_config$options)) {
+          for (opt in ovr$input_config$options) {
+            dropdown_options_df <- bind_rows(dropdown_options_df, tibble(
+              category_name = cat_item$name,
+              override_title = ovr$title,
+              label = opt$label,
+              value = opt$value,
+              is_base_case = opt$is_base_case
+            ))
+          }
+        }
+      }
+    }
+
+    wb_list$override_categories <- categories_df
+    if (nrow(overrides_df) > 0) {
+      wb_list$overrides <- overrides_df
+    }
+    if (nrow(dropdown_options_df) > 0) {
+      wb_list$override_dropdown_options <- dropdown_options_df
+    }
+  }
+
   # Write the Excel file
   excel_path <- file.path(path, "model.xlsx")
   write.xlsx(wb_list, excel_path)
@@ -638,6 +711,13 @@ read_model_yaml <- function(path) {
     model$twsa_analyses <- parse_yaml_twsa(yaml_data$twsa)
   } else {
     model$twsa_analyses <- list()
+  }
+
+  # Read override categories
+  if (!is.null(yaml_data$override_categories)) {
+    model$override_categories <- parse_yaml_override_categories(yaml_data$override_categories)
+  } else {
+    model$override_categories <- list()
   }
 
   # Validate and normalize
@@ -975,6 +1055,11 @@ write_model_yaml <- function(model, path) {
     yaml_data$twsa <- format_twsa_yaml(model$twsa_analyses)
   }
 
+  # Override categories
+  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
+    yaml_data$override_categories <- format_override_categories_yaml(model$override_categories)
+  }
+
   # Write YAML file
   write_yaml_file(yaml_data, path)
 
@@ -1210,6 +1295,88 @@ format_twsa_yaml <- function(twsa_list) {
     }
 
     result
+  })
+}
+
+#' Format Override Categories for YAML
+#' @keywords internal
+format_override_categories_yaml <- function(override_categories) {
+  lapply(override_categories, function(cat_item) {
+    result <- list(
+      name = cat_item$name,
+      general = cat_item$general
+    )
+
+    if (length(cat_item$overrides) > 0) {
+      result$overrides <- lapply(cat_item$overrides, function(ovr) {
+        override <- list(
+          title = ovr$title,
+          type = ovr$type,
+          name = ovr$name,
+          input_type = ovr$input_type,
+          overridden_expression = ovr$overridden_expression
+        )
+        override <- add_optional_field(override, "description", ovr$description)
+        override <- add_optional_field(override, "strategy", ovr$strategy)
+        override <- add_optional_field(override, "group", ovr$group)
+        override$general <- ovr$general
+
+        # Add input_config if it has contents
+        if (length(ovr$input_config) > 0) {
+          override$input_config <- ovr$input_config
+        }
+
+        override
+      })
+    }
+
+    result
+  })
+}
+
+#' Parse YAML Override Categories
+#' @keywords internal
+parse_yaml_override_categories <- function(oc_list) {
+  if (is.null(oc_list) || length(oc_list) == 0) {
+    return(list())
+  }
+
+  lapply(oc_list, function(cat_item) {
+    overrides <- if (!is.null(cat_item$overrides)) {
+      lapply(cat_item$overrides, function(ovr) {
+        input_config <- ovr$input_config %||% list()
+        # Ensure dropdown options are properly structured
+        if (!is.null(input_config$options) && is.list(input_config$options)) {
+          input_config$options <- lapply(input_config$options, function(opt) {
+            list(
+              label = opt$label,
+              value = as.character(opt$value),
+              is_base_case = as.logical(opt$is_base_case %||% FALSE)
+            )
+          })
+        }
+        list(
+          title = ovr$title,
+          description = ovr$description %||% "",
+          type = ovr$type %||% "variable",
+          name = ovr$name,
+          strategy = ovr$strategy %||% "",
+          group = ovr$group %||% "",
+          general = as.logical(ovr$general %||% FALSE),
+          input_type = ovr$input_type %||% "numeric",
+          overridden_expression = as.character(ovr$overridden_expression),
+          input_config = input_config
+        )
+      })
+    } else {
+      list()
+    }
+
+    list(
+      name = cat_item$name,
+      general = as.logical(cat_item$general %||% FALSE),
+      overrides = overrides
+    )
   })
 }
 

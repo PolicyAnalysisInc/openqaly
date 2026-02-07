@@ -277,7 +277,6 @@ incremental_ce_table <- function(results,
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
-#' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param decimals Number of decimal places
@@ -289,7 +288,6 @@ prepare_pairwise_ce_table_data <- function(results,
                                           outcome_summary,
                                           cost_summary,
                                           groups = "overall",
-                                          strategies = NULL,
                                           interventions = NULL,
                                           comparators = NULL,
                                           decimals = 2,
@@ -301,7 +299,6 @@ prepare_pairwise_ce_table_data <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
     interventions = interventions,
     comparators = comparators
   )
@@ -312,6 +309,15 @@ prepare_pairwise_ce_table_data <- function(results,
   if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
     outcome_label <- map_names(outcome_summary, results$metadata$summaries, "display_name")
     cost_label <- map_names(cost_summary, results$metadata$summaries, "display_name")
+  }
+
+  # Derive strategies filter:
+  # - If both interventions AND comparators provided: filter to just those
+  # - If only one provided: use all strategies (NULL) so we can compare against "all others"
+  strategies <- if (!is.null(interventions) && !is.null(comparators)) {
+    unique(c(interventions, comparators))
+  } else {
+    NULL
   }
 
   # Get absolute values for all strategies (always use discounted for CE)
@@ -539,7 +545,6 @@ prepare_pairwise_ce_table_data <- function(results,
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
-#' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param decimals Number of decimal places (default: 2)
@@ -554,11 +559,11 @@ prepare_pairwise_ce_table_data <- function(results,
 #' results <- run_model(model)
 #'
 #' # Pairwise CE table vs control
-#' pairwise_ce_table(results, "total_qalys", "total_cost", comparator = "control")
+#' pairwise_ce_table(results, "total_qalys", "total_cost", comparators = "control")
 #'
 #' # For all groups
 #' pairwise_ce_table(results, "total_qalys", "total_cost", groups = NULL,
-#'                   comparator = "control")
+#'                   comparators = "control")
 #' }
 #'
 #' @export
@@ -566,7 +571,6 @@ pairwise_ce_table <- function(results,
                              outcome_summary,
                              cost_summary,
                              groups = "overall",
-                             strategies = NULL,
                              interventions = NULL,
                              comparators = NULL,
                              decimals = 2,
@@ -581,7 +585,6 @@ pairwise_ce_table <- function(results,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,

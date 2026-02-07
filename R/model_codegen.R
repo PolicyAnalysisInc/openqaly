@@ -141,6 +141,14 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add override categories (if any)
+  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
+    override_code <- generate_override_code(model$override_categories)
+    if (length(override_code) > 0) {
+      code <- c(code, "", override_code)
+    }
+  }
+
   # Write to file if specified
   if (!is.null(file)) {
     writeLines(code, file)
@@ -938,6 +946,90 @@ generate_twsa_code <- function(twsa_analyses) {
           code <- c(code, glue('model <- add_twsa_setting(model, {param_args})'))
         }
       }
+    }
+  }
+
+  code
+}
+
+#' Generate Override Code
+#' @keywords internal
+generate_override_code <- function(override_categories) {
+  if (is.null(override_categories) || length(override_categories) == 0) {
+    return(character(0))
+  }
+
+  code <- c("# Add override categories and overrides")
+
+  for (cat_item in override_categories) {
+    # Generate add_override_category call
+    cat_args <- glue('"{cat_item$name}"')
+    if (isTRUE(cat_item$general)) {
+      cat_args <- cat_args %&% ', general = TRUE'
+    }
+    code <- c(code, glue('model <- add_override_category(model, {cat_args})'))
+
+    # Generate add_override calls for each override
+    for (ovr in cat_item$overrides) {
+      ovr_args <- glue('"{cat_item$name}"')
+      ovr_args <- ovr_args %&% glue(',\n    title = "{ovr$title}"')
+      ovr_args <- ovr_args %&% glue(',\n    name = "{ovr$name}"')
+      ovr_args <- ovr_args %&% glue(',\n    type = "{ovr$type}"')
+      ovr_args <- ovr_args %&% glue(',\n    input_type = "{ovr$input_type}"')
+
+      # Expression - output as unquoted if numeric, quoted if string
+      expr_val <- suppressWarnings(as.numeric(ovr$overridden_expression))
+      if (!is.na(expr_val)) {
+        ovr_args <- ovr_args %&% glue(',\n    expression = {ovr$overridden_expression}')
+      } else {
+        ovr_args <- ovr_args %&% glue(',\n    expression = "{ovr$overridden_expression}"')
+      }
+
+      # Optional description
+      if (!is.null(ovr$description) && ovr$description != "") {
+        desc_escaped <- gsub('"', '\\"', ovr$description)
+        ovr_args <- ovr_args %&% glue(',\n    description = "{desc_escaped}"')
+      }
+
+      # Optional strategy/group
+      if (!is.null(ovr$strategy) && ovr$strategy != "") {
+        ovr_args <- ovr_args %&% glue(',\n    strategy = "{ovr$strategy}"')
+      }
+      if (!is.null(ovr$group) && ovr$group != "") {
+        ovr_args <- ovr_args %&% glue(',\n    group = "{ovr$group}"')
+      }
+
+      # General flag
+      if (isTRUE(ovr$general)) {
+        ovr_args <- ovr_args %&% ',\n    general = TRUE'
+      }
+
+      # Input config params
+      if (!is.null(ovr$input_config$min)) {
+        ovr_args <- ovr_args %&% glue(',\n    min = {ovr$input_config$min}')
+      }
+      if (!is.null(ovr$input_config$max)) {
+        ovr_args <- ovr_args %&% glue(',\n    max = {ovr$input_config$max}')
+      }
+      if (!is.null(ovr$input_config$step_size)) {
+        ovr_args <- ovr_args %&% glue(',\n    step_size = {ovr$input_config$step_size}')
+      }
+
+      # Dropdown options
+      if (ovr$input_type == "dropdown" && !is.null(ovr$input_config$options) &&
+          length(ovr$input_config$options) > 0) {
+        opts_code <- sapply(ovr$input_config$options, function(opt) {
+          opt_args <- glue('"{opt$label}", "{opt$value}"')
+          if (isTRUE(opt$is_base_case)) {
+            opt_args <- opt_args %&% ', is_base_case = TRUE'
+          }
+          glue('      override_option({opt_args})')
+        })
+        ovr_args <- ovr_args %&% ',\n    options = list(\n' %&%
+          paste(opts_code, collapse = ",\n") %&% '\n    )'
+      }
+
+      code <- c(code, glue('model <- add_override(model, {ovr_args}\n  )'))
     }
   }
 

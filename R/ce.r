@@ -348,7 +348,6 @@ calculate_incremental_ce <- function(results,
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)
-#' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
@@ -394,13 +393,22 @@ calculate_pairwise_ce <- function(results,
                                   outcome_summary,
                                   cost_summary,
                                   groups = "overall",
-                                  strategies = NULL,
                                   interventions = NULL,
                                   comparators = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
     stop("At least one of 'interventions' or 'comparators' must be provided")
+  }
+
+  # Derive strategies filter:
+  # - If both interventions AND comparators provided: filter to just those
+
+  # - If only one provided: use all strategies (NULL) so we can compare against "all others"
+  strategies <- if (!is.null(interventions) && !is.null(comparators)) {
+    unique(c(interventions, comparators))
+  } else {
+    NULL
   }
 
   # Get cost summaries (always use discounted for CE analysis)
@@ -456,12 +464,8 @@ calculate_pairwise_ce <- function(results,
       stop("No valid comparisons after excluding self-comparisons")
     }
   } else if (!is.null(interventions)) {
-    # Intervention only: each intervention vs all others (or filtered strategies)
-    comp_strategies <- if (!is.null(strategies)) {
-      setdiff(strategies, interventions)
-    } else {
-      setdiff(all_strategies, interventions)
-    }
+    # Intervention only: each intervention vs all others
+    comp_strategies <- setdiff(all_strategies, interventions)
     for (int_strat in interventions) {
       for (comp_strat in comp_strategies) {
         comparison_pairs[[length(comparison_pairs) + 1]] <- list(
@@ -471,12 +475,8 @@ calculate_pairwise_ce <- function(results,
       }
     }
   } else {
-    # Comparator only: all others (or filtered strategies) vs each comparator
-    int_strategies <- if (!is.null(strategies)) {
-      setdiff(strategies, comparators)
-    } else {
-      setdiff(all_strategies, comparators)
-    }
+    # Comparator only: all others vs each comparator
+    int_strategies <- setdiff(all_strategies, comparators)
     for (comp_strat in comparators) {
       for (int_strat in int_strategies) {
         comparison_pairs[[length(comparison_pairs) + 1]] <- list(

@@ -222,16 +222,13 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Create the object to return that will summarize the results of
   # this segment.
-  # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
-  if ("parameter_overrides" %in% names(segment)) {
-    # Override mode: parameter_overrides already in segment from resample() or DSA
-    # Don't store heavy objects: eval_vars, uneval_vars, initial_state, trace_and_values
-  } else {
-    # Base case mode: keep current behavior
+  # Always store trace_and_values (needed for per-cycle output and aggregation)
+  segment$trace_and_values <- list(calculated_trace_and_values)
+  # In override mode (PSA/DSA), skip heavy diagnostic objects
+  if (!"parameter_overrides" %in% names(segment)) {
     segment$uneval_vars <- list(uneval_vars)
     segment$eval_vars <- list(eval_vars)
     segment$inital_state <- list(eval_states)
-    segment$trace_and_values <- list(calculated_trace_and_values)
   }
 
   # Extract the expanded trace matrix

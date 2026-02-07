@@ -38,17 +38,6 @@ The following examples demonstrate stacked area charts for trace visualization.
 trace_plot_area(results)
 ```
 
-#### Showing percentages
-
-Set `proportional = TRUE` to display state occupancy as percentages instead of probabilities.
-
-```{r, fig.width=9, fig.height=6}
-trace_plot_area(
-  results,
-  proportional = TRUE
-)
-```
-
 #### By subgroup
 
 Use `groups = 'all_groups'` to display results for each population subgroup separately.

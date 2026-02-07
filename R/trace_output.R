@@ -375,8 +375,6 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #'   vector of groups, "all" (all groups plus aggregated), "all_groups"
 #'   (all groups without overall), or NULL (same as "all")
 #' @param strategies Character vector of strategy names to include (NULL for all)
-#' @param proportional Logical. If TRUE, show as percentages (0-100%). If FALSE
-#'   (default), show as probabilities (0-1)
 #' @param states Character vector of states to include (NULL for all)
 #' @param color_palette Named character vector of colors (names = state names),
 #'   or NULL to use default colors
@@ -395,16 +393,12 @@ extract_trace_long <- function(source_data, states = NULL, cycles = NULL, time_u
 #'
 #' # Basic stacked area plot (facets by strategy if multiple)
 #' trace_plot_area(results)
-#'
-#' # Show as percentages
-#' trace_plot_area(results, proportional = TRUE)
 #' }
 #'
 #' @export
 trace_plot_area <- function(res,
                        groups = "overall",
                        strategies = NULL,
-                       proportional = FALSE,
                        states = NULL,
                        color_palette = NULL,
                        show_legend = TRUE,
@@ -430,14 +424,6 @@ trace_plot_area <- function(res,
       new_names <- map_names(old_names, res$metadata$states, name_field)
       names(color_palette) <- new_names
     }
-  }
-
-  # Convert to percentage if requested
-  if (proportional) {
-    trace_data <- trace_data %>%
-      group_by(.data$strategy, .data$group, .data$cycle) %>%
-      mutate(probability = .data$probability * 100) %>%
-      ungroup()
   }
 
   # Preserve state ordering from metadata (reversed for stacking)
@@ -510,7 +496,7 @@ trace_plot_area <- function(res,
     theme_bw() +
     labs(
       x = time_label,
-      y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
+      y = "State Occupancy (Probability)",
       fill = "State"
     ) +
     guides(fill = guide_legend(reverse = TRUE))
@@ -568,7 +554,6 @@ trace_plot_line <- function(res,
                               groups = "overall",
                               strategies = NULL,
                               by_state = TRUE,
-                              proportional = FALSE,
                               states = NULL,
                               color_palette = NULL,
                               show_legend = TRUE,
@@ -594,14 +579,6 @@ trace_plot_line <- function(res,
       new_names <- map_names(old_names, res$metadata$states, name_field)
       names(color_palette) <- new_names
     }
-  }
-
-  # Convert to percentage if requested
-  if (proportional) {
-    trace_data <- trace_data %>%
-      group_by(.data$strategy, .data$group, .data$cycle) %>%
-      mutate(probability = .data$probability * 100) %>%
-      ungroup()
   }
 
   # Determine faceting based on by_state and data dimensions
@@ -690,7 +667,7 @@ trace_plot_line <- function(res,
       theme_bw() +
       labs(
         x = time_label,
-        y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
+        y = "State Occupancy (Probability)",
         color = "State"
       )
   } else {
@@ -702,7 +679,7 @@ trace_plot_line <- function(res,
       theme_bw() +
       labs(
         x = time_label,
-        y = if (proportional) "State Occupancy (%)" else "State Occupancy (Probability)",
+        y = "State Occupancy (Probability)",
         color = "Strategy"
       )
   }
