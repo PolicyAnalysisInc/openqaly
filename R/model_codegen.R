@@ -141,11 +141,27 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add threshold analyses (if any)
+  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
+    threshold_code <- generate_threshold_code(model$threshold_analyses)
+    if (length(threshold_code) > 0) {
+      code <- c(code, "", threshold_code)
+    }
+  }
+
   # Add override categories (if any)
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     override_code <- generate_override_code(model$override_categories)
     if (length(override_code) > 0) {
       code <- c(code, "", override_code)
+    }
+  }
+
+  # Add VBP configuration (if any)
+  if (!is.null(model$vbp)) {
+    vbp_code <- generate_vbp_code(model$vbp)
+    if (length(vbp_code) > 0) {
+      code <- c(code, "", vbp_code)
     }
   }
 
@@ -952,6 +968,22 @@ generate_twsa_code <- function(twsa_analyses) {
   code
 }
 
+#' Generate VBP Code
+#' @keywords internal
+generate_vbp_code <- function(vbp) {
+  if (is.null(vbp)) return(character(0))
+
+  c(
+    "# Set VBP configuration",
+    glue('model <- set_vbp(model,'),
+    glue('  price_variable = "{vbp$price_variable}",'),
+    glue('  intervention_strategy = "{vbp$intervention_strategy}",'),
+    glue('  outcome_summary = "{vbp$outcome_summary}",'),
+    glue('  cost_summary = "{vbp$cost_summary}"'),
+    ")"
+  )
+}
+
 #' Generate Override Code
 #' @keywords internal
 generate_override_code <- function(override_categories) {
@@ -1031,6 +1063,119 @@ generate_override_code <- function(override_categories) {
 
       code <- c(code, glue('model <- add_override(model, {ovr_args}\n  )'))
     }
+  }
+
+  code
+}
+
+#' Generate Threshold Analysis Code
+#' @keywords internal
+generate_threshold_code <- function(threshold_analyses) {
+  if (is.null(threshold_analyses) || length(threshold_analyses) == 0) {
+    return(character(0))
+  }
+
+  code <- c("# Add threshold analyses")
+
+  for (a in threshold_analyses) {
+    # Generate condition constructor call
+    cond <- a$condition
+    cond_func <- switch(cond$output,
+      "outcomes" = "threshold_condition_outcomes",
+      "costs" = "threshold_condition_costs",
+      "nmb" = "threshold_condition_nmb",
+      "ce" = "threshold_condition_ce",
+      "trace" = "threshold_condition_trace"
+    )
+
+    cond_args <- character()
+
+    if (cond$output %in% c("outcomes", "costs")) {
+      if (!is.null(cond$summary) && cond$summary != "") {
+        cond_args <- c(cond_args, glue('summary = "{cond$summary}"'))
+      }
+      if (!is.null(cond$value) && cond$value != "") {
+        cond_args <- c(cond_args, glue('value = "{cond$value}"'))
+      }
+      if (!is.null(cond$type)) {
+        cond_args <- c(cond_args, glue('type = "{cond$type}"'))
+      }
+      if (!is.null(cond$strategy) && cond$strategy != "") {
+        cond_args <- c(cond_args, glue('strategy = "{cond$strategy}"'))
+      }
+      if (!is.null(cond$referent) && cond$referent != "") {
+        cond_args <- c(cond_args, glue('referent = "{cond$referent}"'))
+      }
+      if (!is.null(cond$comparator) && cond$comparator != "") {
+        cond_args <- c(cond_args, glue('comparator = "{cond$comparator}"'))
+      }
+      if (!is.null(cond$discounted) && !isTRUE(cond$discounted)) {
+        cond_args <- c(cond_args, "discounted = FALSE")
+      }
+      if (!is.null(cond$target_value) && cond$target_value != 0) {
+        cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
+      }
+      if (!is.null(cond$group) && cond$group != "") {
+        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
+      }
+    } else if (cond$output %in% c("nmb", "ce")) {
+      cond_args <- c(cond_args, glue('"{cond$health_summary}"'))
+      cond_args <- c(cond_args, glue('"{cond$cost_summary}"'))
+      cond_args <- c(cond_args, glue('"{cond$referent}"'))
+      cond_args <- c(cond_args, glue('"{cond$comparator}"'))
+      if (!is.null(cond$discounted) && !isTRUE(cond$discounted)) {
+        cond_args <- c(cond_args, "discounted = FALSE")
+      }
+      if (cond$output == "nmb" && !is.null(cond$target_value) && cond$target_value != 0) {
+        cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
+      }
+      if (!is.null(cond$group) && cond$group != "") {
+        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
+      }
+      if (!is.null(cond$wtp) && !is.na(cond$wtp)) {
+        cond_args <- c(cond_args, glue('wtp = {cond$wtp}'))
+      }
+    } else if (cond$output == "trace") {
+      cond_args <- c(cond_args, glue('state = "{cond$state}"'))
+      cond_args <- c(cond_args, glue('time = {cond$time}'))
+      if (!is.null(cond$time_unit) && cond$time_unit != "cycle") {
+        cond_args <- c(cond_args, glue('time_unit = "{cond$time_unit}"'))
+      }
+      if (!is.null(cond$type)) {
+        cond_args <- c(cond_args, glue('type = "{cond$type}"'))
+      }
+      if (!is.null(cond$strategy) && cond$strategy != "") {
+        cond_args <- c(cond_args, glue('strategy = "{cond$strategy}"'))
+      }
+      if (!is.null(cond$referent) && cond$referent != "") {
+        cond_args <- c(cond_args, glue('referent = "{cond$referent}"'))
+      }
+      if (!is.null(cond$comparator) && cond$comparator != "") {
+        cond_args <- c(cond_args, glue('comparator = "{cond$comparator}"'))
+      }
+      cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
+      if (!is.null(cond$group) && cond$group != "") {
+        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
+      }
+    }
+
+    cond_call <- glue('{cond_func}({paste(cond_args, collapse = ", ")})')
+
+    # Generate add_threshold_analysis call
+    args <- glue('"{a$name}", "{a$variable}", {a$lower}, {a$upper}')
+    args <- args %&% ",\n    condition = " %&% cond_call
+
+    if (!is.null(a$variable_strategy) && a$variable_strategy != "") {
+      args <- args %&% glue(',\n    variable_strategy = "{a$variable_strategy}"')
+    }
+    if (!is.null(a$variable_group) && a$variable_group != "") {
+      args <- args %&% glue(',\n    variable_group = "{a$variable_group}"')
+    }
+    if (!is.null(a$active) && !isTRUE(a$active)) {
+      args <- args %&% ',\n    active = FALSE'
+    }
+
+    code <- c(code, glue('model <- add_threshold_analysis(model, {args})'))
   }
 
   code

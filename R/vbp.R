@@ -68,10 +68,10 @@ NULL
 #'
 #' @export
 run_vbp <- function(model,
-                   price_variable,
-                   intervention_strategy,
-                   outcome_summary = "total_qalys",
-                   cost_summary = "total_cost",
+                   price_variable = NULL,
+                   intervention_strategy = NULL,
+                   outcome_summary = NULL,
+                   cost_summary = NULL,
                    ...) {
 
   # Fixed test prices for linearity analysis
@@ -83,6 +83,25 @@ run_vbp <- function(model,
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
   parsed_model <- parse_model(model, ...)
+
+  # Fall back to model$vbp for any NULL parameters
+  if (!is.null(model$vbp)) {
+    if (is.null(price_variable)) price_variable <- model$vbp$price_variable
+    if (is.null(intervention_strategy)) intervention_strategy <- model$vbp$intervention_strategy
+    if (is.null(outcome_summary)) outcome_summary <- model$vbp$outcome_summary
+    if (is.null(cost_summary)) cost_summary <- model$vbp$cost_summary
+  }
+
+  # Apply defaults for outcome/cost summaries if still NULL
+  if (is.null(outcome_summary)) outcome_summary <- "total_qalys"
+  if (is.null(cost_summary)) cost_summary <- "total_cost"
+
+  # Require price_variable and intervention_strategy
+  if (is.null(price_variable) || is.null(intervention_strategy)) {
+    stop("price_variable and intervention_strategy are required. ",
+         "Either pass them directly or use set_vbp() on the model.",
+         call. = FALSE)
+  }
 
   # Create VBP specification
   vbp_spec <- list(

@@ -495,6 +495,13 @@ create_comprehensive_model <- function() {
       distribution = mvnormal(mean = c(utility_healthy, utility_sick), sd = c(0.1, 0.15), cor = 0.6),
       variables = c("utility_healthy", "utility_sick"),
       description = "Correlated utility sampling"
+    ) |>
+    # VBP configuration
+    set_vbp(
+      price_variable = "drug_cost",
+      intervention_strategy = "treatment",
+      outcome_summary = "total_qalys",
+      cost_summary = "total_costs"
     )
 }
 
@@ -702,6 +709,22 @@ expect_models_equivalent <- function(original, restored, label = "") {
       expect_equal(length(rest_t$parameters), length(orig_t$parameters),
                    label = paste0(prefix, "twsa[", i, "]$parameters count"))
     }
+  }
+
+  # === VBP CONFIGURATION ===
+  if (!is.null(original$vbp)) {
+    expect_false(is.null(restored$vbp),
+                 label = paste0(prefix, "vbp not NULL"))
+    expect_equal(restored$vbp$price_variable, original$vbp$price_variable,
+                 label = paste0(prefix, "vbp$price_variable"))
+    expect_equal(restored$vbp$intervention_strategy, original$vbp$intervention_strategy,
+                 label = paste0(prefix, "vbp$intervention_strategy"))
+    expect_equal(restored$vbp$outcome_summary, original$vbp$outcome_summary,
+                 label = paste0(prefix, "vbp$outcome_summary"))
+    expect_equal(restored$vbp$cost_summary, original$vbp$cost_summary,
+                 label = paste0(prefix, "vbp$cost_summary"))
+  } else {
+    expect_null(restored$vbp, label = paste0(prefix, "vbp NULL"))
   }
 }
 
@@ -1278,4 +1301,104 @@ test_that("TWSA with strategy-specific variable round-trip", {
   model_back <- read_model_json(json)
 
   expect_equal(model_back$twsa_analyses[[1]]$parameters[[1]]$strategy, "tx_a")
+})
+
+# ==============================================================================
+# VBP Configuration Round-Trip Tests
+# ==============================================================================
+
+#' Create test model with VBP configuration
+create_model_with_vbp <- function() {
+  create_test_model() |>
+    set_vbp(
+      price_variable = "cost_treat",
+      intervention_strategy = "treatment_a",
+      outcome_summary = "total_qaly",
+      cost_summary = "total_cost"
+    )
+}
+
+test_that("VBP config survives JSON round-trip", {
+  model <- create_model_with_vbp()
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_false(is.null(model_back$vbp))
+  expect_equal(model_back$vbp$price_variable, "cost_treat")
+  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
+  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
+  expect_equal(model_back$vbp$cost_summary, "total_cost")
+})
+
+test_that("VBP config survives YAML round-trip", {
+  model <- create_model_with_vbp()
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_false(is.null(model_back$vbp))
+  expect_equal(model_back$vbp$price_variable, "cost_treat")
+  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
+  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
+  expect_equal(model_back$vbp$cost_summary, "total_cost")
+
+  unlink(yaml_path)
+})
+
+test_that("VBP config survives R code round-trip", {
+  model <- create_model_with_vbp()
+
+  r_path <- tempfile(fileext = ".R")
+  write_model(model, r_path, format = "r")
+
+  env <- new.env()
+  source(r_path, local = env)
+  model_names <- ls(env)[sapply(ls(env), function(x) inherits(env[[x]], "oq_model"))]
+  model_back <- env[[model_names[1]]]
+
+  expect_false(is.null(model_back$vbp))
+  expect_equal(model_back$vbp$price_variable, "cost_treat")
+  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
+  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
+  expect_equal(model_back$vbp$cost_summary, "total_cost")
+
+  unlink(r_path)
+})
+
+test_that("VBP config survives Excel round-trip", {
+  skip_on_cran()
+
+  model <- create_model_with_vbp()
+
+  excel_dir <- tempfile()
+  dir.create(excel_dir)
+  write_model(model, excel_dir, format = "excel")
+  model_back <- read_model(excel_dir)
+
+  expect_false(is.null(model_back$vbp))
+  expect_equal(model_back$vbp$price_variable, "cost_treat")
+  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
+  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
+  expect_equal(model_back$vbp$cost_summary, "total_cost")
+
+  unlink(excel_dir, recursive = TRUE)
+})
+
+test_that("model without VBP has NULL vbp field", {
+  model <- create_test_model()
+
+  # JSON
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+  expect_null(model_back$vbp)
+
+  # YAML
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+  expect_null(model_back$vbp)
+
+  unlink(yaml_path)
 })

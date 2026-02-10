@@ -655,7 +655,7 @@ trace_plot_line <- function(res,
   breaks_fn <- pretty_breaks(n = 5)
   time_range <- range(c(0, trace_data[[time_col_name]]))
   time_breaks <- breaks_fn(time_range)
-  time_limits <- range(time_breaks)
+  time_limits <- c(0, max(trace_data[[time_col_name]]))
 
   # Create base plot using the appropriate time column
   if (by_state) {

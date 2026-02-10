@@ -328,6 +328,36 @@ write_model_excel <- function(model, path) {
     wb_list$twsa_parameters <- params_df
   }
 
+  # Add threshold analyses sheet (flat format)
+  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
+    threshold_rows <- lapply(model$threshold_analyses, flatten_threshold_analysis)
+
+    # Collect all possible column names
+    all_cols <- unique(unlist(lapply(threshold_rows, names)))
+
+    threshold_df <- tibble::as_tibble(do.call(rbind, lapply(threshold_rows, function(row) {
+      vals <- lapply(all_cols, function(col) {
+        val <- row[[col]]
+        if (is.null(val)) NA else val
+      })
+      names(vals) <- all_cols
+      as.data.frame(vals, stringsAsFactors = FALSE)
+    })))
+
+    wb_list$threshold_analyses <- threshold_df
+  }
+
+  # Add VBP configuration sheet
+  if (!is.null(model$vbp)) {
+    wb_list$vbp <- tibble::as_tibble(data.frame(
+      price_variable = model$vbp$price_variable,
+      intervention_strategy = model$vbp$intervention_strategy,
+      outcome_summary = model$vbp$outcome_summary,
+      cost_summary = model$vbp$cost_summary,
+      stringsAsFactors = FALSE
+    ))
+  }
+
   # Add override categories sheets
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     categories_df <- tibble(category_name = character(), general = logical())
@@ -713,6 +743,25 @@ read_model_yaml <- function(path) {
     model$twsa_analyses <- list()
   }
 
+  # Read threshold analyses
+  if (!is.null(yaml_data$threshold_analyses)) {
+    model$threshold_analyses <- parse_yaml_threshold(yaml_data$threshold_analyses)
+  } else {
+    model$threshold_analyses <- list()
+  }
+
+  # Read VBP configuration
+  if (!is.null(yaml_data$vbp)) {
+    model$vbp <- list(
+      price_variable = yaml_data$vbp$price_variable,
+      intervention_strategy = yaml_data$vbp$intervention_strategy,
+      outcome_summary = yaml_data$vbp$outcome_summary,
+      cost_summary = yaml_data$vbp$cost_summary
+    )
+  } else {
+    model$vbp <- NULL
+  }
+
   # Read override categories
   if (!is.null(yaml_data$override_categories)) {
     model$override_categories <- parse_yaml_override_categories(yaml_data$override_categories)
@@ -925,6 +974,33 @@ parse_yaml_twsa <- function(twsa_list) {
   })
 }
 
+#' Parse YAML Threshold Analyses
+#' @keywords internal
+parse_yaml_threshold <- function(threshold_list) {
+  if (is.null(threshold_list) || length(threshold_list) == 0) {
+    return(list())
+  }
+
+  lapply(threshold_list, function(a) {
+    condition <- if (!is.null(a$condition)) {
+      a$condition
+    } else {
+      list()
+    }
+
+    list(
+      name = a$name,
+      variable = a$variable,
+      variable_strategy = a$variable_strategy %||% "",
+      variable_group = a$variable_group %||% "",
+      lower = as.numeric(a$lower),
+      upper = as.numeric(a$upper),
+      active = if (!is.null(a$active)) as.logical(a$active) else TRUE,
+      condition = condition
+    )
+  })
+}
+
 #' Write Model to YAML File
 #'
 #' Writes a oq_model object to a single YAML file. Tables are embedded as
@@ -1053,6 +1129,16 @@ write_model_yaml <- function(model, path) {
   # TWSA
   if (length(model$twsa_analyses) > 0) {
     yaml_data$twsa <- format_twsa_yaml(model$twsa_analyses)
+  }
+
+  # Threshold analyses
+  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
+    yaml_data$threshold_analyses <- format_threshold_yaml(model$threshold_analyses)
+  }
+
+  # VBP configuration
+  if (!is.null(model$vbp)) {
+    yaml_data$vbp <- model$vbp
   }
 
   # Override categories
@@ -1294,6 +1380,38 @@ format_twsa_yaml <- function(twsa_list) {
       })
     }
 
+    result
+  })
+}
+
+#' Format Threshold Analyses for YAML
+#' @keywords internal
+format_threshold_yaml <- function(threshold_list) {
+  lapply(threshold_list, function(a) {
+    result <- list(
+      name = a$name,
+      variable = a$variable
+    )
+    result <- add_optional_field(result, "variable_strategy", a$variable_strategy)
+    result <- add_optional_field(result, "variable_group", a$variable_group)
+    result$lower <- a$lower
+    result$upper <- a$upper
+    if (!is.null(a$active)) result$active <- a$active
+
+    # Condition: write nested, omitting NULL/NA/empty fields
+    if (!is.null(a$condition)) {
+      cond <- list(output = a$condition$output)
+      for (field in setdiff(names(a$condition), "output")) {
+        val <- a$condition[[field]]
+        if (is.null(val)) next
+        if (is.logical(val) || is.numeric(val)) {
+          cond[[field]] <- val
+        } else if (is.character(val) && val != "") {
+          cond[[field]] <- val
+        }
+      }
+      result$condition <- cond
+    }
     result
   })
 }

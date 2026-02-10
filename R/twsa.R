@@ -569,6 +569,14 @@ run_twsa <- function(model,
   # Validate TWSA specifications
   validate_twsa_spec(parsed_model)
 
+  # Fall back to model$vbp for VBP parameters if not provided
+  if (is.null(vbp_price_variable) && !is.null(model$vbp)) {
+    vbp_price_variable <- model$vbp$price_variable
+    if (is.null(vbp_intervention)) vbp_intervention <- model$vbp$intervention_strategy
+    if (is.null(vbp_outcome_summary)) vbp_outcome_summary <- model$vbp$outcome_summary
+    if (is.null(vbp_cost_summary)) vbp_cost_summary <- model$vbp$cost_summary
+  }
+
   # Check if VBP mode is enabled
   vbp_enabled <- !is.null(vbp_price_variable)
 

@@ -124,7 +124,9 @@ define_model <- function(type = "markov") {
     dsa_parameters = structure(list(), class = "dsa_parameters"),
     scenarios = list(),
     twsa_analyses = list(),
-    override_categories = list()
+    override_categories = list(),
+    threshold_analyses = list(),
+    vbp = NULL
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -191,6 +193,50 @@ set_settings <- function(model, ...) {
   if (is.null(model$settings$discount_outcomes)) {
     model$settings$discount_outcomes <- 0
   }
+
+  model
+}
+
+#' Set VBP Configuration
+#'
+#' Configure value-based pricing (VBP) parameters on the model so they can be
+#' serialized and used as defaults by \code{run_vbp()}, \code{run_dsa()},
+#' \code{run_scenario()}, and \code{run_twsa()}.
+#'
+#' @param model An oq_model_builder object
+#' @param price_variable Name of the variable representing the intervention's price
+#' @param intervention_strategy Name of the intervention strategy
+#' @param outcome_summary Name of the outcome summary to use
+#' @param cost_summary Name of the cost summary to use
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_vbp(
+#'     price_variable = "c_drug",
+#'     intervention_strategy = "treatment",
+#'     outcome_summary = "total_qalys",
+#'     cost_summary = "total_costs"
+#'   )
+set_vbp <- function(model, price_variable, intervention_strategy,
+                    outcome_summary, cost_summary) {
+  # Validate all params are non-empty strings
+  for (param_name in c("price_variable", "intervention_strategy",
+                        "outcome_summary", "cost_summary")) {
+    val <- get(param_name)
+    if (!is.character(val) || length(val) != 1 || nchar(val) == 0) {
+      stop(param_name, " must be a non-empty string", call. = FALSE)
+    }
+  }
+
+  model$vbp <- list(
+    price_variable = price_variable,
+    intervention_strategy = intervention_strategy,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary
+  )
 
   model
 }
@@ -2101,4 +2147,318 @@ print_override_categories <- function(model) {
     }
   }
   invisible(model)
+}
+
+# ============================================================================
+# Threshold Analysis
+# ============================================================================
+
+#' Create Threshold Condition for Outcomes
+#'
+#' @param summary Target a summary (e.g., "total_qalys"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "qaly_sick"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_outcomes <- function(
+  summary = NULL,
+  value = NULL,
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  discounted = TRUE,
+  target_value = 0,
+  group = ""
+) {
+  type <- match.arg(type)
+  list(output = "outcomes", summary = summary, value = value, type = type,
+       strategy = strategy, referent = referent, comparator = comparator,
+       discounted = discounted, target_value = target_value, group = group)
+}
+
+#' Create Threshold Condition for Costs
+#'
+#' @param summary Target a summary (e.g., "total_cost"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "cost_drug"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_costs <- function(
+  summary = NULL,
+  value = NULL,
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  discounted = TRUE,
+  target_value = 0,
+  group = ""
+) {
+  type <- match.arg(type)
+  list(output = "costs", summary = summary, value = value, type = type,
+       strategy = strategy, referent = referent, comparator = comparator,
+       discounted = discounted, target_value = target_value, group = group)
+}
+
+#' Create Threshold Condition for NMB
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param target_value Target NMB value
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_nmb <- function(health_summary, cost_summary, referent, comparator,
+                                     discounted = TRUE, target_value = 0, group = "",
+                                     wtp = NULL) {
+  list(output = "nmb", health_summary = health_summary, cost_summary = cost_summary,
+       referent = referent, comparator = comparator, discounted = discounted,
+       target_value = target_value, group = group, wtp = wtp)
+}
+
+#' Create Threshold Condition for CE
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_ce <- function(health_summary, cost_summary, referent, comparator,
+                                    discounted = TRUE, group = "",
+                                    wtp = NULL) {
+  list(output = "ce", health_summary = health_summary, cost_summary = cost_summary,
+       referent = referent, comparator = comparator, discounted = discounted,
+       group = group, wtp = wtp)
+}
+
+#' Create Threshold Condition for Trace
+#'
+#' @param state State name to target in the trace
+#' @param time Numeric time value at which to read the trace
+#' @param time_unit Time unit for the time parameter: "cycle", "year", "month", "week", or "day"
+#' @param type Whether to use absolute or difference: "absolute" or "difference"
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param target_value Target trace value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_trace <- function(
+  state,
+  time,
+  time_unit = c("cycle", "year", "month", "week", "day"),
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  target_value,
+  group = ""
+) {
+  time_unit <- match.arg(time_unit)
+  type <- match.arg(type)
+  list(output = "trace", state = state, time = time, time_unit = time_unit,
+       type = type, strategy = strategy, referent = referent,
+       comparator = comparator, target_value = target_value, group = group)
+}
+
+#' Add Threshold Analysis to Model
+#'
+#' Define a threshold analysis that finds the input parameter value producing
+#' a desired output condition using iterative root-finding.
+#'
+#' @param model An oq_model_builder object
+#' @param name Unique name for this threshold analysis
+#' @param variable Variable to solve for
+#' @param lower Lower bound for search range
+#' @param upper Upper bound for search range
+#' @param condition A condition list created by \code{threshold_condition_*} functions
+#' @param variable_strategy Strategy targeting for the variable (empty string = all)
+#' @param variable_group Group targeting for the variable (empty string = all)
+#' @param active Whether this analysis is active
+#' @return The modified model object
+#' @export
+add_threshold_analysis <- function(
+  model, name, variable, lower, upper,
+  condition,
+  variable_strategy = "",
+  variable_group = "",
+  active = TRUE
+) {
+  if (!inherits(model, "oq_model_builder") && !inherits(model, "oq_model")) {
+    stop("model must be an oq_model_builder or oq_model object", call. = FALSE)
+  }
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate variable
+  if (!is.character(variable) || length(variable) != 1 || variable == "") {
+    stop("variable must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate bounds
+  if (!is.numeric(lower) || !is.numeric(upper) || length(lower) != 1 || length(upper) != 1) {
+    stop("lower and upper must be single numeric values", call. = FALSE)
+  }
+  if (lower >= upper) {
+    stop("lower must be less than upper", call. = FALSE)
+  }
+
+  # Validate condition
+  if (!is.list(condition) || is.null(condition$output)) {
+    stop("condition must be a list with an 'output' field (use threshold_condition_* functions)", call. = FALSE)
+  }
+
+  valid_outputs <- c("outcomes", "costs", "nmb", "ce", "vbp", "trace")
+  if (!condition$output %in% valid_outputs) {
+    stop(sprintf("Invalid output type '%s'. Must be one of: %s",
+                 condition$output, paste(valid_outputs, collapse = ", ")), call. = FALSE)
+  }
+
+  if (condition$output == "vbp") {
+    stop("VBP output type is not yet supported for threshold analysis", call. = FALSE)
+  }
+
+  # Validate output-specific fields
+  validate_threshold_condition(condition)
+
+  # Validate variable targeting
+  validate_variable_targeting(model, variable, variable_strategy, variable_group,
+                               "threshold", "add_threshold_analysis")
+
+  # Check for duplicate name - warn and replace
+  existing_idx <- which(sapply(model$threshold_analyses, function(a) a$name) == name)
+  if (length(existing_idx) > 0) {
+    warning(sprintf("Threshold analysis '%s' already exists and will be replaced", name), call. = FALSE)
+    model$threshold_analyses[[existing_idx]] <- NULL
+  }
+
+  analysis <- list(
+    name = name,
+    variable = variable,
+    variable_strategy = variable_strategy,
+    variable_group = variable_group,
+    lower = lower,
+    upper = upper,
+    active = active,
+    condition = condition
+  )
+
+  model$threshold_analyses <- c(model$threshold_analyses, list(analysis))
+  model
+}
+
+#' Validate Threshold Condition Fields
+#' @param condition A threshold condition list
+#' @keywords internal
+validate_threshold_condition <- function(condition) {
+  output <- condition$output
+
+  if (output %in% c("outcomes", "costs")) {
+    has_summary <- !is.null(condition$summary) && condition$summary != ""
+    has_value <- !is.null(condition$value) && condition$value != ""
+    if (!has_summary && !has_value) {
+      stop(sprintf("Threshold condition for '%s' must specify either 'summary' or 'value'", output), call. = FALSE)
+    }
+    if (has_summary && has_value) {
+      stop(sprintf("Threshold condition for '%s' must specify either 'summary' or 'value', not both", output), call. = FALSE)
+    }
+
+    type <- condition$type
+    if (is.null(type) || !type %in% c("absolute", "difference")) {
+      stop("Threshold condition 'type' must be 'absolute' or 'difference'", call. = FALSE)
+    }
+    if (type == "absolute") {
+      if (is.null(condition$strategy) || condition$strategy == "") {
+        stop("Threshold condition with type='absolute' requires 'strategy'", call. = FALSE)
+      }
+    } else {
+      if (is.null(condition$referent) || condition$referent == "") {
+        stop("Threshold condition with type='difference' requires 'referent'", call. = FALSE)
+      }
+      if (is.null(condition$comparator) || condition$comparator == "") {
+        stop("Threshold condition with type='difference' requires 'comparator'", call. = FALSE)
+      }
+    }
+
+    if (is.null(condition$target_value)) {
+      stop(sprintf("Threshold condition for '%s' requires 'target_value'", output), call. = FALSE)
+    }
+
+  } else if (output == "nmb") {
+    required <- c("health_summary", "cost_summary", "referent", "comparator")
+    missing <- required[!sapply(required, function(f) !is.null(condition[[f]]) && condition[[f]] != "")]
+    if (length(missing) > 0) {
+      stop(sprintf("Threshold condition for 'nmb' requires: %s", paste(missing, collapse = ", ")), call. = FALSE)
+    }
+
+  } else if (output == "ce") {
+    required <- c("health_summary", "cost_summary", "referent", "comparator")
+    missing <- required[!sapply(required, function(f) !is.null(condition[[f]]) && condition[[f]] != "")]
+    if (length(missing) > 0) {
+      stop(sprintf("Threshold condition for 'ce' requires: %s", paste(missing, collapse = ", ")), call. = FALSE)
+    }
+  } else if (output == "trace") {
+    if (is.null(condition$state) || condition$state == "") {
+      stop("Threshold condition for 'trace' requires 'state'", call. = FALSE)
+    }
+    if (is.null(condition$time) || !is.numeric(condition$time)) {
+      stop("Threshold condition for 'trace' requires numeric 'time'", call. = FALSE)
+    }
+    valid_time_units <- c("cycle", "year", "month", "week", "day")
+    if (is.null(condition$time_unit) || !condition$time_unit %in% valid_time_units) {
+      stop(sprintf("Threshold condition 'time_unit' must be one of: %s",
+                   paste(valid_time_units, collapse = ", ")), call. = FALSE)
+    }
+    if (is.null(condition$target_value)) {
+      stop("Threshold condition for 'trace' requires 'target_value'", call. = FALSE)
+    }
+    type <- condition$type
+    if (is.null(type) || !type %in% c("absolute", "difference")) {
+      stop("Threshold condition 'type' must be 'absolute' or 'difference'", call. = FALSE)
+    }
+    if (type == "absolute") {
+      if (is.null(condition$strategy) || condition$strategy == "") {
+        stop("Threshold condition with type='absolute' requires 'strategy'", call. = FALSE)
+      }
+    } else {
+      if (is.null(condition$referent) || condition$referent == "") {
+        stop("Threshold condition with type='difference' requires 'referent'", call. = FALSE)
+      }
+      if (is.null(condition$comparator) || condition$comparator == "") {
+        stop("Threshold condition with type='difference' requires 'comparator'", call. = FALSE)
+      }
+    }
+  }
+
+  # Validate group field if provided
+  if (!is.null(condition$group) && !identical(condition$group, "")) {
+    if (!is.character(condition$group) || length(condition$group) != 1) {
+      stop("Threshold condition 'group' must be a single character string", call. = FALSE)
+    }
+  }
 }

@@ -169,6 +169,29 @@ read_model <- function(path) {
     model$twsa_analyses <- list()
   }
 
+  # Read threshold analyses sheet (flat format -> nested)
+  if ("threshold_analyses" %in% names(model) && is.data.frame(model$threshold_analyses) &&
+      nrow(model$threshold_analyses) > 0) {
+    threshold_df <- model$threshold_analyses
+    model$threshold_analyses <- lapply(seq_len(nrow(threshold_df)), function(i) {
+      row <- as.list(threshold_df[i, ])
+      # Convert NA to appropriate defaults
+      if (is.na(row$variable_strategy)) row$variable_strategy <- ""
+      if (is.na(row$variable_group)) row$variable_group <- ""
+      if (is.na(row$active)) row$active <- TRUE
+      nest_threshold_analysis(row)
+    })
+  } else {
+    model$threshold_analyses <- list()
+  }
+
+  # Read VBP configuration sheet
+  if ("vbp" %in% names(model) && is.data.frame(model$vbp) && nrow(model$vbp) > 0) {
+    model$vbp <- as.list(model$vbp[1, ])
+  } else {
+    model$vbp <- NULL
+  }
+
   # Read override categories sheets
   if ("override_categories" %in% names(model)) {
     cats_df <- model$override_categories
@@ -1253,6 +1276,16 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   if (is.null(model$tables)) model$tables <- list()
   if (is.null(model$scripts)) model$scripts <- list()
 
+  # Ensure threshold_analyses exists
+  if (is.null(model$threshold_analyses)) {
+    model$threshold_analyses <- list()
+  }
+
+  # Ensure vbp is valid if present
+  if (!is.null(model$vbp) && !is.list(model$vbp)) {
+    model$vbp <- NULL
+  }
+
   # Ensure override_categories exists and is valid
   if (is.null(model$override_categories)) {
     model$override_categories <- list()
@@ -1595,6 +1628,72 @@ read_model_json <- function(json_string) {
     model$twsa_analyses <- twsa_list
   } else {
     model$twsa_analyses <- list()
+  }
+
+  # Parse threshold analyses from JSON (nested format)
+  if (!is.null(model$threshold_analyses) && is.list(model$threshold_analyses)) {
+    threshold_list <- list()
+    # Handle both list and data.frame formats
+    threshold_items <- if (is.data.frame(model$threshold_analyses)) {
+      lapply(seq_len(nrow(model$threshold_analyses)), function(i) {
+        as.list(model$threshold_analyses[i, ])
+      })
+    } else {
+      model$threshold_analyses
+    }
+
+    for (i in seq_along(threshold_items)) {
+      t <- threshold_items[[i]]
+
+      # Handle condition field: may be a data.frame (fromJSON), list, or nested
+      cond_raw <- t$condition
+      condition <- list()
+      if (is.data.frame(cond_raw)) {
+        # fromJSON simplifies the condition object into a 1-row data.frame
+        condition <- as.list(cond_raw[1, ])
+        # Clean up NA and NULL values
+        condition <- lapply(condition, function(v) {
+          if (length(v) == 1 && is.na(v)) NULL else v
+        })
+        condition <- condition[!sapply(condition, is.null)]
+      } else if (is.list(cond_raw) && length(cond_raw) == 1 && is.data.frame(cond_raw[[1]])) {
+        condition <- as.list(cond_raw[[1]][1, ])
+        condition <- lapply(condition, function(v) {
+          if (length(v) == 1 && is.na(v)) NULL else v
+        })
+        condition <- condition[!sapply(condition, is.null)]
+      } else if (is.list(cond_raw)) {
+        condition <- cond_raw
+      }
+
+      threshold_list[[i]] <- list(
+        name = t$name,
+        variable = t$variable,
+        variable_strategy = (t$variable_strategy %||% "")[1],
+        variable_group = (t$variable_group %||% "")[1],
+        lower = as.numeric(t$lower[1]),
+        upper = as.numeric(t$upper[1]),
+        active = if (!is.null(t$active)) as.logical(t$active[1]) else TRUE,
+        condition = condition
+      )
+    }
+    model$threshold_analyses <- threshold_list
+  } else {
+    model$threshold_analyses <- list()
+  }
+
+  # Parse VBP configuration from JSON
+  if (!is.null(model$vbp)) {
+    # fromJSON may simplify to a data.frame; convert back to list
+    if (is.data.frame(model$vbp)) {
+      model$vbp <- as.list(model$vbp[1, ])
+    }
+    # Ensure it has the expected fields
+    expected_fields <- c("price_variable", "intervention_strategy",
+                         "outcome_summary", "cost_summary")
+    if (!all(expected_fields %in% names(model$vbp))) {
+      model$vbp <- NULL
+    }
   }
 
   # Parse override_categories from JSON
@@ -2222,6 +2321,16 @@ write_model_json <- function(model) {
       )
     }
     json_model$twsa_analyses <- twsa_array
+  }
+
+  # Convert threshold analyses to array format (nested, as-is)
+  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
+    json_model$threshold_analyses <- model$threshold_analyses
+  }
+
+  # VBP configuration
+  if (!is.null(model$vbp)) {
+    json_model$vbp <- model$vbp
   }
 
   # Convert override_categories to array format

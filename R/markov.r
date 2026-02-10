@@ -245,8 +245,7 @@ run_segment.markov <- function(segment, model, env, ...) {
   n_trace_rows <- nrow(collapsed_trace)
 
   # The row names indicate the actual cycle numbers (0, 1, 2, ...)
-  # Add 1 to convert from 0-based to 1-based cycle numbering for user display
-  cycle_numbers <- as.numeric(rownames(collapsed_trace)) + 1
+  cycle_numbers <- as.numeric(rownames(collapsed_trace))
 
   # Get cycle length info from model settings
   cycle_length_days <- model$settings$cycle_length_days

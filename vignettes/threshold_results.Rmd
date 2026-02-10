@@ -1,0 +1,460 @@
+---
+title: "Threshold Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Threshold Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette demonstrates how to configure, run, and visualize
+threshold analysis using openqaly. Threshold analysis uses iterative
+root-finding to determine the value of an input parameter that produces
+a specific target output, such as the utility value at which QALYs
+reach a threshold, or the treatment cost at which the intervention is
+no longer cost-effective.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  dpi = 150
+)
+```
+
+```{r setup, include = FALSE}
+library(openqaly)
+
+model <- read_model(
+  system.file("models", "example_markov", package = "openqaly")
+)
+```
+
+## Configuring Threshold Analyses
+
+Threshold analyses are defined using `add_threshold_analysis()` together
+with a condition constructor that specifies the output metric and target
+value.
+
+### Condition Types
+
+Five condition constructors are available:
+
+- `threshold_condition_outcomes()` -- Target an outcome summary value
+- `threshold_condition_costs()` -- Target a cost summary value
+- `threshold_condition_nmb()` -- Target a Net Monetary Benefit value
+- `threshold_condition_ce()` -- Find cost-effectiveness threshold
+  (NMB = 0)
+- `threshold_condition_trace()` -- Target a state probability at a
+  specific time
+
+Each condition can use either an **absolute** type (value for a single
+strategy) or a **difference** type (difference between a referent and
+comparator strategy).
+
+### Outcomes Condition
+
+Find the utility value at which total QALYs for seritinib equal a
+target value:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Utility (Mild) such that Seritinib QALYs = 8",
+    "u_mild",
+    lower = 0.3, upper = 1,
+    condition = threshold_condition_outcomes(
+      summary = "qalys", type = "absolute",
+      strategy = "seritinib", target_value = 8
+    )
+  )
+```
+
+### Cost Condition
+
+Find the cost parameter value at which total costs reach a target:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Cost (Mild) such that Seritinib Costs = 30,000",
+    "c_mild",
+    lower = 500, upper = 10000,
+    condition = threshold_condition_costs(
+      summary = "costs", type = "absolute",
+      strategy = "seritinib", target_value = 30000
+    )
+  )
+```
+
+### NMB Condition
+
+Find the input value at which NMB reaches a target (default target
+is 0):
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Volantor Cost such that Volantor vs Seritinib NMB = 0",
+    "c_treatment",
+    lower = 100, upper = 20000,
+    variable_strategy = "volantor",
+    condition = threshold_condition_nmb(
+      "qalys", "costs",
+      referent = "volantor",
+      comparator = "seritinib"
+    )
+  )
+```
+
+### CE Condition
+
+Find the parameter value at which the intervention becomes
+cost-effective (NMB = 0). This is equivalent to NMB with
+`target_value = 0`, but uses a dedicated constructor:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Volantor Cost such that Volantor is CE vs Seritinib",
+    "c_treatment",
+    lower = 100, upper = 20000,
+    variable_strategy = "volantor",
+    condition = threshold_condition_ce(
+      "qalys", "costs",
+      referent = "volantor",
+      comparator = "seritinib"
+    )
+  )
+```
+
+### Trace Condition
+
+Find the parameter value at which a state probability hits a target
+at a specific time point:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Utility (Mild) such that P(Healthy) = 50% at Year 5",
+    "u_mild",
+    lower = 0.3, upper = 1,
+    condition = threshold_condition_trace(
+      state = "healthy", time = 5,
+      time_unit = "year", type = "absolute",
+      strategy = "seritinib", target_value = 0.5
+    )
+  )
+```
+
+### Difference Type
+
+Both outcomes/costs and trace conditions support a `difference` type
+that targets the difference between two strategies:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Utility (Mild) such that Volantor gains 0.5 QALYs vs Seritinib",
+    "u_mild",
+    lower = 0.3, upper = 1,
+    condition = threshold_condition_outcomes(
+      summary = "qalys", type = "difference",
+      referent = "volantor",
+      comparator = "seritinib",
+      target_value = 0.5
+    )
+  )
+```
+
+### Strategy-Specific Variables
+
+When the threshold variable is defined for a specific strategy, use
+`variable_strategy` to target it:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Max Volantor Cost for CE vs Seritinib",
+    "c_treatment",
+    lower = 100, upper = 20000,
+    variable_strategy = "volantor",
+    condition = threshold_condition_ce(
+      "qalys", "costs",
+      referent = "volantor",
+      comparator = "seritinib"
+    )
+  )
+```
+
+### Group Targeting
+
+When using a model with groups, use `variable_group` to vary the input
+for a specific group, and `group` in the condition to evaluate the
+output for a specific group:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Incidence (High Risk) such that Seritinib QALYs = 7",
+    "p_mild",
+    lower = 0.01, upper = 0.5,
+    variable_group = "high_risk",
+    condition = threshold_condition_outcomes(
+      summary = "qalys", type = "absolute",
+      strategy = "seritinib", target_value = 7,
+      group = "high_risk"
+    )
+  )
+```
+
+## Running Threshold Analysis
+
+```{r, include = FALSE}
+# Configure threshold analyses for the examples
+model <- model |>
+  add_threshold_analysis(
+    "Utility (Mild) such that Seritinib QALYs = 8",
+    "u_mild",
+    lower = 0.3, upper = 1,
+    condition = threshold_condition_outcomes(
+      summary = "qalys", type = "absolute",
+      strategy = "seritinib", discounted = TRUE,
+      target_value = 8
+    )
+  ) |>
+  add_threshold_analysis(
+    "Volantor Cost such that Volantor is CE vs Seritinib",
+    "c_treatment",
+    lower = 100, upper = 20000,
+    variable_strategy = "volantor",
+    condition = threshold_condition_ce(
+      "qalys", "costs",
+      referent = "volantor",
+      comparator = "seritinib"
+    )
+  )
+
+results <- run_threshold(model)
+```
+
+Use `run_threshold()` to execute all active threshold analyses:
+
+```{r, eval = FALSE}
+results <- run_threshold(model)
+```
+
+The results contain:
+
+- `threshold_values` -- A tibble with the found threshold value for
+  each analysis, plus a `converged` column indicating whether the
+  solver found a valid root
+- `root_finder_history` -- Iteration-by-iteration data showing solver
+  progress
+- `metadata` -- Model metadata (summaries, strategies, states)
+- `analyses` -- The analysis specifications used
+
+### Threshold Values
+
+```{r}
+results$threshold_values
+```
+
+When `converged` is `FALSE`, the solver could not find a parameter
+value that reaches the target within the specified bounds. The `value`
+column will be `NA` for non-converged analyses.
+
+### Solver History
+
+The history shows how the root-finder converged to the threshold value:
+
+```{r}
+head(results$root_finder_history)
+```
+
+## Threshold Plots
+
+### Input vs Output Plot
+
+The `threshold_plot()` function shows how the output metric changes as
+the input parameter varies. For converged analyses, the threshold
+point is highlighted with a red diamond and the goal value is shown as
+a dashed reference line. Non-converged analyses display a "Did not
+converge" label instead.
+
+When multiple analyses are present, each is shown in a separate facet:
+
+```{r, fig.width = 10, fig.height = 5}
+threshold_plot(results)
+```
+
+#### Filtering to a single analysis
+
+Use the `analyses` parameter to show only specific analyses:
+
+```{r, fig.width = 7, fig.height = 5}
+threshold_plot(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8"
+)
+```
+
+```{r, fig.width = 7, fig.height = 5}
+threshold_plot(
+  results,
+  analyses = "Volantor Cost such that Volantor is CE vs Seritinib"
+)
+```
+
+#### Adjusting decimal places
+
+Control the number of significant figures in the threshold value label:
+
+```{r, fig.width = 7, fig.height = 5}
+threshold_plot(
+  results,
+  analyses = "Volantor Cost such that Volantor is CE vs Seritinib",
+  decimals = 2
+)
+```
+
+### Convergence Plot
+
+The `threshold_convergence_plot()` function is a diagnostic tool showing
+how the solver progressed. It plots the difference from the goal at each
+iteration. Converged analyses show a red diamond on the final iteration,
+while non-converged analyses show a gray diamond with a "Did not
+converge" label.
+
+```{r, fig.width = 7, fig.height = 5}
+threshold_convergence_plot(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8"
+)
+```
+
+```{r, fig.width = 7, fig.height = 5}
+threshold_convergence_plot(
+  results,
+  analyses = "Volantor Cost such that Volantor is CE vs Seritinib"
+)
+```
+
+#### Multiple analyses
+
+```{r, fig.width = 10, fig.height = 5}
+threshold_convergence_plot(results)
+```
+
+## Threshold Tables
+
+### Input vs Output Table
+
+The `threshold_table()` function presents the same data as
+`threshold_plot()` in tabular format, sorted by input value.
+
+```{r}
+threshold_table(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8"
+)
+```
+
+```{r}
+threshold_table(
+  results,
+  analyses = "Volantor Cost such that Volantor is CE vs Seritinib"
+)
+```
+
+#### Multiple analyses
+
+When multiple analyses are present, group headers separate each
+analysis:
+
+```{r}
+threshold_table(results)
+```
+
+#### Custom decimal places
+
+```{r}
+threshold_table(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8",
+  decimals = 2
+)
+```
+
+#### Kable output
+
+Use `table_format = "kable"` for HTML-based output:
+
+```{r}
+threshold_table(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8",
+  table_format = "kable"
+)
+```
+
+### Convergence Table
+
+The `threshold_convergence_table()` function presents
+iteration-by-iteration solver data, sorted by iteration number.
+
+```{r}
+threshold_convergence_table(
+  results,
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8"
+)
+```
+
+```{r}
+threshold_convergence_table(
+  results,
+  analyses = "Volantor Cost such that Volantor is CE vs Seritinib"
+)
+```
+
+#### Multiple analyses
+
+```{r}
+threshold_convergence_table(results)
+```
+
+## Inactive Analyses
+
+Analyses can be deactivated by setting `active = FALSE`. Inactive
+analyses are skipped by `run_threshold()`:
+
+```{r, eval = FALSE}
+model |>
+  add_threshold_analysis(
+    "Utility (Mild) such that Seritinib QALYs = 9",
+    "u_mild",
+    lower = 0.3, upper = 1,
+    condition = threshold_condition_outcomes(
+      summary = "qalys", strategy = "seritinib",
+      target_value = 9
+    ),
+    active = FALSE
+  )
+```
+
+## Summary
+
+Threshold analysis answers the question: *"At what parameter value does
+the model output reach a specific target?"* Key features:
+
+1. **Multiple output types** -- Target outcomes, costs, NMB,
+   cost-effectiveness, or state probabilities
+2. **Absolute or difference** -- Find thresholds for a single strategy
+   or for the difference between strategies
+3. **Strategy and group targeting** -- Vary strategy-specific or
+   group-specific parameters
+4. **Convergence diagnostics** -- Inspect the root-finding process with
+   convergence plots and tables
+5. **Automatic axis labels** -- Plots and tables reflect the output type
+   with proper labels (including NMB format with WTP for CE/NMB
+   conditions)
