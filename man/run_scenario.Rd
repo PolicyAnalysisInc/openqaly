@@ -62,7 +62,7 @@ results <- run_scenario(model)
 
 # Example 2: Scenario analysis with setting overrides
 model <- define_model("markov") \%>\%
-  set_settings(timeframe = 20, discount_cost = 3) \%>\%
+  set_settings(timeframe = 20, discount_cost = 0.03) \%>\%
   add_scenario("Extended Horizon") \%>\%
   add_scenario_setting("Extended Horizon", "timeframe", 30) \%>\%
   add_scenario("No Discounting") \%>\%

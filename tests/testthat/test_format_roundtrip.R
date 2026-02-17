@@ -10,8 +10,8 @@ create_test_model <- function() {
     set_settings(
       timeframe = 100,
       cycle_length = 1,
-      discount_cost = 3,
-      discount_outcomes = 3.5
+      discount_cost = 0.03,
+      discount_outcomes = 0.035
     ) |>
     add_strategy("treatment_a", display_name = "Treatment A") |>
     add_strategy("treatment_b", display_name = "Treatment B") |>
@@ -53,7 +53,7 @@ create_model_with_tables <- function() {
 create_model_with_sa <- function() {
   create_test_model() |>
     add_dsa_variable("p_disease", low = bc * 0.5, high = bc * 1.5) |>
-    add_dsa_setting("discount_cost", low = 0, high = 5) |>
+    add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
     add_scenario("Optimistic") |>
     add_scenario_variable("Optimistic", "p_disease", 0.02) |>
     add_scenario_setting("Optimistic", "timeframe", 120) |>
@@ -414,8 +414,8 @@ create_comprehensive_model <- function() {
       timeframe_unit = "years",
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_cost = 3.5,
-      discount_outcomes = 3.5,
+      discount_cost = 0.035,
+      discount_outcomes = 0.035,
       half_cycle_method = "start"
     ) |>
     # Strategies
@@ -473,7 +473,7 @@ create_comprehensive_model <- function() {
     # DSA
     add_dsa_variable("baseline_risk", low = 0.02, high = 0.10, display_name = "Baseline Risk") |>
     add_dsa_variable("efficacy", low = 0.3, high = 0.7, strategy = "treatment") |>
-    add_dsa_setting("discount_cost", low = 0, high = 6) |>
+    add_dsa_setting("discount_cost", low = 0, high = 0.06) |>
     # Scenarios
     add_scenario("Optimistic", description = "Best case assumptions") |>
     add_scenario_variable("Optimistic", "baseline_risk", 0.02) |>
@@ -854,7 +854,7 @@ test_that("JSON -> YAML -> JSON preserves all components", {
 test_that("R -> JSON -> R preserves core components", {
   # R code format has limitations - no SA, limited table/script support
   model <- define_model("markov") |>
-    set_settings(timeframe = 50, cycle_length = 1, discount_cost = 3) |>
+    set_settings(timeframe = 50, cycle_length = 1, discount_cost = 0.03) |>
     add_strategy("control", display_name = "Control") |>
     add_strategy("treatment", display_name = "Treatment") |>
     add_group("general", weight = "1") |>
@@ -1067,8 +1067,8 @@ test_that("DSA setting parameters round-trip through JSON with field verificatio
   model <- define_model("markov") |>
     add_state("alive", initial_prob = 1) |>
     add_transition("alive", "alive", 1) |>
-    set_settings(discount_cost = 3) |>
-    add_dsa_setting("discount_cost", low = 0, high = 5)
+    set_settings(discount_cost = 0.03) |>
+    add_dsa_setting("discount_cost", low = 0, high = 0.05)
 
   json <- write_model_json(model)
   model_back <- read_model_json(json)
@@ -1076,7 +1076,7 @@ test_that("DSA setting parameters round-trip through JSON with field verificatio
   expect_equal(length(model_back$dsa_parameters), 1)
   expect_equal(model_back$dsa_parameters[[1]]$type, "setting")
   expect_equal(model_back$dsa_parameters[[1]]$low, 0)
-  expect_equal(model_back$dsa_parameters[[1]]$high, 5)
+  expect_equal(model_back$dsa_parameters[[1]]$high, 0.05)
 })
 
 test_that("strategy-specific DSA parameters preserved in JSON", {

@@ -12,6 +12,8 @@
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of comparator strategies (e.g., "control").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
+#' @param value_labels Logical. If TRUE (default), display numeric value labels at bar edges.
+#' @param label_accuracy Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.
 #'
 #' @return A ggplot2 object
 #'
@@ -41,7 +43,9 @@ nmb_plot_bar <- function(res,
                      groups = "overall",
                      wtp = NULL,
                      interventions = NULL,
-                     comparators = NULL) {
+                     comparators = NULL,
+                     value_labels = TRUE,
+                     label_accuracy = 0.01) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -149,13 +153,40 @@ nmb_plot_bar <- function(res,
   }
 
   # Create the plot (exactly like outcomes_plot, lines 104-111)
-  nmb_data %>%
+  p <- nmb_data %>%
     ggplot(aes(fill = .data$.pos_or_neg, x = .data$amount, y = .data$value)) +
     geom_bar(stat = "identity", position = "dodge") +
     annotate("segment", x = 0, xend = 0, y = -Inf, yend = Inf,
-             linetype = "dashed", color = "black") +
+             linetype = "dashed", color = "black")
+
+  if (value_labels) {
+    p <- p +
+      geom_text(
+        aes(
+          x = .data$amount,
+          label = scales::comma(.data$amount, accuracy = label_accuracy),
+          hjust = ifelse(.data$amount < 0, 1.1, -0.1)
+        ),
+        size = 2.5,
+        color = "black",
+        show.legend = FALSE
+      )
+
+    has_negative <- any(nmb_data$amount < 0, na.rm = TRUE)
+    has_positive <- any(nmb_data$amount >= 0, na.rm = TRUE)
+    left_expand <- if (has_negative) 0.15 else 0.05
+    right_expand <- if (has_positive) 0.15 else 0.05
+
+    p <- p +
+      scale_x_continuous(labels = comma,
+                         expand = expansion(mult = c(left_expand, right_expand)))
+  } else {
+    p <- p +
+      scale_x_continuous(labels = comma)
+  }
+
+  p +
     facet_component +
-    scale_x_continuous(labels = comma) +
     guides(fill = "none") +
     labs(y = NULL, x = nmb_label) +
     theme_bw()

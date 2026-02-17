@@ -142,30 +142,30 @@ test_that("add_dsa_variable does not warn for different strategy", {
 
 test_that("add_dsa_setting adds setting specification", {
   model <- define_model("markov") %>%
-    set_settings(discount_cost = 3) %>%
-    add_dsa_setting("discount_cost", low = 0, high = 5)
+    set_settings(discount_cost = 0.03) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 0.05)
 
   expect_equal(length(model$dsa_parameters), 1)
   expect_equal(model$dsa_parameters[[1]]$type, "setting")
   expect_equal(model$dsa_parameters[[1]]$name, "discount_cost")
   expect_equal(model$dsa_parameters[[1]]$low, 0)
-  expect_equal(model$dsa_parameters[[1]]$high, 5)
+  expect_equal(model$dsa_parameters[[1]]$high, 0.05)
   expect_equal(model$dsa_parameters[[1]]$display_name, "discount_cost")
 })
 
 test_that("add_dsa_setting warns and replaces duplicate settings", {
   model <- define_model("markov") %>%
-    set_settings(discount_cost = 3.5) %>%
-    add_dsa_setting("discount_cost", low = 0, high = 5)
+    set_settings(discount_cost = 0.035) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 0.05)
 
   expect_warning(
-    model2 <- add_dsa_setting(model, "discount_cost", low = 1, high = 3),
+    model2 <- add_dsa_setting(model, "discount_cost", low = 0.01, high = 0.03),
     "Replacing existing DSA specification"
   )
 
   expect_equal(length(model2$dsa_parameters), 1)
-  expect_equal(model2$dsa_parameters[[1]]$low, 1)
-  expect_equal(model2$dsa_parameters[[1]]$high, 3)
+  expect_equal(model2$dsa_parameters[[1]]$low, 0.01)
+  expect_equal(model2$dsa_parameters[[1]]$high, 0.03)
 })
 
 test_that("validate_dsa_spec catches missing specifications", {
@@ -259,7 +259,7 @@ test_that("build_dsa_segments and metadata generation work correctly", {
   model <- define_model("markov") %>%
     add_variable("p_disease", 0.03) %>%
     add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
-    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 0.05) %>%
     set_settings(timeframe = 10, timeframe_unit = "years",
                 cycle_length = 1, cycle_length_unit = "years") %>%
     add_state("healthy", initial_prob = 1) %>%

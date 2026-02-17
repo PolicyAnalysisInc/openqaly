@@ -267,6 +267,12 @@ add_state <- function(model, name, display_name = NULL,
                      share_state_time = FALSE, state_cycle_limit = NULL,
                      state_cycle_limit_unit = "cycles", initial_prob = NULL) {
 
+  # Block reserved state names
+  if (name %in% c("All", "All Other")) {
+    stop(glue("'{name}' is a reserved state name and cannot be used as a state name. ",
+              "It is used for special value targeting in add_value()."), call. = FALSE)
+  }
+
   # Get immutable model type
   model_type <- tolower(model$settings$model_type)
 
@@ -504,11 +510,49 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     formula_str <- formula_expr
   }
 
+  # Validate "All" / "All Other" state targeting rules
+  state_str <- as.character(state)
+  dest_str <- as.character(destination)
+  is_residence <- is.na(destination) || dest_str == "NA"
+
+  if (state_str %in% c("All", "All Other")) {
+    if (!is_residence) {
+      stop(glue("'{state_str}' cannot be used for transition values (where destination is set). ",
+                "It is only valid for residence values."), call. = FALSE)
+    }
+
+    existing <- model$values
+    if (!is.null(existing) && nrow(existing) > 0) {
+      existing_residence <- existing[existing$name == name &
+        (is.na(existing$destination) | existing$destination == "NA"), , drop = FALSE]
+
+      if (state_str == "All" && nrow(existing_residence) > 0) {
+        stop(glue("Value '{name}' already has residence value rows. ",
+                  "Cannot add 'All' when other residence rows exist."), call. = FALSE)
+      }
+      if (state_str == "All Other" && any(existing_residence$state == "All Other")) {
+        stop(glue("Value '{name}' already has an 'All Other' residence row. ",
+                  "Only one 'All Other' row is allowed per value name."), call. = FALSE)
+      }
+    }
+  } else if (is_residence && !is.na(state) && state_str != "NA") {
+    # Adding an explicit state — check if "All" already exists for this name
+    existing <- model$values
+    if (!is.null(existing) && nrow(existing) > 0) {
+      existing_residence <- existing[existing$name == name &
+        (is.na(existing$destination) | existing$destination == "NA"), , drop = FALSE]
+      if (any(existing_residence$state == "All")) {
+        stop(glue("Value '{name}' already uses state 'All'. ",
+                  "Cannot add explicit state rows when 'All' is used."), call. = FALSE)
+      }
+    }
+  }
+
   new_value <- tibble(
     name = name,
     formula = formula_str,
-    state = as.character(state),
-    destination = as.character(destination),
+    state = state_str,
+    destination = dest_str,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
     type = type
@@ -1193,8 +1237,8 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 3) |>
-#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
 #'   add_dsa_setting("timeframe", low = 10, high = 30)
 #' }
 add_dsa_setting <- function(model, setting, low, high,
@@ -1417,8 +1461,8 @@ add_scenario_variable <- function(model, scenario, variable, value,
 #'
 #' Common settings that can be overridden include:
 #' - `timeframe`: Model time horizon
-#' - `discount_cost`: Discount rate for costs (percentage)
-#' - `discount_outcomes`: Discount rate for outcomes (percentage)
+#' - `discount_cost`: Discount rate for costs (decimal, e.g. 0.03 for 3%)
+#' - `discount_outcomes`: Discount rate for outcomes (decimal, e.g. 0.03 for 3%)
 #' - `cycle_length`: Length of each model cycle
 #'
 #' @param model An oq_model_builder object
@@ -1432,7 +1476,7 @@ add_scenario_variable <- function(model, scenario, variable, value,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
 #'   add_scenario("Extended Horizon") |>
 #'   add_scenario_setting("Extended Horizon", "timeframe", 30) |>
 #'   add_scenario("No Discounting") |>
@@ -1754,12 +1798,12 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
 #'   add_twsa("Time vs Discount") |>
 #'   add_twsa_setting("Time vs Discount", "timeframe",
 #'     type = "range", min = 10, max = 30, steps = 5) |>
 #'   add_twsa_setting("Time vs Discount", "discount_cost",
-#'     type = "custom", values = c(0, 1.5, 3, 5))
+#'     type = "custom", values = c(0, 0.015, 0.03, 0.05))
 #' }
 add_twsa_setting <- function(model, twsa_name, setting, type,
                               min = NULL, max = NULL,

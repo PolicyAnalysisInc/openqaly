@@ -178,7 +178,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     eval_vars,
     value_names,
     state_names,
-    model$settings$reduce_state_cycle
+    isTRUE(model$settings$reduce_state_cycle)
   ) #900ms
 
 #322 ms

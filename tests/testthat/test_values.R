@@ -357,7 +357,7 @@ test_that("read_model enforces values type safety", {
   openxlsx::addWorksheet(wb, "settings")
   settings_data <- data.frame(
     setting = c("n_cycles", "model_type", "discount_cost", "discount_outcomes"),
-    value = c("10", "markov", "3", "3")
+    value = c("10", "markov", "0.03", "0.03")
   )
   openxlsx::writeData(wb, "settings", settings_data)
 
@@ -434,7 +434,7 @@ test_that("read_model_json enforces values type safety", {
   test_json <- jsonlite::toJSON(list(
     settings = data.frame(
       setting = c("n_cycles", "model_type", "discount_cost", "discount_outcomes"),
-      value = c("10", "markov", "3", "3")
+      value = c("10", "markov", "0.03", "0.03")
     ),
     strategies = data.frame(
       name = c("standard", "new"),

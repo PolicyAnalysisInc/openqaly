@@ -129,7 +129,7 @@ test_that("add_twsa_variable supports NSE for range expressions", {
 test_that("add_twsa_setting adds setting with range type", {
   model <- define_model("markov") %>%
     add_twsa("Test") %>%
-    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 0.05, steps = 3)
 
   expect_equal(length(model$twsa_analyses[[1]]$parameters), 1)
   param <- model$twsa_analyses[[1]]$parameters[[1]]
@@ -137,7 +137,7 @@ test_that("add_twsa_setting adds setting with range type", {
   expect_equal(param$name, "discount_cost")
   expect_equal(param$type, "range")
   expect_equal(param$min, 0)
-  expect_equal(param$max, 5)
+  expect_equal(param$max, 0.05)
   expect_equal(param$steps, 3)
 })
 
@@ -164,12 +164,12 @@ test_that("add_twsa_setting errors for nonexistent TWSA", {
 test_that("add_twsa_setting enforces 2-parameter limit", {
   model <- define_model("markov") %>%
     add_twsa("Test") %>%
-    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3) %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 0.05, steps = 3) %>%
     add_twsa_setting("Test", "timeframe", type = "range", min = 10, max = 30, steps = 3)
 
   expect_error(
     add_twsa_setting(model, "Test", "discount_outcomes", type = "range",
-                      min = 0, max = 5, steps = 3),
+                      min = 0, max = 0.05, steps = 3),
     "already has 2 parameters"
   )
 })
@@ -185,7 +185,7 @@ test_that("multiple TWSA analyses can be defined", {
     add_twsa_variable("Cost vs Discount", "cost", type = "range",
                        min = 500, max = 1500, steps = 5) %>%
     add_twsa_setting("Cost vs Discount", "discount_cost", type = "custom",
-                      values = c(0, 3, 5))
+                      values = c(0, 0.03, 0.05))
 
   expect_equal(length(model$twsa_analyses), 2)
   expect_equal(model$twsa_analyses[[1]]$name, "Cost vs Efficacy")
@@ -384,12 +384,12 @@ test_that("generate_twsa_values creates correct custom values", {
     param_type = "setting",
     type = "custom",
     name = "discount_cost",
-    values = c(0, 3, 5, 7)
+    values = c(0, 0.03, 0.05, 0.07)
   )
 
-  values <- generate_twsa_values(param, namespace = NULL, settings = list(discount_cost = 3))
+  values <- generate_twsa_values(param, namespace = NULL, settings = list(discount_cost = 0.03))
 
-  expect_equal(values, c(0, 3, 5, 7))
+  expect_equal(values, c(0, 0.03, 0.05, 0.07))
 })
 
 # ============================================================================

@@ -139,8 +139,8 @@ build_dsa_settings_model <- function() {
       timeframe_unit = "years",
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_cost = 3,
-      discount_outcomes = 3
+      discount_cost = 0.03,
+      discount_outcomes = 0.03
     ) %>%
     add_strategy("standard") %>%
     add_strategy("new_treatment") %>%
@@ -159,7 +159,7 @@ build_dsa_settings_model <- function() {
     add_dsa_variable("p_sick", low = 0.05, high = 0.15,
                      display_name = "Prob. Getting Sick") %>%
     # DSA settings (should have appropriate unit suffixes)
-    add_dsa_setting("discount_cost", low = 0, high = 5,
+    add_dsa_setting("discount_cost", low = 0, high = 0.05,
                     display_name = "Cost Discount") %>%
     add_dsa_setting("timeframe", low = 5, high = 20,
                     display_name = "Time Horizon") %>%

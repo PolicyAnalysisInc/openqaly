@@ -151,7 +151,7 @@ test_that("add_override adds a setting override", {
       name = "discount_cost",
       type = "setting",
       input_type = "numeric",
-      expression = 3,
+      expression = 0.03,
       min = 0, max = 10
     )
 
@@ -246,7 +246,7 @@ test_that("add_override errors when strategy/group used with setting", {
   expect_error(
     add_override(model, "Test",
       title = "Discount", name = "discount_cost",
-      type = "setting", strategy = "treatment_a", expression = 3),
+      type = "setting", strategy = "treatment_a", expression = 0.03),
     "Strategy and group cannot be specified for setting overrides"
   )
 })
@@ -461,13 +461,13 @@ test_that("apply_override_categories injects setting overrides", {
     add_override_category("Settings") %>%
     add_override("Settings",
       title = "Discount", name = "discount_cost",
-      type = "setting", input_type = "numeric", expression = 3)
+      type = "setting", input_type = "numeric", expression = 0.03)
 
   segments <- tibble(strategy = "default", group = "all")
   result <- openqaly:::apply_override_categories(model, segments)
 
   expect_true("setting_overrides" %in% names(result))
-  expect_equal(result$setting_overrides[[1]][["discount_cost"]], 3)
+  expect_equal(result$setting_overrides[[1]][["discount_cost"]], 0.03)
 })
 
 test_that("apply_override_categories applies strategy-specific overrides correctly", {
@@ -516,7 +516,7 @@ test_that("apply_override_categories handles timeframe overrides", {
 # Helper to create a model with overrides for serialization tests
 create_test_override_model <- function() {
   define_model("markov") %>%
-    set_settings(timeframe = 20, discount_cost = 3, discount_outcomes = 3) %>%
+    set_settings(timeframe = 20, discount_cost = 0.03, discount_outcomes = 0.03) %>%
     add_state("healthy", initial_prob = 1) %>%
     add_state("sick", initial_prob = 0) %>%
     add_state("dead", initial_prob = 0) %>%
@@ -721,7 +721,7 @@ test_that("print_override_categories formats output correctly", {
 test_that("model without overrides works identically to original", {
   model <- define_model("markov") %>%
     set_settings(timeframe = 5, timeframe_unit = "years", cycle_length = 1, cycle_length_unit = "years",
-                 discount_cost = 3, discount_outcomes = 3) %>%
+                 discount_cost = 0.03, discount_outcomes = 0.03) %>%
     add_state("healthy", initial_prob = 1) %>%
     add_state("sick", initial_prob = 0) %>%
     add_state("dead", initial_prob = 0) %>%

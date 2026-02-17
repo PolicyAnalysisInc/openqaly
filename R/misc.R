@@ -357,6 +357,9 @@ convert_settings_from_df <- function(settings_df) {
         settings[["reduce_state_cycle"]] <- FALSE
     }
     # If it's already logical, it remains unchanged.
+  } else {
+    # Default to FALSE if not specified
+    settings[["reduce_state_cycle"]] <- FALSE
   }
 
   # Handle half_cycle_method setting
@@ -385,6 +388,14 @@ convert_settings_from_df <- function(settings_df) {
   }
   if (!("discount_outcomes" %in% names(settings))) {
     stop("discount_outcomes is required but was not provided in settings")
+  }
+
+  # Warn if discount rates look like percentages instead of decimals
+  if (settings$discount_cost >= 1) {
+    warning("discount_cost is >= 1. Discount rates should be decimals (e.g., 0.03 for 3%), not percentages.")
+  }
+  if (settings$discount_outcomes >= 1) {
+    warning("discount_outcomes is >= 1. Discount rates should be decimals (e.g., 0.03 for 3%), not percentages.")
   }
 
   settings

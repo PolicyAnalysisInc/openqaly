@@ -2174,8 +2174,8 @@ test_that("run_segment.psm_custom executes correctly via run_model", {
       cycle_length_unit = "months",
       days_per_year = 365.25,
       half_cycle_method = "start",
-      discount_cost = 3.5,
-      discount_outcomes = 3.5
+      discount_cost = 0.035,
+      discount_outcomes = 0.035
     ),
     states = tibble::tibble(
       name = c("alive", "dead"),

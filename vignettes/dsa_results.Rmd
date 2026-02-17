@@ -18,13 +18,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup, include = FALSE}
-# Detect Environment
-is_cran <- !identical(Sys.getenv("NOT_CRAN"), "true")
-is_ci   <- identical(Sys.getenv("CI"), "true")
-
-# If on CRAN or CI, stop rendering immediately
-if (is_cran || is_ci) {
-  message("Skipping vignette build on CRAN/CI")
+# Skip on CI and CRAN (R CMD check sets _R_CHECK_PACKAGE_NAME_)
+if (identical(Sys.getenv("CI"), "true") || nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_"))) {
+  message("Skipping vignette build on CI/CRAN")
   knitr::knit_exit()
 }
 
@@ -75,7 +71,7 @@ The `add_dsa_setting()` function varies model settings like discount rates or ti
 
 ```{r, eval = FALSE}
 model <- model %>%
-  add_dsa_setting("discount_outcomes", low = 0, high = 5,
+  add_dsa_setting("discount_outcomes", low = 0, high = 0.05,
                   display_name = "Outcome Discount Rate")
 ```
 
@@ -105,7 +101,7 @@ model <- model %>%
                    group = "low_risk", display_name = "Disease Incidence (Low Risk)") %>%
   add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
                    group = "high_risk", display_name = "Disease Incidence (High Risk)") %>%
-  add_dsa_setting("discount_outcomes", low = 0, high = 5,
+  add_dsa_setting("discount_outcomes", low = 0, high = 0.05,
                   display_name = "Outcome Discount Rate")
 
 dsa_results <- run_dsa(model)

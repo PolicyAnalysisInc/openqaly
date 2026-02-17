@@ -56,7 +56,54 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
       ),
       state_group = ifelse(is.na(.data$state_group), glue(".{name}"), .data$state_group),
       share_state_time = ifelse(is.na(.data$share_state_time), F, .data$share_state_time)
-    ) %>%
+    )
+
+  # For shared state time groups, validate and propagate the group's cycle limit
+  shared_groups <- parsed_states %>%
+    filter(.data$share_state_time == TRUE)
+
+  if (nrow(shared_groups) > 0) {
+    # Find groups where members have explicit (finite) limits
+    groups_with_limits <- shared_groups %>%
+      filter(is.finite(.data$max_state_time)) %>%
+      group_by(.data$state_group) %>%
+      summarize(
+        n_distinct_limits = n_distinct(.data$max_state_time),
+        group_max_st = first(.data$max_state_time),
+        .groups = "drop"
+      )
+
+    # Error if any group has conflicting limits
+    conflicts <- groups_with_limits %>% filter(.data$n_distinct_limits > 1)
+    if (nrow(conflicts) > 0) {
+      conflict_group <- conflicts$state_group[1]
+      conflict_states <- shared_groups %>%
+        filter(.data$state_group == conflict_group, is.finite(.data$max_state_time))
+      stop(
+        glue("States in group '{conflict_group}' have conflicting state_cycle_limit values: ",
+             "{paste(conflict_states$name, '=', conflict_states$max_state_time, collapse = ', ')}. ",
+             "States that share state time must use the same state_cycle_limit."),
+        call. = FALSE
+      )
+    }
+
+    # Propagate the group limit to all members
+    group_limits <- groups_with_limits %>% select("state_group", "group_max_st")
+    if (nrow(group_limits) > 0) {
+      parsed_states <- parsed_states %>%
+        left_join(group_limits, by = "state_group") %>%
+        mutate(
+          max_state_time = ifelse(
+            .data$share_state_time & !is.na(.data$group_max_st),
+            .data$group_max_st,
+            .data$max_state_time
+          )
+        ) %>%
+        select(-"group_max_st")
+    }
+  }
+
+  parsed_states <- parsed_states %>%
     select(
       "name",
       "display_name",
@@ -73,7 +120,11 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
 }
 
 check_states <- function(x) {
-
+  reserved <- intersect(x$name, c("All", "All Other"))
+  if (length(reserved) > 0) {
+    stop(glue("Reserved state name(s) found: {paste(reserved, collapse = ', ')}. ",
+              "'All' and 'All Other' cannot be used as state names."), call. = FALSE)
+  }
 }
 
 eval_states <- function(x, ns) {

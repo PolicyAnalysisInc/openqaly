@@ -17,13 +17,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup, include = FALSE}
-# Detect Environment
-is_cran <- !identical(Sys.getenv("NOT_CRAN"), "true")
-is_ci   <- identical(Sys.getenv("CI"), "true")
-
-# If on CRAN or CI, stop rendering immediately
-if (is_cran || is_ci) {
-  message("Skipping vignette build on CRAN/CI")
+# Skip on CI and CRAN (R CMD check sets _R_CHECK_PACKAGE_NAME_)
+if (identical(Sys.getenv("CI"), "true") || nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_"))) {
+  message("Skipping vignette build on CI/CRAN")
   knitr::knit_exit()
 }
 
@@ -35,8 +31,8 @@ model <- define_model("markov") |>
     n_cycles = 20,
     cycle_length = 1,
     cycle_length_unit = "years",
-    discount_cost = 3.5,
-    discount_outcomes = 3.5
+    discount_cost = 0.035,
+    discount_outcomes = 0.035
   ) |>
   # States
   add_state("mild", initial_prob = 1) |>
