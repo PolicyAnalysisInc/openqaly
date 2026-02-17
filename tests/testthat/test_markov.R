@@ -2004,3 +2004,131 @@ test_that("eval_trans_markov_lf stops on error when option is set", {
   openqaly:::clear_oq_errors()
 })
 
+# ==============================================================================
+# Shared State Time + state_cycle Bug Fix Tests
+# ==============================================================================
+
+test_that("shared state time with state_cycle propagates limit to all group members", {
+  # This model previously crashed because progressed_comp had no state_cycle_limit
+  # but shared state time with progressed (which had limit=5). The fix propagates
+  # the limit from progressed to progressed_comp.
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 20,
+      cycle_length = 1,
+      cycle_length_unit = "years",
+      discount_cost = 3.5,
+      discount_outcomes = 3.5
+    ) |>
+    add_state(
+      "stable",
+      display_name = "Stable Disease",
+      initial_prob = 1
+    ) |>
+    add_state(
+      "progressed",
+      display_name = "Progressed",
+      state_group = "progression",
+      share_state_time = TRUE,
+      state_cycle_limit = 5,
+      initial_prob = 0
+    ) |>
+    add_state(
+      "progressed_comp",
+      display_name = "Progressed (Complicated)",
+      state_group = "progression",
+      share_state_time = TRUE,
+      initial_prob = 0
+    ) |>
+    add_state(
+      "dead",
+      display_name = "Dead",
+      initial_prob = 0
+    ) |>
+    add_transition("stable", "progressed", 0.15) |>
+    add_transition("stable", "dead", 0.02) |>
+    add_transition("stable", "stable", C) |>
+    add_transition("progressed", "progressed_comp", 0.10) |>
+    add_transition("progressed", "dead", 0.05 + 0.03 * state_cycle) |>
+    add_transition("progressed", "progressed", C) |>
+    add_transition("progressed_comp", "progressed", 0.05) |>
+    add_transition("progressed_comp", "dead", 0.08 + 0.04 * state_cycle) |>
+    add_transition("progressed_comp", "progressed_comp", C) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 1000, state = "stable", type = "cost") |>
+    add_value("cost", 3000, state = "progressed", type = "cost") |>
+    add_value("cost", 5000, state = "progressed_comp", type = "cost") |>
+    add_value("cost", 0, state = "dead", type = "cost") |>
+    add_value("qaly", 0.8, state = "stable", type = "outcome") |>
+    add_value("qaly", 0.5, state = "progressed", type = "outcome") |>
+    add_value("qaly", 0.3, state = "progressed_comp", type = "outcome") |>
+    add_value("qaly", 0, state = "dead", type = "outcome") |>
+    add_strategy("standard_care", "Standard Care") |>
+    add_summary("total_cost", "cost", type = "cost") |>
+    add_summary("total_qalys", "qaly", type = "outcome")
+
+  expect_no_error(run_model(model))
+})
+
+test_that("shared state time with conflicting state_cycle_limit values errors", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(
+        n_cycles = 10,
+        cycle_length = 1,
+        cycle_length_unit = "years",
+        discount_cost = 3.5,
+        discount_outcomes = 3.5
+      ) |>
+      add_state(
+        "stable",
+        display_name = "Stable",
+        initial_prob = 1
+      ) |>
+      add_state(
+        "prog_a",
+        display_name = "Progressed A",
+        state_group = "progression",
+        share_state_time = TRUE,
+        state_cycle_limit = 5,
+        initial_prob = 0
+      ) |>
+      add_state(
+        "prog_b",
+        display_name = "Progressed B",
+        state_group = "progression",
+        share_state_time = TRUE,
+        state_cycle_limit = 10,
+        initial_prob = 0
+      ) |>
+      add_state(
+        "dead",
+        display_name = "Dead",
+        initial_prob = 0
+      ) |>
+      add_transition("stable", "prog_a", 0.15) |>
+      add_transition("stable", "dead", 0.02) |>
+      add_transition("stable", "stable", C) |>
+      add_transition("prog_a", "prog_b", 0.10) |>
+      add_transition("prog_a", "dead", 0.05) |>
+      add_transition("prog_a", "prog_a", C) |>
+      add_transition("prog_b", "prog_a", 0.05) |>
+      add_transition("prog_b", "dead", 0.08) |>
+      add_transition("prog_b", "prog_b", C) |>
+      add_transition("dead", "dead", 1) |>
+      add_value("cost", 1000, state = "stable", type = "cost") |>
+      add_value("cost", 3000, state = "prog_a", type = "cost") |>
+      add_value("cost", 5000, state = "prog_b", type = "cost") |>
+      add_value("cost", 0, state = "dead", type = "cost") |>
+      add_value("qaly", 0.8, state = "stable", type = "outcome") |>
+      add_value("qaly", 0.5, state = "prog_a", type = "outcome") |>
+      add_value("qaly", 0.3, state = "prog_b", type = "outcome") |>
+      add_value("qaly", 0, state = "dead", type = "outcome") |>
+      add_strategy("standard_care", "Standard Care") |>
+      add_summary("total_cost", "cost", type = "cost") |>
+      add_summary("total_qalys", "qaly", type = "outcome") |>
+      run_model(),
+    "conflicting state_cycle_limit"
+  )
+})
+

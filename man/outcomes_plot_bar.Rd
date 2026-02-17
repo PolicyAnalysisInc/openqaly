@@ -10,7 +10,9 @@ outcomes_plot_bar(
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
-  comparators = NULL
+  comparators = NULL,
+  value_labels = TRUE,
+  label_accuracy = 0.01
 )
 }
 \arguments{
@@ -25,6 +27,10 @@ outcomes_plot_bar(
 \item{interventions}{Strategies used as interventions (when plotting differences)}
 
 \item{comparators}{Strategies used as commparators (when plotting differences)}
+
+\item{value_labels}{Logical. If TRUE (default), display numeric value labels at bar edges.}
+
+\item{label_accuracy}{Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.}
 }
 \value{
 A ggplot2 object

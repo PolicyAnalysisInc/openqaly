@@ -8,7 +8,6 @@ trace_plot_area(
   res,
   groups = "overall",
   strategies = NULL,
-  proportional = FALSE,
   states = NULL,
   color_palette = NULL,
   show_legend = TRUE,
@@ -25,9 +24,6 @@ vector of groups, "all" (all groups plus aggregated), "all_groups"
 (all groups without overall), or NULL (same as "all")}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
-
-\item{proportional}{Logical. If TRUE, show as percentages (0-100%). If FALSE
-(default), show as probabilities (0-1)}
 
 \item{states}{Character vector of states to include (NULL for all)}
 
@@ -59,9 +55,6 @@ results <- run_model(model)
 
 # Basic stacked area plot (facets by strategy if multiple)
 trace_plot_area(results)
-
-# Show as percentages
-trace_plot_area(results, proportional = TRUE)
 }
 
 }

@@ -123,7 +123,10 @@ define_model <- function(type = "markov") {
     multivariate_sampling = list(),
     dsa_parameters = structure(list(), class = "dsa_parameters"),
     scenarios = list(),
-    twsa_analyses = list()
+    twsa_analyses = list(),
+    override_categories = list(),
+    threshold_analyses = list(),
+    vbp = NULL
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -194,6 +197,50 @@ set_settings <- function(model, ...) {
   model
 }
 
+#' Set VBP Configuration
+#'
+#' Configure value-based pricing (VBP) parameters on the model so they can be
+#' serialized and used as defaults by \code{run_vbp()}, \code{run_dsa()},
+#' \code{run_scenario()}, and \code{run_twsa()}.
+#'
+#' @param model An oq_model_builder object
+#' @param price_variable Name of the variable representing the intervention's price
+#' @param intervention_strategy Name of the intervention strategy
+#' @param outcome_summary Name of the outcome summary to use
+#' @param cost_summary Name of the cost summary to use
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_vbp(
+#'     price_variable = "c_drug",
+#'     intervention_strategy = "treatment",
+#'     outcome_summary = "total_qalys",
+#'     cost_summary = "total_costs"
+#'   )
+set_vbp <- function(model, price_variable, intervention_strategy,
+                    outcome_summary, cost_summary) {
+  # Validate all params are non-empty strings
+  for (param_name in c("price_variable", "intervention_strategy",
+                        "outcome_summary", "cost_summary")) {
+    val <- get(param_name)
+    if (!is.character(val) || length(val) != 1 || nchar(val) == 0) {
+      stop(param_name, " must be a non-empty string", call. = FALSE)
+    }
+  }
+
+  model$vbp <- list(
+    price_variable = price_variable,
+    intervention_strategy = intervention_strategy,
+    outcome_summary = outcome_summary,
+    cost_summary = cost_summary
+  )
+
+  model
+}
+
 #' Add States to Model
 #'
 #' Add one or more states to the model.
@@ -219,6 +266,12 @@ add_state <- function(model, name, display_name = NULL,
                      description = NULL, state_group = NULL,
                      share_state_time = FALSE, state_cycle_limit = NULL,
                      state_cycle_limit_unit = "cycles", initial_prob = NULL) {
+
+  # Block reserved state names
+  if (name %in% c("All", "All Other")) {
+    stop(glue("'{name}' is a reserved state name and cannot be used as a state name. ",
+              "It is used for special value targeting in add_value()."), call. = FALSE)
+  }
 
   # Get immutable model type
   model_type <- tolower(model$settings$model_type)
@@ -457,11 +510,49 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     formula_str <- formula_expr
   }
 
+  # Validate "All" / "All Other" state targeting rules
+  state_str <- as.character(state)
+  dest_str <- as.character(destination)
+  is_residence <- is.na(destination) || dest_str == "NA"
+
+  if (state_str %in% c("All", "All Other")) {
+    if (!is_residence) {
+      stop(glue("'{state_str}' cannot be used for transition values (where destination is set). ",
+                "It is only valid for residence values."), call. = FALSE)
+    }
+
+    existing <- model$values
+    if (!is.null(existing) && nrow(existing) > 0) {
+      existing_residence <- existing[existing$name == name &
+        (is.na(existing$destination) | existing$destination == "NA"), , drop = FALSE]
+
+      if (state_str == "All" && nrow(existing_residence) > 0) {
+        stop(glue("Value '{name}' already has residence value rows. ",
+                  "Cannot add 'All' when other residence rows exist."), call. = FALSE)
+      }
+      if (state_str == "All Other" && any(existing_residence$state == "All Other")) {
+        stop(glue("Value '{name}' already has an 'All Other' residence row. ",
+                  "Only one 'All Other' row is allowed per value name."), call. = FALSE)
+      }
+    }
+  } else if (is_residence && !is.na(state) && state_str != "NA") {
+    # Adding an explicit state — check if "All" already exists for this name
+    existing <- model$values
+    if (!is.null(existing) && nrow(existing) > 0) {
+      existing_residence <- existing[existing$name == name &
+        (is.na(existing$destination) | existing$destination == "NA"), , drop = FALSE]
+      if (any(existing_residence$state == "All")) {
+        stop(glue("Value '{name}' already uses state 'All'. ",
+                  "Cannot add explicit state rows when 'All' is used."), call. = FALSE)
+      }
+    }
+  }
+
   new_value <- tibble(
     name = name,
     formula = formula_str,
-    state = as.character(state),
-    destination = as.character(destination),
+    state = state_str,
+    destination = dest_str,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
     type = type
@@ -753,7 +844,11 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
-  model$tables[[name]] <- data
+  # Store as structured list with data and optional description
+  model$tables[[name]] <- list(
+    data = data,
+    description = description
+  )
   model
 }
 
@@ -773,7 +868,11 @@ add_table <- function(model, name, data, description = NULL) {
 #' model <- define_model("markov") |>
 #'   add_script("preprocess", "# Data preprocessing\nlibrary(dplyr)")
 add_script <- function(model, name, code, description = NULL) {
-  model$scripts[[name]] <- code
+  # Store as structured list with code and optional description
+  model$scripts[[name]] <- list(
+    code = code,
+    description = description
+  )
   model
 }
 
@@ -1362,8 +1461,8 @@ add_scenario_variable <- function(model, scenario, variable, value,
 #'
 #' Common settings that can be overridden include:
 #' - `timeframe`: Model time horizon
-#' - `discount_cost`: Discount rate for costs (percentage)
-#' - `discount_outcomes`: Discount rate for outcomes (percentage)
+#' - `discount_cost`: Discount rate for costs (percentage, e.g. 3 for 3%)
+#' - `discount_outcomes`: Discount rate for outcomes (percentage, e.g. 3 for 3%)
 #' - `cycle_length`: Length of each model cycle
 #'
 #' @param model An oq_model_builder object
@@ -1807,4 +1906,603 @@ print_twsa <- function(model) {
     }
   }
   invisible(model)
+}
+
+#' Add an Override Category to Model
+#'
+#' Create a named category for grouping related override controls.
+#' Override categories organize UI controls that allow users to modify
+#' model variables and settings at runtime.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string for the category name (must be unique, case-insensitive)
+#' @param general Logical indicating if this is a system category (default: FALSE)
+#'
+#' @return The modified model object
+#' @export
+add_override_category <- function(model, name, general = FALSE) {
+  # Validate inputs
+  if (!is.character(name) || length(name) != 1 || nchar(trimws(name)) == 0) {
+    stop("Override category name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Check for duplicate category name (case-insensitive)
+  if (length(model$override_categories) > 0) {
+    existing_names <- tolower(sapply(model$override_categories, function(c) c$name))
+    if (tolower(name) %in% existing_names) {
+      stop(sprintf("Override category '%s' already exists", name), call. = FALSE)
+    }
+  }
+
+  # Create new category
+  new_category <- list(
+    name = name,
+    general = as.logical(general),
+    overrides = list()
+  )
+
+  # Add to model
+  model$override_categories <- c(model$override_categories, list(new_category))
+
+  model
+}
+
+#' Create a Dropdown Option for Override Controls
+#'
+#' Helper function to create a dropdown option for use with
+#' \code{\link{add_override}} when \code{input_type = "dropdown"}.
+#'
+#' @param label Display text for the option
+#' @param value Actual value when selected
+#' @param is_base_case Whether this is the default option (default: FALSE)
+#'
+#' @return A list representing a dropdown option
+#' @export
+override_option <- function(label, value, is_base_case = FALSE) {
+  if (!is.character(label) || length(label) != 1 || nchar(trimws(label)) == 0) {
+    stop("Dropdown option label must be a non-empty character string", call. = FALSE)
+  }
+  list(
+    label = label,
+    value = as.character(value),
+    is_base_case = as.logical(is_base_case)
+  )
+}
+
+#' Add an Override Control to a Category
+#'
+#' Define a UI override control that allows users to modify a model variable
+#' or setting at runtime. When the model is rendered in a Shiny UI, these
+#' controls will be displayed to the user.
+#'
+#' @param model An oq_model_builder object
+#' @param category Character string naming the category to add to (must exist)
+#' @param title Character string for the display name
+#' @param name Character string for the variable or setting name to override
+#' @param type Character string: "variable" or "setting"
+#' @param input_type Character string: "numeric", "slider", "dropdown", "formula", or "timeframe"
+#' @param expression Default/initial override value as a string or unquoted expression (uses NSE)
+#' @param description Optional description text
+#' @param strategy Optional strategy name (for variable overrides only)
+#' @param group Optional group name (for variable overrides only)
+#' @param general Logical indicating if this is a system override (default: FALSE)
+#' @param min Numeric minimum (for numeric/slider input types)
+#' @param max Numeric maximum (for numeric/slider input types)
+#' @param step_size Numeric step size (for slider input type)
+#' @param options List of dropdown options (for dropdown input type).
+#'   Each option should be created with \code{\link{override_option}}.
+#'
+#' @return The modified model object
+#' @export
+add_override <- function(model, category, title, name, type = "variable",
+                         input_type = "numeric", expression,
+                         description = NULL, strategy = "", group = "",
+                         general = FALSE,
+                         min = NULL, max = NULL, step_size = NULL,
+                         options = NULL) {
+
+  # Validate category exists
+  if (length(model$override_categories) == 0) {
+    stop(sprintf("Override category '%s' not found. Use add_override_category() first.", category),
+         call. = FALSE)
+  }
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == category)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found. Use add_override_category() first.", category),
+         call. = FALSE)
+  }
+
+  # Validate title
+  if (!is.character(title) || length(title) != 1 || nchar(trimws(title)) == 0) {
+    stop("Override title must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || nchar(trimws(name)) == 0) {
+    stop("Override name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate type
+  if (!type %in% c("variable", "setting")) {
+    stop("Override type must be 'variable' or 'setting'", call. = FALSE)
+  }
+
+  # Validate input_type
+  valid_input_types <- c("numeric", "slider", "dropdown", "formula", "timeframe")
+  if (!input_type %in% valid_input_types) {
+    stop(paste0("Override input_type must be one of: ", paste(valid_input_types, collapse = ", ")),
+         call. = FALSE)
+  }
+
+  # Capture expression using NSE
+  expr_quo <- enquo(expression)
+  expr_val <- quo_get_expr(expr_quo)
+
+  if (is.numeric(expr_val)) {
+    expression_str <- as.character(expr_val)
+  } else if (is.character(expr_val) && length(expr_val) == 1) {
+    expression_str <- expr_val
+  } else {
+    expression_str <- expr_text(expr_val)
+  }
+
+  # Validate expression non-empty
+  if (nchar(trimws(expression_str)) == 0) {
+    stop("Override expression must be non-empty", call. = FALSE)
+  }
+
+  # Validate type-specific rules
+  if (type == "setting") {
+    # Settings don't use strategy/group
+    if (strategy != "" || group != "") {
+      stop("Strategy and group cannot be specified for setting overrides", call. = FALSE)
+    }
+    # Validate setting name
+    valid_settings <- c(
+      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+      "discount_cost", "discount_outcomes", "half_cycle_method",
+      "reduce_state_cycle", "days_per_year"
+    )
+    if (!(name %in% valid_settings)) {
+      stop(sprintf(
+        "Invalid override setting name: '%s'. Valid settings: %s",
+        name, paste(valid_settings, collapse = ", ")
+      ), call. = FALSE)
+    }
+  }
+
+  if (type == "variable") {
+    # Validate variable exists and strategy/group targeting
+    validate_variable_targeting(model, name, strategy, group,
+                                "Override", "add_override")
+  }
+
+  # Validate min < max
+  if (!is.null(min) && !is.null(max)) {
+    if (min >= max) {
+      stop(sprintf("Override min (%s) must be less than max (%s)", min, max), call. = FALSE)
+    }
+  }
+
+  # Validate step_size > 0
+  if (!is.null(step_size) && step_size <= 0) {
+    stop("Override step_size must be greater than 0", call. = FALSE)
+  }
+
+  # Validate dropdown options
+  if (input_type == "dropdown" && !is.null(options) && length(options) == 0) {
+    stop("Dropdown override must have at least one option", call. = FALSE)
+  }
+
+  # Check for duplicate override in this category
+  existing_overrides <- model$override_categories[[cat_idx]]$overrides
+  if (length(existing_overrides) > 0) {
+    for (existing in existing_overrides) {
+      if (existing$type == type && existing$name == name &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        stop(sprintf(
+          "An override for %s '%s'%s%s already exists in category '%s'",
+          type, name,
+          if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+          if (group != "") paste0(" (group: ", group, ")") else "",
+          category
+        ), call. = FALSE)
+      }
+    }
+  }
+
+  # Build input_config with defaults
+  input_config <- switch(input_type,
+    "numeric" = list(
+      min = min %||% 0,
+      max = max %||% 100
+    ),
+    "slider" = list(
+      min = min %||% 0,
+      max = max %||% 1,
+      step_size = step_size %||% 0.05
+    ),
+    "dropdown" = list(
+      options = options %||% list()
+    ),
+    "formula" = list(),
+    "timeframe" = list()
+  )
+
+  # Create override item
+  override_item <- list(
+    title = title,
+    description = description %||% "",
+    type = type,
+    name = name,
+    strategy = as.character(strategy),
+    group = as.character(group),
+    general = as.logical(general),
+    input_type = input_type,
+    overridden_expression = expression_str,
+    input_config = input_config
+  )
+
+  # Add to category
+  model$override_categories[[cat_idx]]$overrides <- c(
+    model$override_categories[[cat_idx]]$overrides,
+    list(override_item)
+  )
+
+  model
+}
+
+#' Print Override Categories Summary
+#'
+#' Displays a formatted summary of override categories and their overrides.
+#'
+#' @param model A model object with override_categories
+#' @return Invisible model
+#' @keywords internal
+print_override_categories <- function(model) {
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(invisible(model))
+  }
+
+  # Count total overrides
+  total_overrides <- sum(sapply(model$override_categories, function(c) length(c$overrides)))
+  if (total_overrides == 0) {
+    return(invisible(model))
+  }
+
+  cat(sprintf("\n  [!] Active overrides (%d):\n", total_overrides))
+  for (cat_item in model$override_categories) {
+    if (length(cat_item$overrides) == 0) next
+    cat(sprintf("    %s:\n", cat_item$name))
+    for (override in cat_item$overrides) {
+      config_str <- switch(override$input_type,
+        "numeric" = sprintf("[numeric: %s-%s]",
+          override$input_config$min, override$input_config$max),
+        "slider" = sprintf("[slider: %s-%s]",
+          override$input_config$min, override$input_config$max),
+        "dropdown" = "[dropdown]",
+        "formula" = "[formula]",
+        "timeframe" = "[timeframe]"
+      )
+      cat(sprintf("      - %s (%s): %s %s\n",
+        override$title, override$name,
+        override$overridden_expression, config_str))
+    }
+  }
+  invisible(model)
+}
+
+# ============================================================================
+# Threshold Analysis
+# ============================================================================
+
+#' Create Threshold Condition for Outcomes
+#'
+#' @param summary Target a summary (e.g., "total_qalys"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "qaly_sick"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_outcomes <- function(
+  summary = NULL,
+  value = NULL,
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  discounted = TRUE,
+  target_value = 0,
+  group = ""
+) {
+  type <- match.arg(type)
+  list(output = "outcomes", summary = summary, value = value, type = type,
+       strategy = strategy, referent = referent, comparator = comparator,
+       discounted = discounted, target_value = target_value, group = group)
+}
+
+#' Create Threshold Condition for Costs
+#'
+#' @param summary Target a summary (e.g., "total_cost"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "cost_drug"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_costs <- function(
+  summary = NULL,
+  value = NULL,
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  discounted = TRUE,
+  target_value = 0,
+  group = ""
+) {
+  type <- match.arg(type)
+  list(output = "costs", summary = summary, value = value, type = type,
+       strategy = strategy, referent = referent, comparator = comparator,
+       discounted = discounted, target_value = target_value, group = group)
+}
+
+#' Create Threshold Condition for NMB
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param target_value Target NMB value
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_nmb <- function(health_summary, cost_summary, referent, comparator,
+                                     discounted = TRUE, target_value = 0, group = "",
+                                     wtp = NULL) {
+  list(output = "nmb", health_summary = health_summary, cost_summary = cost_summary,
+       referent = referent, comparator = comparator, discounted = discounted,
+       target_value = target_value, group = group, wtp = wtp)
+}
+
+#' Create Threshold Condition for CE
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_ce <- function(health_summary, cost_summary, referent, comparator,
+                                    discounted = TRUE, group = "",
+                                    wtp = NULL) {
+  list(output = "ce", health_summary = health_summary, cost_summary = cost_summary,
+       referent = referent, comparator = comparator, discounted = discounted,
+       group = group, wtp = wtp)
+}
+
+#' Create Threshold Condition for Trace
+#'
+#' @param state State name to target in the trace
+#' @param time Numeric time value at which to read the trace
+#' @param time_unit Time unit for the time parameter: "cycle", "year", "month", "week", or "day"
+#' @param type Whether to use absolute or difference: "absolute" or "difference"
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param target_value Target trace value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @return A condition list for use in \code{add_threshold_analysis()}
+#' @export
+threshold_condition_trace <- function(
+  state,
+  time,
+  time_unit = c("cycle", "year", "month", "week", "day"),
+  type = c("absolute", "difference"),
+  strategy = NULL,
+  referent = NULL,
+  comparator = NULL,
+  target_value,
+  group = ""
+) {
+  time_unit <- match.arg(time_unit)
+  type <- match.arg(type)
+  list(output = "trace", state = state, time = time, time_unit = time_unit,
+       type = type, strategy = strategy, referent = referent,
+       comparator = comparator, target_value = target_value, group = group)
+}
+
+#' Add Threshold Analysis to Model
+#'
+#' Define a threshold analysis that finds the input parameter value producing
+#' a desired output condition using iterative root-finding.
+#'
+#' @param model An oq_model_builder object
+#' @param name Unique name for this threshold analysis
+#' @param variable Variable to solve for
+#' @param lower Lower bound for search range
+#' @param upper Upper bound for search range
+#' @param condition A condition list created by \code{threshold_condition_*} functions
+#' @param variable_strategy Strategy targeting for the variable (empty string = all)
+#' @param variable_group Group targeting for the variable (empty string = all)
+#' @param active Whether this analysis is active
+#' @return The modified model object
+#' @export
+add_threshold_analysis <- function(
+  model, name, variable, lower, upper,
+  condition,
+  variable_strategy = "",
+  variable_group = "",
+  active = TRUE
+) {
+  if (!inherits(model, "oq_model_builder") && !inherits(model, "oq_model")) {
+    stop("model must be an oq_model_builder or oq_model object", call. = FALSE)
+  }
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate variable
+  if (!is.character(variable) || length(variable) != 1 || variable == "") {
+    stop("variable must be a non-empty character string", call. = FALSE)
+  }
+
+  # Validate bounds
+  if (!is.numeric(lower) || !is.numeric(upper) || length(lower) != 1 || length(upper) != 1) {
+    stop("lower and upper must be single numeric values", call. = FALSE)
+  }
+  if (lower >= upper) {
+    stop("lower must be less than upper", call. = FALSE)
+  }
+
+  # Validate condition
+  if (!is.list(condition) || is.null(condition$output)) {
+    stop("condition must be a list with an 'output' field (use threshold_condition_* functions)", call. = FALSE)
+  }
+
+  valid_outputs <- c("outcomes", "costs", "nmb", "ce", "vbp", "trace")
+  if (!condition$output %in% valid_outputs) {
+    stop(sprintf("Invalid output type '%s'. Must be one of: %s",
+                 condition$output, paste(valid_outputs, collapse = ", ")), call. = FALSE)
+  }
+
+  if (condition$output == "vbp") {
+    stop("VBP output type is not yet supported for threshold analysis", call. = FALSE)
+  }
+
+  # Validate output-specific fields
+  validate_threshold_condition(condition)
+
+  # Validate variable targeting
+  validate_variable_targeting(model, variable, variable_strategy, variable_group,
+                               "threshold", "add_threshold_analysis")
+
+  # Check for duplicate name - warn and replace
+  existing_idx <- which(sapply(model$threshold_analyses, function(a) a$name) == name)
+  if (length(existing_idx) > 0) {
+    warning(sprintf("Threshold analysis '%s' already exists and will be replaced", name), call. = FALSE)
+    model$threshold_analyses[[existing_idx]] <- NULL
+  }
+
+  analysis <- list(
+    name = name,
+    variable = variable,
+    variable_strategy = variable_strategy,
+    variable_group = variable_group,
+    lower = lower,
+    upper = upper,
+    active = active,
+    condition = condition
+  )
+
+  model$threshold_analyses <- c(model$threshold_analyses, list(analysis))
+  model
+}
+
+#' Validate Threshold Condition Fields
+#' @param condition A threshold condition list
+#' @keywords internal
+validate_threshold_condition <- function(condition) {
+  output <- condition$output
+
+  if (output %in% c("outcomes", "costs")) {
+    has_summary <- !is.null(condition$summary) && condition$summary != ""
+    has_value <- !is.null(condition$value) && condition$value != ""
+    if (!has_summary && !has_value) {
+      stop(sprintf("Threshold condition for '%s' must specify either 'summary' or 'value'", output), call. = FALSE)
+    }
+    if (has_summary && has_value) {
+      stop(sprintf("Threshold condition for '%s' must specify either 'summary' or 'value', not both", output), call. = FALSE)
+    }
+
+    type <- condition$type
+    if (is.null(type) || !type %in% c("absolute", "difference")) {
+      stop("Threshold condition 'type' must be 'absolute' or 'difference'", call. = FALSE)
+    }
+    if (type == "absolute") {
+      if (is.null(condition$strategy) || condition$strategy == "") {
+        stop("Threshold condition with type='absolute' requires 'strategy'", call. = FALSE)
+      }
+    } else {
+      if (is.null(condition$referent) || condition$referent == "") {
+        stop("Threshold condition with type='difference' requires 'referent'", call. = FALSE)
+      }
+      if (is.null(condition$comparator) || condition$comparator == "") {
+        stop("Threshold condition with type='difference' requires 'comparator'", call. = FALSE)
+      }
+    }
+
+    if (is.null(condition$target_value)) {
+      stop(sprintf("Threshold condition for '%s' requires 'target_value'", output), call. = FALSE)
+    }
+
+  } else if (output == "nmb") {
+    required <- c("health_summary", "cost_summary", "referent", "comparator")
+    missing <- required[!sapply(required, function(f) !is.null(condition[[f]]) && condition[[f]] != "")]
+    if (length(missing) > 0) {
+      stop(sprintf("Threshold condition for 'nmb' requires: %s", paste(missing, collapse = ", ")), call. = FALSE)
+    }
+
+  } else if (output == "ce") {
+    required <- c("health_summary", "cost_summary", "referent", "comparator")
+    missing <- required[!sapply(required, function(f) !is.null(condition[[f]]) && condition[[f]] != "")]
+    if (length(missing) > 0) {
+      stop(sprintf("Threshold condition for 'ce' requires: %s", paste(missing, collapse = ", ")), call. = FALSE)
+    }
+  } else if (output == "trace") {
+    if (is.null(condition$state) || condition$state == "") {
+      stop("Threshold condition for 'trace' requires 'state'", call. = FALSE)
+    }
+    if (is.null(condition$time) || !is.numeric(condition$time)) {
+      stop("Threshold condition for 'trace' requires numeric 'time'", call. = FALSE)
+    }
+    valid_time_units <- c("cycle", "year", "month", "week", "day")
+    if (is.null(condition$time_unit) || !condition$time_unit %in% valid_time_units) {
+      stop(sprintf("Threshold condition 'time_unit' must be one of: %s",
+                   paste(valid_time_units, collapse = ", ")), call. = FALSE)
+    }
+    if (is.null(condition$target_value)) {
+      stop("Threshold condition for 'trace' requires 'target_value'", call. = FALSE)
+    }
+    type <- condition$type
+    if (is.null(type) || !type %in% c("absolute", "difference")) {
+      stop("Threshold condition 'type' must be 'absolute' or 'difference'", call. = FALSE)
+    }
+    if (type == "absolute") {
+      if (is.null(condition$strategy) || condition$strategy == "") {
+        stop("Threshold condition with type='absolute' requires 'strategy'", call. = FALSE)
+      }
+    } else {
+      if (is.null(condition$referent) || condition$referent == "") {
+        stop("Threshold condition with type='difference' requires 'referent'", call. = FALSE)
+      }
+      if (is.null(condition$comparator) || condition$comparator == "") {
+        stop("Threshold condition with type='difference' requires 'comparator'", call. = FALSE)
+      }
+    }
+  }
+
+  # Validate group field if provided
+  if (!is.null(condition$group) && !identical(condition$group, "")) {
+    if (!is.character(condition$group) || length(condition$group) != 1) {
+      stop("Threshold condition 'group' must be a single character string", call. = FALSE)
+    }
+  }
 }

@@ -85,21 +85,30 @@ build_scenario_segments <- function(model) {
     }) %>%
     ungroup()
 
+  # Apply override categories as baseline overrides
+  enriched_segments <- apply_override_categories(model, enriched_segments)
+
   n_segments <- nrow(enriched_segments)
   all_segments <- list()
   scenario_id <- 1
 
-  # Scenario 1: Base case - all segments with no overrides
+  # Scenario 1: Base case - all segments with override category values as baseline
   base_case_segments <- enriched_segments %>%
     mutate(
-      scenario_id = scenario_id,
-      parameter_overrides = vector("list", n_segments),
-      setting_overrides = vector("list", n_segments)
+      scenario_id = scenario_id
     )
-  # Initialize empty lists
-  for (i in seq_len(n_segments)) {
-    base_case_segments$parameter_overrides[[i]] <- list()
-    base_case_segments$setting_overrides[[i]] <- list()
+  # Initialize override columns if not present (from apply_override_categories)
+  if (!"parameter_overrides" %in% names(base_case_segments)) {
+    base_case_segments$parameter_overrides <- vector("list", n_segments)
+    for (i in seq_len(n_segments)) {
+      base_case_segments$parameter_overrides[[i]] <- list()
+    }
+  }
+  if (!"setting_overrides" %in% names(base_case_segments)) {
+    base_case_segments$setting_overrides <- vector("list", n_segments)
+    for (i in seq_len(n_segments)) {
+      base_case_segments$setting_overrides[[i]] <- list()
+    }
   }
   all_segments[[length(all_segments) + 1]] <- base_case_segments
   scenario_id <- scenario_id + 1
@@ -116,7 +125,12 @@ build_scenario_segments <- function(model) {
       seg_strategy <- segment$strategy[[1]]
       seg_group <- segment$group[[1]]
 
-      overrides <- list()
+      # Start with baseline overrides from override categories
+      overrides <- if ("parameter_overrides" %in% names(enriched_segments)) {
+        enriched_segments$parameter_overrides[[seg_idx]]
+      } else {
+        list()
+      }
 
       for (override in scenario$variable_overrides) {
         # Check if override applies to this segment
@@ -151,8 +165,12 @@ build_scenario_segments <- function(model) {
 
       param_overrides_list[[seg_idx]] <- overrides
 
-      # Build setting overrides (same for all segments in a scenario)
-      setting_overrides <- list()
+      # Build setting overrides - start with baseline from override categories
+      setting_overrides <- if ("setting_overrides" %in% names(enriched_segments)) {
+        enriched_segments$setting_overrides[[seg_idx]]
+      } else {
+        list()
+      }
       for (override in scenario$setting_overrides) {
         setting_overrides[[override$name]] <- override$value
       }
@@ -297,6 +315,14 @@ run_scenario <- function(model,
 
   # Validate scenario specifications
   validate_scenario_spec(parsed_model)
+
+  # Fall back to model$vbp for VBP parameters if not provided
+  if (is.null(vbp_price_variable) && !is.null(model$vbp)) {
+    vbp_price_variable <- model$vbp$price_variable
+    if (is.null(vbp_intervention)) vbp_intervention <- model$vbp$intervention_strategy
+    if (is.null(vbp_outcome_summary)) vbp_outcome_summary <- model$vbp$outcome_summary
+    if (is.null(vbp_cost_summary)) vbp_cost_summary <- model$vbp$cost_summary
+  }
 
   # Check if VBP mode is enabled
   vbp_enabled <- !is.null(vbp_price_variable)

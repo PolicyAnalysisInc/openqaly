@@ -139,7 +139,6 @@ incremental_ce_plot <- function(res,
 #' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)
-#' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of comparator strategies (e.g., "control").
@@ -193,7 +192,6 @@ pairwise_ce_plot <- function(res,
                              outcome_summary,
                              cost_summary,
                              groups = "overall",
-                             strategies = NULL,
                              interventions = NULL,
                              comparators = NULL,
                              wtp = NULL) {
@@ -209,7 +207,6 @@ pairwise_ce_plot <- function(res,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary,
     groups = groups,
-    strategies = strategies,
     interventions = interventions,
     comparators = comparators
   )

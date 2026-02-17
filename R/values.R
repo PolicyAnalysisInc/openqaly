@@ -37,10 +37,13 @@ parse_values <- function(x, states, extra_vars) {
       select("name", "state", "destination") %>%
       distinct() %>%
       mutate(combined = glue("name: {name}, state: {state}, destination: {destination}"))
-    
+
     stop("Duplicate values found. Values must be unique by name, state, and destination combination:\n",
          paste(dup_values$combined, collapse = "\n"))
   }
+
+  # Expand "All" / "All Other" state targeting to concrete state rows
+  x <- expand_all_states_in_values(x, states$name)
 
   # Parse values and sort
   vars <- x %>%
@@ -88,6 +91,107 @@ check_values_df <- function(x) {
       stop(glue("Invalid formula syntax for value '{x$name[i]}': {e$message}"))
     })
   }
+
+  # Validate "All" / "All Other" rules
+  validate_all_other_rules(x)
+}
+
+validate_all_other_rules <- function(x) {
+  reserved <- c("All", "All Other")
+
+  # Find rows with reserved state names
+  reserved_rows <- x[x$state %in% reserved, , drop = FALSE]
+  if (nrow(reserved_rows) == 0) return(invisible(NULL))
+
+  # Error if reserved state names used on transition values (destination is set)
+  transition_reserved <- reserved_rows[!is.na(reserved_rows$destination) & reserved_rows$destination != "NA", , drop = FALSE]
+  if (nrow(transition_reserved) > 0) {
+    bad <- paste(unique(transition_reserved$state), collapse = ", ")
+    stop(glue("'{bad}' cannot be used for transition values (where destination is set). ",
+              "It is only valid for residence values."), call. = FALSE)
+  }
+
+  # Per value name: check rules among residence rows
+  value_names <- unique(x$name)
+  for (vname in value_names) {
+    rows <- x[x$name == vname & (is.na(x$destination) | x$destination == "NA"), , drop = FALSE]
+    if (nrow(rows) == 0) next
+
+    states_used <- rows$state
+    has_all <- "All" %in% states_used
+    has_all_other <- "All Other" %in% states_used
+
+    if (has_all && nrow(rows) > 1) {
+      stop(glue("Value '{vname}' uses state 'All' but also has other residence value rows. ",
+                "'All' must be the only residence row for a given value name."), call. = FALSE)
+    }
+
+    if (has_all_other && sum(states_used == "All Other") > 1) {
+      stop(glue("Value '{vname}' has multiple 'All Other' residence rows. ",
+                "Only one 'All Other' row is allowed per value name."), call. = FALSE)
+    }
+  }
+
+  invisible(NULL)
+}
+
+expand_all_states_in_values <- function(x, state_names) {
+  reserved <- c("All", "All Other")
+  if (!any(x$state %in% reserved)) return(x)
+
+  # Split into residence (destination NA) and non-residence rows
+  is_residence <- is.na(x$destination) | x$destination == "NA"
+  residence <- x[is_residence, , drop = FALSE]
+  non_residence <- x[!is_residence, , drop = FALSE]
+
+  # Process each value name independently
+  value_names <- unique(residence$name)
+  expanded_parts <- list()
+
+  for (vname in value_names) {
+    rows <- residence[residence$name == vname, , drop = FALSE]
+    has_all <- "All" %in% rows$state
+    has_all_other <- "All Other" %in% rows$state
+
+    if (!has_all && !has_all_other) {
+      expanded_parts[[length(expanded_parts) + 1]] <- rows
+      next
+    }
+
+    if (has_all) {
+      # Expand "All" to one row per state
+      template <- rows[rows$state == "All", , drop = FALSE]
+      new_rows <- template[rep(1, length(state_names)), , drop = FALSE]
+      new_rows$state <- state_names
+      rownames(new_rows) <- NULL
+      expanded_parts[[length(expanded_parts) + 1]] <- new_rows
+    } else {
+      # "All Other" case: expand to uncovered states
+      explicit_rows <- rows[rows$state != "All Other", , drop = FALSE]
+      explicit_states <- explicit_rows$state
+      gap_states <- setdiff(state_names, explicit_states)
+
+      if (length(gap_states) == 0) {
+        stop(glue("Value '{vname}' uses 'All Other' but all states already have explicit rows. ",
+                  "There are no remaining states to fill."), call. = FALSE)
+      }
+
+      template <- rows[rows$state == "All Other", , drop = FALSE]
+      new_rows <- template[rep(1, length(gap_states)), , drop = FALSE]
+      new_rows$state <- gap_states
+      rownames(new_rows) <- NULL
+
+      # Keep explicit rows + expanded All Other rows
+      expanded_parts[[length(expanded_parts) + 1]] <- explicit_rows
+      expanded_parts[[length(expanded_parts) + 1]] <- new_rows
+    }
+  }
+
+  # Recombine
+  expanded_residence <- do.call(rbind, expanded_parts)
+  result <- rbind(expanded_residence, non_residence)
+  rownames(result) <- NULL
+  result
 }
 
 as.values <- function(x) x

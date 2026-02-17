@@ -49,12 +49,250 @@ read_model <- function(path) {
     model$multivariate_sampling_variables <- NULL
   }
 
+  # Read metadata sheet for table/script descriptions
+  metadata <- NULL
+  if ("_metadata" %in% names(model)) {
+    metadata <- model$`_metadata`
+    model$`_metadata` <- NULL
+  }
+
+  # Read DSA parameters sheet
+  if ("dsa_parameters" %in% names(model)) {
+    dsa_df <- model$dsa_parameters
+    model$dsa_parameters <- lapply(seq_len(nrow(dsa_df)), function(i) {
+      row <- dsa_df[i, ]
+      param_type <- row$type
+      list(
+        type = param_type,
+        name = row$name,
+        low = deserialize_to_formula(row$low, param_type),
+        high = deserialize_to_formula(row$high, param_type),
+        strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
+        group = if (is.na(row$group) || row$group == "") "" else row$group,
+        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name
+      )
+    })
+    class(model$dsa_parameters) <- "dsa_parameters"
+  } else {
+    model$dsa_parameters <- structure(list(), class = "dsa_parameters")
+  }
+
+  # Read scenarios sheets
+  if ("scenarios" %in% names(model) && "scenario_overrides" %in% names(model)) {
+    scenarios_df <- model$scenarios
+    overrides_df <- model$scenario_overrides
+
+    model$scenarios <- lapply(seq_len(nrow(scenarios_df)), function(i) {
+      s <- scenarios_df[i, ]
+      s_overrides <- overrides_df[overrides_df$scenario_name == s$name, ]
+
+      var_overrides <- list()
+      var_indices <- which(s_overrides$override_type == "variable")
+      if (length(var_indices) > 0) {
+        var_overrides <- lapply(var_indices, function(j) {
+          row <- s_overrides[j, ]
+          list(
+            name = row$name,
+            value = deserialize_to_formula(row$value, "variable"),
+            strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
+            group = if (is.na(row$group) || row$group == "") "" else row$group
+          )
+        })
+      }
+
+      setting_overrides <- list()
+      setting_indices <- which(s_overrides$override_type == "setting")
+      if (length(setting_indices) > 0) {
+        setting_overrides <- lapply(setting_indices, function(j) {
+          row <- s_overrides[j, ]
+          list(name = row$name, value = row$value)
+        })
+      }
+
+      list(
+        name = s$name,
+        description = if (is.na(s$description)) "" else s$description,
+        variable_overrides = var_overrides,
+        setting_overrides = setting_overrides
+      )
+    })
+
+    # Remove raw tables
+    model$scenario_overrides <- NULL
+  } else {
+    model$scenarios <- list()
+  }
+
+  # Read TWSA sheets
+  if ("twsa_analyses" %in% names(model) && "twsa_parameters" %in% names(model)) {
+    twsa_df <- model$twsa_analyses
+    params_df <- model$twsa_parameters
+
+    model$twsa_analyses <- lapply(seq_len(nrow(twsa_df)), function(i) {
+      t <- twsa_df[i, ]
+      t_params <- params_df[params_df$twsa_name == t$name, ]
+
+      parameters <- list()
+      if (nrow(t_params) > 0) {
+        parameters <- lapply(seq_len(nrow(t_params)), function(j) {
+          p <- t_params[j, ]
+          param <- list(
+            param_type = p$param_type,
+            name = p$name,
+            type = p$type,
+            strategy = if (is.na(p$strategy) || p$strategy == "") "" else p$strategy,
+            group = if (is.na(p$group) || p$group == "") "" else p$group,
+            display_name = if (is.na(p$display_name) || p$display_name == "") NULL else p$display_name,
+            include_base_case = if (is.na(p$include_base_case)) TRUE else p$include_base_case
+          )
+          if (!is.na(p$min) && p$min != "") param$min <- deserialize_to_formula(p$min, p$param_type)
+          if (!is.na(p$max) && p$max != "") param$max <- deserialize_to_formula(p$max, p$param_type)
+          if (!is.na(p$radius) && p$radius != "") param$radius <- deserialize_to_formula(p$radius, p$param_type)
+          if (!is.na(p$steps)) param$steps <- p$steps
+          if (!is.na(p$values) && p$values != "") {
+            param$values <- strsplit(p$values, ",")[[1]]
+          }
+          param
+        })
+      }
+
+      list(
+        name = t$name,
+        description = if (is.na(t$description)) "" else t$description,
+        parameters = parameters
+      )
+    })
+
+    # Remove raw tables
+    model$twsa_parameters <- NULL
+  } else {
+    model$twsa_analyses <- list()
+  }
+
+  # Read threshold analyses sheet (flat format -> nested)
+  if ("threshold_analyses" %in% names(model) && is.data.frame(model$threshold_analyses) &&
+      nrow(model$threshold_analyses) > 0) {
+    threshold_df <- model$threshold_analyses
+    model$threshold_analyses <- lapply(seq_len(nrow(threshold_df)), function(i) {
+      row <- as.list(threshold_df[i, ])
+      # Convert NA to appropriate defaults
+      if (is.na(row$variable_strategy)) row$variable_strategy <- ""
+      if (is.na(row$variable_group)) row$variable_group <- ""
+      if (is.na(row$active)) row$active <- TRUE
+      nest_threshold_analysis(row)
+    })
+  } else {
+    model$threshold_analyses <- list()
+  }
+
+  # Read VBP configuration sheet
+  if ("vbp" %in% names(model) && is.data.frame(model$vbp) && nrow(model$vbp) > 0) {
+    model$vbp <- as.list(model$vbp[1, ])
+  } else {
+    model$vbp <- NULL
+  }
+
+  # Read override categories sheets
+  if ("override_categories" %in% names(model)) {
+    cats_df <- model$override_categories
+    overrides_df <- if ("overrides" %in% names(model)) model$overrides else NULL
+    dropdown_df <- if ("override_dropdown_options" %in% names(model)) model$override_dropdown_options else NULL
+
+    model$override_categories <- lapply(seq_len(nrow(cats_df)), function(i) {
+      cat_row <- cats_df[i, ]
+      cat_name <- cat_row$category_name
+
+      # Get overrides for this category
+      overrides_list <- list()
+      if (!is.null(overrides_df)) {
+        cat_overrides <- overrides_df[overrides_df$category_name == cat_name, ]
+        if (nrow(cat_overrides) > 0) {
+          overrides_list <- lapply(seq_len(nrow(cat_overrides)), function(j) {
+            row <- cat_overrides[j, ]
+
+            # Build input_config based on input_type
+            input_config <- list()
+            if (row$input_type %in% c("numeric", "slider")) {
+              if (!is.na(row$config_min) && row$config_min != "") {
+                input_config$min <- as.numeric(row$config_min)
+              }
+              if (!is.na(row$config_max) && row$config_max != "") {
+                input_config$max <- as.numeric(row$config_max)
+              }
+            }
+            if (row$input_type == "slider") {
+              if (!is.na(row$config_step_size) && row$config_step_size != "") {
+                input_config$step_size <- as.numeric(row$config_step_size)
+              }
+            }
+            if (row$input_type == "dropdown" && !is.null(dropdown_df)) {
+              dd_opts <- dropdown_df[dropdown_df$category_name == cat_name &
+                                     dropdown_df$override_title == row$title, ]
+              if (nrow(dd_opts) > 0) {
+                input_config$options <- lapply(seq_len(nrow(dd_opts)), function(k) {
+                  list(
+                    label = dd_opts$label[k],
+                    value = as.character(dd_opts$value[k]),
+                    is_base_case = as.logical(dd_opts$is_base_case[k])
+                  )
+                })
+              } else {
+                input_config$options <- list()
+              }
+            }
+
+            list(
+              title = row$title,
+              description = if (is.na(row$description)) "" else row$description,
+              type = row$type,
+              name = row$name,
+              strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
+              group = if (is.na(row$group) || row$group == "") "" else row$group,
+              general = as.logical(row$general),
+              input_type = row$input_type,
+              overridden_expression = as.character(row$overridden_expression),
+              input_config = input_config
+            )
+          })
+        }
+      }
+
+      list(
+        name = cat_name,
+        general = as.logical(cat_row$general),
+        overrides = overrides_list
+      )
+    })
+
+    # Clean up raw tables
+    model$overrides <- NULL
+    model$override_dropdown_options <- NULL
+  } else {
+    model$override_categories <- list()
+  }
+
   # Read tables from CSV files
   data_path <- file.path(path, 'data')
   if (dir.exists(data_path)) {
-    model$tables <- list.files(data_path) %>%
-      set_names(., gsub('.csv$', '', .)) %>%
-      map(~read.csv(file.path(data_path, .), stringsAsFactor = FALSE, check.names = FALSE))
+    table_files <- list.files(data_path)
+    table_names <- gsub('.csv$', '', table_files)
+    model$tables <- list()
+    for (i in seq_along(table_files)) {
+      table_data <- read.csv(file.path(data_path, table_files[i]),
+                              stringsAsFactors = FALSE, check.names = FALSE)
+      # Look up description from metadata
+      table_description <- NULL
+      if (!is.null(metadata)) {
+        tbl_meta <- metadata[metadata$component_type == "table" & metadata$name == table_names[i], ]
+        if (nrow(tbl_meta) > 0) {
+          table_description <- tbl_meta$description[1]
+        }
+      }
+      model$tables[[table_names[i]]] <- list(
+        data = table_data,
+        description = table_description
+      )
+    }
   } else {
     model$tables <- list()
   }
@@ -62,9 +300,24 @@ read_model <- function(path) {
   # Read scripts from R files
   scripts_path <- file.path(path, 'scripts')
   if (dir.exists(scripts_path)) {
-    model$scripts <- list.files(scripts_path) %>%
-      set_names(., gsub('.R$', '', ., fixed = TRUE)) %>%
-      map(~read_file(file.path(scripts_path, .)))
+    script_files <- list.files(scripts_path)
+    script_names <- gsub("\\.R$", "", script_files)
+    model$scripts <- list()
+    for (i in seq_along(script_files)) {
+      script_code <- read_file(file.path(scripts_path, script_files[i]))
+      # Look up description from metadata
+      script_description <- NULL
+      if (!is.null(metadata)) {
+        scr_meta <- metadata[metadata$component_type == "script" & metadata$name == script_names[i], ]
+        if (nrow(scr_meta) > 0) {
+          script_description <- scr_meta$description[1]
+        }
+      }
+      model$scripts[[script_names[i]]] <- list(
+        code = script_code,
+        description = script_description
+      )
+    }
   } else {
     model$scripts <- list()
   }
@@ -104,6 +357,9 @@ convert_settings_from_df <- function(settings_df) {
         settings[["reduce_state_cycle"]] <- FALSE
     }
     # If it's already logical, it remains unchanged.
+  } else {
+    # Default to FALSE if not specified
+    settings[["reduce_state_cycle"]] <- FALSE
   }
 
   # Handle half_cycle_method setting
@@ -132,6 +388,14 @@ convert_settings_from_df <- function(settings_df) {
   }
   if (!("discount_outcomes" %in% names(settings))) {
     stop("discount_outcomes is required but was not provided in settings")
+  }
+
+  # Warn if discount rates look unreasonably high
+  if (settings$discount_cost > 100) {
+    warning("discount_cost is > 100. Discount rates should be percentages (e.g., 3 for 3%).")
+  }
+  if (settings$discount_outcomes > 100) {
+    warning("discount_outcomes is > 100. Discount rates should be percentages (e.g., 3 for 3%).")
   }
 
   settings
@@ -173,7 +437,18 @@ create_default_group <- function() {
 
 load_tables <- function(tables, env) {
   for (name in names(tables)) {
-    assign(name, tables[[name]], envir = env)
+    table_entry <- tables[[name]]
+    # Handle both old format (direct data frame) and new format (list with data/description)
+    if (is.data.frame(table_entry)) {
+      # Old format - direct data frame
+      assign(name, table_entry, envir = env)
+    } else if (is.list(table_entry) && "data" %in% names(table_entry)) {
+      # New format - extract data from list
+      assign(name, table_entry$data, envir = env)
+    } else {
+      # Fallback - assign as-is
+      assign(name, table_entry, envir = env)
+    }
   }
 }
 
@@ -185,7 +460,15 @@ load_trees <- function(trees, env) {
 
 run_scripts <- function(scripts, env) {
   for (name in names(scripts)) {
-    eval(parse(text = scripts[[name]]), envir = env)
+    script_entry <- scripts[[name]]
+    # Handle both old format (direct code string) and new format (list with code/description)
+    if (is.character(script_entry)) {
+      # Old format - direct code string
+      eval(parse(text = script_entry), envir = env)
+    } else if (is.list(script_entry) && "code" %in% names(script_entry)) {
+      # New format - extract code from list
+      eval(parse(text = script_entry$code), envir = env)
+    }
   }
 }
 
@@ -1004,6 +1287,45 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   if (is.null(model$tables)) model$tables <- list()
   if (is.null(model$scripts)) model$scripts <- list()
 
+  # Ensure threshold_analyses exists
+  if (is.null(model$threshold_analyses)) {
+    model$threshold_analyses <- list()
+  }
+
+  # Ensure vbp is valid if present
+  if (!is.null(model$vbp) && !is.list(model$vbp)) {
+    model$vbp <- NULL
+  }
+
+  # Ensure override_categories exists and is valid
+  if (is.null(model$override_categories)) {
+    model$override_categories <- list()
+  }
+  if (is.list(model$override_categories)) {
+    for (i in seq_along(model$override_categories)) {
+      cat_item <- model$override_categories[[i]]
+      if (is.null(cat_item$name)) cat_item$name <- ""
+      if (is.null(cat_item$general)) cat_item$general <- FALSE
+      if (is.null(cat_item$overrides)) cat_item$overrides <- list()
+      # Validate each override item has required fields
+      for (j in seq_along(cat_item$overrides)) {
+        ovr <- cat_item$overrides[[j]]
+        if (is.null(ovr$title)) ovr$title <- ""
+        if (is.null(ovr$description)) ovr$description <- ""
+        if (is.null(ovr$type)) ovr$type <- "variable"
+        if (is.null(ovr$name)) ovr$name <- ""
+        if (is.null(ovr$strategy)) ovr$strategy <- ""
+        if (is.null(ovr$group)) ovr$group <- ""
+        if (is.null(ovr$general)) ovr$general <- FALSE
+        if (is.null(ovr$input_type)) ovr$input_type <- "numeric"
+        if (is.null(ovr$overridden_expression)) ovr$overridden_expression <- ""
+        if (is.null(ovr$input_config)) ovr$input_config <- list()
+        cat_item$overrides[[j]] <- ovr
+      }
+      model$override_categories[[i]] <- cat_item
+    }
+  }
+
   # Validate group names (no reserved keywords)
   if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
     validate_group_names(model$groups$name)
@@ -1034,28 +1356,50 @@ read_model_json <- function(json_string) {
   # Normalize NULLs
   model <- normalize_model_nulls(model)
 
-  # Convert tables array-of-objects to named list
+  # Convert tables array-of-objects to named list with description support
   if (!is.null(model$tables) && is.data.frame(model$tables) &&
       all(c("name", "data") %in% colnames(model$tables))) {
     table_list <- list()
     for (i in 1:nrow(model$tables)) {
       table_name <- model$tables$name[i]
       table_data <- model$tables$data$rows[[i]]
-      table_list[[table_name]] <- as_tibble(table_data)
+      # Read optional description field
+      table_description <- if ("description" %in% colnames(model$tables)) {
+        desc <- model$tables$description[i]
+        if (is.na(desc) || desc == "") NULL else desc
+      } else {
+        NULL
+      }
+      # Store in new format with data and description
+      table_list[[table_name]] <- list(
+        data = as_tibble(table_data),
+        description = table_description
+      )
     }
     model$tables <- table_list
   } else {
     model$tables <- list()
   }
 
-  # Convert scripts array-of-objects to named list
+  # Convert scripts array-of-objects to named list with description support
   if (!is.null(model$scripts) && is.data.frame(model$scripts) &&
       all(c("name", "code") %in% colnames(model$scripts))) {
     script_list <- list()
     for (i in 1:nrow(model$scripts)) {
       script_name <- model$scripts$name[i]
       script_code <- model$scripts$code[i]
-      script_list[[script_name]] <- script_code
+      # Read optional description field
+      script_description <- if ("description" %in% colnames(model$scripts)) {
+        desc <- model$scripts$description[i]
+        if (is.na(desc) || desc == "") NULL else desc
+      } else {
+        NULL
+      }
+      # Store in new format with code and description
+      script_list[[script_name]] <- list(
+        code = script_code,
+        description = script_description
+      )
     }
     model$scripts <- script_list
   } else {
@@ -1109,6 +1453,373 @@ read_model_json <- function(json_string) {
         }
       }
     }
+  }
+
+  # Deserialize DSA parameters
+  if (!is.null(model$dsa_parameters) && is.list(model$dsa_parameters)) {
+    dsa_list <- list()
+    # Handle both list and data.frame formats
+    params_list <- if (is.data.frame(model$dsa_parameters)) {
+      # Convert data frame rows to list
+      lapply(seq_len(nrow(model$dsa_parameters)), function(i) {
+        as.list(model$dsa_parameters[i, ])
+      })
+    } else {
+      model$dsa_parameters
+    }
+
+    for (i in seq_along(params_list)) {
+      p <- params_list[[i]]
+      param_type <- p$type %||% "variable"
+      dsa_list[[i]] <- list(
+        type = param_type,
+        name = p$name,
+        low = deserialize_to_formula(p$low, param_type),
+        high = deserialize_to_formula(p$high, param_type),
+        strategy = p$strategy %||% "",
+        group = p$group %||% "",
+        display_name = p$display_name
+      )
+    }
+    model$dsa_parameters <- dsa_list
+    class(model$dsa_parameters) <- "dsa_parameters"
+  } else {
+    model$dsa_parameters <- structure(list(), class = "dsa_parameters")
+  }
+
+  # Deserialize scenarios
+  if (!is.null(model$scenarios) && is.list(model$scenarios)) {
+    scenarios_list <- list()
+    # Handle both list and data.frame formats
+    scenario_items <- if (is.data.frame(model$scenarios)) {
+      lapply(seq_len(nrow(model$scenarios)), function(i) {
+        as.list(model$scenarios[i, ])
+      })
+    } else {
+      model$scenarios
+    }
+
+    for (i in seq_along(scenario_items)) {
+      s <- scenario_items[[i]]
+
+      # Handle variable_overrides which may be nested
+      var_overrides <- list()
+      if (!is.null(s$variable_overrides) && length(s$variable_overrides) > 0) {
+        override_items <- if (is.data.frame(s$variable_overrides)) {
+          lapply(seq_len(nrow(s$variable_overrides)), function(j) {
+            as.list(s$variable_overrides[j, ])
+          })
+        } else {
+          s$variable_overrides
+        }
+
+        for (j in seq_along(override_items)) {
+          v <- override_items[[j]]
+          # Skip empty entries (can occur with simplifyVector = TRUE on empty arrays)
+          if (is.null(v$name) || length(v) == 0) next
+
+          # Handle case where simplifyVector=TRUE combined multiple overrides into one
+          # with array values (e.g., name = c("a", "b"), value = c(1, 2))
+          if (length(v$name) > 1) {
+            for (k in seq_along(v$name)) {
+              var_overrides[[length(var_overrides) + 1]] <- list(
+                name = v$name[k],
+                value = deserialize_to_formula(v$value[k], "variable"),
+                strategy = if (!is.null(v$strategy) && length(v$strategy) >= k) v$strategy[k] else "",
+                group = if (!is.null(v$group) && length(v$group) >= k) v$group[k] else ""
+              )
+            }
+          } else {
+            var_overrides[[length(var_overrides) + 1]] <- list(
+              name = v$name,
+              value = deserialize_to_formula(v$value, "variable"),
+              strategy = v$strategy %||% "",
+              group = v$group %||% ""
+            )
+          }
+        }
+      }
+
+      # Handle setting_overrides
+      setting_overrides <- list()
+      if (!is.null(s$setting_overrides) && length(s$setting_overrides) > 0) {
+        override_items <- if (is.data.frame(s$setting_overrides)) {
+          lapply(seq_len(nrow(s$setting_overrides)), function(j) {
+            as.list(s$setting_overrides[j, ])
+          })
+        } else {
+          s$setting_overrides
+        }
+
+        for (j in seq_along(override_items)) {
+          st <- override_items[[j]]
+          # Skip empty entries (can occur with simplifyVector = TRUE on empty arrays)
+          if (is.null(st$name) || length(st) == 0) next
+          setting_overrides[[length(setting_overrides) + 1]] <- list(name = st$name, value = st$value)
+        }
+      }
+
+      scenarios_list[[i]] <- list(
+        name = s$name,
+        description = s$description %||% "",
+        variable_overrides = var_overrides,
+        setting_overrides = setting_overrides
+      )
+    }
+    model$scenarios <- scenarios_list
+  } else {
+    model$scenarios <- list()
+  }
+
+  # Deserialize TWSA analyses
+  if (!is.null(model$twsa_analyses) && is.list(model$twsa_analyses)) {
+    twsa_list <- list()
+    # Handle both list and data.frame formats
+    twsa_items <- if (is.data.frame(model$twsa_analyses)) {
+      lapply(seq_len(nrow(model$twsa_analyses)), function(i) {
+        as.list(model$twsa_analyses[i, ])
+      })
+    } else {
+      model$twsa_analyses
+    }
+
+    for (i in seq_along(twsa_items)) {
+      t <- twsa_items[[i]]
+
+      # Handle parameters
+      params_list <- list()
+      if (!is.null(t$parameters)) {
+        # Handle various parameter formats from JSON parsing:
+        # 1. Direct data.frame (all params in one df)
+        # 2. List containing a data.frame (jsonlite nested array parsing)
+        # 3. List of parameter objects (simplifyVector=FALSE or already parsed)
+        param_items <- if (is.data.frame(t$parameters)) {
+          # Direct data.frame
+          lapply(seq_len(nrow(t$parameters)), function(j) {
+            as.list(t$parameters[j, ])
+          })
+        } else if (is.list(t$parameters) && length(t$parameters) == 1 &&
+                   is.data.frame(t$parameters[[1]])) {
+          # List containing a single data.frame (common from jsonlite)
+          lapply(seq_len(nrow(t$parameters[[1]])), function(j) {
+            as.list(t$parameters[[1]][j, ])
+          })
+        } else {
+          # Assume it's already a list of parameter objects
+          t$parameters
+        }
+
+        for (j in seq_along(param_items)) {
+          p <- param_items[[j]]
+          # Ensure scalar extraction for all fields
+          param_type <- (p$param_type %||% "variable")[1]
+          params_list[[j]] <- list(
+            param_type = param_type,
+            name = p$name[1],
+            type = p$type[1],
+            min = deserialize_to_formula(p$min, param_type),
+            max = deserialize_to_formula(p$max, param_type),
+            radius = deserialize_to_formula(p$radius, param_type),
+            steps = p$steps[1],
+            values = deserialize_to_formula(p$values, param_type),
+            strategy = (p$strategy %||% "")[1],
+            group = (p$group %||% "")[1],
+            display_name = if (!is.null(p$display_name)) p$display_name[1] else NULL,
+            include_base_case = (p$include_base_case %||% TRUE)[1]
+          )
+        }
+      }
+
+      twsa_list[[i]] <- list(
+        name = t$name,
+        description = t$description %||% "",
+        parameters = params_list
+      )
+    }
+    model$twsa_analyses <- twsa_list
+  } else {
+    model$twsa_analyses <- list()
+  }
+
+  # Parse threshold analyses from JSON (nested format)
+  if (!is.null(model$threshold_analyses) && is.list(model$threshold_analyses)) {
+    threshold_list <- list()
+    # Handle both list and data.frame formats
+    threshold_items <- if (is.data.frame(model$threshold_analyses)) {
+      lapply(seq_len(nrow(model$threshold_analyses)), function(i) {
+        as.list(model$threshold_analyses[i, ])
+      })
+    } else {
+      model$threshold_analyses
+    }
+
+    for (i in seq_along(threshold_items)) {
+      t <- threshold_items[[i]]
+
+      # Handle condition field: may be a data.frame (fromJSON), list, or nested
+      cond_raw <- t$condition
+      condition <- list()
+      if (is.data.frame(cond_raw)) {
+        # fromJSON simplifies the condition object into a 1-row data.frame
+        condition <- as.list(cond_raw[1, ])
+        # Clean up NA and NULL values
+        condition <- lapply(condition, function(v) {
+          if (length(v) == 1 && is.na(v)) NULL else v
+        })
+        condition <- condition[!sapply(condition, is.null)]
+      } else if (is.list(cond_raw) && length(cond_raw) == 1 && is.data.frame(cond_raw[[1]])) {
+        condition <- as.list(cond_raw[[1]][1, ])
+        condition <- lapply(condition, function(v) {
+          if (length(v) == 1 && is.na(v)) NULL else v
+        })
+        condition <- condition[!sapply(condition, is.null)]
+      } else if (is.list(cond_raw)) {
+        condition <- cond_raw
+      }
+
+      threshold_list[[i]] <- list(
+        name = t$name,
+        variable = t$variable,
+        variable_strategy = (t$variable_strategy %||% "")[1],
+        variable_group = (t$variable_group %||% "")[1],
+        lower = as.numeric(t$lower[1]),
+        upper = as.numeric(t$upper[1]),
+        active = if (!is.null(t$active)) as.logical(t$active[1]) else TRUE,
+        condition = condition
+      )
+    }
+    model$threshold_analyses <- threshold_list
+  } else {
+    model$threshold_analyses <- list()
+  }
+
+  # Parse VBP configuration from JSON
+  if (!is.null(model$vbp)) {
+    # fromJSON may simplify to a data.frame; convert back to list
+    if (is.data.frame(model$vbp)) {
+      model$vbp <- as.list(model$vbp[1, ])
+    }
+    # Ensure it has the expected fields
+    expected_fields <- c("price_variable", "intervention_strategy",
+                         "outcome_summary", "cost_summary")
+    if (!all(expected_fields %in% names(model$vbp))) {
+      model$vbp <- NULL
+    }
+  }
+
+  # Parse override_categories from JSON
+  if (!is.null(model$override_categories)) {
+    if (is.data.frame(model$override_categories)) {
+      # Simplified by fromJSON into a dataframe
+      oc_list <- list()
+      for (i in seq_len(nrow(model$override_categories))) {
+        row <- model$override_categories[i, ]
+        overrides_raw <- row$overrides[[1]]
+        overrides_list <- list()
+        if (!is.null(overrides_raw) && length(overrides_raw) > 0) {
+          if (is.data.frame(overrides_raw)) {
+            # input_config is a nested data.frame column when fromJSON simplifies
+            ic_df <- overrides_raw$input_config
+            for (j in seq_len(nrow(overrides_raw))) {
+              ovr_row <- overrides_raw[j, ]
+              # Extract input_config for this row from the nested data.frame
+              input_config <- list()
+              if (is.data.frame(ic_df)) {
+                for (col_name in names(ic_df)) {
+                  val <- ic_df[[col_name]]
+                  if (is.list(val)) {
+                    # List columns (e.g., options) - extract element for this row
+                    elem <- val[[j]]
+                    if (!is.null(elem)) {
+                      if (is.data.frame(elem)) {
+                        # Convert data.frame rows to list of lists (dropdown options)
+                        input_config[[col_name]] <- lapply(
+                          seq_len(nrow(elem)),
+                          function(k) as.list(elem[k, ])
+                        )
+                      } else {
+                        input_config[[col_name]] <- elem
+                      }
+                    }
+                  } else {
+                    # Scalar columns (min, max, step_size) - skip NA values
+                    scalar_val <- val[[j]]
+                    if (!is.na(scalar_val)) {
+                      input_config[[col_name]] <- scalar_val
+                    }
+                  }
+                }
+              }
+              overrides_list[[j]] <- list(
+                title = ovr_row$title,
+                description = ovr_row$description %||% "",
+                type = ovr_row$type,
+                name = ovr_row$name,
+                strategy = ovr_row$strategy %||% "",
+                group = ovr_row$group %||% "",
+                general = as.logical(ovr_row$general),
+                input_type = ovr_row$input_type,
+                overridden_expression = as.character(ovr_row$overridden_expression),
+                input_config = input_config
+              )
+            }
+          } else if (is.list(overrides_raw)) {
+            for (j in seq_along(overrides_raw)) {
+              ovr <- overrides_raw[[j]]
+              input_config <- if (is.null(ovr$input_config)) list() else ovr$input_config
+              if (!is.null(input_config$options) && is.data.frame(input_config$options)) {
+                input_config$options <- lapply(seq_len(nrow(input_config$options)), function(k) {
+                  as.list(input_config$options[k, ])
+                })
+              }
+              overrides_list[[j]] <- list(
+                title = ovr$title,
+                description = ovr$description %||% "",
+                type = ovr$type,
+                name = ovr$name,
+                strategy = ovr$strategy %||% "",
+                group = ovr$group %||% "",
+                general = as.logical(ovr$general %||% FALSE),
+                input_type = ovr$input_type,
+                overridden_expression = as.character(ovr$overridden_expression),
+                input_config = input_config
+              )
+            }
+          }
+        }
+        oc_list[[i]] <- list(
+          name = row$name,
+          general = as.logical(row$general),
+          overrides = overrides_list
+        )
+      }
+      model$override_categories <- oc_list
+    } else if (is.list(model$override_categories) && !is.data.frame(model$override_categories)) {
+      # Already in list format, normalize
+      for (i in seq_along(model$override_categories)) {
+        cat_item <- model$override_categories[[i]]
+        if (is.null(cat_item$overrides)) cat_item$overrides <- list()
+        for (j in seq_along(cat_item$overrides)) {
+          ovr <- cat_item$overrides[[j]]
+          if (is.null(ovr$input_config)) ovr$input_config <- list()
+          if (!is.null(ovr$input_config$options) && is.data.frame(ovr$input_config$options)) {
+            ovr$input_config$options <- lapply(seq_len(nrow(ovr$input_config$options)), function(k) {
+              as.list(ovr$input_config$options[k, ])
+            })
+          }
+          ovr$description <- ovr$description %||% ""
+          ovr$strategy <- ovr$strategy %||% ""
+          ovr$group <- ovr$group %||% ""
+          ovr$general <- as.logical(ovr$general %||% FALSE)
+          ovr$overridden_expression <- as.character(ovr$overridden_expression)
+          cat_item$overrides[[j]] <- ovr
+        }
+        cat_item$general <- as.logical(cat_item$general %||% FALSE)
+        model$override_categories[[i]] <- cat_item
+      }
+    }
+  } else {
+    model$override_categories <- list()
   }
 
   # UNIFIED VALIDATION - applies type-specific specs
@@ -1342,6 +2053,41 @@ ensure_tibble_columns <- function(tbl, required_cols_spec_tibble) {
   return(tbl)
 }
 
+#' Serialize Formula or Value for JSON
+#'
+#' Converts oq_formula objects to strings and leaves other values as-is.
+#'
+#' @param x Value to serialize (oq_formula, numeric, character, or NULL)
+#' @return Serialized value suitable for JSON
+#' @keywords internal
+serialize_formula_or_value <- function(x) {
+  if (is.null(x)) return(NULL)
+  if (inherits(x, "oq_formula")) {
+    return(as.character(x))  # Convert to string
+  }
+  return(x)  # Return as-is for literals
+}
+
+#' Deserialize Value to Formula
+#'
+#' Converts string values to oq_formula objects where appropriate.
+#'
+#' @param x Value from JSON (string or numeric)
+#' @param type Parameter type ("variable" or "setting")
+#' @return Deserialized value (oq_formula for variables, literal for settings)
+#' @keywords internal
+deserialize_to_formula <- function(x, type) {
+  if (is.null(x)) return(NULL)
+  # Ensure type is scalar
+  type <- type[1]
+  # Settings use literal values
+  if (type == "setting") return(x)
+  # Variables: convert strings to oq_formula, keep numerics as-is
+  if (is.character(x)) return(as.oq_formula(x))
+  if (is.numeric(x)) return(x)
+  return(x)
+}
+
 #' Write Model to JSON
 #'
 #' Takes a oq_model object (typically loaded from Excel) and converts it
@@ -1398,7 +2144,20 @@ write_model_json <- function(model) {
       tables_array <- list()
       for (i in seq_along(table_names)) {
         table_name <- table_names[i]
-        table_data <- model$tables[[table_name]]
+        table_entry <- model$tables[[table_name]]
+
+        # Handle both old format (direct data frame) and new format (list with data/description)
+        if (is.data.frame(table_entry)) {
+          # Old format - direct data frame
+          table_data <- table_entry
+          table_description <- NULL
+        } else if (is.list(table_entry) && "data" %in% names(table_entry)) {
+          # New format - extract from list
+          table_data <- table_entry$data
+          table_description <- table_entry$description
+        } else {
+          next  # Skip invalid entries
+        }
 
         # Ensure table_data is a data frame
         if (is.data.frame(table_data)) {
@@ -1409,6 +2168,7 @@ write_model_json <- function(model) {
 
           tables_array[[i]] <- list(
             name = table_name,
+            description = table_description,
             data = list(rows = table_data)
           )
         }
@@ -1428,10 +2188,24 @@ write_model_json <- function(model) {
       scripts_array <- list()
       for (i in seq_along(script_names)) {
         script_name <- script_names[i]
-        script_code <- model$scripts[[script_name]]
+        script_entry <- model$scripts[[script_name]]
+
+        # Handle both old format (direct code string) and new format (list with code/description)
+        if (is.character(script_entry)) {
+          # Old format - direct code string
+          script_code <- script_entry
+          script_description <- NULL
+        } else if (is.list(script_entry) && "code" %in% names(script_entry)) {
+          # New format - extract from list
+          script_code <- script_entry$code
+          script_description <- script_entry$description
+        } else {
+          next  # Skip invalid entries
+        }
 
         scripts_array[[i]] <- list(
           name = script_name,
+          description = script_description,
           code = as.character(script_code)
         )
       }
@@ -1468,6 +2242,134 @@ write_model_json <- function(model) {
     } else {
       json_model$multivariate_sampling <- list()
     }
+  }
+
+  # Convert DSA parameters to array format
+  if (!is.null(model$dsa_parameters) && length(model$dsa_parameters) > 0) {
+    dsa_array <- list()
+    for (i in seq_along(model$dsa_parameters)) {
+      param <- model$dsa_parameters[[i]]
+      dsa_entry <- list(
+        type = param$type,
+        name = param$name,
+        low = serialize_formula_or_value(param$low),
+        high = serialize_formula_or_value(param$high)
+      )
+      # Add optional fields for variable-type DSA
+      if (param$type == "variable") {
+        dsa_entry$strategy <- param$strategy %||% ""
+        dsa_entry$group <- param$group %||% ""
+      }
+      dsa_entry$display_name <- param$display_name
+      dsa_array[[i]] <- dsa_entry
+    }
+    json_model$dsa_parameters <- dsa_array
+  }
+
+  # Convert scenarios to array format
+  if (!is.null(model$scenarios) && length(model$scenarios) > 0) {
+    scenarios_array <- list()
+    for (i in seq_along(model$scenarios)) {
+      scenario <- model$scenarios[[i]]
+
+      # Convert variable overrides
+      var_overrides <- lapply(scenario$variable_overrides, function(v) {
+        list(
+          name = v$name,
+          value = serialize_formula_or_value(v$value),
+          strategy = v$strategy %||% "",
+          group = v$group %||% ""
+        )
+      })
+
+      # Convert setting overrides
+      setting_overrides <- lapply(scenario$setting_overrides, function(s) {
+        list(name = s$name, value = s$value)
+      })
+
+      scenarios_array[[i]] <- list(
+        name = scenario$name,
+        description = scenario$description %||% "",
+        variable_overrides = var_overrides,
+        setting_overrides = setting_overrides
+      )
+    }
+    json_model$scenarios <- scenarios_array
+  }
+
+  # Convert TWSA analyses to array format
+  if (!is.null(model$twsa_analyses) && length(model$twsa_analyses) > 0) {
+    twsa_array <- list()
+    for (i in seq_along(model$twsa_analyses)) {
+      twsa <- model$twsa_analyses[[i]]
+
+      # Convert parameters
+      params <- lapply(twsa$parameters, function(p) {
+        param_entry <- list(
+          param_type = p$param_type,
+          name = p$name,
+          type = p$type,
+          min = serialize_formula_or_value(p$min),
+          max = serialize_formula_or_value(p$max),
+          radius = serialize_formula_or_value(p$radius),
+          steps = p$steps,
+          values = serialize_formula_or_value(p$values),
+          display_name = p$display_name,
+          include_base_case = p$include_base_case %||% TRUE
+        )
+        # Add strategy/group for variable-type parameters
+        if (p$param_type == "variable") {
+          param_entry$strategy <- p$strategy %||% ""
+          param_entry$group <- p$group %||% ""
+        }
+        param_entry
+      })
+
+      twsa_array[[i]] <- list(
+        name = twsa$name,
+        description = twsa$description %||% "",
+        parameters = params
+      )
+    }
+    json_model$twsa_analyses <- twsa_array
+  }
+
+  # Convert threshold analyses to array format (nested, as-is)
+  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
+    json_model$threshold_analyses <- model$threshold_analyses
+  }
+
+  # VBP configuration
+  if (!is.null(model$vbp)) {
+    json_model$vbp <- model$vbp
+  }
+
+  # Convert override_categories to array format
+  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
+    oc_array <- lapply(model$override_categories, function(cat_item) {
+      overrides_array <- lapply(cat_item$overrides, function(ovr) {
+        result <- list(
+          title = ovr$title,
+          description = ovr$description %||% "",
+          type = ovr$type,
+          name = ovr$name,
+          strategy = ovr$strategy %||% "",
+          group = ovr$group %||% "",
+          general = ovr$general,
+          input_type = ovr$input_type,
+          overridden_expression = ovr$overridden_expression,
+          input_config = ovr$input_config
+        )
+        result
+      })
+
+      list(
+        name = cat_item$name,
+        general = cat_item$general,
+        overrides = overrides_array
+      )
+    })
+    json_model$override_categories <- oc_array
   }
 
   # Convert to JSON using jsonlite
@@ -1727,4 +2629,144 @@ apply_parameter_overrides <- function(segment, ns, uneval_vars) {
     filter(!.data$name %in% names(override_vals))
 
   list(ns = ns, uneval_vars = uneval_vars)
+}
+
+#' Parse Override Expression to a Value
+#'
+#' Converts an override's overridden_expression to the appropriate value
+#' for injection into parameter_overrides or setting_overrides.
+#'
+#' @param override An override item list
+#' @return The parsed value (numeric, character, or oq_formula)
+#' @keywords internal
+parse_override_expression <- function(override) {
+  expr_str <- override$overridden_expression
+
+  switch(override$input_type,
+    "numeric" = ,
+    "slider" = {
+      as.numeric(expr_str)
+    },
+    "dropdown" = {
+      # Try numeric first, fall back to character
+      num_val <- suppressWarnings(as.numeric(expr_str))
+      if (!is.na(num_val)) num_val else expr_str
+    },
+    "formula" = {
+      as.oq_formula(expr_str)
+    },
+    "timeframe" = {
+      # Split "value|unit" format
+      parts <- strsplit(expr_str, "\\|")[[1]]
+      list(
+        timeframe = as.numeric(parts[1]),
+        timeframe_unit = if (length(parts) > 1) parts[2] else "years"
+      )
+    },
+    # Default fallback
+    {
+      num_val <- suppressWarnings(as.numeric(expr_str))
+      if (!is.na(num_val)) num_val else expr_str
+    }
+  )
+}
+
+#' Apply Override Categories to Segments
+#'
+#' Injects parameter_overrides and setting_overrides columns into the segments
+#' tibble based on active override definitions from model$override_categories.
+#'
+#' @param model Parsed model object with override_categories
+#' @param segments Segments tibble from get_segments()
+#' @return Modified segments tibble with parameter_overrides and setting_overrides columns
+#' @keywords internal
+apply_override_categories <- function(model, segments) {
+  # If no override categories or no overrides, return segments unchanged
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(segments)
+  }
+
+  # Count total overrides
+  total_overrides <- sum(sapply(model$override_categories, function(c) length(c$overrides)))
+  if (total_overrides == 0) {
+    return(segments)
+  }
+
+  # Initialize override columns if not present
+  if (!"parameter_overrides" %in% names(segments)) {
+    segments$parameter_overrides <- lapply(seq_len(nrow(segments)), function(i) list())
+  }
+  if (!"setting_overrides" %in% names(segments)) {
+    segments$setting_overrides <- lapply(seq_len(nrow(segments)), function(i) list())
+  }
+
+  for (seg_idx in seq_len(nrow(segments))) {
+    seg_strategy <- segments$strategy[[seg_idx]]
+    seg_group <- segments$group[[seg_idx]]
+
+    for (cat_item in model$override_categories) {
+      for (override in cat_item$overrides) {
+        if (override$type == "variable") {
+          # Check if override applies to this segment
+          applies <- TRUE
+          if (!is.na(override$strategy) && override$strategy != "" &&
+              override$strategy != seg_strategy) {
+            applies <- FALSE
+          }
+          if (!is.na(override$group) && override$group != "" &&
+              override$group != seg_group) {
+            applies <- FALSE
+          }
+
+          if (applies) {
+            parsed_val <- parse_override_expression(override)
+            segments$parameter_overrides[[seg_idx]][[override$name]] <- parsed_val
+          }
+        } else if (override$type == "setting") {
+          # Settings are global - apply to all segments
+          if (override$input_type == "timeframe") {
+            parsed_val <- parse_override_expression(override)
+            segments$setting_overrides[[seg_idx]][["timeframe"]] <- parsed_val$timeframe
+            segments$setting_overrides[[seg_idx]][["timeframe_unit"]] <- parsed_val$timeframe_unit
+          } else {
+            parsed_val <- parse_override_expression(override)
+            segments$setting_overrides[[seg_idx]][[override$name]] <- parsed_val
+          }
+        }
+      }
+    }
+  }
+
+  segments
+}
+
+#' Emit Override Notification Message
+#'
+#' Prints an informational message about active overrides being applied.
+#'
+#' @param model Model object with override_categories
+#' @keywords internal
+notify_active_overrides <- function(model) {
+  if (is.null(model$override_categories) || length(model$override_categories) == 0) {
+    return(invisible(NULL))
+  }
+
+  overrides_info <- list()
+  for (cat_item in model$override_categories) {
+    for (override in cat_item$overrides) {
+      overrides_info <- c(overrides_info, list(override))
+    }
+  }
+
+  if (length(overrides_info) == 0) {
+    return(invisible(NULL))
+  }
+
+  lines <- sprintf("Note: Model has %d active override(s) that will be applied:", length(overrides_info))
+  for (ovr in overrides_info) {
+    lines <- c(lines, sprintf("  - %s = %s (%s override)",
+      ovr$name, ovr$overridden_expression, ovr$type))
+  }
+  message(paste(lines, collapse = "\n"))
+  invisible(NULL)
 }

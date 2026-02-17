@@ -21,7 +21,6 @@ calculate_discount_factors <- function(n_cycles, discount_rate, cycle_length_yea
   time_years <- (cycles - 1) * cycle_length_years
 
   # Calculate discount factors based on time in years
-  # Convert percentage to decimal (e.g., 3.5 -> 0.035)
   1 / (1 + discount_rate / 100)^time_years
 }
 

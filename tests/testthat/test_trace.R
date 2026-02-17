@@ -473,9 +473,9 @@ test_that("time variables are stored in trace", {
 
   # Check that time values are calculated correctly
   # With cycle_length = 7 days:
-  expect_equal(trace_data$cycle[1:3], c(1, 2, 3))
-  expect_equal(trace_data$day[1:3], c(7, 14, 21))
-  expect_equal(trace_data$week[1:3], c(1, 2, 3))
+  expect_equal(trace_data$cycle[1:3], c(0, 1, 2))
+  expect_equal(trace_data$day[1:3], c(0, 7, 14))
+  expect_equal(trace_data$week[1:3], c(0, 1, 2))
 })
 
 
@@ -498,7 +498,7 @@ test_that("get_trace respects time_unit parameter", {
   # Test different time units
   trace_cycles <- get_trace(results, format = "long", time_unit = "cycle")
   expect_true("cycle" %in% colnames(trace_cycles))
-  expect_equal(unique(trace_cycles$cycle), 1:6)
+  expect_equal(unique(trace_cycles$cycle), 0:5)
 
   trace_days <- get_trace(results, format = "long", time_unit = "day")
   expect_true("day" %in% colnames(trace_days))

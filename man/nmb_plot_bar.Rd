@@ -11,7 +11,9 @@ nmb_plot_bar(
   groups = "overall",
   wtp = NULL,
   interventions = NULL,
-  comparators = NULL
+  comparators = NULL,
+  value_labels = TRUE,
+  label_accuracy = 0.01
 )
 }
 \arguments{
@@ -30,6 +32,10 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{comparators}{Character vector of comparator strategies (e.g., "control").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
+\item{value_labels}{Logical. If TRUE (default), display numeric value labels at bar edges.}
+
+\item{label_accuracy}{Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.}
 }
 \value{
 A ggplot2 object

@@ -140,13 +140,21 @@ build_dsa_segments <- function(model) {
   all_segments <- list()
   run_id <- 1
 
-  # Run 1: Base case - all segments with no overrides
+  # Apply override categories as baseline overrides
+  enriched_segments <- apply_override_categories(model, enriched_segments)
+
+  # Run 1: Base case - all segments with override category values as baseline
   base_case_segments <- enriched_segments %>%
     mutate(
-      run_id = run_id,
-      parameter_overrides = map(1:n(), ~ list()),
-      setting_overrides = map(1:n(), ~ list())
+      run_id = run_id
     )
+  # Initialize override columns if not present (from apply_override_categories)
+  if (!"parameter_overrides" %in% names(base_case_segments)) {
+    base_case_segments$parameter_overrides <- map(1:nrow(base_case_segments), ~ list())
+  }
+  if (!"setting_overrides" %in% names(base_case_segments)) {
+    base_case_segments$setting_overrides <- map(1:nrow(base_case_segments), ~ list())
+  }
   all_segments[[length(all_segments) + 1]] <- base_case_segments
   run_id <- run_id + 1
 
@@ -213,16 +221,25 @@ build_dsa_segments <- function(model) {
           mutate(
             run_id = run_id,
             parameter_overrides = map(1:n(), function(i) {
+              # Start with baseline overrides
+              base <- if ("parameter_overrides" %in% names(enriched_segments)) {
+                enriched_segments$parameter_overrides[[i]]
+              } else {
+                list()
+              }
               if (!is.null(bounds_per_segment[[i]])) {
                 override_val <- if (variation == "low") bounds_per_segment[[i]]$low else bounds_per_segment[[i]]$high
-                list_obj <- list()
-                list_obj[[param$name]] <- override_val
-                list_obj
-              } else {
-                list()  # Empty override for segments where parameter doesn't apply
+                base[[param$name]] <- override_val
               }
+              base
             }),
-            setting_overrides = map(1:n(), ~ list())
+            setting_overrides = map(1:n(), function(i) {
+              if ("setting_overrides" %in% names(enriched_segments)) {
+                enriched_segments$setting_overrides[[i]]
+              } else {
+                list()
+              }
+            })
           )
 
         all_segments[[length(all_segments) + 1]] <- seg_with_overrides
@@ -237,11 +254,21 @@ build_dsa_segments <- function(model) {
         seg_with_override <- enriched_segments %>%
           mutate(
             run_id = run_id,
-            parameter_overrides = map(1:n(), ~ list()),
+            parameter_overrides = map(1:n(), function(i) {
+              if ("parameter_overrides" %in% names(enriched_segments)) {
+                enriched_segments$parameter_overrides[[i]]
+              } else {
+                list()
+              }
+            }),
             setting_overrides = map(1:n(), function(i) {
-              list_obj <- list()
-              list_obj[[param$name]] <- override_val
-              list_obj
+              base <- if ("setting_overrides" %in% names(enriched_segments)) {
+                enriched_segments$setting_overrides[[i]]
+              } else {
+                list()
+              }
+              base[[param$name]] <- override_val
+              base
             })
           )
 
@@ -536,6 +563,14 @@ run_dsa <- function(model,
 
   # Validate DSA specifications
   validate_dsa_spec(parsed_model)
+
+  # Fall back to model$vbp for VBP parameters if not provided
+  if (is.null(vbp_price_variable) && !is.null(model$vbp)) {
+    vbp_price_variable <- model$vbp$price_variable
+    if (is.null(vbp_intervention)) vbp_intervention <- model$vbp$intervention_strategy
+    if (is.null(vbp_outcome_summary)) vbp_outcome_summary <- model$vbp$outcome_summary
+    if (is.null(vbp_cost_summary)) vbp_cost_summary <- model$vbp$cost_summary
+  }
 
   # Check if VBP mode is enabled
   vbp_enabled <- !is.null(vbp_price_variable)

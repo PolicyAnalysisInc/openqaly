@@ -1,0 +1,1818 @@
+{
+  "settings": [
+    {
+      "setting": "model_type",
+      "value": "markov"
+    },
+    {
+      "setting": "timeframe",
+      "value": "5"
+    },
+    {
+      "setting": "timeframe_unit",
+      "value": "years"
+    },
+    {
+      "setting": "cycle_length",
+      "value": "1"
+    },
+    {
+      "setting": "cycle_length_unit",
+      "value": "weeks"
+    },
+    {
+      "setting": "discount_cost",
+      "value": "0"
+    },
+    {
+      "setting": "discount_outcomes",
+      "value": "0"
+    },
+    {
+      "setting": "half_cycle_method",
+      "value": "end"
+    },
+    {
+      "setting": "reduce_state_cycle",
+      "value": "TRUE"
+    },
+    {
+      "setting": "days_per_year",
+      "value": "365"
+    }
+  ],
+  "strategies": [
+    {
+      "name": "checkimab",
+      "display_name": "Checkimab",
+      "description": "Checkimab",
+      "abbreviation": null,
+      "enabled": 1
+    },
+    {
+      "name": "chemoplatin",
+      "display_name": "Chemoplatin",
+      "description": "Chemoplatin",
+      "abbreviation": null,
+      "enabled": 1
+    },
+    {
+      "name": "lenrastim",
+      "display_name": "Lenrastim",
+      "description": "Lenrastim",
+      "abbreviation": null,
+      "enabled": 1
+    }
+  ],
+  "groups": [
+    {
+      "name": "hsct_eligible",
+      "display_name": "HSCT Eligible",
+      "description": "HSCT Eligible",
+      "weight": "0.61",
+      "enabled": 1
+    },
+    {
+      "name": "hsct_ineligible",
+      "display_name": "HSCT Ineligible",
+      "description": "HSCT Ineligible",
+      "weight": "0.39",
+      "enabled": 1
+    }
+  ],
+  "states": [
+    {
+      "name": "initial",
+      "display_name": "Initial Treatment",
+      "description": "initial",
+      "initial_probability": "1",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 1,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "l1_maint",
+      "display_name": "L1 Maintenance",
+      "description": "l1_maint",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": null,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "l2_rescue",
+      "display_name": "Line 2 Rescue",
+      "description": "l2_rescue",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 10,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "l2_maint",
+      "display_name": "Line 2 Maintenance",
+      "description": "l2_maint",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": null,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "hsct",
+      "display_name": "HSCT",
+      "description": "hsct",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 1,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "post_hsct",
+      "display_name": "Post-HSCT",
+      "description": "post_hsct",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 10,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "palliative",
+      "display_name": "Palliative",
+      "description": "palliative",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 1,
+      "state_cycle_limit_unit": "Cycles"
+    },
+    {
+      "name": "dead",
+      "display_name": "Dead",
+      "description": "dead",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": 1,
+      "state_cycle_limit_unit": "Cycles"
+    }
+  ],
+  "transitions": [
+    {
+      "from_state": "initial",
+      "to_state": "initial",
+      "formula": "ifelse(week > 8, 0, C)"
+    },
+    {
+      "from_state": "initial",
+      "to_state": "hsct",
+      "formula": "ifelse(week > 8, resp_l1_rescue * p_hsct, 0)"
+    },
+    {
+      "from_state": "initial",
+      "to_state": "l1_maint",
+      "formula": "ifelse(week > 8, resp_l1_rescue * (1 - p_hsct), 0)"
+    },
+    {
+      "from_state": "initial",
+      "to_state": "l2_rescue",
+      "formula": "ifelse(week > 8, C, 0)"
+    },
+    {
+      "from_state": "initial",
+      "to_state": "dead",
+      "formula": "event_prob(init_mort, year_lag, year)"
+    },
+    {
+      "from_state": "l1_maint",
+      "to_state": "l1_maint",
+      "formula": "C"
+    },
+    {
+      "from_state": "l1_maint",
+      "to_state": "l2_rescue",
+      "formula": "event_prob(l1_relapse_weib, state_year_lag, state_year)"
+    },
+    {
+      "from_state": "l1_maint",
+      "to_state": "dead",
+      "formula": "event_prob(l1_maint_mort, year_lag, year)"
+    },
+    {
+      "from_state": "hsct",
+      "to_state": "post_hsct",
+      "formula": "C"
+    },
+    {
+      "from_state": "hsct",
+      "to_state": "dead",
+      "formula": "p_death_hsct + event_prob(hsct_mort, year_lag, year)"
+    },
+    {
+      "from_state": "l2_rescue",
+      "to_state": "l2_rescue",
+      "formula": "ifelse(state_week > 8, 0, C)"
+    },
+    {
+      "from_state": "l2_rescue",
+      "to_state": "hsct",
+      "formula": "ifelse(state_week > 8, resp_l2_rescue * p_hsct, 0)"
+    },
+    {
+      "from_state": "l2_rescue",
+      "to_state": "l2_maint",
+      "formula": "ifelse(state_week > 8, resp_l2_rescue * (1 - p_hsct), 0)"
+    },
+    {
+      "from_state": "l2_rescue",
+      "to_state": "palliative",
+      "formula": "ifelse(state_week > 8, C, 0)"
+    },
+    {
+      "from_state": "l2_rescue",
+      "to_state": "dead",
+      "formula": "event_prob(l2_rescue_mort, year_lag, year)"
+    },
+    {
+      "from_state": "l2_maint",
+      "to_state": "l2_maint",
+      "formula": "C"
+    },
+    {
+      "from_state": "l2_maint",
+      "to_state": "palliative",
+      "formula": "event_prob(l2_relapse_weib, state_year_lag, state_year)"
+    },
+    {
+      "from_state": "l2_maint",
+      "to_state": "dead",
+      "formula": "event_prob(l2_maint_mort, year_lag, year)"
+    },
+    {
+      "from_state": "post_hsct",
+      "to_state": "post_hsct",
+      "formula": "C"
+    },
+    {
+      "from_state": "post_hsct",
+      "to_state": "dead",
+      "formula": "event_prob(post_hsct_mort, year_lag, year)"
+    },
+    {
+      "from_state": "palliative",
+      "to_state": "palliative",
+      "formula": "C"
+    },
+    {
+      "from_state": "palliative",
+      "to_state": "dead",
+      "formula": "event_prob(palliative_mort, year_lag, year)"
+    },
+    {
+      "from_state": "dead",
+      "to_state": "dead",
+      "formula": "1"
+    }
+  ],
+  "values": [
+    {
+      "name": "init_lys",
+      "display_name": "Initial Tx LYs",
+      "description": "init_lys",
+      "state": "initial",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "hsct_lys",
+      "display_name": "HSCT Lys",
+      "description": "hsct_lys",
+      "state": "hsct",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "post_hsct_lys",
+      "display_name": "Post-HSCT Lys",
+      "description": "post_hsct_lys",
+      "state": "post_hsct",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l1_maint_lys",
+      "display_name": "L1 Maintenance Lys",
+      "description": "l1_maint_lys",
+      "state": "l1_maint",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l2_rescue_lys",
+      "display_name": "L2 Rescue Lys",
+      "description": "l2_rescue_lys",
+      "state": "l2_rescue",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l2_maint_lys",
+      "display_name": "L2 Maintenance Lys",
+      "description": "l2_maint_lys",
+      "state": "l2_maint",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "palliative_lys",
+      "display_name": "Palliative Lys",
+      "description": "palliative_lys",
+      "state": "palliative",
+      "destination": null,
+      "formula": "cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "init_qalys",
+      "display_name": "Initial QALYs",
+      "description": "init_qalys",
+      "state": "initial",
+      "destination": null,
+      "formula": "init_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "hsct_qalys",
+      "display_name": "HSCT QALYs",
+      "description": "hsct_qalys",
+      "state": "hsct",
+      "destination": null,
+      "formula": "hsct_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "post_hsct_qalys",
+      "display_name": "Post-HSCT QALYs",
+      "description": "post_hsct_qalys",
+      "state": "post_hsct",
+      "destination": null,
+      "formula": "post_hsct_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l1_maint_qalys",
+      "display_name": "L1 Maintenance QALYs",
+      "description": "l1_maint_qalys",
+      "state": "l1_maint",
+      "destination": null,
+      "formula": "l1_maint_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l2_rescue_qalys",
+      "display_name": "L2 Rescue QALYs",
+      "description": "l2_rescue_qalys",
+      "state": "l2_rescue",
+      "destination": null,
+      "formula": "l2_rescue_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "l2_maint_qalys",
+      "display_name": "L2 Maintenance QALYs",
+      "description": "l2_maint_qalys",
+      "state": "l2_maint",
+      "destination": null,
+      "formula": "l2_maint_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "palliative_qalys",
+      "display_name": "Palliative QALYs",
+      "description": "palliative_qalys",
+      "state": "palliative",
+      "destination": null,
+      "formula": "palliative_util * cycle_length_years",
+      "type": "outcome"
+    },
+    {
+      "name": "ae_qalys",
+      "display_name": "Adverse Event QALYs",
+      "description": "ae_qalys",
+      "state": null,
+      "destination": null,
+      "formula": "ae_qaly_dec_sum * -1",
+      "type": "outcome"
+    },
+    {
+      "name": "cost_ae",
+      "display_name": "Adverse Event Costs",
+      "description": "cost_ae",
+      "state": null,
+      "destination": null,
+      "formula": "ae_cost_sum",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_init",
+      "display_name": "Routine Care Costs, Initial Tx",
+      "description": "cost_routine_init",
+      "state": "initial",
+      "destination": null,
+      "formula": "400 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_l1m",
+      "display_name": "Routine Care Costs, L1 Maintenance",
+      "description": "cost_routine_l1m",
+      "state": "l1_maint",
+      "destination": null,
+      "formula": "200 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_l2r",
+      "display_name": "Routine Care Costs, Line 2 Rescue",
+      "description": "cost_routine_l2r",
+      "state": "l2_rescue",
+      "destination": null,
+      "formula": "400 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_l2m",
+      "display_name": "Routine Care Costs, Line 2 Maintenance",
+      "description": "cost_routine_l2m",
+      "state": "l2_maint",
+      "destination": null,
+      "formula": "200 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_hsct",
+      "display_name": "Routine Care Costs, HSCT",
+      "description": "cost_routine_hsct",
+      "state": "hsct",
+      "destination": null,
+      "formula": "500 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_psthsct",
+      "display_name": "Routine Care Costs, Post-HSCT",
+      "description": "cost_routine_psthsct",
+      "state": "post_hsct",
+      "destination": null,
+      "formula": "80 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_routine_pall",
+      "display_name": "Routine Care Costs, Palliative",
+      "description": "cost_routine_pall",
+      "state": "palliative",
+      "destination": null,
+      "formula": "800 * cycle_length_months",
+      "type": "cost"
+    },
+    {
+      "name": "cost_med_init",
+      "display_name": "Medication Costs, Initial Tx",
+      "description": "cost_med_init",
+      "state": "initial",
+      "destination": null,
+      "formula": "init_med_cost_per_cycle",
+      "type": "cost"
+    },
+    {
+      "name": "cost_med_l1m",
+      "display_name": "Medication Costs, Line1 Maintenance",
+      "description": "cost_med_l1m",
+      "state": "l1_maint",
+      "destination": null,
+      "formula": "l1_maint_med_cost_per_cycle",
+      "type": "cost"
+    },
+    {
+      "name": "cost_med_l2r",
+      "display_name": "Medication Costs, Line 2 Rescue",
+      "description": "cost_med_l2r",
+      "state": "l2_rescue",
+      "destination": null,
+      "formula": "l2_rescue_med_cost_per_cycle",
+      "type": "cost"
+    },
+    {
+      "name": "cost_med_l2m",
+      "display_name": "Medication Costs, Line 2 Maintenance",
+      "description": "cost_med_l2m",
+      "state": "l2_maint",
+      "destination": null,
+      "formula": "l2_maint_med_cost_per_cycle",
+      "type": "cost"
+    },
+    {
+      "name": "cost_med_post_hsct",
+      "display_name": "Medication Costs, Post-HSCT",
+      "description": "cost_med_post_hsct",
+      "state": "post_hsct",
+      "destination": null,
+      "formula": "post_hsct_med_cost_per_cycle",
+      "type": "cost"
+    },
+    {
+      "name": "cost_hsct",
+      "display_name": "HSCT Procedure Cost",
+      "description": "cost_hsct",
+      "state": "hsct",
+      "destination": null,
+      "formula": "25071",
+      "type": "cost"
+    }
+  ],
+  "summaries": [
+    {
+      "name": "life_years",
+      "display_name": "Life-years",
+      "description": "Life-years",
+      "values": "init_lys, hsct_lys, post_hsct_lys, l1_maint_lys, l2_rescue_lys, l2_maint_lys, palliative_lys",
+      "type": "outcome",
+      "wtp": null
+    },
+    {
+      "name": "qalys",
+      "display_name": "QALYs",
+      "description": "QALYs",
+      "values": "init_qalys, hsct_qalys, post_hsct_qalys, l1_maint_qalys, l2_rescue_qalys, l2_maint_qalys, palliative_qalys, ae_qalys",
+      "type": "outcome",
+      "wtp": null
+    },
+    {
+      "name": "costs",
+      "display_name": "Total Costs",
+      "description": "Total Costs",
+      "values": "cost_ae, cost_routine_init, cost_routine_l1m, cost_routine_l2r, cost_routine_l2m, cost_routine_hsct, cost_routine_psthsct, cost_routine_pall, cost_med_init, cost_med_l1m, cost_med_l2r, cost_med_l2m, cost_med_post_hsct, cost_hsct",
+      "type": "outcome",
+      "wtp": null
+    }
+  ],
+  "variables": [
+    {
+      "name": "p_male",
+      "display_name": "resp_l1_rescue",
+      "description": "resp_l1_rescue",
+      "formula": "0.53",
+      "strategy": null,
+      "group": null,
+      "source": "resp_l1_rescue",
+      "sampling": null
+    },
+    {
+      "name": "age",
+      "display_name": "age",
+      "description": "age",
+      "formula": "34",
+      "strategy": null,
+      "group": "hsct_eligible",
+      "source": "age",
+      "sampling": null
+    },
+    {
+      "name": "age",
+      "display_name": "age",
+      "description": "age",
+      "formula": "52",
+      "strategy": null,
+      "group": "hsct_ineligible",
+      "source": "age",
+      "sampling": null
+    },
+    {
+      "name": "smr_init",
+      "display_name": "smr_init",
+      "description": "smr_init",
+      "formula": "12.21",
+      "strategy": null,
+      "group": null,
+      "source": "smr_init",
+      "sampling": null
+    },
+    {
+      "name": "smr_l1_maint",
+      "display_name": "smr_l1_maint",
+      "description": "smr_l1_maint",
+      "formula": "5.0599999999999996",
+      "strategy": null,
+      "group": null,
+      "source": "smr_l1_maint",
+      "sampling": null
+    },
+    {
+      "name": "smr_l2_rescue",
+      "display_name": "smr_l2_rescue",
+      "description": "smr_l2_rescue",
+      "formula": "14.86",
+      "strategy": null,
+      "group": null,
+      "source": "smr_l2_rescue",
+      "sampling": null
+    },
+    {
+      "name": "smr_l2_maint",
+      "display_name": "smr_l2_maint",
+      "description": "smr_l2_maint",
+      "formula": "6.78",
+      "strategy": null,
+      "group": null,
+      "source": "smr_l2_maint",
+      "sampling": null
+    },
+    {
+      "name": "smr_hsct",
+      "display_name": "smr_hsct",
+      "description": "smr_hsct",
+      "formula": "3.14",
+      "strategy": null,
+      "group": null,
+      "source": "smr_hsct",
+      "sampling": null
+    },
+    {
+      "name": "smr_post_hsct",
+      "display_name": "smr_post_hsct",
+      "description": "smr_post_hsct",
+      "formula": "3.14",
+      "strategy": null,
+      "group": null,
+      "source": "smr_post_hsct",
+      "sampling": null
+    },
+    {
+      "name": "smr_palliative",
+      "display_name": "smr_palliative",
+      "description": "smr_palliative",
+      "formula": "70.099999999999994",
+      "strategy": null,
+      "group": null,
+      "source": "smr_palliative",
+      "sampling": null
+    },
+    {
+      "name": "l1_relapse_shape",
+      "display_name": "l1_relapse_shape",
+      "description": "l1_relapse_shape",
+      "formula": "1.6870000000000001",
+      "strategy": null,
+      "group": null,
+      "source": "l1_relapse_shape",
+      "sampling": null
+    },
+    {
+      "name": "l1_relapse_scale",
+      "display_name": "l1_relapse_scale",
+      "description": "l1_relapse_scale",
+      "formula": "9.6430000000000007",
+      "strategy": null,
+      "group": null,
+      "source": "l1_relapse_scale",
+      "sampling": null
+    },
+    {
+      "name": "l2_relapse_shape",
+      "display_name": "l2_relapse_shape",
+      "description": "l2_relapse_shape",
+      "formula": "1.3028999999999999",
+      "strategy": null,
+      "group": null,
+      "source": "l2_relapse_shape",
+      "sampling": null
+    },
+    {
+      "name": "l2_relapse_scale",
+      "display_name": "l2_relapse_scale",
+      "description": "l2_relapse_scale",
+      "formula": "3.4136000000000002",
+      "strategy": null,
+      "group": null,
+      "source": "l2_relapse_scale",
+      "sampling": null
+    },
+    {
+      "name": "resp_rate_lenrastim",
+      "display_name": "resp_rate_lenrastim",
+      "description": "resp_rate_lenrastim",
+      "formula": "0.25",
+      "strategy": null,
+      "group": null,
+      "source": "resp_rate_lenrastim",
+      "sampling": null
+    },
+    {
+      "name": "rr_chemoplatin",
+      "display_name": "rr_chemoplatin",
+      "description": "rr_chemoplatin",
+      "formula": "1.23",
+      "strategy": null,
+      "group": null,
+      "source": "rr_chemoplatin",
+      "sampling": null
+    },
+    {
+      "name": "rr_checkimab",
+      "display_name": "rr_checkimab",
+      "description": "rr_checkimab",
+      "formula": "2.21",
+      "strategy": null,
+      "group": null,
+      "source": "rr_checkimab",
+      "sampling": null
+    },
+    {
+      "name": "resp_l1_rescue",
+      "display_name": "resp_l1_rescue",
+      "description": "resp_l1_rescue",
+      "formula": "resp_rate_lenrastim",
+      "strategy": "lenrastim",
+      "group": null,
+      "source": "resp_l1_rescue",
+      "sampling": null
+    },
+    {
+      "name": "resp_l1_rescue",
+      "display_name": "resp_l1_rescue",
+      "description": "resp_l1_rescue",
+      "formula": "rr_chemoplatin * resp_rate_lenrastim",
+      "strategy": "chemoplatin",
+      "group": null,
+      "source": "resp_l1_rescue",
+      "sampling": null
+    },
+    {
+      "name": "resp_l1_rescue",
+      "display_name": "resp_l1_rescue",
+      "description": "resp_l1_rescue",
+      "formula": "rr_checkimab * resp_rate_lenrastim",
+      "strategy": "checkimab",
+      "group": null,
+      "source": "resp_l1_rescue",
+      "sampling": null
+    },
+    {
+      "name": "resp_l2_rescue",
+      "display_name": "resp_l2_rescue",
+      "description": "resp_l2_rescue",
+      "formula": "0.18",
+      "strategy": null,
+      "group": null,
+      "source": "resp_l2_rescue",
+      "sampling": null
+    },
+    {
+      "name": "p_hsct",
+      "display_name": "p_hsct",
+      "description": "p_hsct",
+      "formula": "0.67",
+      "strategy": null,
+      "group": "hsct_eligible",
+      "source": "p_hsct",
+      "sampling": null
+    },
+    {
+      "name": "p_hsct",
+      "display_name": "p_hsct",
+      "description": "p_hsct",
+      "formula": "0",
+      "strategy": null,
+      "group": "hsct_ineligible",
+      "source": "p_hsct",
+      "sampling": null
+    },
+    {
+      "name": "p_death_hsct",
+      "display_name": "p_death_hsct",
+      "description": "p_death_hsct",
+      "formula": "0.01",
+      "strategy": null,
+      "group": null,
+      "source": "p_death_hsct",
+      "sampling": null
+    },
+    {
+      "name": "init_util",
+      "display_name": "init_util",
+      "description": "init_util",
+      "formula": "0.64",
+      "strategy": null,
+      "group": null,
+      "source": "init_util",
+      "sampling": null
+    },
+    {
+      "name": "l1_maint_util",
+      "display_name": "l1_maint_util",
+      "description": "l1_maint_util",
+      "formula": "0.74",
+      "strategy": null,
+      "group": null,
+      "source": "l1_maint_util",
+      "sampling": null
+    },
+    {
+      "name": "l2_rescue_util",
+      "display_name": "l2_rescue_util",
+      "description": "l2_rescue_util",
+      "formula": "0.61",
+      "strategy": null,
+      "group": null,
+      "source": "l2_rescue_util",
+      "sampling": null
+    },
+    {
+      "name": "l2_maint_util",
+      "display_name": "l2_maint_util",
+      "description": "l2_maint_util",
+      "formula": "0.68",
+      "strategy": null,
+      "group": null,
+      "source": "l2_maint_util",
+      "sampling": null
+    },
+    {
+      "name": "hsct_util",
+      "display_name": "hsct_util",
+      "description": "hsct_util",
+      "formula": "0.57999999999999996",
+      "strategy": null,
+      "group": null,
+      "source": "hsct_util",
+      "sampling": null
+    },
+    {
+      "name": "post_hsct_util",
+      "display_name": "post_hsct_util",
+      "description": "post_hsct_util",
+      "formula": "0.88",
+      "strategy": null,
+      "group": null,
+      "source": "post_hsct_util",
+      "sampling": null
+    },
+    {
+      "name": "palliative_util",
+      "display_name": "palliative_util",
+      "description": "palliative_util",
+      "formula": "0.51",
+      "strategy": null,
+      "group": null,
+      "source": "palliative_util",
+      "sampling": null
+    },
+    {
+      "name": "bsa_m2",
+      "display_name": "bsa_m2",
+      "description": "bsa_m2",
+      "formula": "1.78",
+      "strategy": null,
+      "group": null,
+      "source": "bsa_m2",
+      "sampling": null
+    },
+    {
+      "name": "weight_kg",
+      "display_name": "weight_kg",
+      "description": "weight_kg",
+      "formula": "78.099999999999994",
+      "strategy": null,
+      "group": null,
+      "source": "weight_kg",
+      "sampling": null
+    },
+    {
+      "name": "ae_cost_sum",
+      "display_name": "ae_cost_sum",
+      "description": "ae_cost_sum",
+      "formula": "sum(ae_incidence$Lenrastim * ae_cost$Cost)",
+      "strategy": "lenrastim",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_cost_sum",
+      "display_name": "ae_cost_sum",
+      "description": "ae_cost_sum",
+      "formula": "sum(ae_incidence$Chemoplatin * ae_cost$Cost)",
+      "strategy": "chemoplatin",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_cost_sum",
+      "display_name": "ae_cost_sum",
+      "description": "ae_cost_sum",
+      "formula": "sum(ae_incidence$Checkimab * ae_cost$Cost)",
+      "strategy": "checkimab",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_qaly_dec_sum",
+      "display_name": "ae_qaly_dec_sum",
+      "description": "ae_qaly_dec_sum",
+      "formula": "sum(ae_incidence$Lenrastim * ae_util$Disutility * ae_util$Duration)/365",
+      "strategy": "lenrastim",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_qaly_dec_sum",
+      "display_name": "ae_qaly_dec_sum",
+      "description": "ae_qaly_dec_sum",
+      "formula": "sum(ae_incidence$Chemoplatin * ae_util$Disutility * ae_util$Duration)/365",
+      "strategy": "chemoplatin",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_qaly_dec_sum",
+      "display_name": "ae_qaly_dec_sum",
+      "description": "ae_qaly_dec_sum",
+      "formula": "sum(ae_incidence$Checkimab * ae_util$Disutility * ae_util$Duration)/365",
+      "strategy": "checkimab",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "init_med_cost_per_cycle",
+      "display_name": "init_med_cost_per_cycle",
+      "description": "init_med_cost_per_cycle",
+      "formula": "calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Lenrastim'))",
+      "strategy": "lenrastim",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "init_med_cost_per_cycle",
+      "display_name": "init_med_cost_per_cycle",
+      "description": "init_med_cost_per_cycle",
+      "formula": "calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Chemoplatin'))",
+      "strategy": "chemoplatin",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "init_med_cost_per_cycle",
+      "display_name": "init_med_cost_per_cycle",
+      "description": "init_med_cost_per_cycle",
+      "formula": "calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Checkimab'))",
+      "strategy": "checkimab",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l1_maint_med_cost_per_cycle",
+      "display_name": "l1_maint_med_cost_per_cycle",
+      "description": "l1_maint_med_cost_per_cycle",
+      "formula": "calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Molgramotin'))",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l2_rescue_med_cost_per_cycle",
+      "display_name": "l2_rescue_med_cost_per_cycle",
+      "description": "l2_rescue_med_cost_per_cycle",
+      "formula": "calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Bendecogin'))",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l2_maint_med_cost_per_cycle",
+      "display_name": "l2_maint_med_cost_per_cycle",
+      "description": "l2_maint_med_cost_per_cycle",
+      "formula": "calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Sargramotide'))",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "post_hsct_med_cost_per_cycle",
+      "display_name": "post_hsct_med_cost_per_cycle",
+      "description": "post_hsct_med_cost_per_cycle",
+      "formula": "calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens, Medication == 'Lupprumab'))",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "gp_mort_surv",
+      "display_name": "gp_mort_surv",
+      "description": "gp_mort_surv",
+      "formula": "define_surv_lifetable(life_table, age, p_male, output_unit = 'years')",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "init_mort",
+      "display_name": "init_mort",
+      "description": "init_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_init)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l1_maint_mort",
+      "display_name": "l1_maint_mort",
+      "description": "l1_maint_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_l1_maint)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l2_rescue_mort",
+      "display_name": "l2_rescue_mort",
+      "description": "l2_rescue_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_l2_rescue)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l2_maint_mort",
+      "display_name": "l2_maint_mort",
+      "description": "l2_maint_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_l2_maint)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "hsct_mort",
+      "display_name": "hsct_mort",
+      "description": "hsct_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_hsct)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "post_hsct_mort",
+      "display_name": "post_hsct_mort",
+      "description": "post_hsct_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_post_hsct)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "palliative_mort",
+      "display_name": "palliative_mort",
+      "description": "palliative_mort",
+      "formula": "apply_hr(gp_mort_surv, smr_palliative)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l1_relapse_weib",
+      "display_name": "l1_relapse_weib",
+      "description": "l1_relapse_weib",
+      "formula": "define_surv_param(dist = \"weibull\", shape = l1_relapse_shape, scale = l1_relapse_scale)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "l2_relapse_weib",
+      "display_name": "l2_relapse_weib",
+      "description": "l2_relapse_weib",
+      "formula": "define_surv_param(dist = \"weibull\", shape = l2_relapse_shape, scale = l2_relapse_scale)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    }
+  ],
+  "trees": [],
+  "tables": [
+    {
+      "name": "ae_cost",
+      "description": null,
+      "data": {
+        "rows": [
+          {
+            "Event": "Nausea",
+            "Cost": 221
+          },
+          {
+            "Event": "Insomnia",
+            "Cost": 543
+          },
+          {
+            "Event": "Abdominal pain",
+            "Cost": 89
+          },
+          {
+            "Event": "Neutropenia",
+            "Cost": 240
+          }
+        ]
+      }
+    },
+    {
+      "name": "ae_incidence",
+      "description": null,
+      "data": {
+        "rows": [
+          {
+            "Event": "Nausea",
+            "Checkimab": 0.050000000000000003,
+            "Chemoplatin": 0.19,
+            "Lenrastim": 0.059999999999999998
+          },
+          {
+            "Event": "Insomnia",
+            "Checkimab": 0.12,
+            "Chemoplatin": 0.080000000000000002,
+            "Lenrastim": 0.050000000000000003
+          },
+          {
+            "Event": "Abdominal pain",
+            "Checkimab": 0.02,
+            "Chemoplatin": 0.02,
+            "Lenrastim": 0.14000000000000001
+          },
+          {
+            "Event": "Neutropenia",
+            "Checkimab": 0.080000000000000002,
+            "Chemoplatin": 0.089999999999999997,
+            "Lenrastim": 0.040000000000000001
+          }
+        ]
+      }
+    },
+    {
+      "name": "ae_util",
+      "description": null,
+      "data": {
+        "rows": [
+          {
+            "Event": "Nausea",
+            "Disutility": 0.080000000000000002,
+            "Duration": 24
+          },
+          {
+            "Event": "Insomnia",
+            "Disutility": 0.059999999999999998,
+            "Duration": 31
+          },
+          {
+            "Event": "Abdominal pain",
+            "Disutility": 0.040000000000000001,
+            "Duration": 12
+          },
+          {
+            "Event": "Neutropenia",
+            "Disutility": 0.01,
+            "Duration": 26
+          }
+        ]
+      }
+    },
+    {
+      "name": "life_table",
+      "description": null,
+      "data": {
+        "rows": [
+          {
+            "age": 0,
+            "male": 0.004548,
+            "female": 0.003571
+          },
+          {
+            "age": 1,
+            "male": 0.00024000000000000001,
+            "female": 0.00022100000000000001
+          },
+          {
+            "age": 2,
+            "male": 0.00016899999999999999,
+            "female": 0.00013899999999999999
+          },
+          {
+            "age": 3,
+            "male": 0.000115,
+            "female": 9.5000000000000005e-05
+          },
+          {
+            "age": 4,
+            "male": 8.6000000000000003e-05,
+            "female": 6.7999999999999999e-05
+          },
+          {
+            "age": 5,
+            "male": 8.5000000000000006e-05,
+            "female": 6.8999999999999997e-05
+          },
+          {
+            "age": 6,
+            "male": 6.8999999999999997e-05,
+            "female": 6.8999999999999997e-05
+          },
+          {
+            "age": 7,
+            "male": 6.9999999999999994e-05,
+            "female": 5.8999999999999998e-05
+          },
+          {
+            "age": 8,
+            "male": 7.7000000000000001e-05,
+            "female": 6.2000000000000003e-05
+          },
+          {
+            "age": 9,
+            "male": 7.2000000000000002e-05,
+            "female": 6.0999999999999999e-05
+          },
+          {
+            "age": 10,
+            "male": 6.0000000000000002e-05,
+            "female": 6.6000000000000005e-05
+          },
+          {
+            "age": 11,
+            "male": 9.2e-05,
+            "female": 7.2999999999999999e-05
+          },
+          {
+            "age": 12,
+            "male": 0.000101,
+            "female": 6.4999999999999994e-05
+          },
+          {
+            "age": 13,
+            "male": 0.00011400000000000001,
+            "female": 0.000105
+          },
+          {
+            "age": 14,
+            "male": 0.00013799999999999999,
+            "female": 8.6000000000000003e-05
+          },
+          {
+            "age": 15,
+            "male": 0.00017899999999999999,
+            "female": 0.00013200000000000001
+          },
+          {
+            "age": 16,
+            "male": 0.00022900000000000001,
+            "female": 0.000121
+          },
+          {
+            "age": 17,
+            "male": 0.00030400000000000002,
+            "female": 0.000166
+          },
+          {
+            "age": 18,
+            "male": 0.00043199999999999998,
+            "female": 0.000176
+          },
+          {
+            "age": 19,
+            "male": 0.00050199999999999995,
+            "female": 0.00019100000000000001
+          },
+          {
+            "age": 20,
+            "male": 0.00045600000000000003,
+            "female": 0.000222
+          },
+          {
+            "age": 21,
+            "male": 0.00049399999999999997,
+            "female": 0.00021100000000000001
+          },
+          {
+            "age": 22,
+            "male": 0.00050199999999999995,
+            "female": 0.00020799999999999999
+          },
+          {
+            "age": 23,
+            "male": 0.00055099999999999995,
+            "female": 0.000242
+          },
+          {
+            "age": 24,
+            "male": 0.000513,
+            "female": 0.00024000000000000001
+          },
+          {
+            "age": 25,
+            "male": 0.00052499999999999997,
+            "female": 0.000231
+          },
+          {
+            "age": 26,
+            "male": 0.00063299999999999999,
+            "female": 0.00027
+          },
+          {
+            "age": 27,
+            "male": 0.00060400000000000004,
+            "female": 0.00030200000000000002
+          },
+          {
+            "age": 28,
+            "male": 0.00066299999999999996,
+            "female": 0.00030699999999999998
+          },
+          {
+            "age": 29,
+            "male": 0.00073899999999999997,
+            "female": 0.00033799999999999998
+          },
+          {
+            "age": 30,
+            "male": 0.00074899999999999999,
+            "female": 0.00035100000000000002
+          },
+          {
+            "age": 31,
+            "male": 0.00086700000000000004,
+            "female": 0.00038699999999999997
+          },
+          {
+            "age": 32,
+            "male": 0.000883,
+            "female": 0.00044200000000000001
+          },
+          {
+            "age": 33,
+            "male": 0.00094899999999999997,
+            "female": 0.00047699999999999999
+          },
+          {
+            "age": 34,
+            "male": 0.0009810000000000001,
+            "female": 0.00054500000000000002
+          },
+          {
+            "age": 35,
+            "male": 0.001091,
+            "female": 0.00061399999999999996
+          },
+          {
+            "age": 36,
+            "male": 0.0011919999999999999,
+            "female": 0.00058
+          },
+          {
+            "age": 37,
+            "male": 0.001276,
+            "female": 0.00071500000000000003
+          },
+          {
+            "age": 38,
+            "male": 0.0013730000000000001,
+            "female": 0.00083900000000000001
+          },
+          {
+            "age": 39,
+            "male": 0.001549,
+            "female": 0.00089800000000000004
+          },
+          {
+            "age": 40,
+            "male": 0.001653,
+            "female": 0.00096199999999999996
+          },
+          {
+            "age": 41,
+            "male": 0.0018079999999999999,
+            "female": 0.001024
+          },
+          {
+            "age": 42,
+            "male": 0.0018649999999999999,
+            "female": 0.0011770000000000001
+          },
+          {
+            "age": 43,
+            "male": 0.0020279999999999999,
+            "female": 0.001183
+          },
+          {
+            "age": 44,
+            "male": 0.0022049999999999999,
+            "female": 0.001333
+          },
+          {
+            "age": 45,
+            "male": 0.0024020000000000001,
+            "female": 0.001415
+          },
+          {
+            "age": 46,
+            "male": 0.0025660000000000001,
+            "female": 0.0015759999999999999
+          },
+          {
+            "age": 47,
+            "male": 0.0028670000000000002,
+            "female": 0.0018420000000000001
+          },
+          {
+            "age": 48,
+            "male": 0.0031470000000000001,
+            "female": 0.0019220000000000001
+          },
+          {
+            "age": 49,
+            "male": 0.0033869999999999998,
+            "female": 0.0020860000000000002
+          },
+          {
+            "age": 50,
+            "male": 0.003699,
+            "female": 0.0023040000000000001
+          },
+          {
+            "age": 51,
+            "male": 0.003947,
+            "female": 0.002454
+          },
+          {
+            "age": 52,
+            "male": 0.0043579999999999999,
+            "female": 0.0025769999999999999
+          },
+          {
+            "age": 53,
+            "male": 0.0045890000000000002,
+            "female": 0.002882
+          },
+          {
+            "age": 54,
+            "male": 0.0049430000000000003,
+            "female": 0.003081
+          },
+          {
+            "age": 55,
+            "male": 0.0053099999999999996,
+            "female": 0.0033869999999999998
+          },
+          {
+            "age": 56,
+            "male": 0.0057460000000000002,
+            "female": 0.003699
+          },
+          {
+            "age": 57,
+            "male": 0.006254,
+            "female": 0.0040150000000000003
+          },
+          {
+            "age": 58,
+            "male": 0.0067499999999999999,
+            "female": 0.004274
+          },
+          {
+            "age": 59,
+            "male": 0.0072249999999999997,
+            "female": 0.004646
+          },
+          {
+            "age": 60,
+            "male": 0.0080319999999999992,
+            "female": 0.0051070000000000004
+          },
+          {
+            "age": 61,
+            "male": 0.008855,
+            "female": 0.0054530000000000004
+          },
+          {
+            "age": 62,
+            "male": 0.00958,
+            "female": 0.0061539999999999997
+          },
+          {
+            "age": 63,
+            "male": 0.010363000000000001,
+            "female": 0.006803
+          },
+          {
+            "age": 64,
+            "male": 0.011379999999999999,
+            "female": 0.0074799999999999997
+          },
+          {
+            "age": 65,
+            "male": 0.012389000000000001,
+            "female": 0.0080420000000000005
+          },
+          {
+            "age": 66,
+            "male": 0.013665999999999999,
+            "female": 0.0089969999999999998
+          },
+          {
+            "age": 67,
+            "male": 0.015075,
+            "female": 0.0098099999999999993
+          },
+          {
+            "age": 68,
+            "male": 0.016594000000000001,
+            "female": 0.010806
+          },
+          {
+            "age": 69,
+            "male": 0.017954000000000001,
+            "female": 0.011665
+          },
+          {
+            "age": 70,
+            "male": 0.019639,
+            "female": 0.01298
+          },
+          {
+            "age": 71,
+            "male": 0.021509,
+            "female": 0.013979999999999999
+          },
+          {
+            "age": 72,
+            "male": 0.023699000000000001,
+            "female": 0.015350000000000001
+          },
+          {
+            "age": 73,
+            "male": 0.025409999999999999,
+            "female": 0.016933
+          },
+          {
+            "age": 74,
+            "male": 0.027562,
+            "female": 0.018619
+          },
+          {
+            "age": 75,
+            "male": 0.030558999999999999,
+            "female": 0.021062999999999998
+          },
+          {
+            "age": 76,
+            "male": 0.034411999999999998,
+            "female": 0.023411000000000001
+          },
+          {
+            "age": 77,
+            "male": 0.038379000000000003,
+            "female": 0.026863999999999999
+          },
+          {
+            "age": 78,
+            "male": 0.043246,
+            "female": 0.030072999999999999
+          },
+          {
+            "age": 79,
+            "male": 0.047924000000000001,
+            "female": 0.033678
+          },
+          {
+            "age": 80,
+            "male": 0.054809999999999998,
+            "female": 0.039002000000000002
+          },
+          {
+            "age": 81,
+            "male": 0.060928999999999997,
+            "female": 0.044073000000000001
+          },
+          {
+            "age": 82,
+            "male": 0.069091,
+            "female": 0.049797000000000001
+          },
+          {
+            "age": 83,
+            "male": 0.075578000000000006,
+            "female": 0.055957
+          },
+          {
+            "age": 84,
+            "male": 0.084871000000000002,
+            "female": 0.063022999999999996
+          },
+          {
+            "age": 85,
+            "male": 0.094935000000000005,
+            "female": 0.071139999999999995
+          },
+          {
+            "age": 86,
+            "male": 0.106503,
+            "female": 0.081536999999999998
+          },
+          {
+            "age": 87,
+            "male": 0.12002400000000001,
+            "female": 0.091619999999999993
+          },
+          {
+            "age": 88,
+            "male": 0.13526099999999999,
+            "female": 0.105934
+          },
+          {
+            "age": 89,
+            "male": 0.150561,
+            "female": 0.11817800000000001
+          },
+          {
+            "age": 90,
+            "male": 0.17042299999999999,
+            "female": 0.134099
+          },
+          {
+            "age": 91,
+            "male": 0.18754000000000001,
+            "female": 0.15221799999999999
+          },
+          {
+            "age": 92,
+            "male": 0.20976600000000001,
+            "female": 0.17122799999999999
+          },
+          {
+            "age": 93,
+            "male": 0.22975899999999999,
+            "female": 0.19035099999999999
+          },
+          {
+            "age": 94,
+            "male": 0.25412299999999999,
+            "female": 0.210095
+          },
+          {
+            "age": 95,
+            "male": 0.27496500000000001,
+            "female": 0.230103
+          },
+          {
+            "age": 96,
+            "male": 0.29870200000000002,
+            "female": 0.251247
+          },
+          {
+            "age": 97,
+            "male": 0.32780599999999999,
+            "female": 0.278312
+          },
+          {
+            "age": 98,
+            "male": 0.337947,
+            "female": 0.304062
+          },
+          {
+            "age": 99,
+            "male": 0.37825900000000001,
+            "female": 0.32394400000000001
+          },
+          {
+            "age": 100,
+            "male": 0.40347499999999997,
+            "female": 0.35231099999999999
+          }
+        ]
+      }
+    },
+    {
+      "name": "regimens",
+      "description": null,
+      "data": {
+        "rows": [
+          {
+            "Medication": "Checkimab",
+            "Type": "Initial Tx",
+            "Dosing Unit": "mg per patient",
+            "Dose": 200,
+            "Doses per Cycle": 28,
+            "Cycle Length (days)": 28,
+            "Max Cycles": 0,
+            "Cost per mg": 3.7799999999999998
+          },
+          {
+            "Medication": "Chemoplatin",
+            "Type": "Initial Tx",
+            "Dosing Unit": "mg per m^2",
+            "Dose": 40,
+            "Doses per Cycle": 1,
+            "Cycle Length (days)": 7,
+            "Max Cycles": 0,
+            "Cost per mg": 6.5
+          },
+          {
+            "Medication": "Lenrastim",
+            "Type": "Initial Tx",
+            "Dosing Unit": "mg per kg",
+            "Dose": 10,
+            "Doses per Cycle": 1,
+            "Cycle Length (days)": 7,
+            "Max Cycles": 0,
+            "Cost per mg": 0.17000000000000001
+          },
+          {
+            "Medication": "Molgramotin",
+            "Type": "L1 Maintenance",
+            "Dosing Unit": "mg per patient",
+            "Dose": 250,
+            "Doses per Cycle": 3,
+            "Cycle Length (days)": 21,
+            "Max Cycles": 0,
+            "Cost per mg": 0.12
+          },
+          {
+            "Medication": "Bendecogin",
+            "Type": "L2 Rescue",
+            "Dosing Unit": "mg per patient",
+            "Dose": 400,
+            "Doses per Cycle": 1,
+            "Cycle Length (days)": 7,
+            "Max Cycles": 0,
+            "Cost per mg": 0.17000000000000001
+          },
+          {
+            "Medication": "Sargramotide",
+            "Type": "L1 Maintenance",
+            "Dosing Unit": "mg per patient",
+            "Dose": 250,
+            "Doses per Cycle": 3,
+            "Cycle Length (days)": 21,
+            "Max Cycles": 0,
+            "Cost per mg": 0.089999999999999997
+          },
+          {
+            "Medication": "Lupprumab",
+            "Type": "Post-HSCT Immunosuppressive",
+            "Dosing Unit": "mg per patient",
+            "Dose": 30,
+            "Doses per Cycle": 30,
+            "Cycle Length (days)": 30,
+            "Max Cycles": 2,
+            "Cost per mg": 4.5800000000000001
+          }
+        ]
+      }
+    }
+  ],
+  "scripts": [
+    {
+      "name": "calc_med_cost.r",
+      "description": null,
+      "code": "calc_med_cost_ <- function(time, model_cycle_length, dose_unit, dose, doses_per_cycle, med_cycle_length, max_cycles, cost_per_mg, bsa, weight) {\n    if (max_cycles == 0) max_cycles <- Inf\n    dose_mult <- 1\n    if (dose_unit[1] == 'mg per kg') {\n        dose_mult <- weight[1]\n    } else if(dose_unit[1] == 'mg per m^2') {\n        dose_mult <- bsa[1]\n    }\n    cost_per_dose <- dose_mult * dose[1] * cost_per_mg[1]\n    cost_per_cycle <- cost_per_dose * doses_per_cycle\n    cost_per_time <- cost_per_cycle / med_cycle_length\n    max_time <- max_cycles * med_cycle_length\n    interval_start <- pmin(time - model_cycle_length, max_time)\n    interval_end <- pmin(time, max_time)\n    interval_length <- interval_end - interval_start\n    interval_cost <- interval_length * cost_per_time\n    \n    interval_cost\n}\n\ncalc_med_cost <- function(time, cycle_length, bsa, weight, regimen) {\n    calc_med_cost_(time, cycle_length, regimen[['Dosing Unit']], regimen[['Dose']], regimen[['Doses per Cycle']], regimen[['Cycle Length (days)']], regimen[['Max Cycles']], regimen[['Cost per mg']], bsa, weight)\n}"
+    }
+  ]
+}

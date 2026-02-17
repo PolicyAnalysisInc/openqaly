@@ -26,8 +26,8 @@ value instead of its default.
 \details{
 Common settings that can be overridden include:
 - `timeframe`: Model time horizon
-- `discount_cost`: Discount rate for costs (percentage)
-- `discount_outcomes`: Discount rate for outcomes (percentage)
+- `discount_cost`: Discount rate for costs (percentage, e.g. 3 for 3%)
+- `discount_outcomes`: Discount rate for outcomes (percentage, e.g. 3 for 3%)
 - `cycle_length`: Length of each model cycle
 }
 \examples{

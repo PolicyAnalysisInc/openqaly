@@ -5,5 +5,5 @@
 \title{Model Format Converters}
 \description{
 Functions for converting openqaly models between different formats
-(Excel folders, JSON files, and R code).
+(Excel folders, JSON files, YAML files, and R code).
 }

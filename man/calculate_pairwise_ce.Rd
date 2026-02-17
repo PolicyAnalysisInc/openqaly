@@ -9,7 +9,6 @@ calculate_pairwise_ce(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
   interventions = NULL,
   comparators = NULL
 )
@@ -22,8 +21,6 @@ calculate_pairwise_ce(
 \item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
 
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + overall)}
-
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
 
 \item{interventions}{Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}

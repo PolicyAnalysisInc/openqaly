@@ -6,10 +6,10 @@
 \usage{
 run_vbp(
   model,
-  price_variable,
-  intervention_strategy,
-  outcome_summary = "total_qalys",
-  cost_summary = "total_cost",
+  price_variable = NULL,
+  intervention_strategy = NULL,
+  outcome_summary = NULL,
+  cost_summary = NULL,
   ...
 )
 }

@@ -9,7 +9,6 @@ prepare_pairwise_ce_table_data(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL,
   interventions = NULL,
   comparators = NULL,
   decimals = 2,
@@ -24,8 +23,6 @@ prepare_pairwise_ce_table_data(
 \item{cost_summary}{Name of the cost summary}
 
 \item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
-
-\item{strategies}{Character vector of strategies to include (NULL for all)}
 
 \item{interventions}{Character vector of reference strategies for intervention perspective}
 

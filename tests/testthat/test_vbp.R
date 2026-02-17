@@ -739,3 +739,59 @@ test_that("run_vbp() handles multiple comparators correctly", {
   expect_true(is.numeric(result$vbp_equations$cost_intercept))
   expect_true(is.numeric(result$vbp_equations$outcome_difference))
 })
+
+# ============================================================================
+# 12. Model VBP Config Tests (set_vbp fallback)
+# ============================================================================
+
+test_that("run_vbp() uses model$vbp config when no args provided", {
+  model <- get_example_model()
+  model <- set_vbp(model,
+    price_variable = "c_drug",
+    intervention_strategy = "targeted",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost"
+  )
+
+  result <- run_vbp(model)
+
+  expect_equal(result$spec$price_variable, "c_drug")
+  expect_equal(result$spec$intervention_strategy, "targeted")
+  expect_equal(result$spec$outcome_summary, "total_qalys")
+  expect_equal(result$spec$cost_summary, "total_cost")
+})
+
+test_that("run_vbp() explicit args override model$vbp config", {
+  model <- get_example_model()
+  model <- set_vbp(model,
+    price_variable = "c_drug",
+    intervention_strategy = "targeted",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost"
+  )
+
+  result <- run_vbp(model, outcome_summary = "total_qalys", cost_summary = "total_cost")
+
+  expect_equal(result$spec$outcome_summary, "total_qalys")
+  expect_equal(result$spec$cost_summary, "total_cost")
+})
+
+test_that("run_vbp() errors when no VBP config anywhere", {
+  model <- get_example_model()
+  # Ensure no model-level VBP
+  model$vbp <- NULL
+
+  expect_error(
+    run_vbp(model),
+    "price_variable and intervention_strategy are required"
+  )
+})
+
+test_that("set_vbp() validates non-empty strings", {
+  model <- define_model("markov")
+
+  expect_error(set_vbp(model, "", "s", "o", "c"), "price_variable must be a non-empty string")
+  expect_error(set_vbp(model, "p", "", "o", "c"), "intervention_strategy must be a non-empty string")
+  expect_error(set_vbp(model, "p", "s", "", "c"), "outcome_summary must be a non-empty string")
+  expect_error(set_vbp(model, "p", "s", "o", ""), "cost_summary must be a non-empty string")
+})

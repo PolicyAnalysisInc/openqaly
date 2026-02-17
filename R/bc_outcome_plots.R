@@ -9,6 +9,8 @@
 #' @param strategies Strategies to include (when plotting absolute values).
 #' @param interventions Strategies used as interventions (when plotting differences)
 #' @param comparators Strategies used as commparators (when plotting differences)
+#' @param value_labels Logical. If TRUE (default), display numeric value labels at bar edges.
+#' @param label_accuracy Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.
 #'
 #' @return A ggplot2 object
 #'
@@ -40,7 +42,9 @@ outcomes_plot_bar <- function(res, outcome,
                         groups = "overall",
                         strategies = NULL,
                         interventions = NULL,
-                        comparators = NULL) {
+                        comparators = NULL,
+                        value_labels = TRUE,
+                        label_accuracy = 0.01) {
   # Validate mutual exclusivity
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
     stop("The 'strategies' argument cannot be provided when also providing 'interventions' or 'comparators'")
@@ -115,11 +119,38 @@ outcomes_plot_bar <- function(res, outcome,
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)
 
-  summaries_with_total %>%
+  p <- summaries_with_total %>%
     ggplot(aes(fill=.data$.pos_or_neg, x=.data$amount, y=.data$value)) +
-    geom_bar(stat="identity", position = "dodge") +
+    geom_bar(stat="identity", position = "dodge")
+
+  if (value_labels) {
+    p <- p +
+      geom_text(
+        aes(
+          x = .data$amount,
+          label = scales::comma(.data$amount, accuracy = label_accuracy),
+          hjust = ifelse(.data$amount < 0, 1.1, -0.1)
+        ),
+        size = 2.5,
+        color = "black",
+        show.legend = FALSE
+      )
+
+    has_negative <- any(summaries_with_total$amount < 0, na.rm = TRUE)
+    has_positive <- any(summaries_with_total$amount >= 0, na.rm = TRUE)
+    left_expand <- if (has_negative) 0.15 else 0.05
+    right_expand <- if (has_positive) 0.15 else 0.05
+
+    p <- p +
+      scale_x_continuous(breaks = x_breaks, labels = comma,
+                         expand = expansion(mult = c(left_expand, right_expand)))
+  } else {
+    p <- p +
+      scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma)
+  }
+
+  p +
     facet_component +
-    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +
     guides(fill = "none") +
     labs(y = NULL, x = outcome_label) +
     theme_bw()

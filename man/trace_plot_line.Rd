@@ -9,7 +9,6 @@ trace_plot_line(
   groups = "overall",
   strategies = NULL,
   by_state = TRUE,
-  proportional = FALSE,
   states = NULL,
   color_palette = NULL,
   show_legend = TRUE,
@@ -30,9 +29,6 @@ vector of groups, "all" (all groups plus aggregated), "all_groups"
 \item{by_state}{Logical. If TRUE (default), lines are colored by state
 and faceted by strategy. If FALSE, lines are colored by strategy
 and faceted by state.}
-
-\item{proportional}{Logical. If TRUE, show as percentages (0-100%). If FALSE
-(default), show as probabilities (0-1)}
 
 \item{states}{Character vector of states to include (NULL for all)}
 
