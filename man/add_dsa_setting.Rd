@@ -29,8 +29,8 @@ model configuration values that are not part of the variables table.
 \examples{
 \dontrun{
 model <- define_model("markov") |>
-  set_settings(timeframe = 20, discount_cost = 0.03) |>
-  add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
+  set_settings(timeframe = 20, discount_cost = 3) |>
+  add_dsa_setting("discount_cost", low = 0, high = 5) |>
   add_dsa_setting("timeframe", low = 10, high = 30)
 }
 }

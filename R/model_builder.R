@@ -1237,8 +1237,8 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
-#'   add_dsa_setting("discount_cost", low = 0, high = 0.05) |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
 #'   add_dsa_setting("timeframe", low = 10, high = 30)
 #' }
 add_dsa_setting <- function(model, setting, low, high,
@@ -1461,8 +1461,8 @@ add_scenario_variable <- function(model, scenario, variable, value,
 #'
 #' Common settings that can be overridden include:
 #' - `timeframe`: Model time horizon
-#' - `discount_cost`: Discount rate for costs (decimal, e.g. 0.03 for 3%)
-#' - `discount_outcomes`: Discount rate for outcomes (decimal, e.g. 0.03 for 3%)
+#' - `discount_cost`: Discount rate for costs (percentage, e.g. 3 for 3%)
+#' - `discount_outcomes`: Discount rate for outcomes (percentage, e.g. 3 for 3%)
 #' - `cycle_length`: Length of each model cycle
 #'
 #' @param model An oq_model_builder object
@@ -1476,7 +1476,7 @@ add_scenario_variable <- function(model, scenario, variable, value,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
 #'   add_scenario("Extended Horizon") |>
 #'   add_scenario_setting("Extended Horizon", "timeframe", 30) |>
 #'   add_scenario("No Discounting") |>
@@ -1798,12 +1798,12 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
 #' @examples
 #' \dontrun{
 #' model <- define_model("markov") |>
-#'   set_settings(timeframe = 20, discount_cost = 0.03) |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
 #'   add_twsa("Time vs Discount") |>
 #'   add_twsa_setting("Time vs Discount", "timeframe",
 #'     type = "range", min = 10, max = 30, steps = 5) |>
 #'   add_twsa_setting("Time vs Discount", "discount_cost",
-#'     type = "custom", values = c(0, 0.015, 0.03, 0.05))
+#'     type = "custom", values = c(0, 1.5, 3, 5))
 #' }
 add_twsa_setting <- function(model, twsa_name, setting, type,
                               min = NULL, max = NULL,

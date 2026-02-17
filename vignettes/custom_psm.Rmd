@@ -66,8 +66,8 @@ discontinuation_model <- define_model("custom_psm") |>
     timeframe_unit = "years",
     cycle_length = 1,
     cycle_length_unit = "month",
-    discount_cost = 0.035,
-    discount_outcomes = 0.035
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
   ) |>
   # States (4 states for discontinuation model)
   add_state("pf_on_tx", display_name = "PF On Treatment") |>
@@ -175,8 +175,8 @@ response_model <- define_model("custom_psm") |>
     timeframe_unit = "years",
     cycle_length = 1,
     cycle_length_unit = "month",
-    discount_cost = 0.035,
-    discount_outcomes = 0.035
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
   ) |>
   # States (4 states for response model)
   add_state("response", display_name = "Response") |>

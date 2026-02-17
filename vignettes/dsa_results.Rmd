@@ -71,7 +71,7 @@ The `add_dsa_setting()` function varies model settings like discount rates or ti
 
 ```{r, eval = FALSE}
 model <- model %>%
-  add_dsa_setting("discount_outcomes", low = 0, high = 0.05,
+  add_dsa_setting("discount_outcomes", low = 0, high = 5,
                   display_name = "Outcome Discount Rate")
 ```
 
@@ -101,7 +101,7 @@ model <- model %>%
                    group = "low_risk", display_name = "Disease Incidence (Low Risk)") %>%
   add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
                    group = "high_risk", display_name = "Disease Incidence (High Risk)") %>%
-  add_dsa_setting("discount_outcomes", low = 0, high = 0.05,
+  add_dsa_setting("discount_outcomes", low = 0, high = 5,
                   display_name = "Outcome Discount Rate")
 
 dsa_results <- run_dsa(model)

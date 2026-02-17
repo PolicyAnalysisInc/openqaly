@@ -5,8 +5,8 @@ build_test_model <- function() {
       n_cycles = 5,
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_cost = 0.03,
-      discount_outcomes = 0.03
+      discount_cost = 3,
+      discount_outcomes = 3
     ) |>
     add_state("alive", initial_prob = 1, display_name = "Alive") |>
     add_state("dead", initial_prob = 0, display_name = "Dead") |>

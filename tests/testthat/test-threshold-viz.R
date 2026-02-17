@@ -479,7 +479,7 @@ test_that("run_threshold result includes analyses field", {
     set_settings(
       timeframe = 10, timeframe_unit = "years",
       cycle_length = 1, cycle_length_unit = "years",
-      discount_cost = 0.03, discount_outcomes = 0.03
+      discount_cost = 3, discount_outcomes = 3
     ) %>%
     add_state("healthy", initial_prob = 1) %>%
     add_state("sick", initial_prob = 0) %>%

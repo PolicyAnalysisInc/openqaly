@@ -10,8 +10,8 @@ build_test_model <- function() {
       n_cycles = 10,
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_cost = 0.03,
-      discount_outcomes = 0.03
+      discount_cost = 3,
+      discount_outcomes = 3
     ) %>%
     add_state("healthy", initial_prob = 1) %>%
     add_state("sick", initial_prob = 0) %>%
@@ -159,7 +159,7 @@ test_that("get_settings returns settings list", {
   settings <- get_settings(model)
   expect_true(is.list(settings))
   expect_equal(settings$model_type, "markov")
-  expect_equal(settings$discount_cost, 0.03)
+  expect_equal(settings$discount_cost, 3)
 })
 
 test_that("get_model_type returns model type string", {

@@ -98,9 +98,9 @@ Use `add_twsa_setting()` to vary model settings like discount rates:
 model <- model |>
   add_twsa("Discount Sensitivity") |>
   add_twsa_setting("Discount Sensitivity", "discount_cost",
-    type = "range", min = 0, max = 0.05, steps = 6) |>
+    type = "range", min = 0, max = 5, steps = 6) |>
   add_twsa_setting("Discount Sensitivity", "discount_outcomes",
-    type = "range", min = 0, max = 0.05, steps = 6)
+    type = "range", min = 0, max = 5, steps = 6)
 ```
 
 ## Running TWSA

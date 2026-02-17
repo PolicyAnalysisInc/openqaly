@@ -62,11 +62,11 @@ Values can be specified using three different range types:
 \examples{
 \dontrun{
 model <- define_model("markov") |>
-  set_settings(timeframe = 20, discount_cost = 0.03) |>
+  set_settings(timeframe = 20, discount_cost = 3) |>
   add_twsa("Time vs Discount") |>
   add_twsa_setting("Time vs Discount", "timeframe",
     type = "range", min = 10, max = 30, steps = 5) |>
   add_twsa_setting("Time vs Discount", "discount_cost",
-    type = "custom", values = c(0, 0.015, 0.03, 0.05))
+    type = "custom", values = c(0, 1.5, 3, 5))
 }
 }

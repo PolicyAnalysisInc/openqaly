@@ -229,8 +229,8 @@ test_that("read_model_json parses minimal valid JSON model", {
       {"setting": "n_cycles", "value": "10"},
       {"setting": "cycle_length", "value": "1"},
       {"setting": "cycle_length_unit", "value": "year"},
-      {"setting": "discount_cost", "value": "0.035"},
-      {"setting": "discount_outcomes", "value": "0.035"}
+      {"setting": "discount_cost", "value": "3.5"},
+      {"setting": "discount_outcomes", "value": "3.5"}
     ],
     "states": [
       {"name": "alive", "initial_probability": "1", "absorbing": "0"},
@@ -260,8 +260,8 @@ test_that("read_model_json handles tables array-of-objects format", {
       {"setting": "n_cycles", "value": "5"},
       {"setting": "cycle_length", "value": "1"},
       {"setting": "cycle_length_unit", "value": "year"},
-      {"setting": "discount_cost", "value": "0.035"},
-      {"setting": "discount_outcomes", "value": "0.035"}
+      {"setting": "discount_cost", "value": "3.5"},
+      {"setting": "discount_outcomes", "value": "3.5"}
     ],
     "states": [
       {"name": "alive", "initial_probability": "1", "absorbing": "0"},
@@ -452,14 +452,14 @@ test_that("apply_setting_overrides applies override values", {
   segment <- tibble::tibble(
     strategy = "A",
     group = "G1",
-    setting_overrides = list(list(n_cycles = 20, discount_cost = 0.05))
+    setting_overrides = list(list(n_cycles = 20, discount_cost = 5))
   )
-  model <- list(settings = list(n_cycles = 10, discount_cost = 0.035))
+  model <- list(settings = list(n_cycles = 10, discount_cost = 3.5))
 
   result <- openqaly:::apply_setting_overrides(segment, model)
 
   expect_equal(result$settings$n_cycles, 20)
-  expect_equal(result$settings$discount_cost, 0.05)
+  expect_equal(result$settings$discount_cost, 5)
 })
 
 # ==============================================================================

@@ -24,8 +24,8 @@ model <- define_model("markov") |>
     n_cycles = 20,
     cycle_length = 1,
     cycle_length_unit = "years",
-    discount_cost = 0.035,
-    discount_outcomes = 0.035
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
   ) |>
   add_state(
     "stable",
@@ -93,8 +93,8 @@ model <- define_model("markov") |>
     n_cycles = 20,
     cycle_length = 1,
     cycle_length_unit = "years",
-    discount_cost = 0.035,
-    discount_outcomes = 0.035
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
   ) |>
   add_state(
     "stable",

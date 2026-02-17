@@ -390,12 +390,12 @@ convert_settings_from_df <- function(settings_df) {
     stop("discount_outcomes is required but was not provided in settings")
   }
 
-  # Warn if discount rates look like percentages instead of decimals
-  if (settings$discount_cost >= 1) {
-    warning("discount_cost is >= 1. Discount rates should be decimals (e.g., 0.03 for 3%), not percentages.")
+  # Warn if discount rates look unreasonably high
+  if (settings$discount_cost > 100) {
+    warning("discount_cost is > 100. Discount rates should be percentages (e.g., 3 for 3%).")
   }
-  if (settings$discount_outcomes >= 1) {
-    warning("discount_outcomes is >= 1. Discount rates should be decimals (e.g., 0.03 for 3%), not percentages.")
+  if (settings$discount_outcomes > 100) {
+    warning("discount_outcomes is > 100. Discount rates should be percentages (e.g., 3 for 3%).")
   }
 
   settings

@@ -26,14 +26,14 @@ value instead of its default.
 \details{
 Common settings that can be overridden include:
 - `timeframe`: Model time horizon
-- `discount_cost`: Discount rate for costs (decimal, e.g. 0.03 for 3%)
-- `discount_outcomes`: Discount rate for outcomes (decimal, e.g. 0.03 for 3%)
+- `discount_cost`: Discount rate for costs (percentage, e.g. 3 for 3%)
+- `discount_outcomes`: Discount rate for outcomes (percentage, e.g. 3 for 3%)
 - `cycle_length`: Length of each model cycle
 }
 \examples{
 \dontrun{
 model <- define_model("markov") |>
-  set_settings(timeframe = 20, discount_cost = 0.03) |>
+  set_settings(timeframe = 20, discount_cost = 3) |>
   add_scenario("Extended Horizon") |>
   add_scenario_setting("Extended Horizon", "timeframe", 30) |>
   add_scenario("No Discounting") |>

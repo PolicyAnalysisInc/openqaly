@@ -2017,8 +2017,8 @@ test_that("shared state time with state_cycle propagates limit to all group memb
       n_cycles = 20,
       cycle_length = 1,
       cycle_length_unit = "years",
-      discount_cost = 0.035,
-      discount_outcomes = 0.035
+      discount_cost = 3.5,
+      discount_outcomes = 3.5
     ) |>
     add_state(
       "stable",
@@ -2077,8 +2077,8 @@ test_that("shared state time with conflicting state_cycle_limit values errors", 
         n_cycles = 10,
         cycle_length = 1,
         cycle_length_unit = "years",
-        discount_cost = 0.035,
-        discount_outcomes = 0.035
+        discount_cost = 3.5,
+        discount_outcomes = 3.5
       ) |>
       add_state(
         "stable",
