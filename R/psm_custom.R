@@ -482,6 +482,12 @@ calculate_psm_custom_values <- function(
     if (is_oq_error(evaluated)) {
       accumulate_oq_error(evaluated, context_msg = glue("Value '{value_name}'"))
       evaluated <- rep(0, n_cycles)
+    } else if (!is.numeric(evaluated)) {
+      accumulate_oq_error(
+        define_error(glue("Value '{value_name}' must evaluate to a numeric value.")),
+        context_msg = "Custom PSM value validation"
+      )
+      evaluated <- rep(0, n_cycles)
     }
 
     # Handle scalar -> replicate to vector
