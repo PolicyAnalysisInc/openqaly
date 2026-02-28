@@ -14,7 +14,9 @@ get_transitions(
   to_states = NULL,
   cycles = NULL,
   time_unit = c("cycle", "day", "week", "month", "year"),
-  use_display_names = TRUE
+  use_display_names = TRUE,
+  state_times = NULL,
+  exclude_zero_residency = NULL
 )
 }
 \arguments{
@@ -47,6 +49,15 @@ If FALSE, use expanded state names (tunnel states).}
 \item{time_unit}{Time unit for output: "cycle" (default), "day", "week", "month", "year"}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for entities}
+
+\item{state_times}{Numeric vector of tunnel state indices to include when
+\code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+base state. Non-tunnel states are always included. Ignored when
+\code{collapsed=TRUE}.}
+
+\item{exclude_zero_residency}{Logical. Exclude expanded states with zero
+residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.}
 }
 \value{
 A data frame with columns depending on format:

@@ -4,10 +4,14 @@
 \alias{run_threshold}
 \title{Run Threshold Analysis}
 \usage{
-run_threshold(model, ...)
+run_threshold(model, progress = NULL, ...)
 }
 \arguments{
 \item{model}{An oq_model_builder or oq_model object with threshold analyses defined}
+
+\item{progress}{Optional progress callback function. Called with
+\code{progress(total = N)} to declare total units, then
+\code{progress(amount = K)} for each completed unit.}
 
 \item{...}{Additional arguments passed to run_segment}
 }

@@ -37,6 +37,13 @@ NULL
 #' @param cycles Integer vector of cycles to include (NULL for all)
 #' @param time_unit Time unit for output: "cycle" (default), "day", "week", "month", "year"
 #' @param use_display_names Logical. If TRUE (default), use display names for entities
+#' @param state_times Numeric vector of tunnel state indices to include when
+#'   \code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+#'   base state. Non-tunnel states are always included. Ignored when
+#'   \code{collapsed=TRUE}.
+#' @param exclude_zero_residency Logical. Exclude expanded states with zero
+#'   residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+#'   FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.
 #'
 #' @return A data frame with columns depending on format:
 #'   \itemize{
@@ -69,7 +76,9 @@ get_transitions <- function(results,
                             to_states = NULL,
                             cycles = NULL,
                             time_unit = c("cycle", "day", "week", "month", "year"),
-                            use_display_names = TRUE) {
+                            use_display_names = TRUE,
+                            state_times = NULL,
+                            exclude_zero_residency = NULL) {
 
   format <- match.arg(format)
   time_unit <- match.arg(time_unit)
@@ -117,8 +126,55 @@ get_transitions <- function(results,
     stop("No data remaining after filtering")
   }
 
+  # Resolve defaults for state filtering
+  if (is.null(exclude_zero_residency)) {
+    exclude_zero_residency <- !collapsed
+  }
+
+  # Warn on misuse
+  internal_state_filter <- NULL
+  if (!collapsed) {
+    if (!is.null(state_times)) {
+      # Gather all expanded state names from transitions
+      all_expanded <- character(0)
+      for (i in seq_len(nrow(source_data))) {
+        trans <- source_data$trace_and_values[[i]]$transitions
+        if (!is.null(trans) && nrow(trans) > 0) {
+          all_expanded <- union(all_expanded, union(trans$from_expanded, trans$to_expanded))
+        }
+      }
+      internal_state_filter <- filter_states_by_time(all_expanded, state_times)
+    }
+
+    if (exclude_zero_residency) {
+      if (is.null(cycles)) {
+        warning("exclude_zero_residency requires 'cycles' to be specified; skipping")
+      } else {
+        # Gather all expanded state names if not already done
+        if (is.null(internal_state_filter)) {
+          all_expanded <- character(0)
+          for (i in seq_len(nrow(source_data))) {
+            trans <- source_data$trace_and_values[[i]]$transitions
+            if (!is.null(trans) && nrow(trans) > 0) {
+              all_expanded <- union(all_expanded, union(trans$from_expanded, trans$to_expanded))
+            }
+          }
+          internal_state_filter <- all_expanded
+        }
+        internal_state_filter <- filter_states_by_residency(
+          internal_state_filter, source_data, cycles
+        )
+      }
+    }
+  } else {
+    if (!is.null(state_times)) {
+      warning("state_times is ignored when collapsed=TRUE")
+    }
+  }
+
   # Extract transition data in long format
-  result <- extract_transitions_long(source_data, collapsed, results$metadata, name_field)
+  result <- extract_transitions_long(source_data, collapsed, results$metadata, name_field,
+                                     internal_state_filter = internal_state_filter)
 
   # Filter by from_states
   if (!is.null(from_states)) {
@@ -164,9 +220,12 @@ get_transitions <- function(results,
 #' @param collapsed Logical. Use collapsed or expanded state names.
 #' @param metadata Model metadata
 #' @param name_field Which name field to use
+#' @param internal_state_filter Optional character vector of expanded state names
+#'   to keep. Applied before display name mapping.
 #' @return Data frame in long format
 #' @keywords internal
-extract_transitions_long <- function(source_data, collapsed, metadata, name_field) {
+extract_transitions_long <- function(source_data, collapsed, metadata, name_field,
+                                     internal_state_filter = NULL) {
   dfs <- lapply(seq_len(nrow(source_data)), function(i) {
     tv <- source_data$trace_and_values[[i]]
 
@@ -199,6 +258,12 @@ extract_transitions_long <- function(source_data, collapsed, metadata, name_fiel
     # When using collapsed names, aggregate expanded tunnel transitions
     if (collapsed) {
       df <- df[!duplicated(df[, c("strategy", "group", "cycle", "from_state", "to_state")]), ]
+    }
+
+    # Apply state filter on internal (expanded) names before display mapping
+    if (!is.null(internal_state_filter)) {
+      df <- df[df$from_state %in% internal_state_filter &
+               df$to_state %in% internal_state_filter, ]
     }
 
     df
@@ -314,4 +379,91 @@ sort_expanded_states <- function(expanded_names, base_order) {
 
   order_idx <- order(base_positions, tunnel_idx)
   expanded_names[order_idx]
+}
+
+
+#' Filter State Names by Tunnel Index
+#'
+#' Keeps non-tunnel states unconditionally and tunnel states whose index
+#' is in \code{state_times}. \code{Inf} maps to the maximum tunnel index
+#' for each base state.
+#'
+#' @param state_names Character vector of expanded state names
+#' @param state_times Numeric vector of tunnel indices to keep (use \code{Inf}
+#'   for the last tunnel state of each base state)
+#' @return Filtered character vector
+#' @keywords internal
+filter_states_by_time <- function(state_names, state_times) {
+  pattern <- "^(.+)\\.(\\d+)$"
+  has_suffix <- grepl(pattern, state_names)
+
+  # Non-tunnel states always pass
+  keep <- !has_suffix
+
+  if (any(has_suffix)) {
+    base_names <- sub(pattern, "\\1", state_names[has_suffix])
+    indices <- as.integer(sub(pattern, "\\2", state_names[has_suffix]))
+
+    # Compute max tunnel index per base state
+    max_indices <- tapply(indices, base_names, max)
+
+    # Resolve Inf -> per-base-state max
+    finite_times <- state_times[is.finite(state_times)]
+    has_inf <- any(is.infinite(state_times) & state_times > 0)
+
+    tunnel_keep <- indices %in% finite_times
+    if (has_inf) {
+      tunnel_keep <- tunnel_keep | (indices == max_indices[base_names])
+    }
+
+    keep[has_suffix] <- tunnel_keep
+  }
+
+  state_names[keep]
+}
+
+
+#' Filter States by Residency in Trace
+#'
+#' Removes expanded states that have zero occupancy at the specified cycles.
+#' Non-tunnel states always pass. A state passes if it has non-zero residency
+#' in any of the relevant trace rows in any segment.
+#'
+#' @param state_names Character vector of expanded state names to filter
+#' @param source_data Data frame of segments (with \code{expanded_trace} column)
+#' @param cycles Integer vector of cycles to check
+#' @return Filtered character vector
+#' @keywords internal
+filter_states_by_residency <- function(state_names, source_data, cycles) {
+  pattern <- "^(.+)\\.(\\d+)$"
+  has_suffix <- grepl(pattern, state_names)
+
+  # Non-tunnel states always pass
+  tunnel_names <- state_names[has_suffix]
+  if (length(tunnel_names) == 0) return(state_names)
+
+  # Check trace rows at cycle boundaries (start and end of each cycle)
+  # Trace row index = cycle (0-indexed trace: row 1 = cycle 0 start)
+  trace_rows <- unique(c(cycles, cycles + 1))
+  trace_rows <- trace_rows[trace_rows >= 1]
+
+  occupied <- character(0)
+
+  for (i in seq_len(nrow(source_data))) {
+    trace <- source_data$expanded_trace[[i]]
+    if (is.null(trace)) next
+
+    # Clamp to available rows
+    valid_rows <- trace_rows[trace_rows <= nrow(trace)]
+    if (length(valid_rows) == 0) next
+
+    subset <- trace[valid_rows, , drop = FALSE]
+    # Find columns with any non-zero value
+    nonzero_cols <- colnames(subset)[colSums(abs(subset), na.rm = TRUE) > 0]
+    occupied <- union(occupied, nonzero_cols)
+  }
+
+  # Keep non-tunnel states + tunnel states that are occupied
+  keep <- !has_suffix | (state_names %in% occupied)
+  state_names[keep]
 }

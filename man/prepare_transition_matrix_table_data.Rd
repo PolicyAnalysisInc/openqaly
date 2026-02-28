@@ -9,8 +9,11 @@ prepare_transition_matrix_table_data(
   cycle = 1,
   strategies = NULL,
   groups = "overall",
+  collapsed = TRUE,
   decimals = 4,
-  font_size = 11
+  font_size = 11,
+  state_times = NULL,
+  exclude_zero_residency = NULL
 )
 }
 \arguments{

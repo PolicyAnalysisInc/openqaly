@@ -488,6 +488,9 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #'   Defaults to "total_qalys" from model metadata if available.
 #' @param vbp_cost_summary Cost summary name for VBP analysis.
 #'   Defaults to "total_cost" from model metadata if available.
+#' @param progress Optional progress callback function. Called with
+#'   \code{progress(total = N)} to declare total units, then
+#'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes run_id dimension).
 #'   When VBP is enabled, also includes dsa_vbp_equations tibble with VBP equations
@@ -552,6 +555,7 @@ run_dsa <- function(model,
                     vbp_intervention = NULL,
                     vbp_outcome_summary = NULL,
                     vbp_cost_summary = NULL,
+                    progress = NULL,
                     ...) {
   # Finalize builders (convert to openqaly model)
   if ("oq_model_builder" %in% class(model)) {
@@ -631,12 +635,23 @@ run_dsa <- function(model,
   run_ids <- unique(all_segments$run_id)
 
   # Run all segments in parallel with progress bar
-  results <- all_segments %>%
+  segment_list <- all_segments %>%
     rowwise() %>%
-    group_split() %>%
-    future_map(function(segment) run_segment(segment, parsed_model, ...),
-               .progress = TRUE, .options = furrr_options(seed = 1)) %>%
-    bind_rows()
+    group_split()
+
+  # Declare progress total and fire pre-segment checkpoints
+  if (!is.null(progress)) {
+    progress(total = get_progress_total(length(segment_list)))
+    progress(amount = 1L)  # parsed & validated
+    progress(amount = 1L)  # segments prepared
+  }
+
+  results <- future_map(
+    segment_list,
+    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    .progress = is.null(progress),
+    .options = furrr_options(seed = 1)
+  ) %>% bind_rows()
 
   # Generate metadata for DSA runs (for analysis functions and plots)
   # Use only base DSA segments (before VBP expansion) for metadata
@@ -650,6 +665,7 @@ run_dsa <- function(model,
 
   # Aggregate by run_id + strategy (and vbp_price_level if present)
   aggregated <- aggregate_segments(results, parsed_model)
+  if (!is.null(progress)) progress(amount = 1L)  # aggregation complete
 
   # Return results
   res <- list()
@@ -670,6 +686,7 @@ run_dsa <- function(model,
     res$vbp_spec <- vbp_spec
   }
 
+  if (!is.null(progress)) progress(amount = 1L)  # complete
   return(res)
 }
 

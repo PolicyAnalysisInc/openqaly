@@ -126,7 +126,8 @@ define_model <- function(type = "markov") {
     twsa_analyses = list(),
     override_categories = list(),
     threshold_analyses = list(),
-    vbp = NULL
+    vbp = NULL,
+    psa = NULL
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -236,6 +237,43 @@ set_vbp <- function(model, price_variable, intervention_strategy,
     intervention_strategy = intervention_strategy,
     outcome_summary = outcome_summary,
     cost_summary = cost_summary
+  )
+
+  model
+}
+
+#' Set PSA Configuration
+#'
+#' Configure probabilistic sensitivity analysis (PSA) parameters on the model
+#' so they can be serialized and used as defaults by \code{run_psa()}.
+#'
+#' @param model An oq_model_builder object
+#' @param n_sim Number of PSA simulations to run (positive integer)
+#' @param seed Random seed for reproducibility (NULL or single numeric value)
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_psa(n_sim = 1000, seed = 42)
+set_psa <- function(model, n_sim, seed = NULL) {
+  # Validate n_sim
+  if (!is.numeric(n_sim) || length(n_sim) != 1 || is.na(n_sim) ||
+      n_sim < 1 || n_sim != as.integer(n_sim)) {
+    stop("n_sim must be a positive integer", call. = FALSE)
+  }
+
+  # Validate seed
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1 || is.na(seed)) {
+      stop("seed must be NULL or a single numeric value", call. = FALSE)
+    }
+  }
+
+  model$psa <- list(
+    n_sim = as.integer(n_sim),
+    seed = seed
   )
 
   model
@@ -498,6 +536,15 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
       stop("Custom PSM models do not support transitional values (both state and destination). ",
            "Use residency values (state only) or model-level values (no state/destination).")
     }
+  }
+
+  # Transitional values require both state and destination
+  has_state_for_tv <- !is.na(state) && as.character(state) != "NA" && as.character(state) != ""
+  has_dest_for_tv <- !is.na(destination) && as.character(destination) != "NA" && as.character(destination) != ""
+  if (has_dest_for_tv && !has_state_for_tv) {
+    stop("Transitional values must specify both 'state' and 'destination'. ",
+         "Value '", name, "' has destination '", destination, "' but no state.",
+         call. = FALSE)
   }
 
   # Capture the formula expression using NSE

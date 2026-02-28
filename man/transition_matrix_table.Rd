@@ -9,9 +9,12 @@ transition_matrix_table(
   cycle = 1,
   strategies = NULL,
   groups = "overall",
+  collapsed = TRUE,
   decimals = 4,
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  state_times = NULL,
+  exclude_zero_residency = NULL
 )
 }
 \arguments{
@@ -23,11 +26,23 @@ transition_matrix_table(
 
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
+\item{collapsed}{Logical. If TRUE (default), use collapsed state names.
+If FALSE, use expanded state names (tunnel states).}
+
 \item{decimals}{Number of decimal places for probabilities (default: 4)}
 
 \item{font_size}{Font size for the table (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
+
+\item{state_times}{Numeric vector of tunnel state indices to include when
+\code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+base state. Non-tunnel states are always included. Ignored when
+\code{collapsed=TRUE}.}
+
+\item{exclude_zero_residency}{Logical. Exclude expanded states with zero
+residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.}
 }
 \value{
 A table object (flextable or kable depending on table_format)

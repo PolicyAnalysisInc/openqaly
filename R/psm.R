@@ -45,6 +45,7 @@ run_segment.psm <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
@@ -82,8 +83,11 @@ run_segment.psm <- function(segment, model, env, ...) {
     )
   }
 
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a namespace which will contain evaluated variables
-  ns <- create_namespace(model, segment)
+  # Include cycle 0 for survival probability calculation at t=0
+  ns <- create_namespace(model, segment, include_cycle_zero = TRUE)
 
   # Apply parameter overrides if present (PSA, DSA, or VBP mode)
   override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
@@ -92,14 +96,16 @@ run_segment.psm <- function(segment, model, env, ...) {
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # PSM doesn't use initial state probabilities (determined by survival functions)
   # Set to NULL for PSM
   eval_states <- NULL
-  
+
   # For PSM, parse and evaluate survival distributions from transitions
   survival_distributions <- parse_and_eval_psm_transitions(model$transitions, segment, eval_vars)
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate PSM trace and values
   calculated_trace_and_values <- calculate_psm_trace_and_values(
     survival_distributions,
@@ -110,6 +116,7 @@ run_segment.psm <- function(segment, model, env, ...) {
     model$settings$n_cycles,
     model$settings$half_cycle_method
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
@@ -136,6 +143,7 @@ run_segment.psm <- function(segment, model, env, ...) {
     discount_factors_outcomes,
     type_mapping
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Create the object to return
   # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
@@ -191,6 +199,7 @@ run_segment.psm <- function(segment, model, env, ...) {
   segment$collapsed_trace <- list(trace_with_time)
   # PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
   segment$expanded_trace <- list(trace_with_time)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate summaries for both discounted and undiscounted values
   if (!is.null(parsed_summaries)) {
@@ -209,15 +218,17 @@ run_segment.psm <- function(segment, model, env, ...) {
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate segment weight
   segment$weight <- calculate_segment_weight(segment, model, eval_vars)
-  
+
   # Reorder columns to have strategy, group, weight first
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   segment
 }
 
@@ -373,10 +384,17 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   pfs_time_unit <- attr(pfs_dist, "time_unit")
   os_time_unit <- attr(os_dist, "time_unit")
   
-  # Convert cycle times to appropriate units
-  # Use the namespace to access time conversion variables
-  pfs_times <- convert_cycles_to_time_unit(cycle_times, pfs_time_unit, namespace)
-  os_times <- convert_cycles_to_time_unit(cycle_times, os_time_unit, namespace)
+  # Map time_unit to the pre-computed column in namespace$df
+  time_col <- function(unit) {
+    switch(tolower(unit),
+      "days" = "day", "weeks" = "week",
+      "months" = "month", "years" = "year", NULL
+    )
+  }
+  pfs_col <- if (!is.null(pfs_time_unit)) time_col(pfs_time_unit) else NULL
+  os_col  <- if (!is.null(os_time_unit))  time_col(os_time_unit)  else NULL
+  pfs_times <- if (!is.null(pfs_col)) namespace$df[[pfs_col]] else cycle_times
+  os_times  <- if (!is.null(os_col))  namespace$df[[os_col]]  else cycle_times
   
   # Get survival probabilities
   pfs_surv <- surv_prob(pfs_dist, pfs_times)
@@ -428,10 +446,11 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   trans_pfs_to_pp <- c(0, diff(-prob_pfs))  # Decrease in PFS
   trans_pp_to_dead <- c(0, diff(prob_dead))  # Increase in dead
   
-  # Calculate values
+  # Values are for cycles 1:n_cycles, so prune cycle 0 from namespace
+  values_ns <- prune_namespace_cycle_zero(namespace)
   values_matrix <- calculate_psm_values(
     uneval_values,
-    namespace,
+    values_ns,
     trace,
     trans_pfs_to_pp,
     trans_pp_to_dead,
@@ -442,53 +461,6 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   )
   
   list(trace = trace, values = values_matrix)
-}
-
-#' Convert Cycles to Time Unit
-#'
-#' Converts cycle numbers to the appropriate time unit for survival distributions.
-#'
-#' @param cycles Vector of cycle numbers
-#' @param time_unit The target time unit (days/weeks/months/years)
-#' @param namespace The namespace containing time variables
-#'
-#' @return Vector of times in the specified unit
-#' @keywords internal
-convert_cycles_to_time_unit <- function(cycles, time_unit, namespace) {
-
-  if (is.null(time_unit)) {
-    warning(
-      "No time unit specified for survival distribution. Assuming cycles."
-    )
-    return(cycles)
-  }
-
-  time_unit <- tolower(time_unit)
-
-  col_name <- switch(time_unit,
-    "days" = "day",
-    "weeks" = "week",
-    "months" = "month",
-    "years" = "year",
-    NULL
-  )
-
-  if (is.null(col_name)) {
-    return(cycles)
-  }
-
-  # Vectorized lookup from namespace$df
-  if (nrow(namespace$df) > 0 &&
-      col_name %in% colnames(namespace$df)) {
-    idx <- match(cycles, namespace$df$cycle)
-    if (!anyNA(idx)) {
-      return(namespace$df[[col_name]][idx])
-    }
-  }
-
-  # Fallback: compute from cycle_length_* variables
-  cl_key <- paste0("cycle_length_", time_unit)
-  cycles * as.numeric(namespace[cl_key])
 }
 
 calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles, half_cycle_method = "start") {

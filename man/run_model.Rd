@@ -4,10 +4,14 @@
 \alias{run_model}
 \title{Run a Model}
 \usage{
-run_model(model, ...)
+run_model(model, progress = NULL, ...)
 }
 \arguments{
 \item{model}{An openqaly model object.}
+
+\item{progress}{Optional progress callback function. Called with
+\code{progress(total = N)} to declare total units, then
+\code{progress(amount = K)} for each completed unit.}
 
 \item{...}{additional arguments.}
 }

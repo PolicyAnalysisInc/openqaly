@@ -16,18 +16,23 @@ prepare_transition_matrix_table_data <- function(results,
                                                   cycle = 1,
                                                   strategies = NULL,
                                                   groups = "overall",
+                                                  collapsed = TRUE,
                                                   decimals = 4,
-                                                  font_size = 11) {
+                                                  font_size = 11,
+                                                  state_times = NULL,
+                                                  exclude_zero_residency = NULL) {
 
   # Get long format transition data
   trans_long <- get_transitions(
     results,
     format = "long",
-    collapsed = TRUE,
+    collapsed = collapsed,
     strategies = strategies,
     groups = groups,
     cycles = cycle,
-    use_display_names = TRUE
+    use_display_names = TRUE,
+    state_times = state_times,
+    exclude_zero_residency = exclude_zero_residency
   )
 
   # Get unique strategies, groups, and states
@@ -44,8 +49,13 @@ prepare_transition_matrix_table_data <- function(results,
   # Preserve state order from metadata
   if (!is.null(results$metadata) && !is.null(results$metadata$states)) {
     state_levels <- results$metadata$states$display_name
-    from_states_display <- state_levels[state_levels %in% from_states_display]
-    to_states_display <- state_levels[state_levels %in% to_states_display]
+    if (collapsed) {
+      from_states_display <- state_levels[state_levels %in% from_states_display]
+      to_states_display <- state_levels[state_levels %in% to_states_display]
+    } else {
+      from_states_display <- sort_expanded_states(from_states_display, state_levels)
+      to_states_display <- sort_expanded_states(to_states_display, state_levels)
+    }
   }
 
   n_to_states <- length(to_states_display)
@@ -303,9 +313,18 @@ prepare_transition_matrix_table_data <- function(results,
 #' @param cycle Integer. Which cycle's transition matrix to display (default: 1).
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param collapsed Logical. If TRUE (default), use collapsed state names.
+#'   If FALSE, use expanded state names (tunnel states).
 #' @param decimals Number of decimal places for probabilities (default: 4)
 #' @param font_size Font size for the table (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param state_times Numeric vector of tunnel state indices to include when
+#'   \code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+#'   base state. Non-tunnel states are always included. Ignored when
+#'   \code{collapsed=TRUE}.
+#' @param exclude_zero_residency Logical. Exclude expanded states with zero
+#'   residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+#'   FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -326,9 +345,12 @@ transition_matrix_table <- function(results,
                                     cycle = 1,
                                     strategies = NULL,
                                     groups = "overall",
+                                    collapsed = TRUE,
                                     decimals = 4,
                                     font_size = 11,
-                                    table_format = c("flextable", "kable")) {
+                                    table_format = c("flextable", "kable"),
+                                    state_times = NULL,
+                                    exclude_zero_residency = NULL) {
 
   table_format <- match.arg(table_format)
 
@@ -337,8 +359,11 @@ transition_matrix_table <- function(results,
     cycle = cycle,
     strategies = strategies,
     groups = groups,
+    collapsed = collapsed,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    state_times = state_times,
+    exclude_zero_residency = exclude_zero_residency
   )
 
   render_table(prepared, format = table_format)

@@ -4,14 +4,20 @@
 \alias{run_psa}
 \title{Run Probabilistic Sensitivity Analysis}
 \usage{
-run_psa(model, n_sim, seed = NULL, ...)
+run_psa(model, n_sim = NULL, seed = NULL, progress = NULL, ...)
 }
 \arguments{
 \item{model}{A oq_model object with sampling specifications}
 
-\item{n_sim}{Number of PSA simulations to run}
+\item{n_sim}{Number of PSA simulations to run. If NULL, falls back to
+the value stored in \code{model$psa$n_sim} (set via \code{\link{set_psa}}).}
 
-\item{seed}{Random seed for reproducibility}
+\item{seed}{Random seed for reproducibility. If NULL, falls back to
+the value stored in \code{model$psa$seed} (set via \code{\link{set_psa}}).}
+
+\item{progress}{Optional progress callback function. Called with
+\code{progress(total = N)} to declare total units, then
+\code{progress(amount = K)} for each completed unit.}
 
 \item{...}{Additional arguments passed to run_segment}
 }

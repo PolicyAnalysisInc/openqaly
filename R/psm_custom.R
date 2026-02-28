@@ -90,6 +90,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
@@ -127,6 +128,8 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     )
   }
 
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a namespace which will contain evaluated variables
   # For PSM Custom, include cycle 0 for trace calculation (state probabilities at t=0)
   ns <- create_namespace(model, segment, include_cycle_zero = TRUE)
@@ -138,12 +141,14 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Custom PSM doesn't use initial state probabilities (determined by formulas at cycle 0)
   eval_states <- NULL
 
   # Parse state probability formulas from transitions
   state_prob_formulas <- parse_state_probability_formulas(model$transitions, unique(model$states$name))
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate Custom PSM trace and values
   calculated_trace_and_values <- calculate_psm_custom_trace_and_values(
@@ -155,6 +160,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     model$settings$n_cycles,
     model$settings$half_cycle_method
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
@@ -181,6 +187,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     discount_factors_outcomes,
     type_mapping
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Create the object to return
   # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
@@ -236,6 +243,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   segment$collapsed_trace <- list(trace_with_time)
   # PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
   segment$expanded_trace <- list(trace_with_time)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate summaries for both discounted and undiscounted values
   if (!is.null(parsed_summaries)) {
@@ -254,6 +262,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate segment weight
   segment$weight <- calculate_segment_weight(segment, model, eval_vars)
@@ -262,6 +271,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   segment
 }

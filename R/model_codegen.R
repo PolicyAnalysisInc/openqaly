@@ -165,6 +165,14 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add PSA configuration (if any)
+  if (!is.null(model$psa)) {
+    psa_code <- generate_psa_code(model$psa)
+    if (length(psa_code) > 0) {
+      code <- c(code, "", psa_code)
+    }
+  }
+
   # Write to file if specified
   if (!is.null(file)) {
     writeLines(code, file)
@@ -980,6 +988,24 @@ generate_vbp_code <- function(vbp) {
     glue('  intervention_strategy = "{vbp$intervention_strategy}",'),
     glue('  outcome_summary = "{vbp$outcome_summary}",'),
     glue('  cost_summary = "{vbp$cost_summary}"'),
+    ")"
+  )
+}
+
+#' Generate PSA Code
+#' @keywords internal
+generate_psa_code <- function(psa) {
+  if (is.null(psa)) return(character(0))
+
+  args <- glue('  n_sim = {psa$n_sim}')
+  if (!is.null(psa$seed)) {
+    args <- c(paste0(args, ","), glue('  seed = {psa$seed}'))
+  }
+
+  c(
+    "# Set PSA configuration",
+    "model <- set_psa(model,",
+    args,
     ")"
   )
 }

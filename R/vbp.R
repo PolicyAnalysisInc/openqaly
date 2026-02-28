@@ -24,6 +24,9 @@ NULL
 #' @param intervention_strategy Name of the intervention strategy
 #' @param outcome_summary Name of the outcome summary to use (default: "total_qalys")
 #' @param cost_summary Name of the cost summary to use (default: "total_cost")
+#' @param progress Optional progress callback function. Called with
+#'   \code{progress(total = N)} to declare total units, then
+#'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
 #'
 #' @return A list containing:
@@ -72,6 +75,7 @@ run_vbp <- function(model,
                    intervention_strategy = NULL,
                    outcome_summary = NULL,
                    cost_summary = NULL,
+                   progress = NULL,
                    ...) {
 
   # Fixed test prices for linearity analysis
@@ -119,15 +123,27 @@ run_vbp <- function(model,
   vbp_segments <- build_vbp_segments(parsed_model, vbp_spec)
 
   # Run all segments in parallel
-  segment_results <- vbp_segments %>%
+  segment_list <- vbp_segments %>%
     rowwise() %>%
-    group_split() %>%
-    future_map(function(segment) run_segment(segment, parsed_model, ...),
-               .progress = TRUE, .options = furrr_options(seed = 1)) %>%
-    bind_rows()
+    group_split()
+
+  # Declare progress total and fire pre-segment checkpoints
+  if (!is.null(progress)) {
+    progress(total = get_progress_total(length(segment_list)))
+    progress(amount = 1L)  # parsed & validated
+    progress(amount = 1L)  # segments prepared
+  }
+
+  segment_results <- future_map(
+    segment_list,
+    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    .progress = is.null(progress),
+    .options = furrr_options(seed = 1)
+  ) %>% bind_rows()
 
   # Aggregate by price_level + strategy
   aggregated <- aggregate_segments(segment_results, parsed_model)
+  if (!is.null(progress)) progress(amount = 1L)  # aggregation complete
 
   # Attach metadata for display name mapping in tables/plots
   attr(aggregated, "metadata") <- parsed_model$metadata
@@ -139,6 +155,8 @@ run_vbp <- function(model,
     vbp_spec,
     parsed_model
   )
+
+  if (!is.null(progress)) progress(amount = 1L)  # complete
 
   # Return results
   list(

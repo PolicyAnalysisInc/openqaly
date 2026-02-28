@@ -92,6 +92,18 @@ check_values_df <- function(x) {
     })
   }
 
+  # Transitional values require both state and destination
+  has_dest <- !is.na(x$destination) & x$destination != "NA" & x$destination != ""
+  has_state <- !is.na(x$state) & x$state != "NA" & x$state != ""
+  invalid_tv <- has_dest & !has_state
+  if (any(invalid_tv)) {
+    bad_rows <- x[invalid_tv, , drop = FALSE]
+    bad_names <- paste(unique(bad_rows$name), collapse = ", ")
+    stop("Transitional values must specify both 'state' and 'destination'. ",
+         "The following values have a destination but no state: ", bad_names,
+         call. = FALSE)
+  }
+
   # Validate "All" / "All Other" rules
   validate_all_other_rules(x)
 }

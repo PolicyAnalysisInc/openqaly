@@ -502,7 +502,9 @@ create_comprehensive_model <- function() {
       intervention_strategy = "treatment",
       outcome_summary = "total_qalys",
       cost_summary = "total_costs"
-    )
+    ) |>
+    # PSA configuration
+    set_psa(n_sim = 500, seed = 12345)
 }
 
 #' Verify all model components match between two models with full field-level verification
@@ -725,6 +727,18 @@ expect_models_equivalent <- function(original, restored, label = "") {
                  label = paste0(prefix, "vbp$cost_summary"))
   } else {
     expect_null(restored$vbp, label = paste0(prefix, "vbp NULL"))
+  }
+
+  # === PSA CONFIGURATION ===
+  if (!is.null(original$psa)) {
+    expect_false(is.null(restored$psa),
+                 label = paste0(prefix, "psa not NULL"))
+    expect_equal(restored$psa$n_sim, original$psa$n_sim,
+                 label = paste0(prefix, "psa$n_sim"))
+    expect_equal(restored$psa$seed, original$psa$seed,
+                 label = paste0(prefix, "psa$seed"))
+  } else {
+    expect_null(restored$psa, label = paste0(prefix, "psa NULL"))
   }
 }
 
@@ -1399,6 +1413,158 @@ test_that("model without VBP has NULL vbp field", {
   write_model_yaml(model, yaml_path)
   model_back <- read_model_yaml(yaml_path)
   expect_null(model_back$vbp)
+
+  unlink(yaml_path)
+})
+
+# ==============================================================================
+# PSA Configuration Round-Trip Tests
+# ==============================================================================
+
+#' Create test model with PSA configuration
+create_model_with_psa <- function(seed = 42) {
+  model <- create_test_model() |>
+    set_psa(n_sim = 500, seed = seed)
+  model
+}
+
+test_that("PSA config survives JSON round-trip", {
+  model <- create_model_with_psa()
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+})
+
+test_that("PSA config without seed survives JSON round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 100)
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 100L)
+  expect_null(model_back$psa$seed)
+})
+
+test_that("PSA config survives YAML round-trip", {
+  model <- create_model_with_psa()
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(yaml_path)
+})
+
+test_that("PSA config without seed survives YAML round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 200)
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 200L)
+  expect_null(model_back$psa$seed)
+
+  unlink(yaml_path)
+})
+
+test_that("PSA config survives R code round-trip", {
+  model <- create_model_with_psa()
+
+  r_path <- tempfile(fileext = ".R")
+  write_model(model, r_path, format = "r")
+
+  env <- new.env()
+  source(r_path, local = env)
+  model_names <- ls(env)[sapply(ls(env), function(x) inherits(env[[x]], "oq_model"))]
+  model_back <- env[[model_names[1]]]
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(r_path)
+})
+
+test_that("PSA config without seed survives R code round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 300)
+
+  r_path <- tempfile(fileext = ".R")
+  write_model(model, r_path, format = "r")
+
+  env <- new.env()
+  source(r_path, local = env)
+  model_names <- ls(env)[sapply(ls(env), function(x) inherits(env[[x]], "oq_model"))]
+  model_back <- env[[model_names[1]]]
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 300L)
+  expect_null(model_back$psa$seed)
+
+  unlink(r_path)
+})
+
+test_that("PSA config survives Excel round-trip", {
+  skip_on_cran()
+
+  model <- create_model_with_psa()
+
+  excel_dir <- tempfile()
+  dir.create(excel_dir)
+  write_model(model, excel_dir, format = "excel")
+  model_back <- read_model(excel_dir)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(excel_dir, recursive = TRUE)
+})
+
+test_that("PSA config without seed survives Excel round-trip", {
+  skip_on_cran()
+
+  model <- create_test_model() |>
+    set_psa(n_sim = 150)
+
+  excel_dir <- tempfile()
+  dir.create(excel_dir)
+  write_model(model, excel_dir, format = "excel")
+  model_back <- read_model(excel_dir)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 150L)
+  expect_null(model_back$psa$seed)
+
+  unlink(excel_dir, recursive = TRUE)
+})
+
+test_that("model without PSA has NULL psa field", {
+  model <- create_test_model()
+
+  # JSON
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+  expect_null(model_back$psa)
+
+  # YAML
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+  expect_null(model_back$psa)
 
   unlink(yaml_path)
 })

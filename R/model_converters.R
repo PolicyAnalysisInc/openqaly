@@ -358,6 +358,15 @@ write_model_excel <- function(model, path) {
     ))
   }
 
+  # Add PSA configuration sheet
+  if (!is.null(model$psa)) {
+    psa_df <- data.frame(n_sim = model$psa$n_sim, stringsAsFactors = FALSE)
+    if (!is.null(model$psa$seed)) {
+      psa_df$seed <- model$psa$seed
+    }
+    wb_list$psa <- tibble::as_tibble(psa_df)
+  }
+
   # Add override categories sheets
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     categories_df <- tibble(category_name = character(), general = logical())
@@ -762,6 +771,16 @@ read_model_yaml <- function(path) {
     model$vbp <- NULL
   }
 
+  # Read PSA configuration
+  if (!is.null(yaml_data$psa)) {
+    model$psa <- list(
+      n_sim = as.integer(yaml_data$psa$n_sim),
+      seed = yaml_data$psa$seed
+    )
+  } else {
+    model$psa <- NULL
+  }
+
   # Read override categories
   if (!is.null(yaml_data$override_categories)) {
     model$override_categories <- parse_yaml_override_categories(yaml_data$override_categories)
@@ -1139,6 +1158,11 @@ write_model_yaml <- function(model, path) {
   # VBP configuration
   if (!is.null(model$vbp)) {
     yaml_data$vbp <- model$vbp
+  }
+
+  # PSA configuration
+  if (!is.null(model$psa)) {
+    yaml_data$psa <- model$psa
   }
 
   # Override categories

@@ -192,6 +192,19 @@ read_model <- function(path) {
     model$vbp <- NULL
   }
 
+  # Read PSA configuration sheet
+  if ("psa" %in% names(model) && is.data.frame(model$psa) && nrow(model$psa) > 0) {
+    psa_row <- as.list(model$psa[1, ])
+    model$psa <- list(n_sim = as.integer(psa_row$n_sim))
+    if (!is.null(psa_row$seed) && !is.na(psa_row$seed)) {
+      model$psa$seed <- psa_row$seed
+    } else {
+      model$psa$seed <- NULL
+    }
+  } else {
+    model$psa <- NULL
+  }
+
   # Read override categories sheets
   if ("override_categories" %in% names(model)) {
     cats_df <- model$override_categories
@@ -1297,6 +1310,11 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     model$vbp <- NULL
   }
 
+  # Ensure psa is valid if present
+  if (!is.null(model$psa) && !is.list(model$psa)) {
+    model$psa <- NULL
+  }
+
   # Ensure override_categories exists and is valid
   if (is.null(model$override_categories)) {
     model$override_categories <- list()
@@ -1478,7 +1496,7 @@ read_model_json <- function(json_string) {
         high = deserialize_to_formula(p$high, param_type),
         strategy = p$strategy %||% "",
         group = p$group %||% "",
-        display_name = p$display_name
+        display_name = if (!is.null(p$display_name) && !is.na(p$display_name) && p$display_name != "") p$display_name else NULL
       )
     }
     model$dsa_parameters <- dsa_list
@@ -1505,12 +1523,19 @@ read_model_json <- function(json_string) {
       # Handle variable_overrides which may be nested
       var_overrides <- list()
       if (!is.null(s$variable_overrides) && length(s$variable_overrides) > 0) {
-        override_items <- if (is.data.frame(s$variable_overrides)) {
-          lapply(seq_len(nrow(s$variable_overrides)), function(j) {
-            as.list(s$variable_overrides[j, ])
+        # Unwrap list-wrapped data.frame (fromJSON with simplifyVector=TRUE on
+        # data.frame scenarios wraps nested arrays in a length-1 list)
+        vo <- s$variable_overrides
+        if (is.list(vo) && !is.data.frame(vo) && length(vo) == 1 && is.data.frame(vo[[1]])) {
+          vo <- vo[[1]]
+        }
+
+        override_items <- if (is.data.frame(vo)) {
+          lapply(seq_len(nrow(vo)), function(j) {
+            as.list(vo[j, ])
           })
         } else {
-          s$variable_overrides
+          vo
         }
 
         for (j in seq_along(override_items)) {
@@ -1543,19 +1568,35 @@ read_model_json <- function(json_string) {
       # Handle setting_overrides
       setting_overrides <- list()
       if (!is.null(s$setting_overrides) && length(s$setting_overrides) > 0) {
-        override_items <- if (is.data.frame(s$setting_overrides)) {
-          lapply(seq_len(nrow(s$setting_overrides)), function(j) {
-            as.list(s$setting_overrides[j, ])
+        # Unwrap list-wrapped data.frame (fromJSON with simplifyVector=TRUE on
+        # data.frame scenarios wraps nested arrays in a length-1 list)
+        so <- s$setting_overrides
+        if (is.list(so) && !is.data.frame(so) && length(so) == 1 && is.data.frame(so[[1]])) {
+          so <- so[[1]]
+        }
+
+        override_items <- if (is.data.frame(so)) {
+          lapply(seq_len(nrow(so)), function(j) {
+            as.list(so[j, ])
           })
         } else {
-          s$setting_overrides
+          so
         }
 
         for (j in seq_along(override_items)) {
           st <- override_items[[j]]
           # Skip empty entries (can occur with simplifyVector = TRUE on empty arrays)
           if (is.null(st$name) || length(st) == 0) next
-          setting_overrides[[length(setting_overrides) + 1]] <- list(name = st$name, value = st$value)
+          # Handle case where st is still a data.frame (multi-row)
+          if (is.data.frame(st)) {
+            for (k in seq_len(nrow(st))) {
+              setting_overrides[[length(setting_overrides) + 1]] <- list(
+                name = st$name[k], value = st$value[k]
+              )
+            }
+          } else {
+            setting_overrides[[length(setting_overrides) + 1]] <- list(name = st$name, value = st$value)
+          }
         }
       }
 
@@ -1624,7 +1665,7 @@ read_model_json <- function(json_string) {
             values = deserialize_to_formula(p$values, param_type),
             strategy = (p$strategy %||% "")[1],
             group = (p$group %||% "")[1],
-            display_name = if (!is.null(p$display_name)) p$display_name[1] else NULL,
+            display_name = if (!is.null(p$display_name) && !is.na(p$display_name[1]) && p$display_name[1] != "") p$display_name[1] else NULL,
             include_base_case = (p$include_base_case %||% TRUE)[1]
           )
         }
@@ -1704,6 +1745,21 @@ read_model_json <- function(json_string) {
                          "outcome_summary", "cost_summary")
     if (!all(expected_fields %in% names(model$vbp))) {
       model$vbp <- NULL
+    }
+  }
+
+  # Parse PSA configuration from JSON
+  if (!is.null(model$psa)) {
+    if (is.data.frame(model$psa)) {
+      model$psa <- as.list(model$psa[1, ])
+    }
+    if (!is.null(model$psa$n_sim)) {
+      model$psa$n_sim <- as.integer(model$psa$n_sim)
+      if (is.null(model$psa$seed) || (length(model$psa$seed) == 1 && is.na(model$psa$seed))) {
+        model$psa$seed <- NULL
+      }
+    } else {
+      model$psa <- NULL
     }
   }
 
@@ -2080,8 +2136,14 @@ deserialize_to_formula <- function(x, type) {
   if (is.null(x)) return(NULL)
   # Ensure type is scalar
   type <- type[1]
-  # Settings use literal values
-  if (type == "setting") return(x)
+  # Settings use literal values - ensure numeric conversion after JSON round-trip
+  if (type == "setting") {
+    if (is.character(x)) {
+      num <- suppressWarnings(as.numeric(x))
+      if (!is.na(num)) return(num)
+    }
+    return(x)
+  }
   # Variables: convert strings to oq_formula, keep numerics as-is
   if (is.character(x)) return(as.oq_formula(x))
   if (is.numeric(x)) return(x)
@@ -2342,6 +2404,11 @@ write_model_json <- function(model) {
   # VBP configuration
   if (!is.null(model$vbp)) {
     json_model$vbp <- model$vbp
+  }
+
+  # PSA configuration
+  if (!is.null(model$psa)) {
+    json_model$psa <- model$psa
   }
 
   # Convert override_categories to array format
@@ -2622,6 +2689,11 @@ apply_parameter_overrides <- function(segment, ns, uneval_vars) {
 
   for (var_name in names(override_vals)) {
     val <- override_vals[[var_name]]
+    # Evaluate oq_formula objects in the namespace so formula-type overrides
+    # resolve to concrete values before being assigned to the environment.
+    if (inherits(val, "oq_formula")) {
+      val <- rlang::eval_tidy(val$quo, env = ns$env)
+    }
     assign(var_name, val, envir = ns$env)
   }
 

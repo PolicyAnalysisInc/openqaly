@@ -96,6 +96,7 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
@@ -146,7 +147,8 @@ run_segment.markov <- function(segment, model, env, ...) {
     uneval_trans,
     uneval_values
   )
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
   ns <- create_namespace(model, segment)
@@ -160,8 +162,10 @@ run_segment.markov <- function(segment, model, env, ...) {
   # values, & summaries.
   eval_vars <- eval_variables(uneval_vars, ns)
   eval_states <- eval_states(uneval_states, eval_vars)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, isTRUE(model$settings$reduce_state_cycle)) #770ms
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Determine value_names safely for evaluate_values and cppMarkovTransitionsAndTrace
   value_names <- character(0)
@@ -180,9 +184,11 @@ run_segment.markov <- function(segment, model, env, ...) {
     state_names,
     isTRUE(model$settings$reduce_state_cycle)
   ) #900ms
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
 #322 ms
   expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
 #340 ms
   calculated_trace_and_values <- calculate_trace_and_values(
@@ -193,6 +199,7 @@ run_segment.markov <- function(segment, model, env, ...) {
     expanded$expanded_state_map,
     model$settings$half_cycle_method
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
@@ -286,6 +293,7 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   segment$collapsed_trace <- list(collapsed_trace_with_time)
   segment$expanded_trace <- list(expanded_trace_with_time)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate summaries: parsed_summaries is now guaranteed to be a tibble (possibly 0-row)
   # calculate_summaries should be robust to a 0-row parsed_summaries or 0-col/0-row trace values.
@@ -317,7 +325,8 @@ run_segment.markov <- function(segment, model, env, ...) {
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   segment
 }
 

@@ -215,10 +215,13 @@ validate_threshold_spec <- function(model) {
 #' the input parameter value that produces a desired output condition.
 #'
 #' @param model An oq_model_builder or oq_model object with threshold analyses defined
+#' @param progress Optional progress callback function. Called with
+#'   \code{progress(total = N)} to declare total units, then
+#'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
 #' @return A list with threshold_values tibble, root_finder_history tibble, and metadata
 #' @export
-run_threshold <- function(model, ...) {
+run_threshold <- function(model, progress = NULL, ...) {
   # Finalize builders
   if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
@@ -239,10 +242,22 @@ run_threshold <- function(model, ...) {
     stop("No active threshold analyses found", call. = FALSE)
   }
 
+  n_analyses <- length(active_analyses)
+  if (!is.null(progress)) {
+    progress(total = 10L + n_analyses * 100L)
+    progress(amount = 5L)
+  }
+
   # Run each analysis sequentially
   res_list <- list()
   for (i in seq_along(active_analyses)) {
-    res_list[[i]] <- run_single_threshold(parsed_model, active_analyses[[i]], ...)
+    res_list[[i]] <- run_single_threshold(
+      parsed_model, active_analyses[[i]], progress = progress, ...
+    )
+  }
+
+  if (!is.null(progress)) {
+    progress(amount = 5L)
   }
 
   # Aggregate results
@@ -272,9 +287,10 @@ run_threshold <- function(model, ...) {
 
 #' Run Single Threshold Analysis
 #' @keywords internal
-run_single_threshold <- function(parsed_model, analysis, ...) {
-  solver <- create_threshold_solver(parsed_model, analysis, ...)
+run_single_threshold <- function(parsed_model, analysis, progress = NULL, ...) {
+  solver <- create_threshold_solver(parsed_model, analysis, progress = progress, ...)
   threshold_value <- find_threshold_value(solver$run_iteration, analysis)
+  solver$complete_progress()
 
   list(
     name = analysis$name,
@@ -290,12 +306,15 @@ run_single_threshold <- function(parsed_model, analysis, ...) {
 #'
 #' @param parsed_model Parsed model object
 #' @param analysis Threshold analysis specification
+#' @param progress Optional progress callback function
 #' @param ... Additional arguments passed to run_segment
-#' @return A list with run_iteration() and get_history() functions
+#' @return A list with run_iteration(), get_history(), and complete_progress() functions
 #' @keywords internal
-create_threshold_solver <- function(parsed_model, analysis, ...) {
+create_threshold_solver <- function(parsed_model, analysis, progress = NULL, ...) {
   history <- list()
   iteration <- 0
+  budget <- 100L
+  cumulative <- 0L
 
   list(
     run_iteration = function(x) {
@@ -365,6 +384,15 @@ create_threshold_solver <- function(parsed_model, analysis, ...) {
         diff = diff
       )
 
+      if (!is.null(progress)) {
+        amt <- max(1L, as.integer((budget - cumulative) * 0.1))
+        amt <- min(amt, budget - cumulative)
+        if (amt > 0L) {
+          progress(amount = amt)
+          cumulative <<- cumulative + amt
+        }
+      }
+
       diff
     },
     get_history = function() {
@@ -373,6 +401,12 @@ create_threshold_solver <- function(parsed_model, analysis, ...) {
                       output = numeric(), goal = numeric(), diff = numeric()))
       }
       bind_rows(history)
+    },
+    complete_progress = function() {
+      if (!is.null(progress) && cumulative < budget) {
+        progress(amount = budget - cumulative)
+        cumulative <<- budget
+      }
     }
   )
 }

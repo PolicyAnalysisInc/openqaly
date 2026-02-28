@@ -11,6 +11,13 @@
 #'   If FALSE, use expanded state names (tunnel states).
 #' @param decimals Integer. Number of decimal places for probability labels (default: 3).
 #' @param use_display_names Logical. If TRUE (default), use display names for entities.
+#' @param state_times Numeric vector of tunnel state indices to include when
+#'   \code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+#'   base state. Non-tunnel states are always included. Ignored when
+#'   \code{collapsed=TRUE}.
+#' @param exclude_zero_residency Logical. Exclude expanded states with zero
+#'   residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+#'   FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.
 #'
 #' @return A ggplot2 object
 #'
@@ -33,7 +40,9 @@ transition_plot_heatmap <- function(res,
                                     strategies = NULL,
                                     collapsed = TRUE,
                                     decimals = 3,
-                                    use_display_names = TRUE) {
+                                    use_display_names = TRUE,
+                                    state_times = NULL,
+                                    exclude_zero_residency = NULL) {
 
   # Get transition data in long format
   trans_data <- get_transitions(
@@ -43,7 +52,9 @@ transition_plot_heatmap <- function(res,
     strategies = strategies,
     groups = groups,
     cycles = cycle,
-    use_display_names = use_display_names
+    use_display_names = use_display_names,
+    state_times = state_times,
+    exclude_zero_residency = exclude_zero_residency
   )
 
   # Get state ordering from metadata
