@@ -69,7 +69,8 @@ read_model <- function(path) {
         high = deserialize_to_formula(row$high, param_type),
         strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
         group = if (is.na(row$group) || row$group == "") "" else row$group,
-        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name
+        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name,
+        range_label = if ("range_label" %in% names(row) && !is.na(row$range_label) && row$range_label != "") row$range_label else NULL
       )
     })
     class(model$dsa_parameters) <- "dsa_parameters"
@@ -1566,7 +1567,8 @@ read_model_json <- function(json_string) {
         high = deserialize_to_formula(p$high, param_type),
         strategy = p$strategy %||% "",
         group = p$group %||% "",
-        display_name = if (!is.null(p$display_name) && !is.na(p$display_name) && p$display_name != "") p$display_name else NULL
+        display_name = if (!is.null(p$display_name) && !is.na(p$display_name) && p$display_name != "") p$display_name else NULL,
+        range_label = if (!is.null(p$range_label) && !is.na(p$range_label) && p$range_label != "") p$range_label else NULL
       )
     }
     model$dsa_parameters <- dsa_list
@@ -2404,6 +2406,7 @@ write_model_json <- function(model) {
         dsa_entry$group <- param$group %||% ""
       }
       dsa_entry$display_name <- param$display_name
+      dsa_entry$range_label <- param$range_label
       dsa_array[[i]] <- dsa_entry
     }
     json_model$dsa_parameters <- dsa_array

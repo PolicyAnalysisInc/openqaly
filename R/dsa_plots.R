@@ -661,6 +661,21 @@ prepare_dsa_tornado_data <- function(results,
     strategy_order <- unique(tornado_data$strategy)
   }
 
+  # Join range_label from dsa_metadata (BEFORE name mapping)
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      tornado_data <- tornado_data %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      tornado_data$range_label <- NA_character_
+    }
+  } else {
+    tornado_data$range_label <- NA_character_
+  }
+
   # Add parameter values to labels if requested (BEFORE name mapping)
   if (show_parameter_values) {
     # Extract parameter values from segments (using technical names)
@@ -705,36 +720,45 @@ prepare_dsa_tornado_data <- function(results,
       rowwise() %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-          {
-            # Determine unit suffix based on parameter type
-            unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-              get_setting_unit_suffix(.data$parameter, settings)
-            } else {
-              ""
-            }
+          !is.na(.data$range_label),
+          # Use custom range label
+          sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+          if_else(
+            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+            {
+              # Determine unit suffix based on parameter type
+              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                get_setting_unit_suffix(.data$parameter, settings)
+              } else {
+                ""
+              }
 
-            # Format values with unit suffix
-            if (unit_suffix != "") {
-              sprintf("%s (%s%s - %s%s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      unit_suffix,
-                      format_param_value(.data$param_high_value),
-                      unit_suffix)
-            } else {
-              sprintf("%s (%s - %s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      format_param_value(.data$param_high_value))
-            }
-          },
-          .data$parameter_display_name
+              # Format values with unit suffix
+              if (unit_suffix != "") {
+                sprintf("%s (%s%s - %s%s)",
+                        .data$parameter_display_name,
+                        format_param_value(.data$param_low_value),
+                        unit_suffix,
+                        format_param_value(.data$param_high_value),
+                        unit_suffix)
+              } else {
+                sprintf("%s (%s - %s)",
+                        .data$parameter_display_name,
+                        format_param_value(.data$param_low_value),
+                        format_param_value(.data$param_high_value))
+              }
+            },
+            .data$parameter_display_name
+          )
         )
       ) %>%
       ungroup() %>%
       select(-"param_low_value", -"param_high_value", -"param_type")
   }
+
+  # Remove range_label column after use
+  tornado_data <- tornado_data %>%
+    select(-any_of("range_label"))
 
   # Attach strategy_order as an attribute to preserve correct ordering
   if (!is.null(strategy_order)) {
@@ -771,6 +795,8 @@ prepare_dsa_tornado_data <- function(results,
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on results? (default: TRUE)
 #'   A parameter has zero impact when its range (abs(high - low)) is effectively zero.
 #'   If all parameters have zero impact, an error is thrown.
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
 #'
 #' @return A ggplot2 object
 #'
@@ -827,7 +853,8 @@ dsa_outcomes_plot <- function(results,
                               comparators = NULL,
                               discounted = TRUE,
                               show_parameter_values = TRUE,
-                              drop_zero_impact = TRUE) {
+                              drop_zero_impact = TRUE,
+                              top_n = NULL) {
 
   # Validate that strategies is mutually exclusive with interventions/comparators
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -862,6 +889,14 @@ dsa_outcomes_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on results. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    tornado_data <- tornado_data %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering
@@ -922,6 +957,8 @@ dsa_outcomes_plot <- function(results,
 #'   When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on NMB? (default: TRUE)
 #'   A parameter has zero impact when its NMB range is effectively zero.
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
 #'
 #' @return A ggplot2 object
 #'
@@ -981,7 +1018,8 @@ dsa_nmb_plot <- function(results,
                          interventions = NULL,
                          comparators = NULL,
                          show_parameter_values = TRUE,
-                         drop_zero_impact = TRUE) {
+                         drop_zero_impact = TRUE,
+                         top_n = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -1078,6 +1116,21 @@ dsa_nmb_plot <- function(results,
     ) %>%
     select("strategy", "group", "parameter", "parameter_display_name", "low", "base", "high", "range")
 
+  # Join range_label from dsa_metadata
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      nmb_tornado <- nmb_tornado %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      nmb_tornado$range_label <- NA_character_
+    }
+  } else {
+    nmb_tornado$range_label <- NA_character_
+  }
+
   # Add parameter values to labels if requested
   if (show_parameter_values) {
     param_values <- extract_parameter_values(results, nmb_tornado, interventions, comparators)
@@ -1090,36 +1143,44 @@ dsa_nmb_plot <- function(results,
       rowwise() %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-          {
-            # Determine unit suffix based on parameter type
-            unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-              get_setting_unit_suffix(.data$parameter, settings)
-            } else {
-              ""
-            }
+          !is.na(.data$range_label),
+          sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+          if_else(
+            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+            {
+              # Determine unit suffix based on parameter type
+              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                get_setting_unit_suffix(.data$parameter, settings)
+              } else {
+                ""
+              }
 
-            # Format values with unit suffix
-            if (unit_suffix != "") {
-              sprintf("%s (%s%s - %s%s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      unit_suffix,
-                      format_param_value(.data$param_high_value),
-                      unit_suffix)
-            } else {
-              sprintf("%s (%s - %s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      format_param_value(.data$param_high_value))
-            }
-          },
-          .data$parameter_display_name
+              # Format values with unit suffix
+              if (unit_suffix != "") {
+                sprintf("%s (%s%s - %s%s)",
+                        .data$parameter_display_name,
+                        format_param_value(.data$param_low_value),
+                        unit_suffix,
+                        format_param_value(.data$param_high_value),
+                        unit_suffix)
+              } else {
+                sprintf("%s (%s - %s)",
+                        .data$parameter_display_name,
+                        format_param_value(.data$param_low_value),
+                        format_param_value(.data$param_high_value))
+              }
+            },
+            .data$parameter_display_name
+          )
         )
       ) %>%
       ungroup() %>%
       select(-"param_low_value", -"param_high_value", -"param_type")
   }
+
+  # Remove range_label column after use
+  nmb_tornado <- nmb_tornado %>%
+    select(-any_of("range_label"))
 
   # Check if data is valid
   if (is.null(nmb_tornado) || nrow(nmb_tornado) == 0) {
@@ -1136,6 +1197,14 @@ dsa_nmb_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on NMB. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    nmb_tornado <- nmb_tornado %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering
@@ -1960,6 +2029,21 @@ prepare_dsa_ce_tornado_data <- function(results,
   processed_df <- bind_rows(processed_rows)
   tornado_data <- bind_cols(tornado_data, processed_df)
 
+  # Join range_label from dsa_metadata
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      tornado_data <- tornado_data %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      tornado_data$range_label <- NA_character_
+    }
+  } else {
+    tornado_data$range_label <- NA_character_
+  }
+
   # Add parameter values if requested
   if (show_parameter_values) {
     param_values <- extract_parameter_values(results, tornado_data, interventions, comparators)
@@ -1973,29 +2057,33 @@ prepare_dsa_ce_tornado_data <- function(results,
         rowwise() %>%
         mutate(
           parameter_display_name = if_else(
-            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-            {
-              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-                get_setting_unit_suffix(.data$parameter, settings)
-              } else {
-                ""
-              }
+            !is.na(.data$range_label),
+            sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+            if_else(
+              !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+              {
+                unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                  get_setting_unit_suffix(.data$parameter, settings)
+                } else {
+                  ""
+                }
 
-              if (unit_suffix != "") {
-                sprintf("%s (%s%s - %s%s)",
-                        .data$parameter_display_name,
-                        format_param_value(.data$param_low_value),
-                        unit_suffix,
-                        format_param_value(.data$param_high_value),
-                        unit_suffix)
-              } else {
-                sprintf("%s (%s - %s)",
-                        .data$parameter_display_name,
-                        format_param_value(.data$param_low_value),
-                        format_param_value(.data$param_high_value))
-              }
-            },
-            .data$parameter_display_name
+                if (unit_suffix != "") {
+                  sprintf("%s (%s%s - %s%s)",
+                          .data$parameter_display_name,
+                          format_param_value(.data$param_low_value),
+                          unit_suffix,
+                          format_param_value(.data$param_high_value),
+                          unit_suffix)
+                } else {
+                  sprintf("%s (%s - %s)",
+                          .data$parameter_display_name,
+                          format_param_value(.data$param_low_value),
+                          format_param_value(.data$param_high_value))
+                }
+              },
+              .data$parameter_display_name
+            )
           )
         ) %>%
         ungroup()
@@ -2007,6 +2095,10 @@ prepare_dsa_ce_tornado_data <- function(results,
       }
     }
   }
+
+  # Remove range_label column after use
+  tornado_data <- tornado_data %>%
+    select(-any_of("range_label"))
 
   # Create facet metadata
   # Note: base_label and footnotes will be finalized in render function after y_base ordering
@@ -2819,6 +2911,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
 #'   At least one of interventions or comparators must be specified.
 #' @param show_parameter_values Logical. Include parameter values in Y-axis labels? (default: TRUE)
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on ICER? (default: TRUE)
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
 #'
 #' @return A ggplot2 object
 #'
@@ -2873,7 +2967,8 @@ dsa_ce_plot <- function(results,
                         interventions = NULL,
                         comparators = NULL,
                         show_parameter_values = TRUE,
-                        drop_zero_impact = TRUE) {
+                        drop_zero_impact = TRUE,
+                        top_n = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -2909,6 +3004,14 @@ dsa_ce_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on ICER. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    tornado_data <- tornado_data %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$displayable_range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering

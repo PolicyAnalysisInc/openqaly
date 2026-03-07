@@ -14,7 +14,9 @@ dsa_outcomes_table(
   decimals = 2,
   discounted = TRUE,
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  top_n = NULL,
+  show_parameter_values = FALSE
 )
 }
 \arguments{
@@ -40,6 +42,11 @@ If provided, shows interventions - comparators comparisons. Mutually exclusive w
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
+
+\item{show_parameter_values}{Logical. Include input parameter values in row labels? (default: FALSE)
+When TRUE, labels show "Parameter Name (low - high)" format.}
 }
 \value{
 A table object (flextable or kable depending on table_format)

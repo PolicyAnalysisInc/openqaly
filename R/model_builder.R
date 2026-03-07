@@ -1292,6 +1292,9 @@ validate_variable_targeting <- function(model, variable, strategy, group,
 #' @param group Optional group name to limit DSA to specific group
 #' @param display_name Optional display name for plots and tables. If not provided,
 #'   inherits from the variable definition. Required to be unique across all DSA parameters.
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
 #'
 #' @return The modified model object
 #'
@@ -1337,7 +1340,8 @@ validate_variable_targeting <- function(model, variable, strategy, group,
 #' }
 add_dsa_variable <- function(model, variable, low, high,
                              strategy = "", group = "",
-                             display_name = NULL) {
+                             display_name = NULL,
+                             range_label = NULL) {
 
   # Validate variable name
   if (!is.character(variable) || length(variable) != 1) {
@@ -1397,7 +1401,8 @@ add_dsa_variable <- function(model, variable, low, high,
     high = high_formula,    # Store as oq_formula object
     strategy = as.character(strategy),
     group = as.character(group),
-    display_name = display_name
+    display_name = display_name,
+    range_label = range_label
   )
 
   # Add to model's dsa_parameters list
@@ -1419,6 +1424,9 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @param low Value for the low bound (numeric or character depending on setting)
 #' @param high Value for the high bound (numeric or character depending on setting)
 #' @param display_name Optional display name for plots and tables
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
 #'
 #' @return The modified model object
 #'
@@ -1431,7 +1439,8 @@ add_dsa_variable <- function(model, variable, low, high,
 #'   add_dsa_setting("timeframe", low = 10, high = 30)
 #' }
 add_dsa_setting <- function(model, setting, low, high,
-                            display_name = NULL) {
+                            display_name = NULL,
+                            range_label = NULL) {
 
   # Validate inputs
   if (!is.character(setting) || length(setting) != 1) {
@@ -1460,7 +1469,8 @@ add_dsa_setting <- function(model, setting, low, high,
     name = setting,
     low = low,           # Store as literal value
     high = high,         # Store as literal value
-    display_name = display_name %||% setting
+    display_name = display_name %||% setting,
+    range_label = range_label
   )
 
   # Add to model's dsa_parameters list

@@ -222,7 +222,8 @@ write_model_excel <- function(model, path) {
       high = character(),
       strategy = character(),
       group = character(),
-      display_name = character()
+      display_name = character(),
+      range_label = character()
     )
     for (p in model$dsa_parameters) {
       dsa_df <- bind_rows(dsa_df, tibble(
@@ -232,7 +233,8 @@ write_model_excel <- function(model, path) {
         high = as.character(serialize_formula_or_value(p$high)),
         strategy = p$strategy %||% "",
         group = p$group %||% "",
-        display_name = p$display_name %||% ""
+        display_name = p$display_name %||% "",
+        range_label = p$range_label %||% ""
       ))
     }
     wb_list$dsa_parameters <- dsa_df
@@ -921,7 +923,8 @@ parse_yaml_dsa_parameters <- function(dsa_list) {
       high = deserialize_to_formula(p$high, param_type),
       strategy = p$strategy %||% "",
       group = p$group %||% "",
-      display_name = p$display_name
+      display_name = p$display_name,
+      range_label = p$range_label
     )
   })
 
@@ -1348,6 +1351,7 @@ format_dsa_yaml <- function(dsa_params) {
     result <- add_optional_field(result, "strategy", p$strategy)
     result <- add_optional_field(result, "group", p$group)
     result <- add_optional_field(result, "display_name", p$display_name)
+    result <- add_optional_field(result, "range_label", p$range_label)
     result
   })
 }

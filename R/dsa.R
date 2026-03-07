@@ -311,7 +311,8 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
         parameter_display_name = "Base Case",
         strategy = NA_character_,
         group = NA_character_,
-        override_value = NA_character_
+        override_value = NA_character_,
+        range_label = NA_character_
       )
     } else {
       # Find a segment with this run_id that has non-empty overrides
@@ -425,7 +426,8 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
           parameter_display_name = display_name,
           strategy = param_strategy,
           group = param_group,
-          override_value = as.character(param_value)
+          override_value = as.character(param_value),
+          range_label = if (!is.null(param_spec$range_label)) param_spec$range_label else NA_character_
         )
 
       } else if (length(setting_overrides) > 0) {
@@ -456,7 +458,8 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
           parameter_display_name = display_name,
           strategy = NA_character_,
           group = NA_character_,
-          override_value = as.character(setting_value)
+          override_value = as.character(setting_value),
+          range_label = if (!is.null(param_spec$range_label)) param_spec$range_label else NA_character_
         )
       }
     }

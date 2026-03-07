@@ -12,7 +12,8 @@ dsa_ce_plot(
   interventions = NULL,
   comparators = NULL,
   show_parameter_values = TRUE,
-  drop_zero_impact = TRUE
+  drop_zero_impact = TRUE,
+  top_n = NULL
 )
 }
 \arguments{
@@ -34,6 +35,9 @@ At least one of interventions or comparators must be specified.}
 \item{show_parameter_values}{Logical. Include parameter values in Y-axis labels? (default: TRUE)}
 
 \item{drop_zero_impact}{Logical. Remove parameters with zero impact on ICER? (default: TRUE)}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range
+(per strategy/group facet). Useful for models with many DSA parameters.}
 }
 \value{
 A ggplot2 object

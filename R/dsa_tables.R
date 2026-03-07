@@ -1,3 +1,86 @@
+#' Enhance Table Parameter Labels with Input Values
+#'
+#' Internal helper that adds input range values to parameter_display_name labels
+#' for table output. Uses custom range_label if available, otherwise auto-formats
+#' from DSA metadata parameter values.
+#'
+#' @param data A data frame with parameter and parameter_display_name columns
+#' @param results DSA results object containing dsa_metadata
+#' @return The data frame with enhanced parameter_display_name
+#' @keywords internal
+enhance_table_parameter_labels <- function(data, results) {
+  if (is.null(results$dsa_metadata)) return(data)
+
+  # Use parameter_display_name as key since parameter names may be duplicated
+  # (e.g., same variable varied for different groups)
+  meta <- results$dsa_metadata %>%
+    filter(.data$parameter_type != "base")
+
+  # Build a lookup: one row per unique parameter_display_name with low/high values and range_label
+  low_vals <- meta %>%
+    filter(.data$variation == "low") %>%
+    select("parameter", "parameter_display_name", "parameter_type", "override_value",
+           "range_label") %>%
+    rename(param_low = "override_value")
+
+  high_vals <- meta %>%
+    filter(.data$variation == "high") %>%
+    select("parameter_display_name", param_high = "override_value")
+
+  param_info <- low_vals %>%
+    inner_join(high_vals, by = "parameter_display_name")
+
+  if (nrow(param_info) == 0) return(data)
+
+  data <- data %>%
+    left_join(
+      param_info %>% select("parameter", "parameter_display_name", "parameter_type",
+                            "param_low", "param_high", "range_label"),
+      by = c("parameter", "parameter_display_name")
+    )
+
+  settings <- results$metadata$settings
+
+  data <- data %>%
+    rowwise() %>%
+    mutate(
+      parameter_display_name = if_else(
+        !is.na(.data$range_label),
+        sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+        if_else(
+          !is.na(.data$param_low) & !is.na(.data$param_high),
+          {
+            unit_suffix <- if (!is.na(.data$parameter_type) && .data$parameter_type == "setting") {
+              get_setting_unit_suffix(.data$parameter, settings)
+            } else {
+              ""
+            }
+
+            if (unit_suffix != "") {
+              sprintf("%s (%s%s - %s%s)",
+                      .data$parameter_display_name,
+                      format_param_value(as.numeric(.data$param_low)),
+                      unit_suffix,
+                      format_param_value(as.numeric(.data$param_high)),
+                      unit_suffix)
+            } else {
+              sprintf("%s (%s - %s)",
+                      .data$parameter_display_name,
+                      format_param_value(as.numeric(.data$param_low)),
+                      format_param_value(as.numeric(.data$param_high)))
+            }
+          },
+          .data$parameter_display_name
+        )
+      )
+    ) %>%
+    ungroup() %>%
+    select(-any_of(c("param_low", "param_high", "parameter_type", "range_label")))
+
+  data
+}
+
+
 #' Prepare DSA Outcomes Table Data
 #'
 #' Internal helper function that prepares DSA outcomes data for table rendering.
@@ -24,7 +107,9 @@ prepare_dsa_outcomes_table_data <- function(results,
                                             comparators = NULL,
                                             decimals = 2,
                                             discounted = TRUE,
-                                            font_size = 11) {
+                                            font_size = 11,
+                                            top_n = NULL,
+                                            show_parameter_values = FALSE) {
 
   # Extract DSA summaries
   dsa_data <- extract_dsa_summaries(
@@ -157,6 +242,21 @@ prepare_dsa_outcomes_table_data <- function(results,
     if (!is.null(results$metadata$groups)) {
       combined_data$group <- map_names(combined_data$group, results$metadata$groups, "display_name")
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    combined_data <- combined_data %>%
+      mutate(.range = abs(.data$high - .data$low)) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    combined_data <- enhance_table_parameter_labels(combined_data, results)
   }
 
   # Get unique strategies and groups
@@ -358,6 +458,9 @@ prepare_dsa_outcomes_table_data <- function(results,
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
+#'   When TRUE, labels show "Parameter Name (low - high)" format.
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -402,7 +505,9 @@ dsa_outcomes_table <- function(results,
                                decimals = 2,
                                discounted = TRUE,
                                font_size = 11,
-                               table_format = c("flextable", "kable")) {
+                               table_format = c("flextable", "kable"),
+                               top_n = NULL,
+                               show_parameter_values = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -421,7 +526,9 @@ dsa_outcomes_table <- function(results,
     comparators = comparators,
     decimals = decimals,
     discounted = discounted,
-    font_size = font_size
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values
   )
 
   # Render using specified backend
@@ -455,7 +562,9 @@ prepare_dsa_nmb_table_data <- function(results,
                                        interventions = NULL,
                                        comparators = NULL,
                                        decimals = 0,
-                                       font_size = 11) {
+                                       font_size = 11,
+                                       top_n = NULL,
+                                       show_parameter_values = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -542,6 +651,21 @@ prepare_dsa_nmb_table_data <- function(results,
       high = .data$high_outcome + .data$high_cost
     ) %>%
     select("strategy", "group", "parameter", "parameter_display_name", "low", "base", "high")
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    nmb_data <- nmb_data %>%
+      mutate(.range = abs(.data$high - .data$low)) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    nmb_data <- enhance_table_parameter_labels(nmb_data, results)
+  }
 
   # Get unique strategies and groups
   strategies_display <- unique(nmb_data$strategy)
@@ -743,6 +867,8 @@ prepare_dsa_nmb_table_data <- function(results,
 #' @param decimals Number of decimal places (default: 0 for monetary values)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -789,7 +915,9 @@ dsa_nmb_table <- function(results,
                           comparators = NULL,
                           decimals = 0,
                           font_size = 11,
-                          table_format = c("flextable", "kable")) {
+                          table_format = c("flextable", "kable"),
+                          top_n = NULL,
+                          show_parameter_values = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -803,7 +931,9 @@ dsa_nmb_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values
   )
 
   # Render using specified backend
@@ -902,7 +1032,9 @@ prepare_dsa_ce_table_data <- function(results,
                                       interventions = NULL,
                                       comparators = NULL,
                                       decimals = 0,
-                                      font_size = 11) {
+                                      font_size = 11,
+                                      top_n = NULL,
+                                      show_parameter_values = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -1049,6 +1181,21 @@ prepare_dsa_ce_table_data <- function(results,
   ce_data <- low_data %>%
     inner_join(high_data, by = c("strategy", "group", "parameter", "parameter_display_name")) %>%
     inner_join(base_data, by = c("strategy", "group"))
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    ce_data <- ce_data %>%
+      mutate(.range = abs(as.numeric(.data$high_icer) - as.numeric(.data$low_icer))) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    ce_data <- enhance_table_parameter_labels(ce_data, results)
+  }
 
   # Format cells and detect flipped ICERs (which need asterisks)
   # Asterisk appears when ICER differs from REQUESTED direction (negative = SW quadrant)
@@ -1267,6 +1414,8 @@ prepare_dsa_ce_table_data <- function(results,
 #' @param decimals Number of decimal places (default: 0 for ICERs)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -1318,7 +1467,9 @@ dsa_ce_table <- function(results,
                          comparators = NULL,
                          decimals = 0,
                          font_size = 11,
-                         table_format = c("flextable", "kable")) {
+                         table_format = c("flextable", "kable"),
+                         top_n = NULL,
+                         show_parameter_values = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -1331,7 +1482,9 @@ dsa_ce_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values
   )
 
   # Render using specified backend

@@ -14,7 +14,9 @@ dsa_nmb_table(
   comparators = NULL,
   decimals = 0,
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  top_n = NULL,
+  show_parameter_values = FALSE
 )
 }
 \arguments{
@@ -41,6 +43,10 @@ At least one of interventions or comparators must be specified.}
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
+
+\item{show_parameter_values}{Logical. Include input parameter values in row labels? (default: FALSE)}
 }
 \value{
 A table object (flextable or kable depending on table_format)

@@ -63,6 +63,18 @@ model <- model %>%
                    display_name = "Disease Incidence")
 ```
 
+#### Custom range label
+
+By default, tornado plot labels auto-generate as "Parameter Name (0.01 - 0.05)". Use `range_label` to override the range portion with custom text.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_variable("p_mild", low = bc * 0.5, high = bc * 1.5,
+                   range_label = "Base Case ± 50%")
+```
+
+This produces labels like "p_mild (Base Case ± 50%)" instead of "p_mild (0.015 - 0.045)".
+
 ### Adding Setting Parameters
 
 The `add_dsa_setting()` function varies model settings like discount rates or timeframe.
@@ -82,6 +94,17 @@ model <- model %>%
   add_dsa_setting("timeframe", low = 5, high = 20)
 ```
 
+#### Custom range label for settings
+
+Settings also support `range_label` for custom tornado label text.
+
+```{r, eval = FALSE}
+model <- model %>%
+  add_dsa_setting("discount_outcomes", low = 0, high = 5,
+                  display_name = "Outcome Discount Rate",
+                  range_label = "0% - 5%")
+```
+
 ## Running DSA
 
 ```{r, include = FALSE}
@@ -90,9 +113,11 @@ model <- model %>%
 # specifying which group to vary. Global variables don't require this.
 model <- model %>%
   add_dsa_variable("u_mild", low = bc * 0.8, high = bc * 1.2,
-                   display_name = "Utility (Mild)") %>%
+                   display_name = "Utility (Mild)",
+                   range_label = "Base Case \u00b1 20%") %>%
   add_dsa_variable("u_severe", low = bc * 0.5, high = bc * 1.5,
-                   display_name = "Utility (Severe)") %>%
+                   display_name = "Utility (Severe)",
+                   range_label = "Base Case \u00b1 50%") %>%
   add_dsa_variable("c_mild", low = bc * 0.8, high = bc * 1.2,
                    display_name = "Cost (Mild)") %>%
   add_dsa_variable("c_severe", low = bc * 0.8, high = bc * 1.2,
@@ -170,6 +195,18 @@ dsa_outcomes_plot(
   dsa_results,
   summary_name = "qalys",
   show_parameter_values = FALSE
+)
+```
+
+#### Showing only the top N parameters
+
+Use `top_n` to limit the tornado plot to the most impactful parameters. This is useful for models with many DSA parameters.
+
+```{r, fig.width=7, fig.height=5}
+dsa_outcomes_plot(
+  dsa_results,
+  summary_name = "qalys",
+  top_n = 3
 )
 ```
 
@@ -289,6 +326,18 @@ dsa_nmb_plot(
 )
 ```
 
+#### Showing only the top N parameters
+
+```{r, fig.width=7, fig.height=4}
+dsa_nmb_plot(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  top_n = 3
+)
+```
+
 #### By subgroup
 
 ```{r, fig.width=12, fig.height=6}
@@ -365,6 +414,30 @@ dsa_outcomes_table(
   dsa_results,
   outcome = "costs",
   decimals = 0
+)
+```
+
+#### Showing only the top N parameters
+
+Use `top_n` to limit the table to the most impactful parameters.
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  top_n = 3
+)
+```
+
+#### Including input parameter values in labels
+
+Use `show_parameter_values = TRUE` to append input range values to parameter labels, matching the tornado plot label format. When a parameter has a custom `range_label`, it is used instead of auto-generated values.
+
+```{r}
+dsa_outcomes_table(
+  dsa_results,
+  outcome = "qalys",
+  show_parameter_values = TRUE
 )
 ```
 
@@ -448,6 +521,18 @@ dsa_nmb_table(
 )
 ```
 
+#### Showing only the top N parameters
+
+```{r}
+dsa_nmb_table(
+  dsa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  top_n = 3
+)
+```
+
 #### By subgroup
 
 ```{r}
@@ -493,6 +578,19 @@ The plot handles special ICER cases:
 - **Dominated**: When the intervention has higher costs and lower/equal outcomes, the ICER is undefined (infinity). These are shown as arrow bars extending to the right edge of the plot.
 - **Dominant**: When the intervention has lower costs and higher/equal outcomes, the ICER is zero. These are shown as bars extending to the zero line on the left.
 
+#### Showing only the top N parameters
+
+```{r, fig.width=7, fig.height=4}
+dsa_ce_plot(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  top_n = 3
+)
+```
+
 ### CE Table
 
 The `dsa_ce_table()` function presents the sensitivity of the ICER to variation in input parameters in tabular format.
@@ -506,6 +604,19 @@ dsa_ce_table(
   cost_outcome = "costs",
   interventions = "volantor",
   comparators = "seritinib"
+)
+```
+
+#### Showing only the top N parameters
+
+```{r}
+dsa_ce_table(
+  dsa_ce_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  interventions = "volantor",
+  comparators = "seritinib",
+  top_n = 3
 )
 ```
 

@@ -13,7 +13,8 @@ dsa_nmb_plot(
   interventions = NULL,
   comparators = NULL,
   show_parameter_values = TRUE,
-  drop_zero_impact = TRUE
+  drop_zero_impact = TRUE,
+  top_n = NULL
 )
 }
 \arguments{
@@ -41,6 +42,9 @@ When TRUE, labels show "Parameter Name (low - high)" format with evaluated param
 
 \item{drop_zero_impact}{Logical. Remove parameters with zero impact on NMB? (default: TRUE)
 A parameter has zero impact when its NMB range is effectively zero.}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range
+(per strategy/group facet). Useful for models with many DSA parameters.}
 }
 \value{
 A ggplot2 object

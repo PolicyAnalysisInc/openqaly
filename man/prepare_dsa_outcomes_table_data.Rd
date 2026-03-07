@@ -13,7 +13,9 @@ prepare_dsa_outcomes_table_data(
   comparators = NULL,
   decimals = 2,
   discounted = TRUE,
-  font_size = 11
+  font_size = 11,
+  top_n = NULL,
+  show_parameter_values = FALSE
 )
 }
 \arguments{

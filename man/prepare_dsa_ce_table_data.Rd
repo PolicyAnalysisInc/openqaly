@@ -12,7 +12,9 @@ prepare_dsa_ce_table_data(
   interventions = NULL,
   comparators = NULL,
   decimals = 0,
-  font_size = 11
+  font_size = 11,
+  top_n = NULL,
+  show_parameter_values = FALSE
 )
 }
 \arguments{
