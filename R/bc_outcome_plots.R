@@ -138,8 +138,8 @@ outcomes_plot_bar <- function(res, outcome,
 
     has_negative <- any(summaries_with_total$amount < 0, na.rm = TRUE)
     has_positive <- any(summaries_with_total$amount >= 0, na.rm = TRUE)
-    left_expand <- if (has_negative) 0.15 else 0.05
-    right_expand <- if (has_positive) 0.15 else 0.05
+    left_expand <- if (has_negative) 0.25 else 0.05
+    right_expand <- if (has_positive) 0.25 else 0.05
 
     p <- p +
       scale_x_continuous(breaks = x_breaks, labels = comma,

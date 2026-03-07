@@ -174,8 +174,8 @@ nmb_plot_bar <- function(res,
 
     has_negative <- any(nmb_data$amount < 0, na.rm = TRUE)
     has_positive <- any(nmb_data$amount >= 0, na.rm = TRUE)
-    left_expand <- if (has_negative) 0.15 else 0.05
-    right_expand <- if (has_positive) 0.15 else 0.05
+    left_expand <- if (has_negative) 0.25 else 0.05
+    right_expand <- if (has_positive) 0.25 else 0.05
 
     p <- p +
       scale_x_continuous(labels = comma,
