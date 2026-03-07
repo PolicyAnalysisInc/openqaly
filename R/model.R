@@ -228,7 +228,9 @@ parse_model <- function(model, ...) {
   # Set the class of the object based on model type
   # Note: model_type should already be normalized to canonical form by normalize_and_validate_model
   model_type <- tolower(model$settings$model_type)
-  if (model_type == "psm") {
+  if (model_type == "decision_tree") {
+    model <- parse_decision_tree_model(model)
+  } else if (model_type == "psm") {
     model <- parse_psm(model)
   } else if (model_type %in% c("custom_psm", "custom psm", "psm_custom")) {
     model <- parse_psm_custom(model)

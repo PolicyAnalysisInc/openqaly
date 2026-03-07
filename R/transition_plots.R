@@ -44,6 +44,12 @@ transition_plot_heatmap <- function(res,
                                     state_times = NULL,
                                     exclude_zero_residency = NULL) {
 
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("transition_plot_heatmap() is not supported for decision tree models. ",
+         "Decision trees do not have state transitions.")
+  }
+
   # Get transition data in long format
   trans_data <- get_transitions(
     res,

@@ -243,6 +243,12 @@ nmb_plot_line <- function(res,
                           time_unit = "cycle",
                           cumulative = TRUE) {
 
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("nmb_plot_line() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
+
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
     stop("At least one of 'interventions' or 'comparators' must be provided")

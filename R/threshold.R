@@ -84,11 +84,21 @@ validate_threshold_spec <- function(model) {
     stop("No threshold analyses found. Add analyses with add_threshold_analysis()", call. = FALSE)
   }
 
+  model_type <- tolower(model$settings$model_type %||% "markov")
+
   errors <- character()
 
   for (i in seq_along(model$threshold_analyses)) {
     analysis <- model$threshold_analyses[[i]]
     name <- analysis$name %||% paste("Analysis", i)
+
+    # Reject trace-based conditions for standalone DT models
+    if (model_type == "decision_tree" && !is.null(analysis$condition) &&
+        !is.null(analysis$condition$output) && analysis$condition$output == "trace") {
+      errors <- c(errors, sprintf(
+        "Threshold '%s': trace-based conditions are not supported for standalone decision tree models",
+        name))
+    }
 
     # Check variable exists
     if (!analysis$variable %in% model$variables$name) {

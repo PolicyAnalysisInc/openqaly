@@ -19,6 +19,7 @@ validate_dsa_spec <- function(model) {
   valid_settings <- c(
     "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
     "discount_cost", "discount_outcomes", "half_cycle_method",
+    "discount_timing", "discount_method",
     "reduce_state_cycle", "days_per_year"
   )
 

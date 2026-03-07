@@ -4,11 +4,15 @@
 \alias{plot_decision_tree}
 \title{Plot a Decision Tree}
 \usage{
-plot_decision_tree(x, ...)
+plot_decision_tree(model, tree_name = NULL, ...)
 }
 \arguments{
-\item{x}{A decision tree object containing a `df` component with columns
-`node`, `parent`, and `formula`.}
+\item{model}{An \code{oq_model} or \code{oq_model_builder} object
+containing a \code{trees} component.}
+
+\item{tree_name}{Character string specifying which tree to plot. If
+\code{NULL}, uses the tree referenced by \code{model$decision_tree$tree_name},
+or the first tree found.}
 
 \item{...}{Additional arguments (currently unused).}
 }
@@ -16,6 +20,7 @@ plot_decision_tree(x, ...)
 A ggplot2/ggraph object displaying the tree structure.
 }
 \description{
-Creates a visualization of a decision tree structure using ggraph,
-displaying nodes and edges with formula labels.
+Creates a health economics-standard visualization of a decision tree,
+with horizontal left-to-right layout and standard node shapes:
+circle for chance nodes and triangle for terminal nodes.
 }

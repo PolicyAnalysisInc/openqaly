@@ -436,6 +436,11 @@ List cppMarkovTransitionsAndTrace(
   colnames(residencyResults) = valueNames;
   rownames(residencyResults) = make_cycle_rownames(1, nCycles);
 
+  // Corrected trace: half-cycle-corrected state probabilities (nCycles x nStates)
+  NumericMatrix correctedTrace(nCycles, nStates);
+  colnames(correctedTrace) = stateNames;
+  rownames(correctedTrace) = make_cycle_rownames(1, nCycles);
+
   enum { HCM_START, HCM_END, HCM_LIFE_TABLE } hcm = HCM_START;
   if (halfCycleMethod == "end") hcm = HCM_END;
   else if (halfCycleMethod == "life-table") hcm = HCM_LIFE_TABLE;
@@ -449,12 +454,12 @@ List cppMarkovTransitionsAndTrace(
       if (hcm == HCM_END) {
         stateProb = currTrace[s];
       } else if (hcm == HCM_LIFE_TABLE) {
-        if (cycle == 1) stateProb = 0.5 * (trace(0, s) + trace(1, s));
-        else if (cycle == nCycles) stateProb = currTrace[s];
-        else stateProb = 0.5 * (prevTrace[s] + currTrace[s]);
+        stateProb = 0.5 * (prevTrace[s] + currTrace[s]);
       } else { // start
         stateProb = prevTrace[s];
       }
+
+      correctedTrace(cycle - 1, s) = stateProb;
 
       if (const std::vector<ValEntry>* rv = residPtr[s]) {
         for (const ValEntry& ve : *rv) {
@@ -494,7 +499,8 @@ List cppMarkovTransitionsAndTrace(
     Named("transitionalValues") = transitionalValueResults,
     Named("residencyValues") = residencyResults,
     Named("modelStartValues") = modelStartResults,
-    Named("values") = totalValues
+    Named("values") = totalValues,
+    Named("correctedTrace") = correctedTrace
   );
 }
 

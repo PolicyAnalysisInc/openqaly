@@ -118,6 +118,15 @@ write_model_excel <- function(model, path) {
     wb_list$trees <- model$trees
   }
 
+  # Handle decision_tree config if present
+  if (!is.null(model$decision_tree)) {
+    wb_list$decision_tree <- tibble(
+      tree_name = model$decision_tree$tree_name,
+      duration = model$decision_tree$duration,
+      duration_unit = model$decision_tree$duration_unit
+    )
+  }
+
   # Handle multivariate sampling if present
   if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
     # Create multivariate_sampling sheet
@@ -724,6 +733,11 @@ read_model_yaml <- function(path) {
     model$trees <- flatten_trees(yaml_data$trees)
   }
 
+  # Read decision_tree configuration
+  if (!is.null(yaml_data$decision_tree)) {
+    model$decision_tree <- as.list(yaml_data$decision_tree)
+  }
+
   # Read multivariate sampling
   if (!is.null(yaml_data$multivariate_sampling)) {
     model$multivariate_sampling <- parse_yaml_multivariate_sampling(
@@ -1125,6 +1139,11 @@ write_model_yaml <- function(model, path) {
   # Convert trees to nested structure
   if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
     yaml_data$trees <- nest_trees(model$trees)
+  }
+
+  # Decision tree configuration
+  if (!is.null(model$decision_tree)) {
+    yaml_data$decision_tree <- model$decision_tree
   }
 
   # Multivariate sampling

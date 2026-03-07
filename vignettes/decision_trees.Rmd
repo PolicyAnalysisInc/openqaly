@@ -1,0 +1,485 @@
+---
+title: "Decision Trees"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Decision Trees}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(openqaly)
+```
+
+## Introduction
+
+Decision trees model one-time clinical events where patients follow different
+pathways with assigned probabilities and payoffs. In health economics, they are
+used for short-term clinical decisions such as treatment response, surgical
+outcomes, or diagnostic testing.
+
+openqaly supports two modes of decision tree modeling:
+
+1. **Standalone decision tree models** — single-point-in-time models where all
+   outcomes and costs are captured in the tree itself.
+2. **Decision trees preceding a Markov or PSM model** — the tree determines
+   initial state allocations and one-time costs, then a Markov or PSM model
+   simulates long-term outcomes.
+
+This vignette demonstrates both modes, tree visualization, and the probability
+query system used in value formulas.
+
+---
+
+## Example 1: Standalone Decision Tree Model
+
+### Motivation
+
+A simple drug comparison: two drugs with different response rates. Responders
+incur higher treatment costs but gain more QALYs. Non-responders receive
+palliative care at lower cost and lower QALY gain.
+
+| Outcome | Cost | QALYs |
+|---------|------|-------|
+| Respond | 15,000 | 0.9 |
+| No respond | 5,000 | 0.5 |
+
+Drug A has a 70% response rate; Drug B has 40%.
+
+### Building the Model
+
+```{r dt-standalone-model}
+dt_model <- define_model("decision_tree") |>
+  # Payoff variables
+  add_variable("cost_respond", 15000) |>
+  add_variable("cost_no_respond", 5000) |>
+  add_variable("qaly_respond", 0.9) |>
+  add_variable("qaly_no_respond", 0.5) |>
+  # Strategy-specific response rates
+  add_variable("p_respond", 0.7, strategy = "drug_a") |>
+  add_variable("p_respond", 0.4, strategy = "drug_b") |>
+  # Strategies
+  add_strategy("drug_a", display_name = "Drug A") |>
+  add_strategy("drug_b", display_name = "Drug B") |>
+  # Decision tree structure
+  add_tree_node("drug_choice", "root", parent = NA, formula = 1) |>
+  add_tree_node("drug_choice", "respond", parent = "root",
+                formula = p_respond) |>
+  add_tree_node("drug_choice", "no_respond", parent = "root",
+                formula = C) |>
+  # Configure the decision tree (duration = 0 for standalone)
+  set_decision_tree("drug_choice", duration = 0, duration_unit = "days") |>
+  # Values — use p() to weight payoffs by branch probability
+  add_value("cost", type = "cost", state = "decision_tree",
+            formula = p(respond, drug_choice) * cost_respond +
+                      p(no_respond, drug_choice) * cost_no_respond) |>
+  add_value("qaly", type = "outcome", state = "decision_tree",
+            formula = p(respond, drug_choice) * qaly_respond +
+                      p(no_respond, drug_choice) * qaly_no_respond) |>
+  # Summaries
+  add_summary("total_cost", values = "cost",
+              display_name = "Total Cost", type = "cost") |>
+  add_summary("total_qaly", values = "qaly",
+              display_name = "QALYs", type = "outcome")
+```
+
+Key points:
+
+- `define_model("decision_tree")` creates a standalone DT model (no states or
+  transitions)
+- `add_tree_node()` builds the tree structure — each node has a name, parent,
+  and probability formula
+- `C` computes the complement probability (1 minus the sum of sibling
+  probabilities)
+- `set_decision_tree()` activates the tree with `duration = 0` for standalone
+  models
+- Values use `state = "decision_tree"` and reference branch probabilities via
+  `p()`
+
+### Running the Model
+
+```{r dt-standalone-run}
+dt_results <- run_model(dt_model)
+```
+
+### Viewing Results
+
+```{r dt-standalone-table}
+outcomes_table(dt_results, outcome = "total_qaly")
+```
+
+```{r dt-standalone-plot, fig.width=9, fig.height=6}
+outcomes_plot_bar(dt_results, outcome = "total_qaly")
+```
+
+---
+
+## Example 2: Decision Tree in Front of a Markov Model
+
+### Motivation
+
+A surgery with two possible outcomes determines long-term health trajectories.
+The surgical outcome feeds into a Markov model where patients transition between
+health states over time.
+
+| Phase | Component | Description |
+|-------|-----------|-------------|
+| DT phase | Surgery | Success (→ healthy) or failure (→ dead) |
+| Markov phase | Long-term | Healthy → Dead transition over time |
+
+Two strategies are compared: aggressive surgery (90% success, higher cost) vs
+conservative surgery (70% success, lower cost).
+
+### Building the Model
+
+```{r dt-markov-model}
+markov_dt_model <- define_model("markov") |>
+  # Settings for the Markov phase
+  set_settings(
+    timeframe = 10,
+    timeframe_unit = "years",
+    cycle_length = 1,
+    cycle_length_unit = "years",
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
+  ) |>
+  # Strategies
+  add_strategy("aggressive", display_name = "Aggressive Surgery") |>
+  add_strategy("conservative", display_name = "Conservative Surgery") |>
+  # Strategy-specific success rates
+  add_variable("p_success", 0.9, strategy = "aggressive") |>
+  add_variable("p_success", 0.7, strategy = "conservative") |>
+  # Cost variables
+  add_variable("c_surgery_success", 50000) |>
+  add_variable("c_surgery_failure", 75000) |>
+  add_variable("c_treatment", 1000) |>
+  # Decision tree for surgery outcomes
+  add_tree_node("surgery", "root", parent = NA, formula = 1) |>
+  add_tree_node("surgery", "success", parent = "root",
+                formula = p_success) |>
+  add_tree_node("surgery", "failure", parent = "root", formula = C) |>
+  # DT duration offsets Markov discounting by 30 days
+  set_decision_tree("surgery", duration = 30, duration_unit = "days") |>
+  # Markov states — initial probabilities reference DT outcomes
+  add_state("healthy", initial_prob = "p(success, surgery)") |>
+  add_state("dead", initial_prob = "C") |>
+  # Transitions
+  add_transition("healthy", "dead", 0.1) |>
+  add_transition("healthy", "healthy", C) |>
+  add_transition("dead", "dead", 1) |>
+  # DT-phase value: one-time surgery cost (not discounted)
+  add_value("surgery_cost", type = "cost", state = "decision_tree",
+            formula = p(success, surgery) * c_surgery_success +
+                      p(failure, surgery) * c_surgery_failure) |>
+  # Markov-phase values: ongoing costs and QALYs (discounted with DT offset)
+  add_value("treatment_cost", type = "cost", state = "healthy",
+            formula = c_treatment) |>
+  add_value("qaly", type = "outcome", state = "healthy", formula = 1) |>
+  # Summaries
+  add_summary("total_cost", type = "cost",
+              values = "surgery_cost,treatment_cost",
+              display_name = "Total Cost") |>
+  add_summary("total_qaly", type = "outcome",
+              values = "qaly",
+              display_name = "QALYs")
+```
+
+Key differences from standalone DT:
+
+- `define_model("markov")` — the base model type is Markov, not decision_tree
+- `set_decision_tree(duration = 30, duration_unit = "days")` — non-zero duration
+  creates a discounting offset for the Markov phase
+- `initial_prob = "p(success, surgery)"` — tree outcomes set initial state
+  probabilities
+- DT values (`state = "decision_tree"`) are one-time, undiscounted payoffs
+- Markov values (`state = "healthy"`) accrue per-cycle and are discounted
+  starting after the 30-day DT offset
+
+### Running the Model
+
+```{r dt-markov-run}
+markov_dt_results <- run_model(markov_dt_model)
+```
+
+### Viewing Results
+
+```{r dt-markov-trace, fig.width=9, fig.height=6}
+# Markov phase state occupancy
+trace_plot_area(markov_dt_results)
+```
+
+```{r dt-markov-outcomes}
+outcomes_table(markov_dt_results, outcome = "total_qaly")
+```
+
+---
+
+## Plotting Decision Trees
+
+### Tree Structure Plot
+
+`plot_decision_tree()` visualizes the tree structure from a model object (before
+running). It shows node shapes (circles for chance nodes, triangles for terminal
+nodes) and formula labels on edges.
+
+```{r dt-structure-plot, fig.width=9, fig.height=6}
+plot_decision_tree(dt_model)
+```
+
+For models with multiple trees, specify which tree to plot:
+
+```r
+plot_decision_tree(model, tree_name = "my_tree")
+```
+
+### Evaluated Tree Sankey Plot
+
+`plot_decision_tree_sankey()` visualizes the evaluated tree from `run_model()`
+output. Flow widths are proportional to computed probabilities, and flows are
+colored by the first branch.
+
+```{r dt-sankey-plot, fig.width=9, fig.height=6}
+plot_decision_tree_sankey(dt_results)
+```
+
+The Sankey automatically facets when there are multiple strategies or groups.
+You can filter with the `strategies` and `groups` parameters:
+
+```r
+plot_decision_tree_sankey(results, strategies = "drug_a")
+```
+
+Note: Sankey plots require base-case results — they are not available for PSA
+or DSA output.
+
+---
+
+## Querying Probabilities with `p()`
+
+The `p()` function is the primary interface for extracting probabilities from
+evaluated decision trees. It supports set operations, conditional probabilities,
+and is used inside `add_value()` formulas to weight payoffs by branch
+probability.
+
+### Example Tree for This Section
+
+We build a more detailed tree to demonstrate all `p()` operators:
+
+```
+trial_tree
+├── treatment (0.5)
+│   ├── response (0.7) [good_outcome]
+│   │   ├── cured (0.4)
+│   │   └── managed (C = 0.6)
+│   └── no_response (C = 0.3) [bad_outcome]
+└── control (C = 0.5)
+    ├── response_ctrl (0.5) [good_outcome]
+    └── no_response_ctrl (C = 0.5) [bad_outcome]
+```
+
+Terminal node joint probabilities:
+
+| Terminal | Probability | Tags |
+|----------|-------------|------|
+| cured | 0.5 × 0.7 × 0.4 = 0.14 | treatment, response, good_outcome |
+| managed | 0.5 × 0.7 × 0.6 = 0.21 | treatment, response, good_outcome |
+| no_response | 0.5 × 0.3 = 0.15 | treatment, bad_outcome |
+| response_ctrl | 0.5 × 0.5 = 0.25 | control, good_outcome |
+| no_response_ctrl | 0.5 × 0.5 = 0.25 | control, bad_outcome |
+
+```{r p-demo-tree}
+p_demo <- define_model("decision_tree") |>
+  add_strategy("s") |>
+  add_tree_node("trial_tree", "root", parent = NA, formula = 1) |>
+  add_tree_node("trial_tree", "treatment", parent = "root",
+                formula = 0.5) |>
+  add_tree_node("trial_tree", "control", parent = "root", formula = C) |>
+  add_tree_node("trial_tree", "response", parent = "treatment",
+                formula = 0.7, tags = "good_outcome") |>
+  add_tree_node("trial_tree", "no_response", parent = "treatment",
+                formula = C, tags = "bad_outcome") |>
+  add_tree_node("trial_tree", "cured", parent = "response",
+                formula = 0.4) |>
+  add_tree_node("trial_tree", "managed", parent = "response",
+                formula = C) |>
+  add_tree_node("trial_tree", "response_ctrl", parent = "control",
+                formula = 0.5, tags = "good_outcome") |>
+  add_tree_node("trial_tree", "no_response_ctrl", parent = "control",
+                formula = C, tags = "bad_outcome")
+
+# Evaluate the tree directly for interactive demonstration
+trial_tree <- decision_tree(p_demo$trees, "trial_tree", 0)
+```
+
+### How `p()` Works
+
+`p()` takes two arguments: an **unevaluated expression** specifying which nodes
+to query, and the **evaluated tree object**. Inside `p()`:
+
+1. Each node name and tag name becomes a **set of terminal nodes**
+2. A node name resolves to all terminal nodes reachable through that node
+3. A tag name resolves to all terminal nodes carrying that tag
+4. Operators combine these sets
+5. The joint probabilities of the resulting terminal nodes are summed
+
+### Basic Queries: Node Probabilities
+
+`p(node_name, tree)` returns the sum of joint probabilities for all terminal
+nodes reachable through that node:
+
+```{r p-basic}
+# Single terminal node — joint probability (0.5 * 0.7 * 0.4 = 0.14)
+p(cured, trial_tree)
+
+# Parent node — sum of descendant terminal probabilities
+# response includes: cured (0.14) + managed (0.21) = 0.35
+p(response, trial_tree)
+
+# Top-level branch (0.50)
+p(treatment, trial_tree)
+
+# Root — always 1.0 (all terminal nodes)
+p(root, trial_tree)
+```
+
+### Tags and Named Groups
+
+The `tags` parameter on `add_tree_node()` assigns custom tags to nodes. A tag
+on a non-terminal node propagates to all its terminal descendants. Each node's
+name is also automatically a tag for itself and its descendants.
+
+Custom tags group nodes across branches:
+
+```{r p-tags}
+# "good_outcome" tag spans both arms:
+# cured (0.14) + managed (0.21) + response_ctrl (0.25) = 0.60
+p(good_outcome, trial_tree)
+
+# "bad_outcome" tag:
+# no_response (0.15) + no_response_ctrl (0.25) = 0.40
+p(bad_outcome, trial_tree)
+```
+
+### The `%and%` Operator (Intersection)
+
+`p(A %and% B, tree)` returns the probability of terminal nodes that belong
+to **both** set A and set B:
+
+```{r p-and}
+# Terminal nodes under "treatment" AND tagged "good_outcome"
+# = cured (0.14) + managed (0.21) = 0.35
+p(treatment %and% good_outcome, trial_tree)
+```
+
+### The `%or%` Operator (Union)
+
+`p(A %or% B, tree)` returns the probability of terminal nodes in A **or** B
+(or both):
+
+```{r p-or}
+# Terminals in treatment OR good_outcome
+# = treatment(0.50) + good_outcome(0.60) - intersection(0.35) = 0.75
+p(treatment %or% good_outcome, trial_tree)
+```
+
+### The `-` Operator (Complement)
+
+`p(-A, tree)` returns the probability of all terminal nodes **not** in set A:
+
+```{r p-not}
+# All terminals NOT under treatment = control branch (0.50)
+p(-treatment, trial_tree)
+
+# All terminals NOT tagged good_outcome (0.40)
+p(-good_outcome, trial_tree)
+```
+
+### The `|` Operator (Conditional Probability)
+
+`p(A | B, tree)` computes the conditional probability P(A|B) = P(A ∩ B) / P(B):
+
+```{r p-given}
+# Among treatment terminals, what fraction are good outcomes?
+# = P(treatment AND good_outcome) / P(treatment) = 0.35 / 0.50 = 0.70
+p(good_outcome | treatment, trial_tree)
+
+# Among good outcome terminals, what fraction are from treatment?
+# = P(treatment AND good_outcome) / P(good_outcome) = 0.35 / 0.60
+p(treatment | good_outcome, trial_tree)
+```
+
+### Combining Operators
+
+Operators can be combined for complex queries:
+
+```{r p-combined}
+# Bad outcomes within treatment branch
+# = no_response = 0.15
+p(-good_outcome %and% treatment, trial_tree)
+
+# Treatment given not-bad-outcome
+# = P(treatment AND good_outcome) / P(good_outcome) = 0.35 / 0.60
+p(treatment | -bad_outcome, trial_tree)
+```
+
+### Using `p()` in Value Formulas
+
+In model building, `p()` is used inside `add_value()` formulas to weight
+payoffs by branch probability. The tree variable name in the formula references
+the evaluated tree in the model's namespace:
+
+```r
+add_value("cost", type = "cost", state = "decision_tree",
+          formula = p(respond, my_tree) * treatment_cost +
+                    p(no_respond, my_tree) * palliative_cost)
+```
+
+---
+
+## Key Concepts
+
+### The Complement Operator `C`
+
+`C` calculates `1 - sum(sibling_probabilities)` for a tree node. It ensures
+branch probabilities sum to 1 at each level. Only one `C` is allowed per parent
+node.
+
+```r
+add_tree_node("tree", "node_a", parent = "root", formula = 0.6) |>
+add_tree_node("tree", "node_b", parent = "root", formula = C)  # = 0.4
+```
+
+Note: `C` in tree node formulas (complement of siblings) is different from the
+`-` operator in `p()` queries (complement of terminal node sets).
+
+### Duration and Discounting
+
+`set_decision_tree(duration, duration_unit)` specifies how long the DT phase
+lasts. This affects the downstream model:
+
+- **Duration = 0** (standalone DT): No discounting applied to DT values.
+- **Duration > 0** (DT + Markov/PSM): The Markov/PSM cycle count is reduced by
+  the DT duration, and discounting of state values is offset by the DT duration.
+- DT-phase values (`state = "decision_tree"`) are **always undiscounted** by
+  default, regardless of duration.
+
+---
+
+## Comparison
+
+| Feature | Standalone DT | DT + Markov | DT + PSM |
+|---------|--------------|-------------|----------|
+| Model type | `"decision_tree"` | `"markov"` | `"psm"` |
+| States | None | Required | Required |
+| Time dimension | Single point | Cycles | Cycles |
+| DT duration | 0 (typical) | Non-zero | Non-zero |
+| DT values | One-time payoffs | One-time payoffs | One-time payoffs |
+| State values | Not applicable | Per-cycle | Per-cycle |
+| Discounting | None by default | Offset by DT duration | Offset by DT duration |

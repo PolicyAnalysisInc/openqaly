@@ -205,6 +205,13 @@ read_model <- function(path) {
     model$psa <- NULL
   }
 
+  # Read decision_tree configuration sheet
+  if ("decision_tree" %in% names(model) && is.data.frame(model$decision_tree) && nrow(model$decision_tree) > 0) {
+    model$decision_tree <- as.list(model$decision_tree[1, ])
+  } else {
+    model$decision_tree <- NULL
+  }
+
   # Read override categories sheets
   if ("override_categories" %in% names(model)) {
     cats_df <- model$override_categories
@@ -393,6 +400,44 @@ convert_settings_from_df <- function(settings_df) {
   } else {
     # Default to "start" if not specified (maintains backward compatibility)
     settings[["half_cycle_method"]] <- "start"
+  }
+
+  # Handle discount_timing setting
+  if ("discount_timing" %in% names(settings)) {
+    val <- settings[["discount_timing"]]
+    if (is.character(val)) {
+      val_lower <- tolower(val)
+      if (val_lower %in% c("start", "end", "midpoint")) {
+        settings[["discount_timing"]] <- val_lower
+      } else {
+        warning(glue("Invalid discount_timing: {val} - must be 'start', 'end', or 'midpoint'. Defaulting to 'start'"))
+        settings[["discount_timing"]] <- "start"
+      }
+    } else {
+      warning(glue("discount_timing must be a string, got: {class(val)} - defaulting to 'start'"))
+      settings[["discount_timing"]] <- "start"
+    }
+  } else {
+    settings[["discount_timing"]] <- "start"
+  }
+
+  # Handle discount_method setting
+  if ("discount_method" %in% names(settings)) {
+    val <- settings[["discount_method"]]
+    if (is.character(val)) {
+      val_lower <- tolower(val)
+      if (val_lower %in% c("by_cycle", "by_year")) {
+        settings[["discount_method"]] <- val_lower
+      } else {
+        warning(glue("Invalid discount_method: {val} - must be 'by_cycle' or 'by_year'. Defaulting to 'by_cycle'"))
+        settings[["discount_method"]] <- "by_cycle"
+      }
+    } else {
+      warning(glue("discount_method must be a string, got: {class(val)} - defaulting to 'by_cycle'"))
+      settings[["discount_method"]] <- "by_cycle"
+    }
+  } else {
+    settings[["discount_method"]] <- "by_cycle"
   }
 
   # Validate that discount rates are provided (mandatory)
@@ -1153,6 +1198,8 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     "psm"
   } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
     "custom_psm"
+  } else if (model_type_lower %in% c("decision_tree", "decision tree", "decisiontree")) {
+    "decision_tree"
   } else {
     # Try to match partial strings
     if (model_type_lower %in% c("markov")) {
@@ -1161,6 +1208,8 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
       "psm"
     } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
       "custom_psm"
+    } else if (model_type_lower %in% c("decision_tree", "decision tree", "decisiontree")) {
+      "decision_tree"
     } else {
       warning("Invalid model_type '", model_type, "'. Defaulting to 'markov'.")
       "markov"
@@ -1175,7 +1224,7 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   # Load type-specific specs
   spec_path <- system.file('model_input_specs', package = 'openqaly')
 
-  states_spec_file <- if (model_type %in% c("psm", "custom_psm")) {
+  states_spec_file <- if (model_type %in% c("psm", "custom_psm", "decision_tree")) {
     "psm_states.csv"
   } else {
     "states.csv"
@@ -1344,9 +1393,30 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     }
   }
 
+  # Ensure decision_tree field exists
+  if (is.null(model$decision_tree)) {
+    # Leave as NULL
+  }
+
+  # Validate decision tree configuration if present
+  validate_decision_tree(model)
+
   # Validate group names (no reserved keywords)
   if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
     validate_group_names(model$groups$name)
+  }
+
+  # Validate no name collisions between tables and values
+  if (length(model$tables) > 0 && is.data.frame(model$values) && nrow(model$values) > 0) {
+    table_names <- names(model$tables)
+    value_names <- unique(model$values$name[!is.na(model$values$name)])
+    collisions <- intersect(table_names, value_names)
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+        paste(collisions, collapse = ", ")
+      ))
+    }
   }
 
   # Set class
@@ -1760,6 +1830,17 @@ read_model_json <- function(json_string) {
       }
     } else {
       model$psa <- NULL
+    }
+  }
+
+  # Parse decision_tree configuration from JSON
+  if (!is.null(model$decision_tree)) {
+    if (is.data.frame(model$decision_tree)) {
+      model$decision_tree <- as.list(model$decision_tree[1, ])
+    }
+    # Ensure it has the expected fields
+    if (!all(c("tree_name", "duration", "duration_unit") %in% names(model$decision_tree))) {
+      model$decision_tree <- NULL
     }
   }
 
@@ -2409,6 +2490,11 @@ write_model_json <- function(model) {
   # PSA configuration
   if (!is.null(model$psa)) {
     json_model$psa <- model$psa
+  }
+
+  # Decision tree configuration
+  if (!is.null(model$decision_tree)) {
+    json_model$decision_tree <- model$decision_tree
   }
 
   # Convert override_categories to array format

@@ -8,6 +8,13 @@ library(ggplot2)
 # This prevents FutureInterruptError from MultisessionFuture workers
 future::plan(future::sequential)
 
+# Skip tests only when actually running on CRAN (R CMD check sets this env var)
+skip_if_cran <- function() {
+  if (nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_"))) {
+    skip("On CRAN")
+  }
+}
+
 # ============================================================================
 # Shared PSA Test Fixtures
 # ============================================================================

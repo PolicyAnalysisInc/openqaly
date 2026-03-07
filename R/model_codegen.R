@@ -117,6 +117,14 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add decision tree configuration (if any)
+  if (!is.null(model$decision_tree)) {
+    dt_code <- generate_decision_tree_code(model$decision_tree)
+    if (length(dt_code) > 0) {
+      code <- c(code, "", dt_code)
+    }
+  }
+
   # Add DSA parameters (if any)
   if (!is.null(model$dsa_parameters) && length(model$dsa_parameters) > 0) {
     dsa_code <- generate_dsa_code(model$dsa_parameters)
@@ -333,6 +341,9 @@ generate_values_code <- function(values) {
     }
     if ("type" %in% names(v) && !is.na(v$type) && v$type != "outcome") {
       args <- args %&% glue(', type = "{v$type}"')
+    }
+    if ("discounting_override" %in% names(v) && !is.na(v$discounting_override) && v$discounting_override != "") {
+      args <- args %&% glue(', discounting_override = "{v$discounting_override}"')
     }
 
     code <- c(code, glue('  add_value({args}) |>'))
@@ -1007,6 +1018,21 @@ generate_psa_code <- function(psa) {
     "model <- set_psa(model,",
     args,
     ")"
+  )
+}
+
+#' Generate Decision Tree Code
+#' @keywords internal
+generate_decision_tree_code <- function(decision_tree) {
+  if (is.null(decision_tree)) return(character(0))
+
+  tree_name <- decision_tree$tree_name
+  duration <- decision_tree$duration
+  duration_unit <- decision_tree$duration_unit
+
+  c(
+    "# Set decision tree configuration",
+    glue('model <- set_decision_tree(model, "{tree_name}", {duration}, duration_unit = "{duration_unit}")')
   )
 }
 

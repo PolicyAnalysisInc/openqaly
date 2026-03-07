@@ -33,7 +33,7 @@ calculate_psm_custom_values(
 A matrix of calculated values
 }
 \description{
-Calculates residency and model-level values for Custom PSM models.
+Calculates residency and model start values for Custom PSM models.
 Transitional values are not supported.
 }
 \keyword{internal}

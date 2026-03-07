@@ -228,27 +228,6 @@ test_that('decision tree based probability calculations yield correct results', 
   )
   
 })
-test_that('evaluated decision tress can be plotted', {
-  
-  test_ns <- openqaly:::create_test_ns(segment)
-  cycles <- rep(seq_len(12), 12)
-  rows <- length(cycles)
-  test_ns$env$.trees <- tree_tests$trees_valid
-  
-  expect_silent({
-    
-    # Parse the variables specification
-    parsed_vars <- openqaly:::parse_seg_variables(tree_tests$vars, segment, tree_tests$trees_valid)
-  
-    # Evaluate the variables
-    var_res <- openqaly:::eval_variables(parsed_vars, test_ns)
-    
-    # Plot the tree
-    plot_decision_tree(var_res['tree'])
-
-  })
-  
-})
 
 # Internals
 test_that('checking subtrees works', {

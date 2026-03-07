@@ -295,7 +295,7 @@ State probability formulas can reference:
 
 Custom PSM supports:
 - **Residency values**: Applied when in a specific state (`state = "alive"`)
-- **Model-level values**: Applied regardless of state (`state = NA`)
+- **model start values**: Applied regardless of state (`state = NA`)
 
 **Transitional values** (with both `state` and `destination`) are **not supported**
 in Custom PSM because there are no explicit transitions between states.
@@ -309,5 +309,5 @@ in Custom PSM because there are no explicit transitions between states.
 | States | Exactly 3 (PF, Progressed, Dead) | 2 or more |
 | State probabilities | Derived from PFS/OS curve areas | Direct formulas |
 | Use cases | Standard oncology endpoints | Discontinuation, response-based, multi-state |
-| Values | Residency + transitional | Residency + model-level only |
+| Values | Residency + transitional | Residency + model start only |
 | Complement | Not applicable | One state can use `C` |

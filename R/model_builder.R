@@ -23,11 +23,18 @@ NULL
 #' model <- define_model("psm")
 #' model <- define_model("custom_psm")
 define_model <- function(type = "markov") {
-  type <- match.arg(tolower(type), c("markov", "psm", "custom_psm"))
+  type <- match.arg(tolower(type), c("markov", "psm", "custom_psm", "decision_tree"))
 
   # Type-specific state initialization
   # PSM and Custom PSM use same 3-column state structure
-  states_init <- if (type %in% c("psm", "custom_psm")) {
+  # Decision tree models have no states
+  states_init <- if (type == "decision_tree") {
+    tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0)
+    )
+  } else if (type %in% c("psm", "custom_psm")) {
     tibble(
       name = character(0),
       display_name = character(0),
@@ -47,7 +54,14 @@ define_model <- function(type = "markov") {
   }
 
   # Type-specific transitions initialization
-  transitions_init <- if (type == "psm") {
+  # Decision tree models have no transitions
+  transitions_init <- if (type == "decision_tree") {
+    tibble(
+      from_state = character(0),
+      to_state = character(0),
+      formula = character(0)
+    )
+  } else if (type == "psm") {
     tibble(
       endpoint = character(0),
       time_unit = character(0),
@@ -73,6 +87,8 @@ define_model <- function(type = "markov") {
       half_cycle_method = "start",
       discount_cost = 0,
       discount_outcomes = 0,
+      discount_timing = "start",
+      discount_method = "by_cycle",
       reduce_state_cycle = FALSE
     ),
     states = states_init,
@@ -120,6 +136,7 @@ define_model <- function(type = "markov") {
     tables = list(),
     scripts = list(),
     trees = NULL,
+    decision_tree = NULL,
     multivariate_sampling = list(),
     dsa_parameters = structure(list(), class = "dsa_parameters"),
     scenarios = list(),
@@ -166,6 +183,8 @@ set_settings <- function(model, ...) {
     discount_cost = "discount_cost",
     discount_outcomes = "discount_outcomes",
     half_cycle_method = "half_cycle_method",
+    discount_timing = "discount_timing",
+    discount_method = "discount_method",
     reduce_state_cycle = "reduce_state_cycle",
     days_per_year = "days_per_year"
   )
@@ -279,6 +298,97 @@ set_psa <- function(model, n_sim, seed = NULL) {
   model
 }
 
+#' Add a Tree Node
+#'
+#' Add a node to a decision tree in the model. Creates the trees tibble if it
+#' doesn't exist yet.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string for the tree name
+#' @param node Character string for the node name
+#' @param parent Character string for the parent node name (NA for root)
+#' @param formula An unquoted R expression for the node probability
+#' @param tags Optional character string for node tags
+#'
+#' @return The modified model object
+#'
+#' @export
+add_tree_node <- function(model, tree_name, node, parent = NA, formula, tags = NA) {
+  # Capture the formula expression using NSE
+  formula_quo <- enquo(formula)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
+
+  new_row <- tibble(
+    name = tree_name,
+    node = node,
+    parent = if (is.na(parent)) NA_character_ else as.character(parent),
+    formula = formula_str,
+    tags = if (is.na(tags)) NA_character_ else as.character(tags)
+  )
+
+  if (is.null(model$trees)) {
+    model$trees <- new_row
+  } else {
+    model$trees <- bind_rows(model$trees, new_row)
+  }
+
+  model
+}
+
+#' Set Decision Tree Configuration
+#'
+#' Configure a decision tree to run before the main model. The tree produces
+#' one-time payoffs and a duration that offsets downstream discounting.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string referencing a tree in model$trees
+#' @param duration An unquoted R expression for the duration (can reference variables for PSA)
+#' @param duration_unit Character string for the time unit ("days", "weeks", "months", "years")
+#'
+#' @return The modified model object
+#'
+#' @export
+set_decision_tree <- function(model, tree_name, duration, duration_unit = "days") {
+  # Validate duration_unit
+  valid_units <- c("days", "weeks", "months", "years")
+  duration_unit <- match.arg(tolower(duration_unit), valid_units)
+
+  # Capture the duration expression using NSE
+  duration_quo <- enquo(duration)
+  duration_expr <- quo_get_expr(duration_quo)
+  duration_str <- expr_text(duration_expr)
+  if (is.character(duration_expr) && length(duration_expr) == 1) {
+    duration_str <- duration_expr
+  }
+
+  model$decision_tree <- list(
+    tree_name = tree_name,
+    duration = duration_str,
+    duration_unit = duration_unit
+  )
+
+  model
+}
+
+#' Remove Decision Tree Configuration
+#'
+#' Remove the decision tree configuration from the model.
+#'
+#' @param model An oq_model_builder object
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_decision_tree <- function(model) {
+  model$decision_tree <- NULL
+  model
+}
+
 #' Add States to Model
 #'
 #' Add one or more states to the model.
@@ -313,6 +423,12 @@ add_state <- function(model, name, display_name = NULL,
 
   # Get immutable model type
   model_type <- tolower(model$settings$model_type)
+
+  # Decision tree models don't have states
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support states. Use add_value() with state = 'decision_tree' instead.",
+         call. = FALSE)
+  }
 
   if (model_type %in% c("psm", "custom_psm")) {
     # PSM and Custom PSM: Reject Markov-specific parameters
@@ -382,6 +498,9 @@ add_transition <- function(model, from_state, to_state, formula) {
   # Check model type for appropriate structure
   model_type <- tolower(model$settings$model_type %||% "markov")
 
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
   if (model_type == "psm") {
     stop("For PSM models, use add_psm_transition() instead")
   }
@@ -516,6 +635,12 @@ add_custom_psm_transition <- function(model, state, formula) {
 #' @param display_name Optional display name
 #' @param description Optional description
 #' @param type Value type (default: "outcome")
+#' @param discounting_override Optional formula string that overrides per-cycle
+#'   discounting. When provided, the formula result replaces the standard discount
+#'   factor entirely: \code{values_discounted = values * result}. The formula can
+#'   return a scalar or a vector of length n_cycles. Available variables in the
+#'   formula: all model variables, \code{discount_rate}, \code{discount_factors},
+#'   and \code{trace(state_name)}.
 #'
 #' @return The modified model object
 #'
@@ -525,7 +650,7 @@ add_custom_psm_transition <- function(model, state, formula) {
 #'   add_value("cost", base_cost + extra_cost, state = "sick")
 add_value <- function(model, name, formula, state = NA, destination = NA,
                      display_name = NULL, description = NULL,
-                     type = "outcome") {
+                     type = "outcome", discounting_override = NA) {
 
   # Check for transitional values in custom_psm (not supported)
   model_type <- tolower(model$settings$model_type %||% "markov")
@@ -534,7 +659,16 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     has_dest <- !is.na(destination) && destination != "NA"
     if (has_state && has_dest) {
       stop("Custom PSM models do not support transitional values (both state and destination). ",
-           "Use residency values (state only) or model-level values (no state/destination).")
+           "Use residency values (state only) or model start values (no state/destination).")
+    }
+  }
+
+  # Validate decision_tree state: destination must be NA
+  if (!is.na(state) && as.character(state) == "decision_tree") {
+    if (!is.na(destination) && as.character(destination) != "NA" && as.character(destination) != "") {
+      stop("Values with state = 'decision_tree' cannot have a destination. ",
+           "Decision tree values are one-time payoffs, not transitional values.",
+           call. = FALSE)
     }
   }
 
@@ -602,7 +736,8 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     destination = dest_str,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
-    type = type
+    type = type,
+    discounting_override = as.character(discounting_override)
   )
 
   model$values <- bind_rows(model$values, new_value)
@@ -891,6 +1026,13 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
+  # Check for name collision with values
+  if (is.data.frame(model$values) && nrow(model$values) > 0 && name %in% model$values$name) {
+    stop(sprintf(
+      "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+      name
+    ))
+  }
   # Store as structured list with data and optional description
   model$tables[[name]] <- list(
     data = data,

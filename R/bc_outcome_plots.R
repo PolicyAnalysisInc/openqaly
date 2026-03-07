@@ -218,6 +218,12 @@ outcomes_plot_line <- function(res, outcome,
                         cumulative = TRUE,
                         discounted = TRUE) {
 
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("outcomes_plot_line() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
+
   # Validate mutual exclusivity
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
     stop("'strategies' cannot be used with 'interventions' or 'comparators'")

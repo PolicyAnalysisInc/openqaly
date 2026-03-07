@@ -186,10 +186,18 @@ decision_tree <- function(df, name, cycle) {
       ns <- define_namespace(the_env, data.frame(cycle = cycle))
       
       # Evaluate the variables
-      res <- eval_variables(subtree_vars, ns, T, 'trees')
+      res <- eval_variables(subtree_vars, ns, FALSE, 'trees')
       
       # Put into a matrix
-      mat <- as.matrix(res$df[subtree_vars$name])
+      node_data <- lapply(subtree_vars$name, function(nm) {
+        if (nm %in% colnames(res$df)) {
+          res$df[[nm]]
+        } else {
+          get(nm, envir = res$env)
+        }
+      })
+      names(node_data) <- subtree_vars$name
+      mat <- as.matrix(as.data.frame(node_data))
 
       # Calculate complementary probabilities
       c_index <- mat == -pi

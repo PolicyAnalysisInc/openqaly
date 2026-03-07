@@ -555,3 +555,278 @@ test_that("High discount rate (50%) works correctly", {
   # By cycle 5, values should be heavily discounted
   expect_lt(values_disc[5, "cost"], 200)
 })
+
+# =============================================================================
+# Unit Tests: discount_timing and discount_method parameters
+# =============================================================================
+
+test_that("discount_timing = 'end' shifts time by one full cycle", {
+  factors <- calculate_discount_factors(5, 5, cycle_length_years = 1,
+                                        discount_timing = "end")
+  # end timing: time = cycle * cycle_length_years (cycles 1..5 => times 1,2,3,4,5)
+  expected <- 1 / 1.05^(1:5)
+  expect_equal(factors, expected, tolerance = 1e-10)
+})
+
+test_that("discount_timing = 'midpoint' uses half-cycle offset", {
+  factors <- calculate_discount_factors(5, 5, cycle_length_years = 1,
+                                        discount_timing = "midpoint")
+  # midpoint timing: time = (cycle - 0.5) * cycle_length_years
+  expected <- 1 / 1.05^(c(0.5, 1.5, 2.5, 3.5, 4.5))
+  expect_equal(factors, expected, tolerance = 1e-10)
+})
+
+test_that("discount_method = 'by_year' with monthly cycles floors to whole years (start timing)", {
+  # 24 monthly cycles, start timing
+  factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
+                                        discount_timing = "start",
+                                        discount_method = "by_year")
+  # start timing: time = (cycle - 1) / 12, floored to whole years
+  # Cycles 1-12: floor((0..11)/12) = 0  => factor = 1
+  # Cycles 13-24: floor((12..23)/12) = 1 => factor = 1/1.05
+  expected <- c(rep(1, 12), rep(1/1.05, 12))
+  expect_equal(factors, expected, tolerance = 1e-10)
+})
+
+test_that("discount_method = 'by_year' with midpoint timing", {
+  factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
+                                        discount_timing = "midpoint",
+                                        discount_method = "by_year")
+  # midpoint timing: time = (cycle - 0.5) / 12, floored
+  # Cycles 1-12: floor((0.5..11.5)/12) = floor(0.0417..0.9583) = 0 => factor = 1
+  # Cycles 13-24: floor((12.5..23.5)/12) = floor(1.0417..1.9583) = 1 => factor = 1/1.05
+  expected <- c(rep(1, 12), rep(1/1.05, 12))
+  expect_equal(factors, expected, tolerance = 1e-10)
+})
+
+test_that("discount_method = 'by_year' with end timing", {
+  factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
+                                        discount_timing = "end",
+                                        discount_method = "by_year")
+  # end timing: time = cycle / 12, floored
+  # Cycles 1-11: floor((1..11)/12) = 0 => factor = 1
+  # Cycle 12: floor(12/12) = 1 => factor = 1/1.05
+  # Cycles 13-23: floor((13..23)/12) = 1 => factor = 1/1.05
+  # Cycle 24: floor(24/12) = 2 => factor = 1/1.05^2
+  expected <- c(rep(1, 11), rep(1/1.05, 12), 1/1.05^2)
+  expect_equal(factors, expected, tolerance = 1e-10)
+})
+
+test_that("invalid discount_timing raises error", {
+  expect_error(
+    calculate_discount_factors(5, 5, discount_timing = "invalid"),
+    "Invalid discount_timing"
+  )
+})
+
+test_that("invalid discount_method raises error", {
+  expect_error(
+    calculate_discount_factors(5, 5, discount_method = "invalid"),
+    "Invalid discount_method"
+  )
+})
+
+test_that("default parameters produce identical results to no-arg call (backward compat)", {
+  factors_default <- calculate_discount_factors(12, 5, cycle_length_years = 1/12)
+  factors_explicit <- calculate_discount_factors(12, 5, cycle_length_years = 1/12,
+                                                  discount_timing = "start",
+                                                  discount_method = "by_cycle")
+  expect_identical(factors_default, factors_explicit)
+})
+
+# =============================================================================
+# Integration Test: discount_timing and discount_method via run_model()
+# =============================================================================
+
+test_that("discount_timing = 'end' produces correct discounted values via run_model()", {
+  json_model <- '
+{
+  "settings": [
+    {"setting": "model_type", "value": "markov"},
+    {"setting": "timeframe", "value": "5"},
+    {"setting": "timeframe_unit", "value": "years"},
+    {"setting": "discount_cost", "value": "3"},
+    {"setting": "discount_outcomes", "value": "1.5"},
+    {"setting": "cycle_length", "value": "1"},
+    {"setting": "cycle_length_unit", "value": "years"},
+    {"setting": "half_cycle_method", "value": "start"},
+    {"setting": "discount_timing", "value": "end"},
+    {"setting": "discount_method", "value": "by_cycle"},
+    {"setting": "days_per_year", "value": "365"},
+    {"setting": "reduce_state_cycle", "value": "false"}
+  ],
+  "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
+  "groups": [],
+  "states": [
+    {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""},
+    {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
+  ],
+  "transitions": [
+    {"from_state": "Alive", "to_state": "Alive", "formula": "0.9"},
+    {"from_state": "Alive", "to_state": "Dead", "formula": "0.1"},
+    {"from_state": "Dead", "to_state": "Dead", "formula": "1"},
+    {"from_state": "Dead", "to_state": "Alive", "formula": "0"}
+  ],
+  "values": [
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "type": "outcome"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "outcome"}
+  ],
+  "summaries": [
+    {"name": "total_cost", "display_name": "Total Cost", "description": "", "values": "cost"},
+    {"name": "total_utility", "display_name": "Total Utility", "description": "", "values": "utility"}
+  ],
+  "variables": [],
+  "trees": [],
+  "tables": [],
+  "scripts": []
+}
+'
+
+  temp_file <- tempfile(fileext = ".json")
+  writeLines(json_model, temp_file)
+  model <- read_model_json(readLines(temp_file))
+  unlink(temp_file)
+
+  results <- run_model(model)
+
+  alive_probs <- c(1.0, 0.9, 0.81, 0.729, 0.6561)
+
+  # end timing: time = cycle * cycle_length_years => times 1,2,3,4,5
+  cost_factors <- (1.03)^(-(1:5))
+  utility_factors <- (1.015)^(-(1:5))
+
+  expected_costs <- alive_probs * 1000 * cost_factors
+  expected_utilities <- alive_probs * 0.8 * utility_factors
+
+  values_disc <- results$aggregated$trace_and_values[[1]]$values_discounted
+
+  for(i in 1:5) {
+    expect_equal(values_disc[i, "cost"], expected_costs[i],
+                tolerance = 1e-10,
+                label = paste("Cycle", i, "cost with end timing"))
+    expect_equal(values_disc[i, "utility"], expected_utilities[i],
+                tolerance = 1e-10,
+                label = paste("Cycle", i, "utility with end timing"))
+  }
+})
+
+# =============================================================================
+# Deserialization Defaults Test
+# =============================================================================
+
+test_that("model without new settings defaults correctly and matches explicit start/by_cycle", {
+  # Model WITHOUT discount_timing and discount_method (simulating old model)
+  json_old <- '
+{
+  "settings": [
+    {"setting": "model_type", "value": "markov"},
+    {"setting": "timeframe", "value": "5"},
+    {"setting": "timeframe_unit", "value": "years"},
+    {"setting": "discount_cost", "value": "3"},
+    {"setting": "discount_outcomes", "value": "1.5"},
+    {"setting": "cycle_length", "value": "1"},
+    {"setting": "cycle_length_unit", "value": "years"},
+    {"setting": "half_cycle_method", "value": "start"},
+    {"setting": "days_per_year", "value": "365"},
+    {"setting": "reduce_state_cycle", "value": "false"}
+  ],
+  "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
+  "groups": [],
+  "states": [
+    {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""},
+    {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
+  ],
+  "transitions": [
+    {"from_state": "Alive", "to_state": "Alive", "formula": "0.9"},
+    {"from_state": "Alive", "to_state": "Dead", "formula": "0.1"},
+    {"from_state": "Dead", "to_state": "Dead", "formula": "1"},
+    {"from_state": "Dead", "to_state": "Alive", "formula": "0"}
+  ],
+  "values": [
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "type": "outcome"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "outcome"}
+  ],
+  "summaries": [
+    {"name": "total_cost", "display_name": "Total Cost", "description": "", "values": "cost"},
+    {"name": "total_utility", "display_name": "Total Utility", "description": "", "values": "utility"}
+  ],
+  "variables": [],
+  "trees": [],
+  "tables": [],
+  "scripts": []
+}
+'
+
+  # Model WITH explicit start/by_cycle
+  json_new <- '
+{
+  "settings": [
+    {"setting": "model_type", "value": "markov"},
+    {"setting": "timeframe", "value": "5"},
+    {"setting": "timeframe_unit", "value": "years"},
+    {"setting": "discount_cost", "value": "3"},
+    {"setting": "discount_outcomes", "value": "1.5"},
+    {"setting": "cycle_length", "value": "1"},
+    {"setting": "cycle_length_unit", "value": "years"},
+    {"setting": "half_cycle_method", "value": "start"},
+    {"setting": "discount_timing", "value": "start"},
+    {"setting": "discount_method", "value": "by_cycle"},
+    {"setting": "days_per_year", "value": "365"},
+    {"setting": "reduce_state_cycle", "value": "false"}
+  ],
+  "strategies": [{"name": "base", "display_name": "Base", "description": "", "abbreviation": ""}],
+  "groups": [],
+  "states": [
+    {"name": "Alive", "display_name": "Alive", "description": "", "initial_probability": "1", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""},
+    {"name": "Dead", "display_name": "Dead", "description": "", "initial_probability": "0", "state_group": "", "share_state_time": false, "state_cycle_limit": null, "state_cycle_limit_unit": ""}
+  ],
+  "transitions": [
+    {"from_state": "Alive", "to_state": "Alive", "formula": "0.9"},
+    {"from_state": "Alive", "to_state": "Dead", "formula": "0.1"},
+    {"from_state": "Dead", "to_state": "Dead", "formula": "1"},
+    {"from_state": "Dead", "to_state": "Alive", "formula": "0"}
+  ],
+  "values": [
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Alive", "destination": "", "formula": "1000", "type": "cost"},
+    {"name": "cost", "display_name": "Cost", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "cost"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Alive", "destination": "", "formula": "0.8", "type": "outcome"},
+    {"name": "utility", "display_name": "Utility", "description": "", "state": "Dead", "destination": "", "formula": "0", "type": "outcome"}
+  ],
+  "summaries": [
+    {"name": "total_cost", "display_name": "Total Cost", "description": "", "values": "cost"},
+    {"name": "total_utility", "display_name": "Total Utility", "description": "", "values": "utility"}
+  ],
+  "variables": [],
+  "trees": [],
+  "tables": [],
+  "scripts": []
+}
+'
+
+  temp_old <- tempfile(fileext = ".json")
+  writeLines(json_old, temp_old)
+  model_old <- read_model_json(readLines(temp_old))
+  unlink(temp_old)
+
+  temp_new <- tempfile(fileext = ".json")
+  writeLines(json_new, temp_new)
+  model_new <- read_model_json(readLines(temp_new))
+  unlink(temp_new)
+
+  # Settings should default correctly
+  expect_equal(model_old$settings$discount_timing, "start")
+  expect_equal(model_old$settings$discount_method, "by_cycle")
+
+  # Run both models and compare discounted values
+  results_old <- run_model(model_old)
+  results_new <- run_model(model_new)
+
+  values_old <- results_old$aggregated$trace_and_values[[1]]$values_discounted
+  values_new <- results_new$aggregated$trace_and_values[[1]]$values_discounted
+
+  expect_equal(values_old, values_new, tolerance = 1e-10)
+})

@@ -4,7 +4,14 @@
 \alias{calculate_discount_factors}
 \title{Calculate Discount Factors}
 \usage{
-calculate_discount_factors(n_cycles, discount_rate, cycle_length_years = 1)
+calculate_discount_factors(
+  n_cycles,
+  discount_rate,
+  cycle_length_years = 1,
+  discount_timing = "start",
+  discount_method = "by_cycle",
+  offset_years = 0
+)
 }
 \arguments{
 \item{n_cycles}{Number of cycles}
@@ -12,6 +19,16 @@ calculate_discount_factors(n_cycles, discount_rate, cycle_length_years = 1)
 \item{discount_rate}{Annual discount rate as a percentage (e.g., 3.5 for 3.5\%)}
 
 \item{cycle_length_years}{Length of each cycle in years (e.g., 1/12 for monthly, 1/52 for weekly)}
+
+\item{discount_timing}{Which point in the cycle to use for the discount formula:
+\code{"start"} (default, cycle start), \code{"end"} (cycle end), or \code{"midpoint"} (cycle midpoint).}
+
+\item{discount_method}{Whether discounting steps annually or continuously:
+\code{"by_cycle"} (default, continuous per-cycle time) or \code{"by_year"} (floor to whole years).}
+
+\item{offset_years}{Offset in years added to all time points before applying
+discounting. Used when a decision tree phase precedes the model, shifting
+all discounting forward. Default is 0.}
 }
 \value{
 Vector of discount factors for each cycle

@@ -754,7 +754,7 @@ expect_models_equivalent <- function(original, restored, label = "") {
 # - Script names preserve original naming (no double .R extension)
 
 test_that("Excel -> JSON -> Excel preserves all components", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model with all components including SA
   model <- create_comprehensive_model()
@@ -787,7 +787,7 @@ test_that("Excel -> JSON -> Excel preserves all components", {
 })
 
 test_that("JSON -> Excel -> JSON preserves all components", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model with all components including SA
   model <- create_comprehensive_model()
@@ -968,7 +968,7 @@ test_that("JSON -> R -> JSON preserves core components", {
 # ==============================================================================
 
 test_that("all formats produce equivalent JSON for same model", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model to test all components including SA
   model <- create_comprehensive_model()
@@ -1382,7 +1382,7 @@ test_that("VBP config survives R code round-trip", {
 })
 
 test_that("VBP config survives Excel round-trip", {
-  skip_on_cran()
+  skip_if_cran()
 
   model <- create_model_with_vbp()
 
@@ -1518,7 +1518,7 @@ test_that("PSA config without seed survives R code round-trip", {
 })
 
 test_that("PSA config survives Excel round-trip", {
-  skip_on_cran()
+  skip_if_cran()
 
   model <- create_model_with_psa()
 
@@ -1535,7 +1535,7 @@ test_that("PSA config survives Excel round-trip", {
 })
 
 test_that("PSA config without seed survives Excel round-trip", {
-  skip_on_cran()
+  skip_if_cran()
 
   model <- create_test_model() |>
     set_psa(n_sim = 150)
@@ -1565,6 +1565,167 @@ test_that("model without PSA has NULL psa field", {
   write_model_yaml(model, yaml_path)
   model_back <- read_model_yaml(yaml_path)
   expect_null(model_back$psa)
+
+  unlink(yaml_path)
+})
+
+# ==============================================================================
+# discount_timing and discount_method Round-Trip Tests
+# ==============================================================================
+
+test_that("discount_timing and discount_method survive JSON round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_equal(model_back$settings$discount_timing, "midpoint")
+  expect_equal(model_back$settings$discount_method, "by_year")
+})
+
+test_that("discount_timing and discount_method survive YAML round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "end",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_equal(model_back$settings$discount_timing, "end")
+  expect_equal(model_back$settings$discount_method, "by_year")
+
+  unlink(yaml_path)
+})
+
+test_that("discount_timing and discount_method survive Excel round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_cycle"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  temp_dir <- tempdir()
+  write_model_excel(model, temp_dir)
+  model_back <- read_model(temp_dir)
+
+  expect_equal(model_back$settings$discount_timing, "midpoint")
+  expect_equal(model_back$settings$discount_method, "by_cycle")
+
+  unlink(file.path(temp_dir, "model.xlsx"))
+})
+
+test_that("discount_timing and discount_method survive R code generation round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "end",
+      discount_method = "by_cycle"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  code <- model_to_r_code(model)
+  # Evaluate the generated R code to reconstruct the model
+  model_back <- eval(parse(text = code))
+
+  expect_equal(model_back$settings$discount_timing, "end")
+  expect_equal(model_back$settings$discount_method, "by_cycle")
+})
+
+test_that("discount_timing and discount_method survive JSON -> YAML cross-format", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  # JSON -> read -> YAML -> read -> JSON -> read
+  json1 <- write_model_json(model)
+  model_from_json <- read_model_json(json1)
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model_from_json, yaml_path)
+  model_from_yaml <- read_model_yaml(yaml_path)
+
+  json2 <- write_model_json(model_from_yaml)
+  model_final <- read_model_json(json2)
+
+  expect_equal(model_final$settings$discount_timing, "midpoint")
+  expect_equal(model_final$settings$discount_method, "by_year")
 
   unlink(yaml_path)
 })

@@ -406,6 +406,12 @@ trace_plot_area <- function(res,
                        use_display_names = TRUE,
                        time_unit = "cycle") {
 
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("trace_plot_area() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
+
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(res,
                           format = "long",
@@ -560,6 +566,12 @@ trace_plot_line <- function(res,
                               collapsed = TRUE,
                               use_display_names = TRUE,
                               time_unit = "cycle") {
+
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("trace_plot_line() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
 
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(res,

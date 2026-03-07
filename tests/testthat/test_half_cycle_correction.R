@@ -112,9 +112,8 @@ test_that("Half-cycle correction methods produce different results", {
   expect_false(all(values_start == values_lifetable))
   expect_false(all(values_end == values_lifetable))
 
-  # Life-table should be between start and end for most cycles
-  # (except first and last where special rules apply)
-  for (i in 2:(n_cycles-1)) {
+  # Life-table should be between start and end for all cycles
+  for (i in 1:n_cycles) {
     min_val <- min(values_start[i], values_end[i])
     max_val <- max(values_start[i], values_end[i])
     # Life-table should be approximately in the middle
@@ -233,7 +232,7 @@ test_that("Life-table method implements half-cycle correction correctly", {
   # Cycle 2: average of trace[1] and trace[2] = (1+1)/2 = 1 in state 1
   # Cycle 3: average of trace[2] and trace[3] = (1+0)/2 = 0.5 in state 1, 0.5 in state 2
   # Cycle 4: average of trace[3] and trace[4] = (0+0)/2 = 0 in state 1, 1 in state 2
-  # Cycle 5: just trace[5] = 0 in state 1, 1 in state 2 (last cycle)
+  # Cycle 5: average of trace[4] and trace[5] = (0+0)/2 = 0 in state 1, (1+1)/2 = 1 in state 2
 
   values <- result_lifetable$values
   expect_equal(values[1, "value1"], 1)

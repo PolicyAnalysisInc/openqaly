@@ -717,7 +717,7 @@ test_that("calculate_psm_values applies transitional values correctly", {
   expect_equal(result[3, "prog_cost"], 200)
 })
 
-test_that("calculate_psm_values applies model-level values correctly", {
+test_that("calculate_psm_values applies model start values correctly", {
   n_cycles <- 2
   trace <- matrix(c(
     1.0, 0.0, 0.0,
@@ -727,7 +727,7 @@ test_that("calculate_psm_values applies model-level values correctly", {
   colnames(trace) <- c("pfs", "progressed", "dead")
   rownames(trace) <- 0:2
 
-  # Model-level value (no state association): fixed cost per cycle
+  # Model start value (no state association): one-time cost at model start
   uneval_values <- data.frame(
     name = "admin_cost",
     state = NA,
@@ -754,9 +754,9 @@ test_that("calculate_psm_values applies model-level values correctly", {
     "start"
   )
 
-  # Model-level value: applied directly without state weighting
+  # Model start value: applied only at cycle 1
   expect_equal(result[1, "admin_cost"], 100)
-  expect_equal(result[2, "admin_cost"], 100)
+  expect_equal(result[2, "admin_cost"], 0)
 })
 
 test_that("calculate_psm_values handles half-cycle method 'end' correctly", {
@@ -840,8 +840,8 @@ test_that("calculate_psm_values handles half-cycle method 'life-table' correctly
   # Life-table method for cycle 1: average of trace[1,] and trace[2,]
   # (1.0 + 0.8) / 2 = 0.9
   expect_equal(result[1, "utility"], 0.9)
-  # Cycle 2 (last cycle): uses end value only = trace[3,] = 0.6
-  expect_equal(result[2, "utility"], 0.6)
+  # Cycle 2: average of trace[2,] and trace[3,] = (0.8 + 0.6) / 2 = 0.7
+  expect_equal(result[2, "utility"], 0.7)
 })
 
 test_that("calculate_psm_values returns empty matrix when no values defined", {
@@ -1417,7 +1417,7 @@ test_that("calculate_psm_custom_values applies residency values correctly", {
   expect_equal(result[2, "utility"], 0.8)
 })
 
-test_that("calculate_psm_custom_values applies model-level values correctly", {
+test_that("calculate_psm_custom_values applies model start values correctly", {
   n_cycles <- 2
   trace <- matrix(c(1.0, 0.0, 0.8, 0.2, 0.6, 0.4), nrow = 3, byrow = TRUE)
   colnames(trace) <- c("alive", "dead")
@@ -1425,7 +1425,7 @@ test_that("calculate_psm_custom_values applies model-level values correctly", {
 
   uneval_values <- data.frame(
     name = "admin_cost",
-    state = NA,  # Model-level
+    state = NA,  # Model start
     destination = NA,
     type = "cost",
     stringsAsFactors = FALSE
@@ -1443,9 +1443,9 @@ test_that("calculate_psm_custom_values applies model-level values correctly", {
     n_cycles, "start"
   )
 
-  # Model-level: applied without state weighting
+  # Model start value: applied only at cycle 1
   expect_equal(result[1, "admin_cost"], 50)
-  expect_equal(result[2, "admin_cost"], 50)
+  expect_equal(result[2, "admin_cost"], 0)
 })
 
 test_that("calculate_psm_custom_values handles half-cycle methods", {
