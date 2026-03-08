@@ -4,15 +4,20 @@
 \alias{plot_decision_tree}
 \title{Plot a Decision Tree}
 \usage{
-plot_decision_tree(model, tree_name = NULL, ...)
+plot_decision_tree(x, tree_name = NULL, strategy = NULL, group = NULL, ...)
 }
 \arguments{
-\item{model}{An \code{oq_model} or \code{oq_model_builder} object
-containing a \code{trees} component.}
+\item{x}{An \code{oq_model}, \code{oq_model_builder}, or results object
+from \code{run_model()}.}
 
 \item{tree_name}{Character string specifying which tree to plot. If
-\code{NULL}, uses the tree referenced by \code{model$decision_tree$tree_name},
-or the first tree found.}
+\code{NULL}, auto-detects from the model or results.}
+
+\item{strategy}{Character string specifying which strategy to plot.
+Required when \code{x} is a results object.}
+
+\item{group}{Character string specifying which group to plot. If \code{NULL}
+(default), uses the first group. Only used when \code{x} is a results object.}
 
 \item{...}{Additional arguments (currently unused).}
 }
@@ -23,4 +28,9 @@ A ggplot2/ggraph object displaying the tree structure.
 Creates a health economics-standard visualization of a decision tree,
 with horizontal left-to-right layout and standard node shapes:
 circle for chance nodes and triangle for terminal nodes.
+}
+\details{
+When called with a model or builder object, edge labels show formula text.
+When called with results from \code{run_model()}, edge labels show
+evaluated conditional probabilities as percentages.
 }

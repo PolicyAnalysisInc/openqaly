@@ -229,7 +229,7 @@ outcomes_table(markov_dt_results, outcome = "total_qaly")
 running). It shows node shapes (circles for chance nodes, triangles for terminal
 nodes) and formula labels on edges.
 
-```{r dt-structure-plot, fig.width=9, fig.height=6}
+```{r dt-structure-plot, fig.width=12, fig.height=8}
 plot_decision_tree(dt_model)
 ```
 
@@ -239,25 +239,23 @@ For models with multiple trees, specify which tree to plot:
 plot_decision_tree(model, tree_name = "my_tree")
 ```
 
-### Evaluated Tree Sankey Plot
+### Evaluated Tree Plot
 
-`plot_decision_tree_sankey()` visualizes the evaluated tree from `run_model()`
-output. Flow widths are proportional to computed probabilities, and flows are
-colored by the first branch.
+`plot_decision_tree()` can also visualize evaluated results from `run_model()`,
+showing conditional probabilities on each edge instead of formula text.
 
-```{r dt-sankey-plot, fig.width=9, fig.height=6}
-plot_decision_tree_sankey(dt_results)
+```{r dt-results-plot, fig.width=12, fig.height=8}
+plot_decision_tree(dt_results, strategy = "drug_a")
 ```
 
-The Sankey automatically facets when there are multiple strategies or groups.
-You can filter with the `strategies` and `groups` parameters:
+For multi-strategy models, specify which strategy to plot:
 
 ```r
-plot_decision_tree_sankey(results, strategies = "drug_a")
+plot_decision_tree(results, strategy = "drug_a")
 ```
 
-Note: Sankey plots require base-case results — they are not available for PSA
-or DSA output.
+Note: Plotting results requires base-case output — PSA or DSA results are not
+supported.
 
 ---
 

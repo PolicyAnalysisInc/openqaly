@@ -361,7 +361,7 @@ test_that("plot_decision_tree errors on model with no trees", {
 test_that("plot_decision_tree errors on non-model input", {
   expect_error(
     plot_decision_tree(list(a = 1)),
-    "must be an oq_model or oq_model_builder"
+    "must be an oq_model"
   )
 })
 
@@ -842,32 +842,46 @@ test_that("discounting_override with discount_factors vector works in Markov", {
 })
 
 # ==============================================================================
-# Sankey Plot Tests
+# plot_decision_tree on Results Tests
 # ==============================================================================
 
-test_that("plot_decision_tree_sankey returns gg object", {
+test_that("plot_decision_tree on results returns gg with probability labels", {
   model <- create_standalone_dt_model()
   result <- run_model(model)
-  p <- plot_decision_tree_sankey(result)
+  p <- plot_decision_tree(result, strategy = "treatment")
+  expect_s3_class(p, "gg")
+  # Check that edge labels contain percentage signs (layer 2 = geom_label)
+  edge_data <- ggplot2::layer_data(p, 2)
+  expect_true(all(grepl("%", edge_data$label)))
+})
+
+test_that("plot_decision_tree on results respects tree_name parameter", {
+  model <- create_standalone_dt_model()
+  result <- run_model(model)
+  p <- plot_decision_tree(result, strategy = "treatment",
+                          tree_name = "treatment")
   expect_s3_class(p, "gg")
 })
 
-test_that("plot_decision_tree_sankey respects tree_name parameter", {
+test_that("plot_decision_tree on results errors when strategy is missing", {
   model <- create_standalone_dt_model()
   result <- run_model(model)
-  p <- plot_decision_tree_sankey(result, tree_name = "treatment")
-  expect_s3_class(p, "gg")
-})
-
-test_that("plot_decision_tree_sankey errors on non-run_model results", {
-  model <- create_standalone_dt_model()
   expect_error(
-    plot_decision_tree_sankey(model),
-    "must be output from run_model"
+    plot_decision_tree(result),
+    "strategy.*required"
   )
 })
 
-test_that("plot_decision_tree_sankey handles multi-strategy model", {
+test_that("plot_decision_tree on results errors on invalid strategy", {
+  model <- create_standalone_dt_model()
+  result <- run_model(model)
+  expect_error(
+    plot_decision_tree(result, strategy = "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("plot_decision_tree on results works with multi-strategy model", {
   model <- define_model("decision_tree") |>
     add_variable("drug_a_cost", 10000) |>
     add_strategy("treatment_a") |>
@@ -886,16 +900,18 @@ test_that("plot_decision_tree_sankey handles multi-strategy model", {
     add_summary("total_qaly", type = "outcome", values = "drug_qaly")
 
   result <- run_model(model)
-  p <- plot_decision_tree_sankey(result)
+  p <- plot_decision_tree(result, strategy = "treatment_a")
   expect_s3_class(p, "gg")
+  p2 <- plot_decision_tree(result, strategy = "treatment_b")
+  expect_s3_class(p2, "gg")
 })
 
-test_that("plot_decision_tree_sankey errors without eval_vars", {
+test_that("plot_decision_tree on results errors without eval_vars", {
   model <- create_standalone_dt_model()
   result <- run_model(model)
   result$segments$eval_vars <- NULL
   expect_error(
-    plot_decision_tree_sankey(result),
-    "base-case results"
+    plot_decision_tree(result, strategy = "treatment"),
+    "base-case"
   )
 })
