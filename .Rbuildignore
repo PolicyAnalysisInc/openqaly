@@ -1,5 +1,3 @@
-^\.circleci$
-^\.circleci/config\.yml$
 ^codecov\.yml$
 ^\.
 ^scratch notes$

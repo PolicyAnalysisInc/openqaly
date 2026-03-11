@@ -337,6 +337,8 @@ add_tree_node <- function(model, tree_name, node, parent = NA, formula, tags = N
     model$trees <- bind_rows(model$trees, new_row)
   }
 
+  validate_tree_name_collisions(tree_name, model)
+
   model
 }
 
@@ -428,6 +430,16 @@ add_state <- function(model, name, display_name = NULL,
   if (model_type == "decision_tree") {
     stop("Decision tree models do not support states. Use add_value() with state = 'decision_tree' instead.",
          call. = FALSE)
+  }
+
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
   }
 
   if (model_type %in% c("psm", "custom_psm")) {
@@ -729,6 +741,16 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     }
   }
 
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
   new_value <- tibble(
     name = name,
     formula = formula_str,
@@ -876,6 +898,16 @@ add_variable <- function(model, name, formula, display_name = NULL,
     }
   }
 
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
   new_var <- tibble(
     name = name,
     formula = formula_str,
@@ -992,6 +1024,16 @@ add_summary <- function(model, name, values, display_name = NULL,
     stop("Summary type must be 'outcome' or 'cost'")
   }
 
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
   # Validate that WTP is not specified for cost summaries
   if (type == "cost" && !is.null(wtp)) {
     stop(sprintf("WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.", name))
@@ -1026,6 +1068,15 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
   # Check for name collision with values
   if (is.data.frame(model$values) && nrow(model$values) > 0 && name %in% model$values$name) {
     stop(sprintf(

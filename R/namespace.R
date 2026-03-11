@@ -48,7 +48,9 @@ define_namespace <- function(env, df, additional = NULL, ...) {
     }
     
     # Handle non-dataframe additional items
-    additional <- if (length(non_df_list) > 0) non_df_list[[1]] else NULL
+    additional <- if (length(non_df_list) > 0) {
+      do.call(c, non_df_list)
+    } else NULL
   } else if (!is.null(additional) && is.data.frame(additional)) {
     # If additional is a dataframe, merge it with df
     df <- cbind(df, additional)

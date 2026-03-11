@@ -160,7 +160,7 @@ cycle_length_variables <- function(settings) {
 
   # Return NA values if cycle length couldn't be determined
   if (is.na(cl)) {
-    return(tibble(
+    return(list(
       cycle_length_days = NA_real_,
       cycle_length_weeks = NA_real_,
       cycle_length_months = NA_real_,
@@ -168,7 +168,7 @@ cycle_length_variables <- function(settings) {
     ))
   }
 
-  tibble(
+  list(
     cycle_length_days = cl,
     cycle_length_weeks = convert_time(cl, from = 'Days', to = 'Weeks', settings),
     cycle_length_months = convert_time(cl, from = 'Days', to = 'Months', settings),

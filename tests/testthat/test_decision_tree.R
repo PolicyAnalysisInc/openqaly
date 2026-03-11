@@ -915,3 +915,145 @@ test_that("plot_decision_tree on results errors without eval_vars", {
     "base-case"
   )
 })
+
+# ==============================================================================
+# Tree Name Collision Tests
+# ==============================================================================
+
+test_that("tree name collides with variable name (tree added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("my_var", "root", parent = NA, formula = 1) |>
+      add_variable("my_var", 100),
+    'Name collision.*"my_var".*decision tree'
+  )
+})
+
+test_that("tree name collides with variable name (variable added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_variable("my_var", 100) |>
+      add_tree_node("my_var", "root", parent = NA, formula = 1),
+    "Name collision.*decision trees and variables"
+  )
+})
+
+test_that("tree name collides with table name (tree added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("my_tbl", "root", parent = NA, formula = 1) |>
+      add_table("my_tbl", data.frame(x = 1)),
+    'Name collision.*"my_tbl".*decision tree'
+  )
+})
+
+test_that("tree name collides with table name (table added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_table("my_tbl", data.frame(x = 1)) |>
+      add_tree_node("my_tbl", "root", parent = NA, formula = 1),
+    "Name collision.*decision trees and tables"
+  )
+})
+
+test_that("tree name collides with value name (tree added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("my_val", "root", parent = NA, formula = 1) |>
+      add_strategy("s") |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("dead", initial_prob = 0) |>
+      add_transition("healthy", "dead", 0.1) |>
+      add_transition("healthy", "healthy", C) |>
+      add_transition("dead", "dead", 1) |>
+      add_value("my_val", formula = 100, type = "cost", state = "healthy"),
+    'Name collision.*"my_val".*decision tree'
+  )
+})
+
+test_that("tree name collides with value name (value added first)", {
+  model <- define_model("markov") |>
+    add_strategy("s") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("healthy", "dead", 0.1) |>
+    add_transition("healthy", "healthy", C) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("my_val", formula = 100, type = "cost", state = "healthy")
+
+  expect_error(
+    model |> add_tree_node("my_val", "root", parent = NA, formula = 1),
+    "Name collision.*decision trees and values"
+  )
+})
+
+test_that("tree name collides with state name (tree added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("healthy", "root", parent = NA, formula = 1) |>
+      add_state("healthy", initial_prob = 1),
+    'Name collision.*"healthy".*decision tree'
+  )
+})
+
+test_that("tree name collides with state name (state added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_state("healthy", initial_prob = 1) |>
+      add_tree_node("healthy", "root", parent = NA, formula = 1),
+    "Name collision.*decision trees and states"
+  )
+})
+
+test_that("tree name collides with summary name (tree added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("total_cost", "root", parent = NA, formula = 1) |>
+      add_summary("total_cost", type = "cost", values = "some_val"),
+    'Name collision.*"total_cost".*decision tree'
+  )
+})
+
+test_that("tree name collides with summary name (summary added first)", {
+  expect_error(
+    define_model("markov") |>
+      add_summary("total_cost", type = "cost", values = "some_val") |>
+      add_tree_node("total_cost", "root", parent = NA, formula = 1),
+    "Name collision.*decision trees and summaries"
+  )
+})
+
+test_that("tree name collides with reserved keyword", {
+  expect_error(
+    define_model("markov") |>
+      add_tree_node("cycle", "root", parent = NA, formula = 1),
+    "Name collision.*reserved keywords"
+  )
+})
+
+test_that("validation-time detection of tree name collision", {
+  # Build a model, then manually inject a collision
+  model <- define_model("markov") |>
+    add_tree_node("my_tree", "root", parent = NA, formula = 1)
+  # Manually add a variable with the same name (bypassing builder check)
+  model$variables <- tibble::tibble(
+    name = "my_tree", formula = "1", display_name = "", description = "",
+    strategy = "", group = "", source = "", sampling = ""
+  )
+  expect_error(
+    normalize_and_validate_model(model, preserve_builder = FALSE),
+    "Name collision.*decision trees and variables"
+  )
+})
+
+test_that("non-colliding tree names work fine", {
+  # This should not error
+  model <- define_model("markov") |>
+    add_variable("my_var", 100) |>
+    add_tree_node("my_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("my_tree", "left", parent = "root", formula = 0.5) |>
+    add_tree_node("my_tree", "right", parent = "root", formula = "C")
+
+  expect_false(is.null(model$trees))
+  expect_equal(nrow(model$trees), 3)
+})

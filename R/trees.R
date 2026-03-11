@@ -140,7 +140,77 @@ check_tree_df <- function(df) {
     )
     stop(error_msg, call. = F)
   }
-  
+
+}
+
+#' Validate tree name collisions with other model components
+#' @param tree_names Character vector of tree names to check
+#' @param model The model object
+#' @keywords internal
+validate_tree_name_collisions <- function(tree_names, model) {
+  # Check against variables
+  if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+    collisions <- intersect(tree_names, unique(model$variables$name))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        'Name collision detected: the following names are used as both decision trees and variables: %s. Please rename the tree(s) or variable(s) to avoid this conflict.',
+        err_name_string(collisions)
+      ), call. = FALSE)
+    }
+  }
+
+  # Check against tables
+  if (length(model$tables) > 0) {
+    collisions <- intersect(tree_names, names(model$tables))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        'Name collision detected: the following names are used as both decision trees and tables: %s. Please rename the tree(s) or table(s) to avoid this conflict.',
+        err_name_string(collisions)
+      ), call. = FALSE)
+    }
+  }
+
+  # Check against values
+  if (is.data.frame(model$values) && nrow(model$values) > 0) {
+    collisions <- intersect(tree_names, unique(model$values$name))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        'Name collision detected: the following names are used as both decision trees and values: %s. Please rename the tree(s) or value(s) to avoid this conflict.',
+        err_name_string(collisions)
+      ), call. = FALSE)
+    }
+  }
+
+  # Check against states
+  if (is.data.frame(model$states) && nrow(model$states) > 0) {
+    collisions <- intersect(tree_names, unique(model$states$name))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        'Name collision detected: the following names are used as both decision trees and states: %s. Please rename the tree(s) or state(s) to avoid this conflict.',
+        err_name_string(collisions)
+      ), call. = FALSE)
+    }
+  }
+
+  # Check against summaries
+  if (is.data.frame(model$summaries) && nrow(model$summaries) > 0) {
+    collisions <- intersect(tree_names, unique(model$summaries$name))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        'Name collision detected: the following names are used as both decision trees and summaries: %s. Please rename the tree(s) or summary(ies) to avoid this conflict.',
+        err_name_string(collisions)
+      ), call. = FALSE)
+    }
+  }
+
+  # Check against reserved keywords
+  collisions <- intersect(tree_names, oq_keywords)
+  if (length(collisions) > 0) {
+    stop(sprintf(
+      'Name collision detected: the following decision tree names are reserved keywords: %s. Please rename the tree(s) to avoid this conflict.',
+      err_name_string(collisions)
+    ), call. = FALSE)
+  }
 }
 
 #' Evaluate a Decision Tree

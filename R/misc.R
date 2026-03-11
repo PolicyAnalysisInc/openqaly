@@ -1420,6 +1420,11 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     }
   }
 
+  # Validate no name collisions between trees and other components
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    validate_tree_name_collisions(unique(model$trees$name), model)
+  }
+
   # Set class
   if (preserve_builder && "oq_model_builder" %in% class(model)) {
     class(model) <- c("oq_model_builder", "oq_model")
