@@ -4,14 +4,24 @@
 \alias{threshold_plot}
 \title{Threshold Plot}
 \usage{
-threshold_plot(results, analyses = NULL, decimals = 4)
+threshold_plot(
+  results,
+  analyses = NULL,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE
+)
 }
 \arguments{
 \item{results}{Threshold results from run_threshold()}
 
 \item{analyses}{Optional character vector of analysis names to include}
 
-\item{decimals}{Number of decimal places for threshold value label (default: 4)}
+\item{axis_decimals}{Number of decimal places for axis labels, or NULL for auto}
+
+\item{label_decimals}{Number of decimal places for threshold value label, or NULL for auto}
+
+\item{abbreviate}{Logical. If TRUE, use K/M/B/T abbreviations. Default FALSE}
 }
 \value{
 A ggplot object

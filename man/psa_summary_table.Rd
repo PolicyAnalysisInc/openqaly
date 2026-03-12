@@ -11,8 +11,9 @@ psa_summary_table(
   pce_wtp = c(50000, 1e+05, 150000),
   groups = "overall",
   strategies = NULL,
-  outcome_decimals = 2,
-  cost_decimals = 0,
+  outcome_decimals = NULL,
+  cost_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -39,9 +40,11 @@ psa_summary_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
-\item{outcome_decimals}{Number of decimal places for outcomes (default: 2)}
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL, auto)}
 
-\item{cost_decimals}{Number of decimal places for costs (default: 0, nearest unit)}
+\item{cost_decimals}{Number of decimal places for costs (default: NULL, auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
@@ -64,9 +67,6 @@ three sections:
   \item Cost: Mean (95% CI), SD, Median (IQR), Range
   \item Probability of Cost-Effectiveness: One row per WTP threshold
 }
-
-All rounding uses decimal places (not significant figures). Costs are rounded
-to the nearest unit by default (cost_decimals = 0).
 
 PSA summary calculations always use discounted values as this is a
 cost-effectiveness measure.

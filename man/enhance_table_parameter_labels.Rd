@@ -4,7 +4,7 @@
 \alias{enhance_table_parameter_labels}
 \title{Enhance Table Parameter Labels with Input Values}
 \usage{
-enhance_table_parameter_labels(data, results)
+enhance_table_parameter_labels(data, results, locale = NULL)
 }
 \arguments{
 \item{data}{A data frame with parameter and parameter_display_name columns}

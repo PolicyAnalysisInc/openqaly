@@ -325,8 +325,8 @@ vbp_plot <- function(vbp_results,
 
   # Add scales and theme
   p <- p +
-    scale_x_continuous(labels = comma) +
-    scale_y_continuous(labels = comma) +
+    scale_x_continuous(labels = oq_label_fn(currency = TRUE, abbreviate = TRUE)) +
+    scale_y_continuous(labels = oq_label_fn(currency = TRUE, abbreviate = TRUE)) +
     theme_bw() +
     labs(
       x = "Willingness-to-Pay Threshold",

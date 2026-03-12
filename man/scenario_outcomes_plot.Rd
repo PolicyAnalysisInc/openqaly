@@ -11,7 +11,10 @@ scenario_outcomes_plot(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = TRUE
+  discounted = TRUE,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -33,6 +36,12 @@ differences (intervention - comparator).}
 Can be combined with interventions for N×M comparisons.}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{label_decimals}{Fixed decimal places for value labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

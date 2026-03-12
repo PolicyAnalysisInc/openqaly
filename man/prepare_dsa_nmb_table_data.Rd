@@ -12,10 +12,11 @@ prepare_dsa_nmb_table_data(
   wtp = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  decimals = NULL,
   font_size = 11,
   top_n = NULL,
-  show_parameter_values = FALSE
+  show_parameter_values = FALSE,
+  abbreviate = FALSE
 )
 }
 \arguments{

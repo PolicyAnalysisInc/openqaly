@@ -526,7 +526,11 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
       # Already a model object
       model <- input
     } else if (is.character(input) && length(input) == 1) {
-      if (dir.exists(input)) {
+      # Parse raw JSON strings before filesystem checks to avoid path warnings
+      # when long JSON content is passed as input.
+      if (validate(input)) {
+        model <- read_model_json(input)
+      } else if (dir.exists(input)) {
         # Check if it's an Excel model folder
         excel_file <- file.path(input, "model.xlsx")
         if (file.exists(excel_file)) {
@@ -560,12 +564,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
           stop("Unknown file extension: ", ext)
         }
       } else {
-        # Try to parse as JSON string
-        if (validate(input)) {
-          model <- read_model_json(input)
-        } else {
-          stop("Input not recognized as file, folder, or valid JSON: ", input)
-        }
+        stop("Input not recognized as file, folder, or valid JSON: ", input)
       }
     } else {
       stop("Invalid input type")
@@ -1571,4 +1570,3 @@ write_yaml_file <- function(data, path) {
   )
   writeLines(yaml_str, path)
 }
-

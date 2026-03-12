@@ -4,7 +4,14 @@
 \alias{plot_decision_tree}
 \title{Plot a Decision Tree}
 \usage{
-plot_decision_tree(x, tree_name = NULL, strategy = NULL, group = NULL, ...)
+plot_decision_tree(
+  x,
+  tree_name = NULL,
+  strategy = NULL,
+  group = NULL,
+  probability_decimals = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{An \code{oq_model}, \code{oq_model_builder}, or results object
@@ -18,6 +25,8 @@ Required when \code{x} is a results object.}
 
 \item{group}{Character string specifying which group to plot. If \code{NULL}
 (default), uses the first group. Only used when \code{x} is a results object.}
+
+\item{probability_decimals}{Fixed decimal places for probability labels, or NULL for auto-precision}
 
 \item{...}{Additional arguments (currently unused).}
 }

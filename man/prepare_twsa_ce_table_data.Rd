@@ -12,6 +12,10 @@ prepare_twsa_ce_table_data(
   groups = "overall",
   interventions,
   comparators,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -29,6 +33,14 @@ prepare_twsa_ce_table_data(
 \item{interventions}{Intervention strategy name(s)}
 
 \item{comparators}{Comparator strategy name(s)}
+
+\item{cost_decimals}{Number of decimal places for costs (NULL for auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (NULL for auto)}
+
+\item{icer_decimals}{Number of decimal places for ICERs (NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting?}
 
 \item{font_size}{Font size for rendering}
 }

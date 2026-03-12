@@ -9,7 +9,8 @@ generate_ce_error_message(
   variation,
   icer_value,
   intervention_name,
-  comparator_name
+  comparator_name,
+  locale = NULL
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ generate_ce_error_message(
 \item{intervention_name}{Character display name of intervention}
 
 \item{comparator_name}{Character display name of comparator}
+
+\item{locale}{Optional locale for number formatting}
 }
 \value{
 Character error message or NA_character_

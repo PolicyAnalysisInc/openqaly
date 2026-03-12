@@ -4,7 +4,14 @@
 \alias{render_scenario_ce_bar_plot}
 \title{Render Scenario CE Bar Plot}
 \usage{
-render_scenario_ce_bar_plot(ce_data, metadata)
+render_scenario_ce_bar_plot(
+  ce_data,
+  metadata,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  locale = NULL,
+  abbreviate = FALSE
+)
 }
 \arguments{
 \item{ce_data}{Prepared CE data with icer, ce_class, value columns}

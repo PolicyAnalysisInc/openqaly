@@ -11,11 +11,11 @@
 #' @importFrom glue glue
 NULL
 
-#' Prepare TWSA Outcomes Table Data
+#' Prepare TWSA Summary Table Data
 #'
 #' Internal helper function that prepares TWSA data for table rendering.
 #' Creates a grid format with X parameter values as columns and Y parameter
-#' values as rows.
+#' values as rows. Used by both outcomes and costs table functions.
 #'
 #' @param results TWSA results object from run_twsa()
 #' @param summary_name Name of summary to display
@@ -25,12 +25,15 @@ NULL
 #' @param interventions Intervention strategy name(s)
 #' @param comparators Comparator strategy name(s)
 #' @param discounted Logical. Use discounted values?
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting?
 #' @param font_size Font size for rendering
+#' @param value_type Type of values to extract: "all" (default), "outcome", or "cost"
+#' @param currency Logical. Format values as currency? (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
-prepare_twsa_outcomes_table_data <- function(results,
+prepare_twsa_summary_table_data <- function(results,
                                      summary_name,
                                      twsa_name = NULL,
                                      groups = "overall",
@@ -38,14 +41,17 @@ prepare_twsa_outcomes_table_data <- function(results,
                                      interventions = NULL,
                                      comparators = NULL,
                                      discounted = TRUE,
-                                     decimals = 2,
-                                     font_size = 11) {
+                                     decimals = NULL,
+                                     abbreviate = FALSE,
+                                     font_size = 11,
+                                     value_type = "all",
+                                     currency = FALSE) {
 
   # Extract TWSA summaries
   twsa_data <- extract_twsa_summaries(
     results,
     summary_name = summary_name,
-    value_type = "all",
+    value_type = value_type,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -160,6 +166,7 @@ prepare_twsa_outcomes_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Build table for each strategy/group combination
+  locale <- get_results_locale(results)
   tables <- list()
 
   for (strat in strategies_display) {
@@ -183,10 +190,9 @@ prepare_twsa_outcomes_table_data <- function(results,
       x_cols <- setdiff(names(wide_data), "y_value")
       for (col in x_cols) {
         if (is.numeric(wide_data[[col]])) {
-          rounded_vals <- round(wide_data[[col]], decimals)
-          rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          wide_data[[col]] <- format(rounded_vals, nsmall = decimals,
-                                      scientific = FALSE, trim = TRUE)
+          wide_data[[col]] <- oq_format(wide_data[[col]], decimals = decimals,
+                                         locale = locale, abbreviate = abbreviate,
+                                         currency = currency)
         }
       }
 
@@ -213,7 +219,8 @@ prepare_twsa_outcomes_table_data <- function(results,
     n_strategies = n_strategies,
     n_groups = n_groups,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    locale = locale
   )
 }
 
@@ -232,7 +239,8 @@ prepare_twsa_outcomes_table_data <- function(results,
 #' @param interventions Intervention strategy name(s) for incremental calculation
 #' @param comparators Comparator strategy name(s) for incremental calculation
 #' @param discounted Logical. Use discounted values? (default: FALSE)
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for table (default: 11)
 #' @param backend Table rendering backend: "flextable" (default) or "kable"
 #'
@@ -258,14 +266,15 @@ twsa_outcomes_table <- function(results,
                         interventions = NULL,
                         comparators = NULL,
                         discounted = TRUE,
-                        decimals = 2,
+                        decimals = NULL,
+                        abbreviate = FALSE,
                         font_size = 11,
                         backend = c("flextable", "kable")) {
 
   backend <- match.arg(backend)
 
   # Prepare table data
-  prepared <- prepare_twsa_outcomes_table_data(
+  prepared <- prepare_twsa_summary_table_data(
     results = results,
     summary_name = summary_name,
     twsa_name = twsa_name,
@@ -275,74 +284,84 @@ twsa_outcomes_table <- function(results,
     comparators = comparators,
     discounted = discounted,
     decimals = decimals,
-    font_size = font_size
+    abbreviate = abbreviate,
+    font_size = font_size,
+    value_type = "outcome",
+    currency = FALSE
   )
 
-  if (length(prepared$tables) == 0) {
-    stop("No data available for table", call. = FALSE)
-  }
+  # Render grid table
+  render_twsa_grid_table(prepared, font_size, backend)
+}
 
-  # For simplicity, render first table (single strategy/group)
-  # Could be extended to combine multiple tables
-  table_info <- prepared$tables[[1]]
+#' TWSA Costs Table
+#'
+#' Creates a grid table showing two-way sensitivity analysis cost results.
+#' The table displays cost values across a grid with X parameter values as
+#' columns and Y parameter values as rows.
+#'
+#' @param results TWSA results object from run_twsa()
+#' @param summary_name Name of the cost summary to display (e.g., "total_cost")
+#' @param twsa_name Name of specific TWSA analysis to show (NULL for first/only)
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Intervention strategy name(s) for incremental calculation
+#' @param comparators Comparator strategy name(s) for incremental calculation
+#' @param discounted Logical. Use discounted values? (default: TRUE)
+#' @param decimals Number of decimal places (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
+#' @param font_size Font size for table (default: 11)
+#' @param backend Table rendering backend: "flextable" (default) or "kable"
+#'
+#' @return A rendered table object (flextable or kable)
+#' @export
+#' @examples
+#' \dontrun{
+#' results <- run_twsa(model)
+#'
+#' # Basic cost table
+#' twsa_costs_table(results, "total_cost")
+#'
+#' # Incremental cost table
+#' twsa_costs_table(results, "total_cost",
+#'   interventions = "treatment",
+#'   comparators = "standard_care")
+#' }
+twsa_costs_table <- function(results,
+                              summary_name,
+                              twsa_name = NULL,
+                              groups = "overall",
+                              strategies = NULL,
+                              interventions = NULL,
+                              comparators = NULL,
+                              discounted = TRUE,
+                              decimals = NULL,
+                              abbreviate = FALSE,
+                              font_size = 11,
+                              backend = c("flextable", "kable")) {
 
-  # Build headers
-  x_param_name <- table_info$x_param_name
-  x_values <- table_info$x_values
+  backend <- match.arg(backend)
 
-  # Create header structure
-  # Row 1: X parameter name spanning all X columns
-  # Row 2: X values as column headers
-  headers <- list()
-
-  # Level 1: X parameter name
-  row1 <- list()
-  row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 1, 0))
-  row1[[2]] <- list(span = length(x_values), text = x_param_name, borders = c(1, 0, 1, 0))
-  headers[[1]] <- row1
-
-  # Level 2: X values
-  row2 <- list()
-  row2[[1]] <- list(span = 1, text = table_info$y_param_name, borders = c(0, 0, 1, 1))
-  for (i in seq_along(x_values)) {
-    row2[[i + 1]] <- list(
-      span = 1,
-      text = scales::comma(x_values[i]),
-      borders = c(0, 0, 1, 1)
-    )
-  }
-  headers[[2]] <- row2
-
-  # Add strategy/group header if multiple
-  if (prepared$n_strategies > 1 || prepared$n_groups > 1) {
-    title_text <- table_info$strategy
-    if (prepared$n_groups > 1) {
-      title_text <- paste0(title_text, " - ", table_info$group)
-    }
-    # Prepend title row
-    title_row <- list()
-    title_row[[1]] <- list(
-      span = length(x_values) + 1,
-      text = title_text,
-      borders = c(1, 0, 0, 0)
-    )
-    headers <- c(list(title_row), headers)
-  }
-
-  # Create column alignments
-  n_cols <- ncol(table_info$data)
-  column_alignments <- c("left", rep("right", n_cols - 1))
-
-  # Create table spec
-  spec <- create_simple_table_spec(
-    headers = headers,
-    data = table_info$data,
-    column_alignments = column_alignments,
-    font_size = font_size
+  # Prepare table data
+  prepared <- prepare_twsa_summary_table_data(
+    results = results,
+    summary_name = summary_name,
+    twsa_name = twsa_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    decimals = decimals,
+    abbreviate = abbreviate,
+    font_size = font_size,
+    value_type = "cost",
+    currency = TRUE
   )
 
-  # Render table
-  render_table(spec, format = backend)
+  # Render grid table
+  render_twsa_grid_table(prepared, font_size, backend)
 }
 
 #' Render TWSA Grid Table
@@ -379,12 +398,13 @@ render_twsa_grid_table <- function(prepared, font_size, backend) {
   headers[[1]] <- row1
 
   # Level 2: X values
+  locale <- prepared$locale
   row2 <- list()
   row2[[1]] <- list(span = 1, text = table_info$y_param_name, borders = c(0, 0, 1, 1))
   for (i in seq_along(x_values)) {
     row2[[i + 1]] <- list(
       span = 1,
-      text = scales::comma(x_values[i]),
+      text = oq_format(x_values[i], locale = locale),
       borders = c(0, 0, 1, 1)
     )
   }
@@ -433,7 +453,8 @@ render_twsa_grid_table <- function(prepared, font_size, backend) {
 #' @param interventions Intervention strategy name(s)
 #' @param comparators Comparator strategy name(s)
 #' @param wtp Willingness-to-pay threshold
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -446,7 +467,8 @@ prepare_twsa_nmb_table_data <- function(results,
                                          interventions = NULL,
                                          comparators = NULL,
                                          wtp,
-                                         decimals = 0,
+                                         decimals = NULL,
+                                         abbreviate = FALSE,
                                          font_size = 11) {
 
   # Use the NMB data preparation from plots
@@ -480,6 +502,7 @@ prepare_twsa_nmb_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Build table for each strategy/group combination
+  locale <- get_results_locale(results)
   tables <- list()
 
   for (strat in strategies_display) {
@@ -503,8 +526,8 @@ prepare_twsa_nmb_table_data <- function(results,
       x_cols <- setdiff(names(wide_data), "y_value")
       for (col in x_cols) {
         if (is.numeric(wide_data[[col]])) {
-          rounded_vals <- round(wide_data[[col]], decimals)
-          wide_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          wide_data[[col]] <- oq_format(wide_data[[col]], decimals = decimals,
+                                         locale = locale, abbreviate = abbreviate, currency = TRUE)
         }
       }
 
@@ -531,7 +554,8 @@ prepare_twsa_nmb_table_data <- function(results,
     n_strategies = n_strategies,
     n_groups = n_groups,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    locale = locale
   )
 }
 
@@ -551,7 +575,8 @@ prepare_twsa_nmb_table_data <- function(results,
 #' @param comparators Comparator strategy name(s). At least one of interventions
 #'   or comparators must be specified.
 #' @param wtp Willingness-to-pay threshold. If NULL, extracts from outcome metadata.
-#' @param decimals Number of decimal places (default: 0)
+#' @param decimals Number of decimal places (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for table (default: 11)
 #' @param backend Table rendering backend: "flextable" (default) or "kable"
 #'
@@ -573,7 +598,8 @@ twsa_nmb_table <- function(results,
                             interventions = NULL,
                             comparators = NULL,
                             wtp = NULL,
-                            decimals = 0,
+                            decimals = NULL,
+                            abbreviate = FALSE,
                             font_size = 11,
                             backend = c("flextable", "kable")) {
 
@@ -615,6 +641,7 @@ twsa_nmb_table <- function(results,
     comparators = comparators,
     wtp = wtp,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -633,6 +660,10 @@ twsa_nmb_table <- function(results,
 #' @param groups Group selection
 #' @param interventions Intervention strategy name(s)
 #' @param comparators Comparator strategy name(s)
+#' @param cost_decimals Number of decimal places for costs (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcomes (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICERs (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -644,6 +675,10 @@ prepare_twsa_ce_table_data <- function(results,
                                         groups = "overall",
                                         interventions,
                                         comparators,
+                                        cost_decimals = NULL,
+                                        outcome_decimals = NULL,
+                                        icer_decimals = NULL,
+                                        abbreviate = FALSE,
                                         font_size = 11) {
 
   # Use the CE data preparation from plots
@@ -676,6 +711,7 @@ prepare_twsa_ce_table_data <- function(results,
   n_groups <- length(groups_display)
 
   # Build table for each strategy/group combination
+  locale <- get_results_locale(results)
   tables <- list()
 
   for (strat in strategies_display) {
@@ -688,13 +724,8 @@ prepare_twsa_ce_table_data <- function(results,
       # Format ICER values with special case handling
       subset_data <- subset_data %>%
         mutate(
-          display_text = case_when(
-            .data$ce_class == "dominated" ~ "Dominated",
-            .data$ce_class == "dominant" ~ "Dominant",
-            .data$ce_class == "equivalent" ~ "Equivalent",
-            .data$ce_class == "sw_quadrant" ~ paste0(scales::comma(abs(.data$icer), accuracy = 1), "*"),
-            TRUE ~ scales::comma(.data$icer, accuracy = 1)
-          )
+          display_text = oq_format_icer(.data$icer, decimals = icer_decimals,
+                                         locale = locale, abbreviate = abbreviate)
         )
 
       # Pivot to wide format
@@ -729,8 +760,9 @@ prepare_twsa_ce_table_data <- function(results,
     tables = tables,
     n_strategies = n_strategies,
     n_groups = n_groups,
-    decimals = 0,
-    font_size = font_size
+    decimals = icer_decimals,
+    font_size = font_size,
+    locale = locale
   )
 }
 
@@ -747,6 +779,10 @@ prepare_twsa_ce_table_data <- function(results,
 #'   specific group name(s)
 #' @param interventions Intervention strategy name(s). Required.
 #' @param comparators Comparator strategy name(s). Required.
+#' @param cost_decimals Number of decimal places for costs (default: NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL for auto)
+#' @param icer_decimals Number of decimal places for ICERs (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for table (default: 11)
 #' @param backend Table rendering backend: "flextable" (default) or "kable"
 #'
@@ -780,6 +816,10 @@ twsa_ce_table <- function(results,
                            groups = "overall",
                            interventions,
                            comparators,
+                           cost_decimals = NULL,
+                           outcome_decimals = NULL,
+                           icer_decimals = NULL,
+                           abbreviate = FALSE,
                            font_size = 11,
                            backend = c("flextable", "kable")) {
 
@@ -794,6 +834,10 @@ twsa_ce_table <- function(results,
     groups = groups,
     interventions = interventions,
     comparators = comparators,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    icer_decimals = icer_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

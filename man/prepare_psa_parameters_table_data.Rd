@@ -9,7 +9,8 @@ prepare_psa_parameters_table_data(
   variables = NULL,
   group = NULL,
   strategies = NULL,
-  decimals = 3,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -23,6 +24,8 @@ prepare_psa_parameters_table_data(
 \item{strategies}{Single strategy to filter parameters (NULL for first strategy)}
 
 \item{decimals}{Number of decimal places}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)?}
 
 \item{font_size}{Font size for rendering}
 }

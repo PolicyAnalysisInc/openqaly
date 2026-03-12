@@ -82,8 +82,8 @@ test_that("dsa_outcomes_plot() comparison mode calculates differences", {
     strategies = strategies[1]
   )
 
-  # Comparison mode - use cost outcome since it has more variation
-  p_compare <- dsa_outcomes_plot(
+  # Comparison mode - use cost summary since it has more variation
+  p_compare <- dsa_costs_plot(
     results, "total_cost",
     interventions = strategies[2],
     comparators = strategies[1]
@@ -274,24 +274,6 @@ test_that("dsa_nmb_plot() handles cost-only parameters", {
 # Tests for Helper Functions
 # ============================================================================
 
-# format_param_value() tests - Direct ::: access
-test_that("format_param_value() uses significant figures correctly", {
-  formatted <- openqaly:::format_param_value(1234.5678, 4)
-  # Should round to 4 sig figs: 1235
-  expect_true(grepl("1,235", formatted) || grepl("1235", formatted))
-})
-
-test_that("format_param_value() avoids scientific notation for large numbers", {
-  formatted <- openqaly:::format_param_value(1000000, 4)
-  # Should NOT contain "e" (scientific notation)
-  expect_false(grepl("e", formatted, ignore.case = TRUE))
-})
-
-test_that("format_param_value() uses comma formatting", {
-  formatted <- openqaly:::format_param_value(10000, 4)
-  # Should contain comma for thousands separator
-  expect_true(grepl(",", formatted))
-})
 
 # render_tornado_plot() tests - via exported functions
 test_that("render_tornado_plot() single strategy/group has single panel", {
@@ -390,8 +372,8 @@ test_that("DSA plots workflow with example model", {
 test_that("DSA plots work with cost summary", {
   results <- get_example_dsa_results()
 
-  # Plot cost outcomes instead of QALY outcomes
-  p <- dsa_outcomes_plot(results, "total_cost", strategies = "standard")
+  # Plot cost summary using costs plot
+  p <- dsa_costs_plot(results, "total_cost", strategies = "standard")
   expect_s3_class(p, "ggplot")
 
   built <- ggplot_build(p)
@@ -583,17 +565,6 @@ test_that("dsa_nmb_plot bar range reflects correct NMB for low/high runs", {
 # Edge Case Tests
 # ============================================================================
 
-test_that("format_param_value handles small decimals", {
-  formatted <- openqaly:::format_param_value(0.001234, 4)
-  # Should contain the significant digits
-
-  expect_true(grepl("0\\.001", formatted))
-})
-
-test_that("format_param_value handles negative numbers", {
-  formatted <- openqaly:::format_param_value(-1234.5, 4)
-  expect_true(grepl("-", formatted))
-})
 
 test_that("dsa_outcomes_plot errors when strategies used with interventions", {
   results <- get_example_dsa_results()
@@ -983,9 +954,9 @@ test_that("detect_variation_error() returns correct error states", {
 })
 
 test_that("format_icer_label() formats values correctly", {
-  expect_equal(openqaly:::format_icer_label(50000), "50,000")
-  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "50,000*")
-  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "50,000**")
+  expect_equal(openqaly:::format_icer_label(50000), "$50,000")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "$50,000*")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "$50,000**")
   expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
   expect_equal(openqaly:::format_icer_label(Inf, asterisk = "*"), "Dominated*")
   expect_equal(openqaly:::format_icer_label(0), "Dominant")
@@ -1062,12 +1033,12 @@ test_that("detect_variation_error() handles same-as-base cases", {
 
 test_that("format_icer_label() adds asterisk based on asterisk parameter", {
   # No asterisk parameter - no asterisk
-  expect_equal(openqaly:::format_icer_label(50000), "50,000")
-  expect_equal(openqaly:::format_icer_label(50000, asterisk = ""), "50,000")
+  expect_equal(openqaly:::format_icer_label(50000), "$50,000")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = ""), "$50,000")
 
   # With asterisk parameter - asterisk added
-  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "50,000*")
-  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "50,000**")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "*"), "$50,000*")
+  expect_equal(openqaly:::format_icer_label(50000, asterisk = "**"), "$50,000**")
 
   # Special values also get asterisks when provided
   expect_equal(openqaly:::format_icer_label(Inf), "Dominated")
@@ -1448,4 +1419,14 @@ test_that("at-base variations are forced opposite to other bar direction", {
   expect_true(result3$low_at_base)
   expect_true(result3$high_at_base)
   expect_false(result3$same_side)
+})
+
+# ============================================================================
+# Tests for dsa_costs_plot()
+# ============================================================================
+
+test_that("dsa_costs_plot() returns ggplot object", {
+  results <- get_example_dsa_results()
+  p <- dsa_costs_plot(results, "total_cost")
+  expect_s3_class(p, "ggplot")
 })

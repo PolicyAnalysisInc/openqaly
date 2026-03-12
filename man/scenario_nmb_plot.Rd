@@ -11,7 +11,10 @@ scenario_nmb_plot(
   groups = "overall",
   wtp = NULL,
   interventions = NULL,
-  comparators = NULL
+  comparators = NULL,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -30,6 +33,12 @@ At least one of interventions or comparators must be specified.}
 
 \item{comparators}{Character vector of comparator strategy name(s).
 At least one of interventions or comparators must be specified.}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{label_decimals}{Fixed decimal places for value labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

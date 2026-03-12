@@ -11,7 +11,10 @@ pairwise_ce_plot(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  wtp = NULL
+  wtp = NULL,
+  cost_axis_decimals = NULL,
+  outcome_axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -32,6 +35,12 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 \item{wtp}{Willingness-to-pay threshold for the WTP line. If NULL (default), uses
 the WTP from the outcome summary metadata if available. If neither is available,
 no WTP line is drawn.}
+
+\item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}
+
+\item{outcome_axis_decimals}{Fixed decimal places for outcome axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

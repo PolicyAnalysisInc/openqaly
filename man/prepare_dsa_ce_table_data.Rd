@@ -11,10 +11,13 @@ prepare_dsa_ce_table_data(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
   font_size = 11,
   top_n = NULL,
-  show_parameter_values = FALSE
+  show_parameter_values = FALSE,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -30,9 +33,19 @@ prepare_dsa_ce_table_data(
 
 \item{comparators}{Comparator strategy name(s)}
 
-\item{decimals}{Number of decimal places}
+\item{cost_decimals}{Number of decimal places for costs (NULL for auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (NULL for auto)}
+
+\item{icer_decimals}{Number of decimal places for ICERs (NULL for auto)}
 
 \item{font_size}{Font size for rendering}
+
+\item{top_n}{Integer or NULL for top N parameters}
+
+\item{show_parameter_values}{Logical. Include input parameter values in row labels?}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)?}
 }
 \value{
 List with prepared data and metadata for render_table()

@@ -127,15 +127,15 @@ build_simple_dsa_model <- function() {
     add_transition("sick", "sick", "0.8") %>%
     add_transition("dead", "dead", "1") %>%
     # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy", type = "cost") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick", type = "cost") %>%
+    add_value("cost", "0", state = "dead", type = "cost") %>%
+    add_value("qalys", "u_healthy", state = "healthy", type = "outcome") %>%
+    add_value("qalys", "u_sick", state = "sick", type = "outcome") %>%
+    add_value("qalys", "0", state = "dead", type = "outcome") %>%
     # Summaries
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome", wtp = 50000)
 }
 
 # DSA settings model for testing unit formatting
@@ -178,15 +178,15 @@ build_dsa_settings_model <- function() {
     add_transition("sick", "sick", "0.8") %>%
     add_transition("dead", "dead", "1") %>%
     # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy", type = "cost") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick", type = "cost") %>%
+    add_value("cost", "0", state = "dead", type = "cost") %>%
+    add_value("qalys", "u_healthy", state = "healthy", type = "outcome") %>%
+    add_value("qalys", "u_sick", state = "sick", type = "outcome") %>%
+    add_value("qalys", "0", state = "dead", type = "outcome") %>%
     # Summaries
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome", wtp = 50000)
 }
 
 # Normal ICER model: Treatment more costly AND more effective (NE quadrant)

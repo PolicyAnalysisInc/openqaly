@@ -14,7 +14,10 @@ dsa_nmb_plot(
   comparators = NULL,
   show_parameter_values = TRUE,
   drop_zero_impact = TRUE,
-  top_n = NULL
+  top_n = NULL,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -45,6 +48,12 @@ A parameter has zero impact when its NMB range is effectively zero.}
 
 \item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range
 (per strategy/group facet). Useful for models with many DSA parameters.}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{label_decimals}{Fixed decimal places for value labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

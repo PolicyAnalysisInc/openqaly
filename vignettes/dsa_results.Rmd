@@ -276,6 +276,50 @@ dsa_outcomes_plot(
 )
 ```
 
+### Costs Tornado Plot
+
+The `dsa_costs_plot()` function creates tornado plots for cost summaries with currency formatting.
+
+#### Basic usage
+
+```{r, fig.width=7, fig.height=7}
+dsa_costs_plot(
+  dsa_results,
+  summary_name = "costs"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r, fig.width=7, fig.height=6}
+dsa_costs_plot(
+  dsa_results,
+  summary_name = "costs",
+  strategies = c("seritinib", "volantor")
+)
+```
+
+#### Intervention vs comparator
+
+```{r, fig.width=7, fig.height=5}
+dsa_costs_plot(
+  dsa_results,
+  summary_name = "costs",
+  interventions = "volantor",
+  comparators = "seritinib"
+)
+```
+
+#### Showing only the top N parameters
+
+```{r, fig.width=7, fig.height=5}
+dsa_costs_plot(
+  dsa_results,
+  summary_name = "costs",
+  top_n = 3
+)
+```
+
 ### NMB Tornado Plot
 
 The `dsa_nmb_plot()` function creates tornado plots for Net Monetary Benefit.
@@ -468,6 +512,39 @@ dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
   groups = 'all'
+)
+```
+
+### Costs Table
+
+The `dsa_costs_table()` function presents DSA cost results with currency formatting.
+
+#### Basic usage
+
+```{r}
+dsa_costs_table(
+  dsa_results,
+  outcome = "costs"
+)
+```
+
+#### Filtering to specific strategies
+
+```{r}
+dsa_costs_table(
+  dsa_results,
+  outcome = "costs",
+  strategies = c("seritinib", "volantor")
+)
+```
+
+#### Comparator perspective
+
+```{r}
+dsa_costs_table(
+  dsa_results,
+  outcome = "costs",
+  comparators = "seritinib"
 )
 ```
 

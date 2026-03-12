@@ -93,7 +93,8 @@ get_threshold_output_label <- function(analysis, metadata) {
       }
     }
 
-    wtp_formatted <- if (!is.na(wtp)) scales::comma(wtp) else "?"
+    locale <- get_results_locale(list(metadata = metadata))
+    wtp_formatted <- if (!is.na(wtp)) oq_format(wtp, locale = locale, currency = TRUE) else "?"
     glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   } else if (output_type == "trace") {
@@ -156,10 +157,16 @@ get_threshold_input_label <- function(analysis, metadata) {
 #'
 #' @param results Threshold results from run_threshold()
 #' @param analyses Optional character vector of analysis names to include
-#' @param decimals Number of decimal places for threshold value label (default: 4)
+#' @param axis_decimals Number of decimal places for axis labels, or NULL for auto
+#' @param label_decimals Number of decimal places for threshold value label, or NULL for auto
+#' @param abbreviate Logical. If TRUE, use K/M/B/T abbreviations. Default FALSE
 #' @return A ggplot object
 #' @export
-threshold_plot <- function(results, analyses = NULL, decimals = 4) {
+threshold_plot <- function(results, analyses = NULL, axis_decimals = NULL,
+                           label_decimals = NULL, abbreviate = FALSE) {
+  # Get locale for formatting
+  locale <- get_results_locale(results)
+
   data <- prepare_threshold_history_data(results, analyses)
   history <- data$history
   tv <- data$threshold_values
@@ -229,9 +236,9 @@ threshold_plot <- function(results, analyses = NULL, decimals = 4) {
     )
 
     # Label with threshold value
-    threshold_points$label <- vapply(threshold_points$threshold_value, function(v) {
-      format_param_value(v, digits = decimals)
-    }, character(1))
+    threshold_points$label <- oq_format(threshold_points$threshold_value,
+                                         decimals = label_decimals, locale = locale,
+                                         abbreviate = abbreviate)
 
     p <- p + ggplot2::geom_label(
       data = threshold_points,
@@ -272,8 +279,8 @@ threshold_plot <- function(results, analyses = NULL, decimals = 4) {
 
   # Scales and theme
   p <- p +
-    ggplot2::scale_x_continuous(breaks = scales::pretty_breaks(n = 5), labels = scales::comma) +
-    ggplot2::scale_y_continuous(breaks = scales::pretty_breaks(n = 5), labels = scales::comma) +
+    ggplot2::scale_x_continuous(breaks = scales::pretty_breaks(n = 5), labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate)) +
+    ggplot2::scale_y_continuous(breaks = scales::pretty_breaks(n = 5), labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate)) +
     ggplot2::labs(x = xlab_text, y = ylab_text) +
     ggplot2::theme_bw()
 
@@ -289,9 +296,16 @@ threshold_plot <- function(results, analyses = NULL, decimals = 4) {
 #'
 #' @param results Threshold results from run_threshold()
 #' @param analyses Optional character vector of analysis names to include
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @return A ggplot object
 #' @export
-threshold_convergence_plot <- function(results, analyses = NULL) {
+threshold_convergence_plot <- function(results, analyses = NULL,
+                                       axis_decimals = NULL,
+                                       abbreviate = FALSE) {
+  # Get locale for formatting
+  locale <- get_results_locale(results)
+
   data <- prepare_threshold_history_data(results, analyses)
   history <- data$history
   tv <- data$threshold_values
@@ -364,8 +378,11 @@ threshold_convergence_plot <- function(results, analyses = NULL) {
 
   # Scales and theme
   p <- p +
-    ggplot2::scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
-    ggplot2::scale_y_continuous(labels = scales::comma) +
+    ggplot2::scale_x_continuous(
+      breaks = scales::pretty_breaks(n = 5),
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate)
+    ) +
+    ggplot2::scale_y_continuous(labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate)) +
     ggplot2::labs(x = "Iteration", y = "Difference from Goal") +
     ggplot2::theme_bw()
 

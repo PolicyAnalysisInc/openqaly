@@ -11,7 +11,7 @@ evpi_table(
   wtp_thresholds = c(20000, 50000, 1e+05, 150000),
   groups = "overall",
   strategies = NULL,
-  decimals = 0,
+  decimals = NULL,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -38,7 +38,7 @@ Default is c(20000, 50000, 100000, 150000)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
-\item{decimals}{Number of decimal places for EVPI values (default: 0)}
+\item{decimals}{Number of decimal places for EVPI values (default: NULL, auto)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

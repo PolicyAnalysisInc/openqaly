@@ -10,10 +10,11 @@ prepare_transition_matrix_table_data(
   strategies = NULL,
   groups = "overall",
   collapsed = TRUE,
-  decimals = 4,
+  decimals = NULL,
   font_size = 11,
   state_times = NULL,
-  exclude_zero_residency = NULL
+  exclude_zero_residency = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -25,9 +26,11 @@ prepare_transition_matrix_table_data(
 
 \item{groups}{Group selection}
 
-\item{decimals}{Number of decimal places for probabilities (default: 4)}
+\item{decimals}{Number of decimal places for probabilities (default: NULL, uses locale default)}
 
 \item{font_size}{Font size for the table (default: 11)}
+
+\item{abbreviate}{Logical. If TRUE, abbreviate large numbers (default: FALSE)}
 }
 \value{
 List with prepared data and metadata for render_table()

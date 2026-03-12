@@ -12,7 +12,8 @@ scenario_nmb_table(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -32,7 +33,9 @@ At least one of interventions or comparators must be specified.}
 
 \item{comparators}{Character vector of comparator strategy name(s).}
 
-\item{decimals}{Number of decimal places (default: 0)}
+\item{decimals}{Number of decimal places (default: NULL for auto-precision)}
+
+\item{abbreviate}{Logical. Use K/M/B/T suffixes? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 }

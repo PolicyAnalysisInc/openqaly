@@ -145,6 +145,14 @@ outcomes_plot_bar(disc_results, outcome = "qalys")
 outcomes_table(disc_results, outcome = "qalys")
 ```
 
+```{r disc-costs, fig.width=9, fig.height=6}
+costs_plot_bar(disc_results, outcome = "total_cost")
+```
+
+```{r disc-costs-table}
+costs_table(disc_results, outcome = "total_cost")
+```
+
 ---
 
 ## Example 2: Response-Based Model
@@ -248,6 +256,14 @@ outcomes_plot_bar(response_results, outcome = "qalys")
 
 ```{r response-table}
 outcomes_table(response_results, outcome = "qalys")
+```
+
+```{r response-costs, fig.width=9, fig.height=6}
+costs_plot_bar(response_results, outcome = "total_cost")
+```
+
+```{r response-costs-table}
+costs_table(response_results, outcome = "total_cost")
 ```
 
 ---

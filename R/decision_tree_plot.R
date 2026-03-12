@@ -16,13 +16,22 @@
 #'   Required when \code{x} is a results object.
 #' @param group Character string specifying which group to plot. If \code{NULL}
 #'   (default), uses the first group. Only used when \code{x} is a results object.
+#' @param probability_decimals Fixed decimal places for probability labels, or NULL for auto-precision
 #' @param ... Additional arguments (currently unused).
 #'
 #' @return A ggplot2/ggraph object displaying the tree structure.
 #'
 #' @export
 plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
-                               group = NULL, ...) {
+                               group = NULL, probability_decimals = NULL,
+                               ...) {
+
+  # Get locale for formatting (results path has metadata, model path uses US default)
+  locale <- if (!is.null(x$metadata)) {
+    get_results_locale(x)
+  } else {
+    get_locale("US")
+  }
 
   # Detect input type and extract tree_df + edge labels
   if (inherits(x, c("oq_model", "oq_model_builder"))) {
@@ -35,7 +44,9 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   } else if (!is.null(x$segments) &&
              "eval_vars" %in% colnames(x$segments)) {
     # Results path: probability labels
-    tree_info <- .extract_results_tree(x, tree_name, strategy, group)
+    tree_info <- .extract_results_tree(x, tree_name, strategy, group,
+                                        probability_decimals = probability_decimals,
+                                        locale = locale)
     tree_df <- tree_info$tree_df
     edge_labels <- tree_info$edge_labels
     root_label <- tree_info$root_label
@@ -69,9 +80,10 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   # Append joint probabilities to terminal node labels
   if (!is.null(joint_probs)) {
     is_terminal <- node_type == "terminal"
+    prob_pct <- joint_probs[all_nodes[is_terminal]] * 100
+    formatted_pct <- oq_format(prob_pct, decimals = probability_decimals, locale = locale)
     node_labels[is_terminal] <- paste0(
-      node_labels[is_terminal], " (",
-      sprintf("%.1f%%", joint_probs[all_nodes[is_terminal]] * 100), ")"
+      node_labels[is_terminal], " (", formatted_pct, "%)"
     )
   }
 
@@ -211,7 +223,8 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
 #' @param group Group name or NULL for first group
 #' @return List with tree_df, edge_labels, root_label
 #' @keywords internal
-.extract_results_tree <- function(results, tree_name, strategy, group) {
+.extract_results_tree <- function(results, tree_name, strategy, group,
+                                   probability_decimals = NULL, locale = NULL) {
   segments <- results$segments
 
   if (is.null(strategy)) {
@@ -277,9 +290,11 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   cond_prob <- eval_tree$cond_prob
   non_root <- tree_df[tree_df$parent != "", ]
 
-  edge_labels <- vapply(non_root$node, function(n) {
-    sprintf("%.1f%%", cond_prob[[n]][1] * 100)
-  }, character(1), USE.NAMES = FALSE)
+  prob_values <- vapply(non_root$node, function(n) {
+    cond_prob[[n]][1] * 100
+  }, numeric(1), USE.NAMES = FALSE)
+  if (is.null(locale)) locale <- get_locale("US")
+  edge_labels <- paste0(oq_format(prob_values, decimals = probability_decimals, locale = locale), "%")
 
   # Compute joint (unconditional) probabilities for all nodes
   compute_joint_prob <- function(node_name) {

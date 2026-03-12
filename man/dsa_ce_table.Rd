@@ -11,11 +11,14 @@ dsa_ce_table(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
   font_size = 11,
   table_format = c("flextable", "kable"),
   top_n = NULL,
-  show_parameter_values = FALSE
+  show_parameter_values = FALSE,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -33,7 +36,11 @@ At least one of interventions or comparators must be specified.}
 \item{comparators}{Character vector of comparator strategy name(s).
 At least one of interventions or comparators must be specified.}
 
-\item{decimals}{Number of decimal places (default: 0 for ICERs)}
+\item{cost_decimals}{Number of decimal places for costs (default: NULL for auto-precision)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL for auto-precision)}
+
+\item{icer_decimals}{Number of decimal places for ICERs (default: NULL for auto-precision)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
@@ -42,6 +49,8 @@ At least one of interventions or comparators must be specified.}
 \item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
 
 \item{show_parameter_values}{Logical. Include input parameter values in row labels? (default: FALSE)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A table object (flextable or kable depending on table_format)

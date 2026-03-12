@@ -11,7 +11,9 @@ create_test_model <- function() {
       timeframe = 100,
       cycle_length = 1,
       discount_cost = 3,
-      discount_outcomes = 3.5
+      discount_outcomes = 3.5,
+      country = "US",
+      number_country = "FR"
     ) |>
     add_strategy("treatment_a", display_name = "Treatment A") |>
     add_strategy("treatment_b", display_name = "Treatment B") |>
@@ -80,6 +82,8 @@ test_that("basic model survives JSON round-trip", {
   expect_equal(nrow(model$transitions), nrow(model_back$transitions))
   expect_equal(nrow(model$variables), nrow(model_back$variables))
   expect_equal(nrow(model$strategies), nrow(model_back$strategies))
+  expect_equal(toupper(model_back$settings$country), "US")
+  expect_equal(toupper(model_back$settings$number_country), "FR")
 })
 
 test_that("model with tables/scripts survives JSON round-trip", {
@@ -127,6 +131,8 @@ test_that("basic model survives YAML round-trip", {
   expect_equal(nrow(model$states), nrow(model_back$states))
   expect_equal(nrow(model$transitions), nrow(model_back$transitions))
   expect_equal(nrow(model$variables), nrow(model_back$variables))
+  expect_equal(toupper(model_back$settings$country), "US")
+  expect_equal(toupper(model_back$settings$number_country), "FR")
 
   unlink(yaml_path)
 })

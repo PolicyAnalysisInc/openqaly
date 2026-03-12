@@ -279,3 +279,25 @@ test_that("outcomes_plot_line() errors when strategies used with comparators", {
     "'strategies' cannot be used"
   )
 })
+
+# ============================================================================
+# Tests for costs_plot_bar()
+# ============================================================================
+
+test_that("costs_plot_bar() returns ggplot with bar geom", {
+  results <- get_test_results()
+  p <- costs_plot_bar(results, "total_cost")
+  expect_s3_class(p, "ggplot")
+  expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomBar"))))
+})
+
+# ============================================================================
+# Tests for costs_plot_line()
+# ============================================================================
+
+test_that("costs_plot_line() returns ggplot with line geom", {
+  results <- get_test_results()
+  p <- costs_plot_line(results, "total_cost")
+  expect_s3_class(p, "ggplot")
+  expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomLine"))))
+})

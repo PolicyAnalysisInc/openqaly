@@ -796,3 +796,13 @@ test_that("prepare_psa_parameters_table_data() respects decimals parameter", {
     expect_true(is.character(mean_val))
   }
 })
+
+# ============================================================================
+# Tests for psa_costs_table()
+# ============================================================================
+
+test_that("psa_costs_table() creates table with all strategies", {
+  results <- get_cached_psa_results()
+  tbl <- psa_costs_table(results, "total_cost", table_format = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})

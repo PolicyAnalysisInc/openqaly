@@ -12,7 +12,9 @@ psa_outcomes_table(
   interventions = NULL,
   comparators = NULL,
   discounted = TRUE,
-  decimals = 2,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -43,7 +45,11 @@ perspective. Use for outcome differences. Cannot be used with strategies.}
 
 \item{discounted}{Logical. Use discounted outcome values? Default TRUE.}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{cost_decimals}{Number of decimal places for costs (default: NULL, auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL, auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

@@ -16,7 +16,9 @@ outcome_density_plot(
   alpha = 0.4,
   title = NULL,
   xlab = NULL,
-  legend_position = "right"
+  legend_position = "right",
+  axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -42,11 +44,15 @@ values. Cannot be used with \code{interventions} or \code{comparators}.}
 
 \item{alpha}{Numeric. Transparency level for density fill (0-1). Default 0.4.}
 
-\item{title}{Character. Plot title. If NULL (default), auto-generated.}
+\item{title}{Character. Plot title. If NULL (default), no title is shown.}
 
 \item{xlab}{Character. X-axis label. If NULL (default), auto-generated.}
 
 \item{legend_position}{Position of the legend. Default "right".}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot object

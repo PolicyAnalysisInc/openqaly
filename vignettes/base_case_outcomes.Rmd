@@ -99,7 +99,6 @@ outcomes_plot_bar(
   comparators = "chemo"
 )
 ```
-
 ### Line
 
 The `outcomes_plot_line()` function displays outcomes as line charts over the model time horizon.
@@ -157,7 +156,6 @@ outcomes_plot_line(
   comparators = "chemo"
 )
 ```
-
 ## Tables
 
 The `outcomes_table()` function presents outcome values in tabular format.

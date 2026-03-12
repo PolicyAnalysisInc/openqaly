@@ -11,7 +11,7 @@ prepare_incremental_ceac_table_data(
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
   strategies = NULL,
-  decimals = 1,
+  decimals = NULL,
   font_size = 11
 )
 }

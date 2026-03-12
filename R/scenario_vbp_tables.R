@@ -25,8 +25,11 @@ prepare_scenario_vbp_table_data <- function(results,
                                              wtp,
                                              groups = "overall",
                                              comparators = "all",
-                                             decimals = 0,
+                                             decimals = NULL,
+                                             abbreviate = FALSE,
                                              font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Prepare bar data (reuse logic)
   vbp_data <- prepare_scenario_vbp_bar_data(results, wtp, groups, comparators)
@@ -61,8 +64,9 @@ prepare_scenario_vbp_table_data <- function(results,
     # Format numeric columns
     for (col in comparators_display) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                         locale = locale, currency = TRUE,
+                                         abbreviate = abbreviate)
       }
     }
 
@@ -115,8 +119,9 @@ prepare_scenario_vbp_table_data <- function(results,
       # Format numeric columns
       for (col in comparators_display) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                        locale = locale, currency = TRUE,
+                                        abbreviate = abbreviate)
         }
       }
 
@@ -167,7 +172,8 @@ prepare_scenario_vbp_table_data <- function(results,
 #' @param wtp Willingness-to-pay threshold. If NULL, uses default WTP from model metadata.
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or specific group names
 #' @param comparators Comparator strategies: "all" (default) or specific comparator names
-#' @param decimals Number of decimal places (default: 0)
+#' @param decimals Number of decimal places (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #'
 #' @return A gt table object
@@ -188,7 +194,8 @@ scenario_vbp_table <- function(results,
                                 wtp = NULL,
                                 groups = "overall",
                                 comparators = "all",
-                                decimals = 0,
+                                decimals = NULL,
+                                abbreviate = FALSE,
                                 font_size = 11) {
 
   # Get WTP if not provided
@@ -213,6 +220,7 @@ scenario_vbp_table <- function(results,
     groups = groups,
     comparators = comparators,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

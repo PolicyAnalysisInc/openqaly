@@ -32,7 +32,12 @@ NULL
 #' @return A ggplot2 object
 #' @keywords internal
 render_scenario_bar_plot <- function(bar_data, x_label,
-                                      value_labels = TRUE) {
+                                      value_labels = TRUE,
+                                      axis_decimals = NULL,
+                                      label_decimals = NULL,
+                                      locale = NULL,
+                                      abbreviate = FALSE,
+                                      currency = FALSE) {
 
   # Determine faceting
   n_groups <- length(unique(bar_data$group))
@@ -81,9 +86,8 @@ render_scenario_bar_plot <- function(bar_data, x_label,
     ) %>%
     ungroup()
 
-  # Calculate axis limits
-  x_range <- range(c(0, bar_data$value), na.rm = TRUE)
-  x_breaks <- pretty_breaks(n = 5)(x_range)
+  # Let ggplot compute pretty breaks per facet when scales are free_x.
+  x_breaks <- pretty_breaks(n = 5)
 
   # Determine expansion based on where values exist
   has_negative <- any(bar_data$value < 0, na.rm = TRUE)
@@ -109,7 +113,7 @@ render_scenario_bar_plot <- function(bar_data, x_label,
       geom_text(
         aes(
           x = .data$value,
-          label = scales::comma(.data$value, accuracy = 0.01),
+          label = oq_format(.data$value, decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = currency),
           hjust = case_when(
             .data$value > 0 ~ -0.1,
             .data$value < 0 ~ 1.1,
@@ -123,7 +127,7 @@ render_scenario_bar_plot <- function(bar_data, x_label,
   }
 
   p <- p +
-    scale_x_continuous(breaks = x_breaks, labels = comma,
+    scale_x_continuous(breaks = x_breaks, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency),
                        expand = expansion(mult = c(left_expand, right_expand))) +
     labs(y = "Scenario", x = x_label) +
     theme_bw() +
@@ -160,13 +164,14 @@ prepare_scenario_bar_data <- function(results,
                                        strategies,
                                        interventions,
                                        comparators,
-                                       discounted) {
+                                       discounted,
+                                       value_type = "all") {
 
   # Extract scenario summaries
   scenario_data <- extract_scenario_summaries(
     results,
     summary_name = summary_name,
-    value_type = "all",
+    value_type = value_type,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -272,6 +277,91 @@ prepare_scenario_bar_data <- function(results,
 }
 
 
+#' Scenario Summary Plot Implementation
+#'
+#' Internal helper that implements the scenario bar chart for both outcomes and costs.
+#'
+#' @param results A openqaly scenario results object (output from run_scenario)
+#' @param summary_name Name of the summary to plot (e.g., "total_qalys", "total_cost")
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups,
+#'   or NULL (all groups plus aggregated)
+#' @param strategies Character vector of strategy names to include (NULL for all).
+#'   Mutually exclusive with interventions/comparators.
+#' @param interventions Character vector of intervention strategy name(s).
+#'   Can be combined with comparators for N×M comparisons. When specified, shows
+#'   differences (intervention - comparator).
+#' @param comparators Character vector of comparator strategy name(s).
+#'   Can be combined with interventions for N×M comparisons.
+#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#' @param value_type Character. Type of values to extract: "outcome", "cost", or "all"
+#' @param currency Logical. Format values as currency? (default: FALSE)
+#'
+#' @return A ggplot2 object
+#' @keywords internal
+scenario_summary_plot_impl <- function(results,
+                                        summary_name,
+                                        groups = "overall",
+                                        strategies = NULL,
+                                        interventions = NULL,
+                                        comparators = NULL,
+                                        discounted = TRUE,
+                                        axis_decimals = NULL,
+                                        label_decimals = NULL,
+                                        abbreviate = FALSE,
+                                        value_type = "outcome",
+                                        currency = FALSE) {
+
+  # Validate that strategies is mutually exclusive with interventions/comparators
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'.",
+         call. = FALSE)
+  }
+
+  # Prepare bar data
+  bar_data <- prepare_scenario_bar_data(
+    results = results,
+    summary_name = summary_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    value_type = value_type
+  )
+
+  # Check if data is valid
+  if (is.null(bar_data) || nrow(bar_data) == 0) {
+    stop("No data available for scenario bar chart with specified parameters",
+         call. = FALSE)
+  }
+
+  # Map summary name for axis label
+  summary_label <- summary_name
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    summary_label <- map_names(summary_name, results$metadata$summaries, "display_name")
+  }
+
+  # Add prefix if showing differences
+  if (!is.null(interventions) || !is.null(comparators)) {
+    summary_label <- paste0("Difference in ", summary_label)
+  }
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
+
+  # Render bar plot
+  render_scenario_bar_plot(bar_data, summary_label,
+                           axis_decimals = axis_decimals,
+                           label_decimals = label_decimals,
+                           locale = locale,
+                           abbreviate = abbreviate,
+                           currency = currency)
+}
+
+
 #' Plot Scenario Outcomes as Bar Chart
 #'
 #' Creates a horizontal bar chart showing the outcome value for each scenario.
@@ -290,6 +380,9 @@ prepare_scenario_bar_data <- function(results,
 #' @param comparators Character vector of comparator strategy name(s).
 #'   Can be combined with interventions for N×M comparisons.
 #' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -314,44 +407,92 @@ scenario_outcomes_plot <- function(results,
                                     strategies = NULL,
                                     interventions = NULL,
                                     comparators = NULL,
-                                    discounted = TRUE) {
+                                    discounted = TRUE,
+                                    axis_decimals = NULL,
+                                    label_decimals = NULL,
+                                    abbreviate = FALSE) {
 
-  # Validate that strategies is mutually exclusive with interventions/comparators
-  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
-    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'.",
-         call. = FALSE)
-  }
-
-  # Prepare bar data
-  bar_data <- prepare_scenario_bar_data(
+  scenario_summary_plot_impl(
     results = results,
     summary_name = summary_name,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,
-    discounted = discounted
+    discounted = discounted,
+    axis_decimals = axis_decimals,
+    label_decimals = label_decimals,
+    abbreviate = abbreviate,
+    value_type = "outcome",
+    currency = FALSE
   )
+}
 
-  # Check if data is valid
-  if (is.null(bar_data) || nrow(bar_data) == 0) {
-    stop("No data available for scenario bar chart with specified parameters",
-         call. = FALSE)
-  }
 
-  # Map summary name for axis label
-  summary_label <- summary_name
-  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
-    summary_label <- map_names(summary_name, results$metadata$summaries, "display_name")
-  }
+#' Plot Scenario Costs as Bar Chart
+#'
+#' Creates a horizontal bar chart showing the cost value for each scenario.
+#' Scenarios are displayed on the Y-axis with values on the X-axis.
+#' The Base Case is always shown first and highlighted.
+#'
+#' @param results A openqaly scenario results object (output from run_scenario)
+#' @param summary_name Name of the summary to plot (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups,
+#'   or NULL (all groups plus aggregated)
+#' @param strategies Character vector of strategy names to include (NULL for all).
+#'   Mutually exclusive with interventions/comparators.
+#' @param interventions Character vector of intervention strategy name(s).
+#'   Can be combined with comparators for N×M comparisons. When specified, shows
+#'   differences (intervention - comparator).
+#' @param comparators Character vector of comparator strategy name(s).
+#'   Can be combined with interventions for N×M comparisons.
+#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot2 object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") %>%
+#'   add_scenario("Optimistic") %>%
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95)
+#' results <- run_scenario(model)
+#'
+#' # Basic cost bar chart
+#' scenario_costs_plot(results, "total_cost")
+#'
+#' # Show differences vs comparator
+#' scenario_costs_plot(results, "total_cost", comparators = "control")
+#' }
+#'
+#' @export
+scenario_costs_plot <- function(results,
+                                 summary_name,
+                                 groups = "overall",
+                                 strategies = NULL,
+                                 interventions = NULL,
+                                 comparators = NULL,
+                                 discounted = TRUE,
+                                 axis_decimals = NULL,
+                                 label_decimals = NULL,
+                                 abbreviate = FALSE) {
 
-  # Add prefix if showing differences
-  if (!is.null(interventions) || !is.null(comparators)) {
-    summary_label <- paste0("Difference in ", summary_label)
-  }
-
-  # Render bar plot
-  render_scenario_bar_plot(bar_data, summary_label)
+  scenario_summary_plot_impl(
+    results = results,
+    summary_name = summary_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    axis_decimals = axis_decimals,
+    label_decimals = label_decimals,
+    abbreviate = abbreviate,
+    value_type = "cost",
+    currency = TRUE
+  )
 }
 
 
@@ -369,6 +510,9 @@ scenario_outcomes_plot <- function(results,
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
 #'   At least one of interventions or comparators must be specified.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -394,7 +538,10 @@ scenario_nmb_plot <- function(results,
                                groups = "overall",
                                wtp = NULL,
                                interventions = NULL,
-                               comparators = NULL) {
+                               comparators = NULL,
+                               axis_decimals = NULL,
+                               label_decimals = NULL,
+                               abbreviate = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -468,11 +615,19 @@ scenario_nmb_plot <- function(results,
     cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
   }
 
-  wtp_formatted <- scales::comma(wtp)
+  # Extract locale from results
+  locale <- get_results_locale(results)
+
+  wtp_formatted <- oq_format(wtp, locale = locale, currency = TRUE)
   nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   # Render bar plot
-  render_scenario_bar_plot(nmb_data, nmb_label)
+  render_scenario_bar_plot(nmb_data, nmb_label,
+                           axis_decimals = axis_decimals,
+                           label_decimals = label_decimals,
+                           locale = locale,
+                           abbreviate = abbreviate,
+                           currency = TRUE)
 }
 
 
@@ -490,6 +645,9 @@ scenario_nmb_plot <- function(results,
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
 #'   At least one of interventions or comparators must be specified.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -517,7 +675,10 @@ scenario_ce_plot <- function(results,
                               cost_outcome,
                               groups = "overall",
                               interventions = NULL,
-                              comparators = NULL) {
+                              comparators = NULL,
+                              axis_decimals = NULL,
+                              label_decimals = NULL,
+                              abbreviate = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -601,8 +762,15 @@ scenario_ce_plot <- function(results,
          call. = FALSE)
   }
 
+  # Extract locale from results
+  locale <- get_results_locale(results)
+
   # Render CE bar plot with special handling
-  render_scenario_ce_bar_plot(ce_data, results$metadata)
+  render_scenario_ce_bar_plot(ce_data, results$metadata,
+                              axis_decimals = axis_decimals,
+                              label_decimals = label_decimals,
+                              locale = locale,
+                              abbreviate = abbreviate)
 }
 
 
@@ -615,7 +783,11 @@ scenario_ce_plot <- function(results,
 #'
 #' @return A ggplot2 object
 #' @keywords internal
-render_scenario_ce_bar_plot <- function(ce_data, metadata) {
+render_scenario_ce_bar_plot <- function(ce_data, metadata,
+                                         axis_decimals = NULL,
+                                         label_decimals = NULL,
+                                         locale = NULL,
+                                         abbreviate = FALSE) {
 
   # Determine faceting
   n_groups <- length(unique(ce_data$group))
@@ -689,10 +861,10 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
         .data$ce_class == "identical" ~ paste0("Identical", asterisk_map["identical"]),
         .data$ce_class == "dominant" ~ "Dominant",
         .data$ce_class == "flipped" ~ paste0(
-          scales::comma(abs(.data$icer), accuracy = 1),
+          oq_format(abs(.data$icer), decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE),
           asterisk_map["flipped"]
         ),
-        TRUE ~ scales::comma(.data$icer, accuracy = 1)
+        TRUE ~ oq_format(.data$icer, decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE)
       )
     )
 
@@ -834,7 +1006,7 @@ render_scenario_ce_bar_plot <- function(ce_data, metadata) {
   p <- p +
     scale_x_continuous(
       breaks = x_breaks,
-      labels = comma,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate),
       expand = expansion(mult = c(0.05, 0)),
       limits = x_limits
     ) +

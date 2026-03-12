@@ -216,6 +216,20 @@ test_that("trace_plot_line creates a ggplot with lines", {
   expect_true(any(sapply(p$layers, function(l) inherits(l$geom, "GeomLine"))))
 })
 
+test_that("trace_plot_area uses explicit numeric axis label functions", {
+  model_path <- system.file("models/example_psm", package = "openqaly")
+  if (model_path == "") {
+    model_path <- "inst/models/example_psm"
+  }
+
+  model <- read_model(model_path)
+  results <- run_model(model)
+  p <- trace_plot_area(results)
+
+  expect_true(is.function(p$scales$get_scales("x")$labels))
+  expect_true(is.function(p$scales$get_scales("y")$labels))
+})
+
 # =============================================================================
 # Trace Export Tests
 # =============================================================================

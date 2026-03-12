@@ -150,6 +150,20 @@ To show incremental outcomes (intervention minus comparator):
 scenario_outcomes_plot(results, "qalys", comparators = "volantor")
 ```
 
+### Costs Bar Charts
+
+Use `scenario_costs_plot()` to create bar charts for cost outcomes with currency formatting:
+
+```{r, fig.width = 7, fig.height = 5}
+scenario_costs_plot(results, "costs")
+```
+
+#### Showing Differences
+
+```{r, fig.width = 7, fig.height = 5}
+scenario_costs_plot(results, "costs", comparators = "volantor")
+```
+
 ### Cost-Effectiveness Bar Charts
 
 Use `scenario_ce_plot()` to display ICERs by scenario:
@@ -181,6 +195,12 @@ scenario_nmb_plot(results, "qalys", "costs",
 
 ```{r}
 scenario_outcomes_table(results, "qalys")
+```
+
+### Costs Table
+
+```{r}
+scenario_costs_table(results, "costs")
 ```
 
 ### Cost-Effectiveness Table
@@ -250,6 +270,12 @@ When your model has multiple groups, you can view results by group:
 
 ```{r, fig.width = 7, fig.height = 6}
 scenario_outcomes_plot(results, "qalys", groups = "all")
+```
+
+### Costs by Group
+
+```{r, fig.width = 7, fig.height = 6}
+scenario_costs_plot(results, "costs", groups = "all")
 ```
 
 ### Specific Groups

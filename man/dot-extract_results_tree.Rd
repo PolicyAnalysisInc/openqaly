@@ -4,7 +4,14 @@
 \alias{.extract_results_tree}
 \title{Extract tree data from run_model() results}
 \usage{
-.extract_results_tree(results, tree_name, strategy, group)
+.extract_results_tree(
+  results,
+  tree_name,
+  strategy,
+  group,
+  probability_decimals = NULL,
+  locale = NULL
+)
 }
 \arguments{
 \item{results}{Output from run_model()}

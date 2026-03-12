@@ -11,7 +11,8 @@ get_psa_outcome_simulations(
   comparators = NULL,
   groups = "overall",
   strategies = NULL,
-  discounted = TRUE
+  discounted = TRUE,
+  value_type = "outcome"
 )
 }
 \arguments{
@@ -32,6 +33,8 @@ Cannot be used with \code{strategies}.}
 values. Cannot be used with \code{interventions} or \code{comparators}.}
 
 \item{discounted}{Logical. Use discounted outcome values? Default TRUE.}
+
+\item{value_type}{Character. Type of value to extract: "outcome" or "cost". Default "outcome".}
 }
 \value{
 A tibble with columns:

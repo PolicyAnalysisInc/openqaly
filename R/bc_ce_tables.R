@@ -8,7 +8,10 @@
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param decimals Number of decimal places
+#' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -18,7 +21,10 @@ prepare_incremental_ce_table_data <- function(results,
                                               cost_summary,
                                               groups = "overall",
                                               strategies = NULL,
-                                              decimals = 2,
+                                              cost_decimals = NULL,
+                                              outcome_decimals = NULL,
+                                              icer_decimals = NULL,
+                                              abbreviate = FALSE,
                                               font_size = 11) {
 
   # Calculate incremental CE (always uses discounted values)
@@ -38,25 +44,22 @@ prepare_incremental_ce_table_data <- function(results,
     cost_label <- map_names(cost_summary, results$metadata$summaries, "display_name")
   }
 
-  # Format ICER column using print.icer() logic
-  format_icer <- function(icer_values, digits = decimals) {
-    fmt_num <- function(v) {
-      scales::comma(round(v, digits = digits))
-    }
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
-    out <- character(length(icer_values))
-    out[is.na(icer_values)] <- ""  # Blank for NA (reference strategy)
-    out[is.nan(icer_values)] <- "Equivalent"  # Changed from "—" to match print.icer
-    out[is.infinite(icer_values)] <- "Dominated"
-    out[!is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values == 0] <- "Dominant"
+  # Format helpers for cost and outcome columns
+  format_cost_col <- function(values, digits) {
+    sapply(values, function(v) {
+      if (is.na(v)) "" else oq_format(v, decimals = digits, locale = locale,
+                                       abbreviate = abbreviate, currency = TRUE)
+    })
+  }
 
-    pos <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values > 0
-    out[pos] <- fmt_num(icer_values[pos])
-
-    neg <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values < 0
-    out[neg] <- paste0(fmt_num(-icer_values[neg]), "*")
-
-    out
+  format_outcome_col <- function(values, digits) {
+    sapply(values, function(v) {
+      if (is.na(v)) "" else oq_format(v, decimals = digits, locale = locale,
+                                       abbreviate = abbreviate, currency = FALSE)
+    })
   }
 
   # Get unique strategies and groups
@@ -76,26 +79,15 @@ prepare_incremental_ce_table_data <- function(results,
     arrange(.data$group, .data$cost) %>%
     select("strategy", "group", "cost", "outcome", "dcost", "doutcome", "icer", "comparator")
 
-  # Format columns to character
-  # Format numeric columns with proper handling for NA
-  format_numeric_col <- function(values, digits) {
-    sapply(values, function(v) {
-      if (is.na(v)) {
-        ""
-      } else {
-        scales::comma(round(v, digits), accuracy = 10^(-digits))
-      }
-    })
-  }
-
-  # Format the ICER column using the format_icer helper (vectorized)
+  # Format the columns using locale-aware formatting
   formatted_data <- table_data %>%
     mutate(
-      cost = format_numeric_col(.data$cost, decimals),
-      outcome = format_numeric_col(.data$outcome, decimals),
-      dcost = format_numeric_col(.data$dcost, decimals),
-      doutcome = format_numeric_col(.data$doutcome, decimals),
-      icer = format_icer(.data$icer, decimals),
+      cost = format_cost_col(.data$cost, cost_decimals),
+      outcome = format_outcome_col(.data$outcome, outcome_decimals),
+      dcost = format_cost_col(.data$dcost, cost_decimals),
+      doutcome = format_outcome_col(.data$doutcome, outcome_decimals),
+      icer = oq_format_icer(.data$icer, decimals = icer_decimals, locale = locale,
+                             abbreviate = abbreviate),
       comparator = ifelse(is.na(.data$comparator), "", .data$comparator)
     )
 
@@ -222,7 +214,10 @@ prepare_incremental_ce_table_data <- function(results,
 #' @param cost_summary Name of the cost summary
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param decimals Number of decimal places (default: 2)
+#' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -246,7 +241,10 @@ incremental_ce_table <- function(results,
                                 cost_summary,
                                 groups = "overall",
                                 strategies = NULL,
-                                decimals = 2,
+                                cost_decimals = NULL,
+                                outcome_decimals = NULL,
+                                icer_decimals = NULL,
+                                abbreviate = FALSE,
                                 font_size = 11,
                                 table_format = c("flextable", "kable")) {
 
@@ -259,7 +257,10 @@ incremental_ce_table <- function(results,
     cost_summary = cost_summary,
     groups = groups,
     strategies = strategies,
-    decimals = decimals,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    icer_decimals = icer_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -279,7 +280,10 @@ incremental_ce_table <- function(results,
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
-#' @param decimals Number of decimal places
+#' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -290,7 +294,10 @@ prepare_pairwise_ce_table_data <- function(results,
                                           groups = "overall",
                                           interventions = NULL,
                                           comparators = NULL,
-                                          decimals = 2,
+                                          cost_decimals = NULL,
+                                          outcome_decimals = NULL,
+                                          icer_decimals = NULL,
+                                          abbreviate = FALSE,
                                           font_size = 11) {
 
   # Calculate pairwise CE (always uses discounted values)
@@ -348,35 +355,21 @@ prepare_pairwise_ce_table_data <- function(results,
   absolute_data <- cost_data %>%
     inner_join(outcome_data, by = c("strategy", "group"))
 
-  # Format ICER column using print.icer() logic
-  format_icer <- function(icer_values, digits = decimals) {
-    fmt_num <- function(v) {
-      scales::comma(round(v, digits = digits))
-    }
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
-    out <- character(length(icer_values))
-    out[is.na(icer_values)] <- ""  # Blank for NA
-    out[is.nan(icer_values)] <- "Equivalent"
-    out[is.infinite(icer_values)] <- "Dominated"
-    out[!is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values == 0] <- "Dominant"
-
-    pos <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values > 0
-    out[pos] <- fmt_num(icer_values[pos])
-
-    neg <- !is.nan(icer_values) & !is.infinite(icer_values) & !is.na(icer_values) & icer_values < 0
-    out[neg] <- paste0(fmt_num(-icer_values[neg]), "*")
-
-    out
+  # Format helpers for cost and outcome columns
+  format_cost_col <- function(values, digits) {
+    sapply(values, function(v) {
+      if (is.na(v)) "" else oq_format(v, decimals = digits, locale = locale,
+                                       abbreviate = abbreviate, currency = TRUE)
+    })
   }
 
-  # Format numeric columns
-  format_numeric_col <- function(values, digits) {
+  format_outcome_col <- function(values, digits) {
     sapply(values, function(v) {
-      if (is.na(v)) {
-        ""
-      } else {
-        scales::comma(round(v, digits), accuracy = 10^(-digits))
-      }
+      if (is.na(v)) "" else oq_format(v, decimals = digits, locale = locale,
+                                       abbreviate = abbreviate, currency = FALSE)
     })
   }
 
@@ -401,8 +394,8 @@ prepare_pairwise_ce_table_data <- function(results,
     strategy_rows <- absolute_data %>%
       mutate(
         row_label = .data$strategy,
-        cost_fmt = format_numeric_col(.data$cost, decimals),
-        outcome_fmt = format_numeric_col(.data$outcome, decimals),
+        cost_fmt = format_cost_col(.data$cost, cost_decimals),
+        outcome_fmt = format_outcome_col(.data$outcome, outcome_decimals),
         icer_fmt = ""
       ) %>%
       select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
@@ -411,9 +404,10 @@ prepare_pairwise_ce_table_data <- function(results,
     comparison_rows <- ce_data %>%
       mutate(
         row_label = paste(.data$strategy, "vs.", .data$comparator),
-        cost_fmt = format_numeric_col(.data$dcost, decimals),
-        outcome_fmt = format_numeric_col(.data$doutcome, decimals),
-        icer_fmt = format_icer(.data$icer, decimals)
+        cost_fmt = format_cost_col(.data$dcost, cost_decimals),
+        outcome_fmt = format_outcome_col(.data$doutcome, outcome_decimals),
+        icer_fmt = oq_format_icer(.data$icer, decimals = icer_decimals, locale = locale,
+                                   abbreviate = abbreviate)
       ) %>%
       select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
@@ -461,8 +455,8 @@ prepare_pairwise_ce_table_data <- function(results,
         filter(.data$group == grp) %>%
         mutate(
           row_label = .data$strategy,
-          cost_fmt = format_numeric_col(.data$cost, decimals),
-          outcome_fmt = format_numeric_col(.data$outcome, decimals),
+          cost_fmt = format_cost_col(.data$cost, cost_decimals),
+          outcome_fmt = format_outcome_col(.data$outcome, outcome_decimals),
           icer_fmt = ""
         ) %>%
         select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
@@ -479,9 +473,10 @@ prepare_pairwise_ce_table_data <- function(results,
         filter(.data$group == grp) %>%
         mutate(
           row_label = paste0(.data$strategy, " vs. ", .data$comparator),
-          cost_fmt = format_numeric_col(.data$dcost, decimals),
-          outcome_fmt = format_numeric_col(.data$doutcome, decimals),
-          icer_fmt = format_icer(.data$icer, decimals)
+          cost_fmt = format_cost_col(.data$dcost, cost_decimals),
+          outcome_fmt = format_outcome_col(.data$doutcome, outcome_decimals),
+          icer_fmt = oq_format_icer(.data$icer, decimals = icer_decimals, locale = locale,
+                                     abbreviate = abbreviate)
         ) %>%
         select("row_label", "cost_fmt", "outcome_fmt", "icer_fmt")
 
@@ -547,7 +542,10 @@ prepare_pairwise_ce_table_data <- function(results,
 #' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
-#' @param decimals Number of decimal places (default: 2)
+#' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -573,7 +571,10 @@ pairwise_ce_table <- function(results,
                              groups = "overall",
                              interventions = NULL,
                              comparators = NULL,
-                             decimals = 2,
+                             cost_decimals = NULL,
+                             outcome_decimals = NULL,
+                             icer_decimals = NULL,
+                             abbreviate = FALSE,
                              font_size = 11,
                              table_format = c("flextable", "kable")) {
 
@@ -587,7 +588,10 @@ pairwise_ce_table <- function(results,
     groups = groups,
     interventions = interventions,
     comparators = comparators,
-    decimals = decimals,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    icer_decimals = icer_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

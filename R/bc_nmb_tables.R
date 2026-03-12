@@ -11,7 +11,8 @@
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL, uses locale default)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -24,7 +25,8 @@ prepare_nmb_table_data <- function(results,
                                   interventions = NULL,
                                   comparators = NULL,
                                   show_total = TRUE,
-                                  decimals = 2,
+                                  decimals = NULL,
+                                  abbreviate = FALSE,
                                   font_size = 11) {
 
   # Validate interventions/comparators
@@ -116,13 +118,8 @@ prepare_nmb_table_data <- function(results,
       )
   }
 
-  # Round values first (keep as numeric for now)
+  # Track value columns (numeric) for formatting
   value_cols <- setdiff(colnames(pivot_data), "value")
-  for (col in value_cols) {
-    if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- round(pivot_data[[col]], decimals)
-    }
-  }
 
   # Track total row index if requested
   total_row_index <- NULL
@@ -134,13 +131,13 @@ prepare_nmb_table_data <- function(results,
     total_row_index <- nrow(pivot_data)
   }
 
-  # NOW format values as character strings to prevent renderer reformatting
+  # Format values as character strings using locale-aware formatting
+  locale <- get_results_locale(results)
   for (col in value_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      rounded_vals <- pivot_data[[col]]
-      # Fix negative zero display
-      rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-      pivot_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+      pivot_data[[col]] <- oq_format(pivot_data[[col]], decimals = decimals,
+                                      locale = locale, abbreviate = abbreviate,
+                                      currency = TRUE)
     }
   }
 
@@ -340,7 +337,8 @@ prepare_nmb_table_data <- function(results,
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL, uses locale default)
+#' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -369,7 +367,8 @@ nmb_table <- function(results,
                      interventions = NULL,
                      comparators = NULL,
                      show_total = TRUE,
-                     decimals = 2,
+                     decimals = NULL,
+                     abbreviate = FALSE,
                      font_size = 11,
                      table_format = c("flextable", "kable")) {
 
@@ -386,6 +385,7 @@ nmb_table <- function(results,
     comparators = comparators,
     show_total = show_total,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

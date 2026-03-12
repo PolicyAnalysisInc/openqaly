@@ -186,7 +186,9 @@ set_settings <- function(model, ...) {
     discount_timing = "discount_timing",
     discount_method = "discount_method",
     reduce_state_cycle = "reduce_state_cycle",
-    days_per_year = "days_per_year"
+    days_per_year = "days_per_year",
+    country = "country",
+    number_country = "number_country"
   )
 
   # Apply settings

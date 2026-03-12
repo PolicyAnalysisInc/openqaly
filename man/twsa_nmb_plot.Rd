@@ -17,7 +17,10 @@ twsa_nmb_plot(
   xlab = NULL,
   ylab = NULL,
   viridis_option = "viridis",
-  show_base_case = TRUE
+  show_base_case = TRUE,
+  cell_decimals = NULL,
+  axis_label_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -50,6 +53,12 @@ or comparators must be specified.}
 "plasma", "inferno", or "cividis"}
 
 \item{show_base_case}{Logical. Show base case point marker? (default: TRUE)}
+
+\item{cell_decimals}{Fixed decimal places for cell labels, or NULL for auto-precision}
+
+\item{axis_label_decimals}{Fixed decimal places for axis tick labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

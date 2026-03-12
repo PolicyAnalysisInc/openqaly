@@ -4,7 +4,13 @@
 \alias{format_icer_label}
 \title{Format ICER Value for Display}
 \usage{
-format_icer_label(icer_value, asterisk = "", decimals = 0)
+format_icer_label(
+  icer_value,
+  asterisk = "",
+  decimals = 0,
+  locale = NULL,
+  abbreviate_val = FALSE
+)
 }
 \arguments{
 \item{icer_value}{Numeric ICER value}

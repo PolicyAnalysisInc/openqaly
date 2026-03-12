@@ -10,6 +10,9 @@ dsa_vbp_plot(
   comparators = "all",
   groups = "overall",
   show_parameter_values = TRUE,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE,
   ...
 )
 }
@@ -27,6 +30,12 @@ uses the WTP from the outcome summary specified in the VBP analysis.}
 
 \item{show_parameter_values}{Logical. Show parameter values in y-axis labels?
 (default: TRUE)}
+
+\item{axis_decimals}{Numeric or NULL. Number of decimal places for axis labels. NULL for auto.}
+
+\item{label_decimals}{Numeric or NULL. Number of decimal places for value labels. NULL for auto.}
+
+\item{abbreviate}{Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.}
 
 \item{...}{Additional arguments (reserved for future use)}
 }

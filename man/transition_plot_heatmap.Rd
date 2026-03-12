@@ -10,7 +10,7 @@ transition_plot_heatmap(
   groups = "overall",
   strategies = NULL,
   collapsed = TRUE,
-  decimals = 3,
+  decimals = NULL,
   use_display_names = TRUE,
   state_times = NULL,
   exclude_zero_residency = NULL
@@ -29,7 +29,7 @@ vector of groups, "all", "all_groups", or NULL}
 \item{collapsed}{Logical. If TRUE (default), use collapsed state names.
 If FALSE, use expanded state names (tunnel states).}
 
-\item{decimals}{Integer. Number of decimal places for probability labels (default: 3).}
+\item{decimals}{Integer. Number of decimal places for probability labels, or NULL for auto-precision.}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for entities.}
 

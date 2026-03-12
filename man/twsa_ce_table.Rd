@@ -12,6 +12,10 @@ twsa_ce_table(
   groups = "overall",
   interventions,
   comparators,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   backend = c("flextable", "kable")
 )
@@ -31,6 +35,14 @@ specific group name(s)}
 \item{interventions}{Intervention strategy name(s). Required.}
 
 \item{comparators}{Comparator strategy name(s). Required.}
+
+\item{cost_decimals}{Number of decimal places for costs (default: NULL for auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL for auto)}
+
+\item{icer_decimals}{Number of decimal places for ICERs (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for table (default: 11)}
 

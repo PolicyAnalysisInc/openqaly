@@ -7,8 +7,9 @@
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param time_unit Which time unit to display
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -17,9 +18,10 @@ prepare_trace_table_data <- function(results,
                                      groups = "overall",
                                      states = NULL,
                                      cycles = NULL,
-                                     decimals = 4,
+                                     decimals = NULL,
                                      time_unit = "cycle",
-                                     font_size = 11) {
+                                     font_size = 11,
+                                     abbreviate = FALSE) {
 
   # Get long format trace data (names already mapped by get_trace)
   trace_long <- get_trace(
@@ -154,19 +156,14 @@ prepare_trace_table_data <- function(results,
   }
 
   # Format probability columns as character strings to prevent renderer reformatting
+  locale <- get_results_locale(results)
   prob_cols <- setdiff(
     colnames(trace_data),
     c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE))
   )
   for (col in prob_cols) {
     if (is.numeric(trace_data[[col]])) {
-      rounded_vals <- round(trace_data[[col]], decimals)
-      # Fix negative zero display
-      rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-      trace_data[[col]] <- format(rounded_vals,
-                                  nsmall = decimals,
-                                  scientific = FALSE,
-                                  trim = TRUE)
+      trace_data[[col]] <- oq_format(trace_data[[col]], decimals = decimals, locale = locale, abbreviate = abbreviate)
     }
   }
 
@@ -337,11 +334,12 @@ prepare_trace_table_data <- function(results,
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param time_unit Which time unit to display: "cycle" (default), "day", "week",
 #'   "month", or "year".
 #' @param font_size Font size for the table (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -369,10 +367,11 @@ trace_table <- function(results,
                         groups = "overall",
                         states = NULL,
                         cycles = NULL,
-                        decimals = 4,
+                        decimals = NULL,
                         time_unit = "cycle",
                         font_size = 11,
-                        table_format = c("flextable", "kable")) {
+                        table_format = c("flextable", "kable"),
+                        abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -385,7 +384,8 @@ trace_table <- function(results,
     cycles = cycles,
     decimals = decimals,
     time_unit = time_unit,
-    font_size = font_size
+    font_size = font_size,
+    abbreviate = abbreviate
   )
 
   # Render using specified backend

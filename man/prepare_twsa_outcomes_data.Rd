@@ -12,7 +12,8 @@ prepare_twsa_outcomes_data(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  discounted = TRUE
+  discounted = TRUE,
+  value_type = "all"
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ prepare_twsa_outcomes_data(
 \item{comparators}{Comparator strategy name(s)}
 
 \item{discounted}{Logical. Use discounted values?}
+
+\item{value_type}{Type of values to extract: "all" (default), "outcome", or "cost"}
 }
 \value{
 Tibble with x_value, y_value, value, strategy, group, and parameter info

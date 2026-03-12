@@ -4,7 +4,16 @@
 \alias{render_scenario_bar_plot}
 \title{Render Scenario Bar Plot}
 \usage{
-render_scenario_bar_plot(bar_data, x_label, value_labels = TRUE)
+render_scenario_bar_plot(
+  bar_data,
+  x_label,
+  value_labels = TRUE,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  locale = NULL,
+  abbreviate = FALSE,
+  currency = FALSE
+)
 }
 \arguments{
 \item{bar_data}{Prepared tibble with columns: scenario_name, value, strategy, group,

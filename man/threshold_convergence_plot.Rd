@@ -4,12 +4,21 @@
 \alias{threshold_convergence_plot}
 \title{Threshold Convergence Plot}
 \usage{
-threshold_convergence_plot(results, analyses = NULL)
+threshold_convergence_plot(
+  results,
+  analyses = NULL,
+  axis_decimals = NULL,
+  abbreviate = FALSE
+)
 }
 \arguments{
 \item{results}{Threshold results from run_threshold()}
 
 \item{analyses}{Optional character vector of analysis names to include}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot object

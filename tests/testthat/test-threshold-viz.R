@@ -237,6 +237,14 @@ test_that("threshold_convergence_plot returns ggplot for multiple analyses", {
   expect_s3_class(p, "ggplot")
 })
 
+test_that("threshold_convergence_plot formats x-axis through oq_label_fn", {
+  results <- build_mock_threshold_results(1)
+  p <- threshold_convergence_plot(results)
+  labels <- p$scales$get_scales("x")$labels(c(1.01, 1.02))
+
+  expect_equal(length(unique(labels)), 2)
+})
+
 test_that("threshold_convergence_plot filters by analyses parameter", {
   results <- build_mock_threshold_results(2)
   p <- threshold_convergence_plot(results, analyses = "Analysis 2")

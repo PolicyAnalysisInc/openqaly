@@ -158,7 +158,9 @@ test_that("Multi-group pairwise CE table has group header rows", {
     cost_summary = "total_cost",
     groups = "all",
     comparators = "standard",
-    decimals = 2
+    cost_decimals = 2,
+    outcome_decimals = 2,
+    icer_decimals = 2
   )
 
   # Should have group_header_rows in special_rows
@@ -183,7 +185,9 @@ test_that("Multi-group pairwise CE table has correct columns", {
     cost_summary = "total_cost",
     groups = "all",
     comparators = "standard",
-    decimals = 2
+    cost_decimals = 2,
+    outcome_decimals = 2,
+    icer_decimals = 2
   )
 
   # Should have expected columns matching display names from test model
@@ -203,7 +207,9 @@ test_that("Multi-group pairwise CE table group headers contain group names", {
     cost_summary = "total_cost",
     groups = "all",
     comparators = "standard",
-    decimals = 2
+    cost_decimals = 2,
+    outcome_decimals = 2,
+    icer_decimals = 2
   )
 
   # Get group display names (plus Overall)

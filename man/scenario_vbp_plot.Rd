@@ -4,7 +4,15 @@
 \alias{scenario_vbp_plot}
 \title{Plot Scenario VBP as Bar Chart}
 \usage{
-scenario_vbp_plot(results, wtp = NULL, groups = "overall", comparators = "all")
+scenario_vbp_plot(
+  results,
+  wtp = NULL,
+  groups = "overall",
+  comparators = "all",
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  abbreviate = FALSE
+)
 }
 \arguments{
 \item{results}{A openqaly scenario+VBP results object (output from run_scenario with VBP enabled)}
@@ -14,6 +22,12 @@ scenario_vbp_plot(results, wtp = NULL, groups = "overall", comparators = "all")
 \item{groups}{Group selection: "overall" (default), "all", "all_groups", or specific group names}
 
 \item{comparators}{Comparator strategies: "all" (default) or specific comparator names}
+
+\item{axis_decimals}{Numeric or NULL. Number of decimal places for axis labels. NULL for auto.}
+
+\item{label_decimals}{Numeric or NULL. Number of decimal places for value labels. NULL for auto.}
+
+\item{abbreviate}{Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.}
 }
 \value{
 A ggplot2 object

@@ -12,7 +12,7 @@ prepare_pairwise_ceac_table_data(
   comparators = NULL,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
   groups = "overall",
-  decimals = 1,
+  decimals = NULL,
   font_size = 11
 )
 }

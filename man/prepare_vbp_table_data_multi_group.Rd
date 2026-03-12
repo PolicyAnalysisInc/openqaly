@@ -9,7 +9,8 @@ prepare_vbp_table_data_multi_group(
   wtp_thresholds = NULL,
   comparators = "all",
   groups_to_process,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -28,7 +29,9 @@ prepare_vbp_table_data_multi_group(
 
 \item{groups_to_process}{Character vector of groups to include}
 
-\item{decimals}{Number of decimal places}
+\item{decimals}{Number of decimal places (NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)?}
 
 \item{font_size}{Font size for rendering}
 }

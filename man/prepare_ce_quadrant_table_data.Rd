@@ -11,7 +11,7 @@ prepare_ce_quadrant_table_data(
   comparator,
   groups = "overall",
   strategies = NULL,
-  decimals = 1,
+  decimals = NULL,
   font_size = 11
 )
 }

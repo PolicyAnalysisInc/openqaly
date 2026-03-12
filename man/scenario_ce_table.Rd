@@ -11,7 +11,10 @@ scenario_ce_table(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -30,7 +33,13 @@ At least one of interventions or comparators must be specified.}
 
 \item{comparators}{Character vector of comparator strategy name(s).}
 
-\item{decimals}{Number of decimal places for ICER (default: 0)}
+\item{cost_decimals}{Number of decimal places for costs (default: NULL for auto-precision)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL for auto-precision)}
+
+\item{icer_decimals}{Number of decimal places for ICER (default: NULL for auto-precision)}
+
+\item{abbreviate}{Logical. Use K/M/B/T suffixes? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

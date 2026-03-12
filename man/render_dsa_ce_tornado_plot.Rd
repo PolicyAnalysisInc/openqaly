@@ -7,7 +7,11 @@
 render_dsa_ce_tornado_plot(
   tornado_data,
   facet_metadata,
-  dominated_position = NULL
+  dominated_position = NULL,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  locale = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{

@@ -167,6 +167,54 @@ twsa_outcomes_plot(results, "qalys",
   discounted = TRUE)
 ```
 
+## Costs Heatmaps
+
+Use `twsa_costs_plot()` to create heatmaps for cost outcomes with currency formatting.
+These examples use parameters that both change total costs: treatment cost
+and the cost discount rate.
+
+```{r, include = FALSE}
+model_costs <- read_model(
+  system.file("models", "example_markov", package = "openqaly")
+) |>
+  add_twsa("Cost Sensitivity") |>
+  add_twsa_variable("Cost Sensitivity", "c_treatment",
+    type = "custom", values = c(1500, 2250, 3000, 3750, 4500),
+    display_name = "Treatment Cost", strategy = "volantor") |>
+  add_twsa_setting("Cost Sensitivity", "discount_cost",
+    type = "range", min = 0, max = 5, steps = 5,
+    display_name = "Cost Discount Rate")
+
+results_costs <- run_twsa(model_costs)
+```
+
+### Basic usage
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_costs_plot(results_costs, "costs")
+```
+
+### Filtering to specific strategies
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_costs_plot(results_costs, "costs", strategies = "volantor")
+```
+
+### Incremental costs
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_costs_plot(results_costs, "costs",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+### Using discounted values
+
+```{r, fig.width = 7, fig.height = 5}
+twsa_costs_plot(results_costs, "costs",
+  discounted = TRUE)
+```
+
 ## NMB Heatmaps
 
 Use `twsa_nmb_plot()` to show Net Monetary Benefit across the grid.
@@ -229,6 +277,16 @@ Use `twsa_outcomes_table()` to create grid tables of outcome values.
 
 ```{r}
 twsa_outcomes_table(results, "qalys",
+  interventions = "volantor",
+  comparators = "seritinib")
+```
+
+## Costs Tables
+
+Use `twsa_costs_table()` to create grid tables of cost values with currency formatting.
+
+```{r}
+twsa_costs_table(results, "costs",
   interventions = "volantor",
   comparators = "seritinib")
 ```

@@ -10,7 +10,11 @@ render_twsa_ce_heatmap(
   xlab = NULL,
   ylab = NULL,
   viridis_option = "viridis",
-  show_base_case = TRUE
+  show_base_case = TRUE,
+  cell_decimals = NULL,
+  axis_label_decimals = NULL,
+  abbreviate = FALSE,
+  locale = NULL
 )
 }
 \arguments{

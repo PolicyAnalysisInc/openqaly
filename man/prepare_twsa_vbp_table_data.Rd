@@ -10,7 +10,8 @@ prepare_twsa_vbp_table_data(
   twsa_name = NULL,
   groups = "overall",
   comparators = "all",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
