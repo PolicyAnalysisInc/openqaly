@@ -2,29 +2,21 @@
 % Please edit documentation in R/twsa_plots.R
 \name{continuous_legend_breaks}
 \alias{continuous_legend_breaks}
-\title{Render TWSA Heatmap}
+\title{Continuous Legend Breaks}
 \usage{
 continuous_legend_breaks(values, limits = NULL, n = 5)
 }
 \arguments{
-\item{heatmap_data}{Prepared tibble from prepare_twsa_heatmap_data}
+\item{values}{Numeric vector of data values}
 
-\item{title}{Plot title}
+\item{limits}{Optional numeric vector of length 2 giving the scale limits}
 
-\item{xlab}{X-axis label}
-
-\item{ylab}{Y-axis label}
-
-\item{legend_title}{Legend title}
-
-\item{viridis_option}{Viridis palette option}
-
-\item{show_base_case}{Logical. Mark base case point?}
+\item{n}{Approximate number of breaks}
 }
 \value{
-A ggplot2 object
+A numeric vector of break values
 }
 \description{
-Internal helper to create heatmap visualization from prepared data.
+Internal helper to compute legend breaks for continuous scales.
 }
 \keyword{internal}

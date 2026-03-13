@@ -1216,6 +1216,7 @@ format_csv_for_yaml <- function(df) {
     return("")
   }
   # Write to string
+  csv_output <- NULL
   conn <- textConnection("csv_output", "w", local = TRUE)
   on.exit(close(conn))
   write.csv(df, conn, row.names = FALSE)

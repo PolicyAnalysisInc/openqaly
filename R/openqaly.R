@@ -10,7 +10,7 @@
 #' @importFrom jsonlite fromJSON toJSON write_json validate
 #' @importFrom tibble rownames_to_column tibble as_tibble tribble
 #' @importFrom stringr str_split_fixed str_split
-#' @importFrom utils capture.output write.csv head
+#' @importFrom utils capture.output write.csv read.csv head
 #' @importFrom methods as
 #' @importFrom readr read_csv read_file
 #' @importFrom glue glue

@@ -27,7 +27,6 @@ Imports:
     glue,
     ggplot2,
     ggraph,
-    ggrepel,
     tidygraph,
     Rcpp,
     jsonlite,

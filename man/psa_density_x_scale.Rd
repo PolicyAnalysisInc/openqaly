@@ -2,7 +2,7 @@
 % Please edit documentation in R/psa_plots.R
 \name{psa_density_x_scale}
 \alias{psa_density_x_scale}
-\title{Incremental Net Monetary Benefit Density Plot}
+\title{PSA Density X Scale}
 \usage{
 psa_density_x_scale(x, include = NULL, n = 4)
 }
@@ -12,95 +12,11 @@ psa_density_x_scale(x, include = NULL, n = 4)
 \item{include}{Optional numeric vector that must be included in the x-axis range}
 
 \item{n}{Approximate number of pretty breaks}
-
-\item{results}{A openqaly PSA results object}
-
-\item{outcome_summary}{Name of the outcome summary (e.g., "total_qalys")}
-
-\item{cost_summary}{Name of the cost summary (e.g., "total_cost")}
-
-\item{wtp}{Willingness-to-pay threshold for NMB calculation}
-
-\item{interventions}{Character vector of intervention strategy name(s).
-Can be combined with comparators for N x M comparisons.}
-
-\item{comparators}{Character vector of comparator strategy name(s).
-Can be combined with interventions for N x M comparisons.}
-
-\item{groups}{Group selection:
-\itemize{
-  \item \code{"overall"} - Overall population (aggregated, default)
-  \item \code{"group_name"} - Specific group by name
-  \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
-  \item \code{c("overall", "group1")} - Specific groups + overall
-  \item \code{"all"} or \code{NULL} - All groups + overall
-  \item \code{"all_groups"} - All groups without overall
-}}
-
-\item{strategies}{Character vector of strategies to include (NULL for all).
-Mutually exclusive with interventions/comparators.}
-
-\item{show_mean}{Logical. Show vertical lines at mean incremental NMB per comparison?}
-
-\item{alpha}{Transparency for density fill (default: 0.4)}
-
-\item{title}{Optional plot title}
-
-\item{xlab}{Optional x-axis label}
-
-\item{legend_position}{Legend position ("right", "bottom", "top", "left", "none")}
-
-\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
-
-\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
-A ggplot object
-
 A list with \code{breaks} and \code{limits}
 }
 \description{
-Creates a density plot showing the distribution of incremental Net Monetary
-Benefit (NMB) relative to a comparator at a given willingness-to-pay threshold.
-}
-\details{
-Incremental Net Monetary Benefit is calculated as:
-\deqn{\Delta NMB = \lambda \times \Delta Outcomes - \Delta Costs}
-
-where \eqn{\lambda} is the willingness-to-pay threshold and \eqn{\Delta}
-represents the difference between intervention and comparator. Positive
-incremental NMB indicates the intervention is cost-effective at the given
-WTP threshold.
-
-**Comparison Modes:**
-
-When interventions and/or comparators are specified:
-\itemize{
-  \item Both as single values: shows one comparison (intervention - comparator)
-  \item One as vector, other NULL: shows each vs. all others
-  \item Both as vectors (N x M mode): shows all pairwise comparisons (excluding self)
-}
-
-A vertical dashed line at x = 0 indicates the threshold for cost-effectiveness:
-positive values indicate the intervention is cost-effective.
-
-NMB calculations always use discounted values as this is a cost-effectiveness measure.
-}
-\examples{
-\dontrun{
-model <- read_model(system.file("models/example_psm", package = "openqaly"))
-psa_results <- run_psa(model, n_sim = 1000)
-
-# Incremental NMB density relative to a comparator
-nmb_density_plot(psa_results, "total_qalys", "total_cost",
-                 wtp = 50000, comparators = "control")
-
-# Intervention perspective
-nmb_density_plot(psa_results, "total_qalys", "total_cost",
-                 wtp = 100000, interventions = "new_treatment", show_mean = TRUE)
-}
-
 Internal helper for density plot x-axis breaks and limits.
-
 }
 \keyword{internal}

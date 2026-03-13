@@ -288,6 +288,26 @@ test_that("psa_parameter_scatter_matrix() extracts correct variables", {
   expect_equal(p$nrow, 2)
 })
 
+test_that("psa_parameter_scatter_matrix() does not emit duplicate scale warnings", {
+  skip_if_not_installed("GGally")
+  results <- get_cached_psa_results()
+
+  warnings <- character()
+  withCallingHandlers(
+    psa_parameter_scatter_matrix(
+      results,
+      variables = c("p_sick", "c_healthy", "u_healthy"),
+      strategies = "standard"
+    ),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  expect_false(any(grepl("Scale for [xy] is already present", warnings)))
+})
+
 test_that("psa_parameter_scatter_matrix() errors with less than 2 variables", {
   skip_if_not_installed("GGally")
   results <- get_cached_psa_results()

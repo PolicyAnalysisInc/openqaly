@@ -195,19 +195,15 @@ prepare_twsa_outcomes_data <- function(results,
   heatmap_data
 }
 
-#' Render TWSA Heatmap
+#' Continuous Legend Breaks
 #'
-#' Internal helper to create heatmap visualization from prepared data.
+#' Internal helper to compute legend breaks for continuous scales.
 #'
-#' @param heatmap_data Prepared tibble from prepare_twsa_heatmap_data
-#' @param title Plot title
-#' @param xlab X-axis label
-#' @param ylab Y-axis label
-#' @param legend_title Legend title
-#' @param viridis_option Viridis palette option
-#' @param show_base_case Logical. Mark base case point?
+#' @param values Numeric vector of data values
+#' @param limits Optional numeric vector of length 2 giving the scale limits
+#' @param n Approximate number of breaks
 #'
-#' @return A ggplot2 object
+#' @return A numeric vector of break values
 #' @keywords internal
 continuous_legend_breaks <- function(values,
                                      limits = NULL,
@@ -238,6 +234,24 @@ continuous_legend_breaks <- function(values,
   sort(unique(c(limits[1], interior_breaks, limits[2])))
 }
 
+#' Render TWSA Heatmap
+#'
+#' Internal helper to create heatmap visualization from prepared data.
+#'
+#' @param heatmap_data Prepared tibble from prepare_twsa_heatmap_data
+#' @param title Plot title
+#' @param xlab X-axis label
+#' @param ylab Y-axis label
+#' @param legend_title Legend title
+#' @param viridis_option Viridis palette option
+#' @param show_base_case Logical. Mark base case point?
+#' @param caption Optional plot caption
+#' @param cell_decimals Number of decimal places for cell labels
+#' @param axis_label_decimals Number of decimal places for axis labels
+#' @param abbreviate Logical. Use abbreviated number format?
+#' @param currency Logical. Format values as currency?
+#' @param locale Locale for number formatting
+#'
 #' @return A ggplot2 object
 #' @keywords internal
 render_twsa_heatmap <- function(heatmap_data,

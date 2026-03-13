@@ -1,5 +1,6 @@
 ^codecov\.yml$
 ^\.
+^\.article$
 ^scratch notes$
 ^LICENSE$
 ^openqaly\.Rproj$
@@ -9,3 +10,4 @@
 ^todo$
 ^src/.*\.tmp$
 ^.*\.tar\.gz$
+^\.heemod$

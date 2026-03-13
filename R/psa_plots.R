@@ -596,6 +596,31 @@ psa_parameter_scatter_matrix <- function(results,
     stop("Need at least 2 variables to create a scatter matrix. Found ", ncol(plot_data))
   }
 
+  axis_label_fn <- oq_label_fn(decimals = axis_decimals, locale = locale)
+
+  default_lower_points <- is.list(lower) &&
+    identical(lower$continuous, "points")
+  default_diag_density <- is.list(diag) &&
+    identical(diag$continuous, "densityDiag")
+
+  if (default_lower_points) {
+    lower <- lower
+    lower$continuous <- function(data, mapping, ...) {
+      GGally::ggally_points(data, mapping, alpha = alpha, size = 0.5, ...) +
+        scale_x_continuous(labels = axis_label_fn) +
+        scale_y_continuous(labels = axis_label_fn)
+    }
+  }
+
+  if (default_diag_density) {
+    diag <- diag
+    diag$continuous <- function(data, mapping, ...) {
+      GGally::ggally_densityDiag(data, mapping, ...) +
+        scale_x_continuous(labels = axis_label_fn) +
+        scale_y_continuous(labels = axis_label_fn)
+    }
+  }
+
   # Set default title if not provided
   if (is.null(title)) {
     n_sim <- nrow(plot_data)
@@ -633,29 +658,6 @@ psa_parameter_scatter_matrix <- function(results,
       title = title,
       progress = FALSE
     )
-  }
-
-  # Adjust alpha for scatter plots if points are in lower triangle
-  if (!is.null(lower$continuous) && lower$continuous == "points") {
-    p <- p + theme_bw()
-
-    # Apply alpha to scatter plots in lower triangle
-    for (i in 2:ncol(plot_data)) {
-      for (j in 1:(i-1)) {
-        p[i, j] <- p[i, j] +
-          geom_point(alpha = alpha, size = 0.5)
-      }
-    }
-  }
-
-  # Apply locale-aware axis formatting to all sub-plots
-  axis_label_fn <- oq_label_fn(decimals = axis_decimals, locale = locale)
-  for (i in seq_len(ncol(plot_data))) {
-    for (j in seq_len(ncol(plot_data))) {
-      p[i, j] <- p[i, j] +
-        scale_x_continuous(labels = axis_label_fn) +
-        scale_y_continuous(labels = axis_label_fn)
-    }
   }
 
   return(p)
@@ -1186,6 +1188,44 @@ pairwise_psa_scatter_plot <- function(results,
   p
 }
 
+#' PSA Density X Scale
+#'
+#' Internal helper for density plot x-axis breaks and limits.
+#'
+#' @param x Numeric vector of plotted x-values
+#' @param include Optional numeric vector that must be included in the x-axis range
+#' @param n Approximate number of pretty breaks
+#'
+#' @return A list with \code{breaks} and \code{limits}
+#' @keywords internal
+psa_density_x_scale <- function(x, include = NULL, n = 4) {
+  x_values <- x[is.finite(x)]
+  include_values <- include[is.finite(include)]
+  scale_values <- c(x_values, include_values)
+
+  if (length(scale_values) == 0) {
+    scale_values <- c(0, 1)
+  }
+
+  x_range <- range(scale_values)
+
+  if (x_range[1] == x_range[2]) {
+    expand_amount <- max(abs(x_range[1]) * 0.05, 1)
+    x_range <- x_range + c(-expand_amount, expand_amount)
+  }
+
+  x_breaks <- pretty_breaks(n = n)(x_range)
+  x_breaks <- x_breaks[is.finite(x_breaks)]
+
+  if (length(x_breaks) == 0) {
+    x_breaks <- x_range
+  }
+
+  list(
+    breaks = x_breaks,
+    limits = range(x_breaks)
+  )
+}
 
 #' Incremental Net Monetary Benefit Density Plot
 #'
@@ -1258,43 +1298,6 @@ pairwise_psa_scatter_plot <- function(results,
 #'                  wtp = 100000, interventions = "new_treatment", show_mean = TRUE)
 #' }
 #'
-#' Internal helper for density plot x-axis breaks and limits.
-#'
-#' @param x Numeric vector of plotted x-values
-#' @param include Optional numeric vector that must be included in the x-axis range
-#' @param n Approximate number of pretty breaks
-#'
-#' @return A list with \code{breaks} and \code{limits}
-#' @keywords internal
-psa_density_x_scale <- function(x, include = NULL, n = 4) {
-  x_values <- x[is.finite(x)]
-  include_values <- include[is.finite(include)]
-  scale_values <- c(x_values, include_values)
-
-  if (length(scale_values) == 0) {
-    scale_values <- c(0, 1)
-  }
-
-  x_range <- range(scale_values)
-
-  if (x_range[1] == x_range[2]) {
-    expand_amount <- max(abs(x_range[1]) * 0.05, 1)
-    x_range <- x_range + c(-expand_amount, expand_amount)
-  }
-
-  x_breaks <- pretty_breaks(n = n)(x_range)
-  x_breaks <- x_breaks[is.finite(x_breaks)]
-
-  if (length(x_breaks) == 0) {
-    x_breaks <- x_range
-  }
-
-  list(
-    breaks = x_breaks,
-    limits = range(x_breaks)
-  )
-}
-
 #' @export
 nmb_density_plot <- function(results,
                              outcome_summary,
