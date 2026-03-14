@@ -599,121 +599,17 @@ test_that("PSM correctly validates trace probabilities", {
 })
 
 # =============================================================================
-# Unit Tests: convert_cycles_to_time_unit
+# Regression: PSM time conversion should not warn
 # =============================================================================
 
-test_that("convert_cycles_to_time_unit returns 0 for cycle 0", {
-  # Create a minimal namespace with time conversion data
-  days_per_year <- 365.25
-  cycle_length_days <- 30  # 1-month cycles
-  n_cycles <- 5
+test_that("PSM model runs without time conversion warnings", {
+  model_path <- system.file("models/example_psm", package = "openqaly")
+  if (model_path == "") {
+    model_path <- "inst/models/example_psm"
+  }
 
-  # Build namespace dataframe with time columns for each cycle
-  ns_df <- data.frame(
-    cycle = 0:n_cycles,
-    state_cycle = rep(1, n_cycles + 1),
-    day = (0:n_cycles) * cycle_length_days,
-    week = (0:n_cycles) * cycle_length_days / 7,
-    month = (0:n_cycles) * cycle_length_days / (days_per_year / 12),
-    year = (0:n_cycles) * cycle_length_days / days_per_year
-  )
-
-  ns_env <- new.env()
-  assign("cycle_length_days", cycle_length_days, envir = ns_env)
-  assign("cycle_length_weeks", cycle_length_days / 7, envir = ns_env)
-  assign("cycle_length_months", cycle_length_days / (days_per_year / 12), envir = ns_env)
-  assign("cycle_length_years", cycle_length_days / days_per_year, envir = ns_env)
-
-  ns <- list(df = ns_df, env = ns_env)
-  class(ns) <- "namespace"
-
-  # Cycle 0 should always return 0 regardless of time unit
-  expect_equal(openqaly:::convert_cycles_to_time_unit(0, "days", ns), 0)
-  expect_equal(openqaly:::convert_cycles_to_time_unit(0, "weeks", ns), 0)
-  expect_equal(openqaly:::convert_cycles_to_time_unit(0, "months", ns), 0)
-  expect_equal(openqaly:::convert_cycles_to_time_unit(0, "years", ns), 0)
-})
-
-test_that("convert_cycles_to_time_unit correctly converts to different units", {
-  days_per_year <- 365.25
-  cycle_length_days <- 30
-  n_cycles <- 3
-
-  ns_df <- data.frame(
-    cycle = 0:n_cycles,
-    state_cycle = rep(1, n_cycles + 1),
-    day = (0:n_cycles) * cycle_length_days,
-    week = (0:n_cycles) * cycle_length_days / 7,
-    month = (0:n_cycles) * cycle_length_days / (days_per_year / 12),
-    year = (0:n_cycles) * cycle_length_days / days_per_year
-  )
-
-  ns_env <- new.env()
-  assign("cycle_length_days", cycle_length_days, envir = ns_env)
-  assign("cycle_length_weeks", cycle_length_days / 7, envir = ns_env)
-  assign("cycle_length_months", cycle_length_days / (days_per_year / 12), envir = ns_env)
-  assign("cycle_length_years", cycle_length_days / days_per_year, envir = ns_env)
-
-  ns <- list(df = ns_df, env = ns_env)
-  class(ns) <- "namespace"
-
-  cycles <- c(0, 1, 2, 3)
-
-  # Days: 0, 30, 60, 90
-  result_days <- openqaly:::convert_cycles_to_time_unit(cycles, "days", ns)
-  expect_equal(result_days, c(0, 30, 60, 90))
-
-  # Weeks: 0, 30/7, 60/7, 90/7
-  result_weeks <- openqaly:::convert_cycles_to_time_unit(cycles, "weeks", ns)
-  expect_equal(result_weeks, cycles * cycle_length_days / 7)
-
-  # Months: 0, 30/(365.25/12), ...
-  days_per_month <- days_per_year / 12
-  result_months <- openqaly:::convert_cycles_to_time_unit(cycles, "months", ns)
-  expect_equal(result_months, cycles * cycle_length_days / days_per_month)
-
-  # Years: 0, 30/365.25, ...
-  result_years <- openqaly:::convert_cycles_to_time_unit(cycles, "years", ns)
-  expect_equal(result_years, cycles * cycle_length_days / days_per_year)
-})
-
-test_that("convert_cycles_to_time_unit warns on NULL time_unit", {
-  ns_df <- data.frame(cycle = 0:3, state_cycle = rep(1, 4))
-  ns_env <- new.env()
-  ns <- list(df = ns_df, env = ns_env)
-  class(ns) <- "namespace"
-
-  expect_warning(
-    result <- openqaly:::convert_cycles_to_time_unit(c(0, 1, 2, 3), NULL, ns),
-    "No time unit specified"
-  )
-
-  # Should return cycles unchanged when no time unit specified
-  expect_equal(result, c(0, 1, 2, 3))
-})
-
-test_that("convert_cycles_to_time_unit uses fallback when namespace lacks time data", {
-  # Create namespace without pre-computed time columns
-  ns_df <- data.frame(
-    cycle = numeric(0),  # Empty - no matching rows
-    state_cycle = numeric(0)
-  )
-
-  ns_env <- new.env()
-  cycle_length_days <- 30
-  assign("cycle_length_days", cycle_length_days, envir = ns_env)
-  assign("cycle_length_weeks", cycle_length_days / 7, envir = ns_env)
-  assign("cycle_length_months", cycle_length_days / (365.25 / 12), envir = ns_env)
-  assign("cycle_length_years", cycle_length_days / 365.25, envir = ns_env)
-
-  ns <- list(df = ns_df, env = ns_env)
-  class(ns) <- "namespace"
-
-  cycles <- c(0, 1, 2)
-
-  # Should use fallback calculation from cycle_length_* variables
-  result_days <- openqaly:::convert_cycles_to_time_unit(cycles, "days", ns)
-  expect_equal(result_days, c(0, 30, 60))
+  model <- read_model(model_path)
+  expect_no_warning(results <- run_model(model))
 })
 
 # =============================================================================
@@ -821,7 +717,7 @@ test_that("calculate_psm_values applies transitional values correctly", {
   expect_equal(result[3, "prog_cost"], 200)
 })
 
-test_that("calculate_psm_values applies model-level values correctly", {
+test_that("calculate_psm_values applies model start values correctly", {
   n_cycles <- 2
   trace <- matrix(c(
     1.0, 0.0, 0.0,
@@ -831,7 +727,7 @@ test_that("calculate_psm_values applies model-level values correctly", {
   colnames(trace) <- c("pfs", "progressed", "dead")
   rownames(trace) <- 0:2
 
-  # Model-level value (no state association): fixed cost per cycle
+  # Model start value (no state association): one-time cost at model start
   uneval_values <- data.frame(
     name = "admin_cost",
     state = NA,
@@ -858,9 +754,9 @@ test_that("calculate_psm_values applies model-level values correctly", {
     "start"
   )
 
-  # Model-level value: applied directly without state weighting
+  # Model start value: applied only at cycle 1
   expect_equal(result[1, "admin_cost"], 100)
-  expect_equal(result[2, "admin_cost"], 100)
+  expect_equal(result[2, "admin_cost"], 0)
 })
 
 test_that("calculate_psm_values handles half-cycle method 'end' correctly", {
@@ -944,8 +840,8 @@ test_that("calculate_psm_values handles half-cycle method 'life-table' correctly
   # Life-table method for cycle 1: average of trace[1,] and trace[2,]
   # (1.0 + 0.8) / 2 = 0.9
   expect_equal(result[1, "utility"], 0.9)
-  # Cycle 2 (last cycle): uses end value only = trace[3,] = 0.6
-  expect_equal(result[2, "utility"], 0.6)
+  # Cycle 2: average of trace[2,] and trace[3,] = (0.8 + 0.6) / 2 = 0.7
+  expect_equal(result[2, "utility"], 0.7)
 })
 
 test_that("calculate_psm_values returns empty matrix when no values defined", {
@@ -1521,7 +1417,7 @@ test_that("calculate_psm_custom_values applies residency values correctly", {
   expect_equal(result[2, "utility"], 0.8)
 })
 
-test_that("calculate_psm_custom_values applies model-level values correctly", {
+test_that("calculate_psm_custom_values applies model start values correctly", {
   n_cycles <- 2
   trace <- matrix(c(1.0, 0.0, 0.8, 0.2, 0.6, 0.4), nrow = 3, byrow = TRUE)
   colnames(trace) <- c("alive", "dead")
@@ -1529,7 +1425,7 @@ test_that("calculate_psm_custom_values applies model-level values correctly", {
 
   uneval_values <- data.frame(
     name = "admin_cost",
-    state = NA,  # Model-level
+    state = NA,  # Model start
     destination = NA,
     type = "cost",
     stringsAsFactors = FALSE
@@ -1547,9 +1443,9 @@ test_that("calculate_psm_custom_values applies model-level values correctly", {
     n_cycles, "start"
   )
 
-  # Model-level: applied without state weighting
+  # Model start value: applied only at cycle 1
   expect_equal(result[1, "admin_cost"], 50)
-  expect_equal(result[2, "admin_cost"], 50)
+  expect_equal(result[2, "admin_cost"], 0)
 })
 
 test_that("calculate_psm_custom_values handles half-cycle methods", {

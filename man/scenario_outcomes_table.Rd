@@ -11,7 +11,8 @@ scenario_outcomes_table(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = 2,
+  decimals = NULL,
+  abbreviate = FALSE,
   discounted = TRUE,
   font_size = 11
 )
@@ -30,7 +31,9 @@ When specified, shows differences (intervention - comparator).}
 
 \item{comparators}{Character vector of comparator strategy name(s).}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{decimals}{Number of decimal places (default: NULL for auto-precision)}
+
+\item{abbreviate}{Logical. Use K/M/B/T suffixes? (default: FALSE)}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
 

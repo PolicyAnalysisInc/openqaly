@@ -10,7 +10,10 @@ incremental_ce_table(
   cost_summary,
   groups = "overall",
   strategies = NULL,
-  decimals = 2,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  icer_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -26,7 +29,13 @@ incremental_ce_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{cost_decimals}{Number of decimal places for cost columns (NULL for auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcome columns (NULL for auto)}
+
+\item{icer_decimals}{Number of decimal places for ICER column (NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

@@ -12,7 +12,9 @@ psa_nmb_table(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -42,7 +44,11 @@ perspective. At least one of interventions or comparators required.}
 \item{comparators}{Character vector of reference strategies for comparator
 perspective. At least one of interventions or comparators required.}
 
-\item{decimals}{Number of decimal places (default: 0, appropriate for monetary values)}
+\item{cost_decimals}{Number of decimal places for costs (default: NULL, auto)}
+
+\item{outcome_decimals}{Number of decimal places for outcomes (default: NULL, auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

@@ -114,7 +114,7 @@ test_that("Base case values in table match extract_dsa_summaries()", {
   results <- get_dsa_test_results()
   # Note: using "aggregated" because the DSA tables implementation
   # doesn't map "overall" to "aggregated" like other table functions
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -144,7 +144,7 @@ test_that("Base case values in table match extract_dsa_summaries()", {
 test_that("Low/High values match extract_dsa_summaries() for each parameter", {
 
   results <- get_dsa_test_results()
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -211,7 +211,7 @@ test_that("Differences equal intervention minus comparator for base case", {
   expected_base_diff <- base_new - base_standard
 
   # Get difference via comparators parameter
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall",
     comparators = "standard"
   )
@@ -235,7 +235,7 @@ test_that("Differences are correct for low and high variations", {
   )
 
   # Get difference via comparators parameter
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall",
     comparators = "standard"
   )
@@ -292,7 +292,7 @@ test_that("Differences are correct for low and high variations", {
 test_that("Table has one row per DSA parameter", {
 
   results <- get_dsa_test_results()
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -305,7 +305,7 @@ test_that("Table has one row per DSA parameter", {
 test_that("Table has Low/Base/High columns per strategy", {
 
   results <- get_dsa_test_results()
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -317,7 +317,7 @@ test_that("Table has Low/Base/High columns per strategy", {
 test_that("Headers have strategy names and Low/Base/High labels", {
 
   results <- get_dsa_test_results()
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -332,7 +332,7 @@ test_that("Headers have strategy names and Low/Base/High labels", {
 test_that("Column alignments are correct", {
 
   results <- get_dsa_test_results()
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall"
   )
 
@@ -388,10 +388,10 @@ test_that("dsa_outcomes_table() works with discounted = TRUE", {
 test_that("dsa_outcomes_table() respects decimals parameter", {
 
   results <- get_dsa_test_results()
-  prepared_2 <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared_2 <- openqaly:::prepare_dsa_summary_table_data(
     results, "total_qalys", groups = "overall", decimals = 2
   )
-  prepared_4 <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared_4 <- openqaly:::prepare_dsa_summary_table_data(
     results, "total_qalys", groups = "overall", decimals = 4
   )
 
@@ -404,11 +404,11 @@ test_that("dsa_outcomes_table() respects decimals parameter", {
   expect_true(nchar(val_4) >= nchar(val_2))
 })
 
-test_that("dsa_outcomes_table() works with cost outcomes (kable format)", {
+test_that("dsa_costs_table() works with cost outcomes (kable format)", {
 
   results <- get_dsa_test_results()
-  tbl <- dsa_outcomes_table(results, "total_cost", groups = "overall",
-                            table_format = "kable")
+  tbl <- dsa_costs_table(results, "total_cost", groups = "overall",
+                         table_format = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
@@ -423,8 +423,8 @@ test_that("Full DSA table workflow produces valid kable output", {
   # Generate tables for both outcomes using kable format
   qaly_tbl <- dsa_outcomes_table(results, "total_qalys", groups = "overall",
                                   table_format = "kable")
-  cost_tbl <- dsa_outcomes_table(results, "total_cost", groups = "overall",
-                                  table_format = "kable")
+  cost_tbl <- dsa_costs_table(results, "total_cost", groups = "overall",
+                              table_format = "kable")
 
   expect_true(inherits(qaly_tbl, "kableExtra") || is.character(qaly_tbl))
   expect_true(inherits(cost_tbl, "kableExtra") || is.character(cost_tbl))
@@ -455,7 +455,7 @@ test_that("DSA table with strategy filter works", {
   results <- get_dsa_test_results()
 
   # Filter to single strategy
-  prepared <- openqaly:::prepare_dsa_outcomes_table_data(
+  prepared <- openqaly:::prepare_dsa_summary_table_data(
     results, outcome = "total_qalys", groups = "overall",
     strategies = "standard"
   )
@@ -474,6 +474,11 @@ test_that("DSA table with strategy filter works", {
 get_dsa_nmb_test_results <- function() {
   # Use cached results from setup.R for performance
   get_cached_dsa_nmb_results()
+}
+
+# Parse formatted monetary labels (e.g., "-$10,708.25") back to numeric for assertions.
+parse_formatted_money <- function(x) {
+  as.numeric(gsub("[^0-9.-]", "", x))
 }
 
 # ============================================================================
@@ -513,7 +518,7 @@ test_that("dsa_nmb_table NMB values equal delta_qalys * wtp - delta_cost", {
   row_idx <- which(prepared$data[[1]] == param)
   col_names <- names(prepared$data)
   base_col <- col_names[grepl("vs\\.", col_names) & grepl("_base$", col_names)]
-  actual_base_nmb <- as.numeric(gsub(",", "", prepared$data[[base_col]][row_idx]))
+  actual_base_nmb <- parse_formatted_money(prepared$data[[base_col]][row_idx])
 
   expect_equal(actual_base_nmb, expected_base_nmb, tolerance = 1,
                info = "Base NMB should equal delta_qalys * wtp - delta_cost")
@@ -552,8 +557,8 @@ test_that("dsa_nmb_table low/high values follow NMB formula", {
   low_col <- col_names[grepl("vs\\.", col_names) & grepl("_low$", col_names)]
   high_col <- col_names[grepl("vs\\.", col_names) & grepl("_high$", col_names)]
 
-  actual_low_nmb <- as.numeric(gsub(",", "", prepared$data[[low_col]][row_idx]))
-  actual_high_nmb <- as.numeric(gsub(",", "", prepared$data[[high_col]][row_idx]))
+  actual_low_nmb <- parse_formatted_money(prepared$data[[low_col]][row_idx])
+  actual_high_nmb <- parse_formatted_money(prepared$data[[high_col]][row_idx])
 
   expect_equal(actual_low_nmb, expected_low_nmb, tolerance = 1,
                info = "Low NMB should follow NMB formula")
@@ -685,9 +690,9 @@ test_that("dsa_nmb_table() respects decimals parameter", {
   val_2 <- prepared_2$data[[col]][1]
 
   # decimals = 2 should have more characters (decimal point + digits)
-  # Note: values might have commas, so compare after removing them
-  val_0_clean <- gsub(",", "", val_0)
-  val_2_clean <- gsub(",", "", val_2)
+  # Note: values are currency-formatted, so compare after stripping symbols/commas.
+  val_0_clean <- gsub("[^0-9.-]", "", val_0)
+  val_2_clean <- gsub("[^0-9.-]", "", val_2)
   expect_true(grepl("\\.", val_2_clean) || nchar(val_2_clean) >= nchar(val_0_clean))
 })
 
@@ -746,36 +751,6 @@ test_that("is_flipped_icer() detects SW quadrant (negative) ICERs correctly", {
   expect_false(openqaly:::is_flipped_icer(NA))
 })
 
-test_that("format_ce_cell() formats ICER values correctly", {
-  # Positive finite - no asterisk (matches requested direction)
-  expect_equal(openqaly:::format_ce_cell(50000, 0), "50,000")
-
-  # Dominated
-  expect_equal(openqaly:::format_ce_cell(Inf, 0), "Dominated")
-
-  # Dominant
-  expect_equal(openqaly:::format_ce_cell(0, 0), "Dominant")
-
-  # Equivalent
-  expect_equal(openqaly:::format_ce_cell(NaN, 0), "Equivalent")
-
-  # NA (reference)
-  expect_equal(openqaly:::format_ce_cell(NA, 0), "")
-
-  # Negative ICER = flipped direction = asterisk
-  # Asterisk appears when ICER differs from REQUESTED direction (negative = SW quadrant)
-  result <- openqaly:::format_ce_cell(-50000, 0)
-  expect_true(grepl("\\*", result))
-  expect_true(grepl("50,000", result))
-
-  # Another negative value - also gets asterisk
-  result <- openqaly:::format_ce_cell(-40000, 0)
-  expect_true(grepl("\\*", result))
-
-  # Positive value - no asterisk (matches requested direction)
-  result <- openqaly:::format_ce_cell(60000, 0)
-  expect_false(grepl("\\*", result))
-})
 
 # ============================================================================
 # DSA CE Table: Data Preparation Tests
@@ -900,12 +875,12 @@ test_that("dsa_ce_table() respects decimals parameter", {
   prepared_0 <- openqaly:::prepare_dsa_ce_table_data(
     results, "total_qalys", "total_cost",
     groups = "overall", comparators = "standard",
-    decimals = 0
+    icer_decimals = 0
   )
   prepared_2 <- openqaly:::prepare_dsa_ce_table_data(
     results, "total_qalys", "total_cost",
     groups = "overall", comparators = "standard",
-    decimals = 2
+    icer_decimals = 2
   )
 
   # Values with 2 decimals should be different from 0 decimals
@@ -945,7 +920,7 @@ test_that("DSA CE table ICER values match manual calculation", {
   prepared <- openqaly:::prepare_dsa_ce_table_data(
     results, "total_qalys", "total_cost",
     groups = "overall", comparators = "standard",
-    decimals = 0
+    icer_decimals = 0
   )
 
   # Find the base column and get first row value
@@ -955,8 +930,8 @@ test_that("DSA CE table ICER values match manual calculation", {
 
   base_value <- prepared$data[[base_col]][1]
 
-  # Expected formatted value (format_ce_cell now only takes icer_value and decimals)
-  expected_formatted <- openqaly:::format_ce_cell(as.numeric(expected_icer), 0)
+  # Expected formatted value using oq_format_icer (abs to suppress asterisk for base case)
+  expected_formatted <- openqaly:::oq_format_icer(abs(as.numeric(expected_icer)), decimals = 0)
 
   expect_equal(base_value, expected_formatted)
 })
@@ -1075,7 +1050,7 @@ test_that("DSA CE table adds asterisks for flipped (negative) ICERs", {
     groups = "overall",
     interventions = "treatment",
     comparators = "control",
-    decimals = 0
+    icer_decimals = 0
   )
 
   # Check that we have data
@@ -1107,9 +1082,19 @@ test_that("DSA CE table footnotes are generated for flipped ICERs", {
     groups = "overall",
     interventions = "treatment",
     comparators = "control",
-    decimals = 0
+    icer_decimals = 0
   )
 
   # Footnotes should be present if any ICERs are flipped
   expect_true(is.character(prepared$footnotes) || length(prepared$footnotes) == 0)
+})
+
+# ============================================================================
+# Tests for dsa_costs_table()
+# ============================================================================
+
+test_that("dsa_costs_table() returns a rendered table", {
+  results <- get_dsa_test_results()
+  tbl <- dsa_costs_table(results, "total_cost", table_format = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })

@@ -232,9 +232,12 @@ test_that("vbp_plot() formats axes with dollar labels", {
   vbp_results <- get_cached_vbp_results()
   p <- vbp_plot(vbp_results)
 
-  # Both X and Y axes should use dollar formatting
-  # This is verified by the scales being set, but exact format is hard to test
-  expect_s3_class(p, "ggplot")
+  x_labels <- p$scales$get_scales("x")$labels(c(1000, 1500))
+  y_labels <- p$scales$get_scales("y")$labels(c(1000, 1500))
+
+  expect_true(all(grepl("^\\$", x_labels)))
+  expect_true(all(grepl("^\\$", y_labels)))
+  expect_equal(length(unique(x_labels)), 2)
 })
 
 # ============================================================================

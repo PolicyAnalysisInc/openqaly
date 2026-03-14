@@ -1,0 +1,696 @@
+{
+  "settings": [
+    {
+      "setting": "model_type",
+      "value": "markov"
+    },
+    {
+      "setting": "days_per_year",
+      "value": "365"
+    },
+    {
+      "setting": "half_cycle_method",
+      "value": "start"
+    },
+    {
+      "setting": "discount_cost",
+      "value": "3.5"
+    },
+    {
+      "setting": "discount_outcomes",
+      "value": "3.5"
+    },
+    {
+      "setting": "reduce_state_cycle",
+      "value": "FALSE"
+    },
+    {
+      "setting": "timeframe",
+      "value": "20"
+    },
+    {
+      "setting": "timeframe_unit",
+      "value": "years"
+    },
+    {
+      "setting": "cycle_length",
+      "value": "1"
+    },
+    {
+      "setting": "cycle_length_unit",
+      "value": "years"
+    }
+  ],
+  "strategies": [
+    {
+      "name": "standard",
+      "display_name": "standard",
+      "description": "standard",
+      "abbreviation": null,
+      "enabled": 1
+    },
+    {
+      "name": "intensive",
+      "display_name": "intensive",
+      "description": "intensive",
+      "abbreviation": null,
+      "enabled": 1
+    }
+  ],
+  "groups": [
+    {
+      "name": "younger",
+      "display_name": "younger",
+      "description": "younger",
+      "weight": "0.6",
+      "enabled": 1
+    },
+    {
+      "name": "older",
+      "display_name": "older",
+      "description": "older",
+      "weight": "0.4",
+      "enabled": 1
+    }
+  ],
+  "states": [
+    {
+      "name": "well_controlled",
+      "display_name": "well_controlled",
+      "description": "well_controlled",
+      "initial_probability": "1",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": null,
+      "state_cycle_limit_unit": "cycles"
+    },
+    {
+      "name": "complications",
+      "display_name": "complications",
+      "description": "complications",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": null,
+      "state_cycle_limit_unit": "cycles"
+    },
+    {
+      "name": "dead",
+      "display_name": "dead",
+      "description": "dead",
+      "initial_probability": "0",
+      "state_group": null,
+      "share_state_time": false,
+      "state_cycle_limit": null,
+      "state_cycle_limit_unit": "cycles"
+    }
+  ],
+  "transitions": [
+    {
+      "from_state": "well_controlled",
+      "to_state": "complications",
+      "formula": "p_complications * (1 - efficacy)"
+    },
+    {
+      "from_state": "well_controlled",
+      "to_state": "dead",
+      "formula": "p_death_well"
+    },
+    {
+      "from_state": "well_controlled",
+      "to_state": "well_controlled",
+      "formula": "1 - p_complications * (1 - efficacy) - p_death_well"
+    },
+    {
+      "from_state": "complications",
+      "to_state": "dead",
+      "formula": "p_death_comp"
+    },
+    {
+      "from_state": "complications",
+      "to_state": "complications",
+      "formula": "1 - p_death_comp"
+    },
+    {
+      "from_state": "dead",
+      "to_state": "dead",
+      "formula": "1"
+    }
+  ],
+  "values": [
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "well_controlled",
+      "destination": null,
+      "formula": "c_drug + c_monitoring + ae_cost_adj",
+      "type": "cost"
+    },
+    {
+      "name": "cost_comp",
+      "display_name": "cost_comp",
+      "description": "cost_comp",
+      "state": "complications",
+      "destination": null,
+      "formula": "c_comp + c_monitoring",
+      "type": "cost"
+    },
+    {
+      "name": "cost_dead",
+      "display_name": "cost_dead",
+      "description": "cost_dead",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "cost"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "well_controlled",
+      "destination": null,
+      "formula": "u_well - p(adverse_event, ae_tree) * u_ae_decrement",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "complications",
+      "destination": null,
+      "formula": "u_comp",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "outcome"
+    }
+  ],
+  "summaries": [
+    {
+      "name": "total_costs",
+      "display_name": "total_costs",
+      "description": "total_costs",
+      "values": "cost_treat,cost_comp,cost_dead",
+      "type": "cost",
+      "wtp": null
+    },
+    {
+      "name": "total_qalys",
+      "display_name": "total_qalys",
+      "description": "total_qalys",
+      "values": "qaly",
+      "type": "outcome",
+      "wtp": 50000
+    }
+  ],
+  "variables": [
+    {
+      "name": "p_complications",
+      "display_name": "p_complications, younger",
+      "description": "p_complications, younger",
+      "formula": "0.08",
+      "strategy": null,
+      "group": "younger",
+      "source": null,
+      "sampling": "beta(mean = 0.08, sd = 0.02)"
+    },
+    {
+      "name": "p_complications",
+      "display_name": "p_complications, older",
+      "description": "p_complications, older",
+      "formula": "0.12",
+      "strategy": null,
+      "group": "older",
+      "source": null,
+      "sampling": "beta(mean = 0.12, sd = 0.03)"
+    },
+    {
+      "name": "efficacy",
+      "display_name": "efficacy, standard",
+      "description": "efficacy, standard",
+      "formula": "0.5",
+      "strategy": "standard",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "efficacy",
+      "display_name": "efficacy, intensive",
+      "description": "efficacy, intensive",
+      "formula": "0.7",
+      "strategy": "intensive",
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.7, sd = 0.08)"
+    },
+    {
+      "name": "p_death_well",
+      "display_name": "p_death_well",
+      "description": "p_death_well",
+      "formula": "0.01",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.01, sd = 0.003)"
+    },
+    {
+      "name": "p_death_comp",
+      "display_name": "p_death_comp",
+      "description": "p_death_comp",
+      "formula": "0.05",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.05, sd = 0.01)"
+    },
+    {
+      "name": "u_well",
+      "display_name": "u_well",
+      "description": "u_well",
+      "formula": "0.85",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.85, sd = 0.05)"
+    },
+    {
+      "name": "u_comp",
+      "display_name": "u_comp",
+      "description": "u_comp",
+      "formula": "0.6",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.6, sd = 0.08)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, standard",
+      "description": "c_drug, standard",
+      "formula": "2000",
+      "strategy": "standard",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 2000, sd = 300)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, intensive",
+      "description": "c_drug, intensive",
+      "formula": "5000",
+      "strategy": "intensive",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 5000, sd = 700)"
+    },
+    {
+      "name": "c_comp",
+      "display_name": "c_comp",
+      "description": "c_comp",
+      "formula": "8000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_monitoring",
+      "display_name": "c_monitoring",
+      "description": "c_monitoring",
+      "formula": "500",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_ae",
+      "display_name": "p_ae",
+      "description": "p_ae",
+      "formula": "0.15",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_ae",
+      "display_name": "c_ae",
+      "description": "c_ae",
+      "formula": "3000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "u_ae_decrement",
+      "display_name": "u_ae_decrement",
+      "description": "u_ae_decrement",
+      "formula": "0.05",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_cost_adj",
+      "display_name": "ae_cost_adj",
+      "description": "ae_cost_adj",
+      "formula": "p(severe, ae_tree) * c_ae",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    }
+  ],
+  "trees": [
+    {
+      "name": "ae_tree",
+      "node": "ae_event",
+      "tags": "adverse_event",
+      "parent": null,
+      "formula": "p_ae"
+    },
+    {
+      "name": "ae_tree",
+      "node": "no_ae",
+      "tags": "no_adverse_event",
+      "parent": null,
+      "formula": "C"
+    },
+    {
+      "name": "ae_tree",
+      "node": "ae_mild",
+      "tags": "mild",
+      "parent": "ae_event",
+      "formula": "0.7"
+    },
+    {
+      "name": "ae_tree",
+      "node": "ae_severe",
+      "tags": "severe",
+      "parent": "ae_event",
+      "formula": "C"
+    }
+  ],
+  "tables": [],
+  "scripts": [],
+  "multivariate_sampling": [
+    {
+      "name": "utility_correlation",
+      "distribution": "mvnormal(mean = c(0.85, 0.6), sd = c(0.05, 0.08), cor = 0.6)",
+      "description": "",
+      "variables": [
+        {
+          "variable": "u_well",
+          "strategy": null,
+          "group": null
+        },
+        {
+          "variable": "u_comp",
+          "strategy": null,
+          "group": null
+        }
+      ]
+    }
+  ],
+  "dsa_parameters": [
+    {
+      "type": "variable",
+      "name": "p_complications",
+      "low": "bc * 0.5",
+      "high": "bc * 1.5",
+      "strategy": "",
+      "group": "younger"
+    },
+    {
+      "type": "variable",
+      "name": "efficacy",
+      "low": "bc * 0.8",
+      "high": "bc * 1.2",
+      "strategy": "intensive",
+      "group": ""
+    },
+    {
+      "type": "variable",
+      "name": "c_drug",
+      "low": "bc * 0.5",
+      "high": "bc * 1.5",
+      "strategy": "intensive",
+      "group": ""
+    },
+    {
+      "type": "setting",
+      "name": "discount_cost",
+      "low": 0,
+      "high": 5,
+      "display_name": "discount_cost"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "High Efficacy",
+      "description": "High Efficacy",
+      "variable_overrides": [
+        {
+          "name": "efficacy",
+          "value": 0.84999999999999998,
+          "strategy": "intensive",
+          "group": ""
+        }
+      ],
+      "setting_overrides": [
+        {
+          "name": "timeframe",
+          "value": 30
+        }
+      ]
+    },
+    {
+      "name": "Low Cost",
+      "description": "Low Cost",
+      "variable_overrides": [
+        {
+          "name": "c_drug",
+          "value": 3000,
+          "strategy": "intensive",
+          "group": ""
+        }
+      ],
+      "setting_overrides": [
+        {
+          "name": "discount_cost",
+          "value": 0
+        }
+      ]
+    }
+  ],
+  "twsa_analyses": [
+    {
+      "name": "Drug Cost vs Efficacy",
+      "description": "Drug Cost vs Efficacy",
+      "parameters": [
+        {
+          "param_type": "variable",
+          "name": "c_drug",
+          "type": "range",
+          "min": "3000",
+          "max": "8000",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "intensive",
+          "group": ""
+        },
+        {
+          "param_type": "variable",
+          "name": "efficacy",
+          "type": "range",
+          "min": "0.5",
+          "max": "0.9",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "intensive",
+          "group": ""
+        }
+      ]
+    }
+  ],
+  "threshold_analyses": [
+    {
+      "name": "Max Drug Cost",
+      "variable": "c_drug",
+      "variable_strategy": "intensive",
+      "variable_group": "",
+      "lower": 0,
+      "upper": 20000,
+      "active": true,
+      "condition": {
+        "output": "nmb",
+        "health_summary": "total_qalys",
+        "cost_summary": "total_costs",
+        "referent": "intensive",
+        "comparator": "standard",
+        "discounted": true,
+        "target_value": 0,
+        "group": "",
+        "wtp": null
+      }
+    }
+  ],
+  "vbp": {
+    "price_variable": "c_drug",
+    "intervention_strategy": "intensive",
+    "outcome_summary": "total_qalys",
+    "cost_summary": "total_costs"
+  },
+  "psa": {
+    "n_sim": 1000,
+    "seed": 42
+  },
+  "override_categories": [
+    {
+      "name": "Model Settings",
+      "general": true,
+      "overrides": [
+        {
+          "title": "Time Horizon",
+          "description": "",
+          "type": "setting",
+          "name": "timeframe",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "timeframe",
+          "overridden_expression": "20",
+          "input_config": []
+        },
+        {
+          "title": "Discount Rate (Costs)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_cost",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10,
+            "step_size": 0.5
+          }
+        },
+        {
+          "title": "Discount Rate (Outcomes)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_outcomes",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "Treatment Parameters",
+      "general": false,
+      "overrides": [
+        {
+          "title": "Drug Cost (Intensive)",
+          "description": "",
+          "type": "variable",
+          "name": "c_drug",
+          "strategy": "intensive",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "5000",
+          "input_config": {
+            "min": 0,
+            "max": 20000
+          }
+        },
+        {
+          "title": "Treatment Efficacy",
+          "description": "",
+          "type": "variable",
+          "name": "efficacy",
+          "strategy": "intensive",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "0.7",
+          "input_config": {
+            "min": 0,
+            "max": 1,
+            "step_size": 0.050000000000000003
+          }
+        },
+        {
+          "title": "Complication Rate (Young)",
+          "description": "",
+          "type": "variable",
+          "name": "p_complications",
+          "strategy": "",
+          "group": "younger",
+          "general": false,
+          "input_type": "dropdown",
+          "overridden_expression": "0.08",
+          "input_config": {
+            "options": [
+              {
+                "label": "Low",
+                "value": "0.04",
+                "is_base_case": false
+              },
+              {
+                "label": "Base Case",
+                "value": "0.08",
+                "is_base_case": true
+              },
+              {
+                "label": "High",
+                "value": "0.12",
+                "is_base_case": false
+              }
+            ]
+          }
+        },
+        {
+          "title": "AE Probability",
+          "description": "",
+          "type": "variable",
+          "name": "p_ae",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "formula",
+          "overridden_expression": "0.15",
+          "input_config": []
+        }
+      ]
+    }
+  ]
+}

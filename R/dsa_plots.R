@@ -1,46 +1,3 @@
-#' Format Parameter Value for Display
-#'
-#' Internal helper to format parameter values for DSA plot labels.
-#' Uses comma + decimal notation instead of scientific notation.
-#'
-#' @param value Numeric value to format
-#' @param digits Number of significant figures (default: 4)
-#'
-#' @return Formatted string with commas and no scientific notation
-#' @keywords internal
-format_param_value <- function(value, digits = 4) {
-  # Handle special cases
-  if (is.null(value) || length(value) == 0) return(NA_character_)
-  if (is.na(value)) return(NA_character_)
-  if (value == 0) return("0")
-
-  # Round to significant figures
-  rounded <- signif(value, digits)
-  abs_val <- abs(rounded)
-
-  # Calculate appropriate accuracy for scales::comma based on magnitude
-  magnitude <- floor(log10(abs_val))
-
-  if (abs_val >= 1) {
-    # For values >= 1, limit decimal places based on significant figures needed
-    decimals_needed <- max(0, digits - magnitude - 1)
-    accuracy <- 10^(-decimals_needed)
-  } else {
-    # For values < 1, ensure enough decimal places to show all significant figures
-    accuracy <- 10^(magnitude - digits + 1)
-  }
-
-  # Format with commas and calculated accuracy
-  formatted <- scales::comma(rounded, accuracy = accuracy)
-
-  # Clean up trailing zeros after decimal point
-  if (grepl("\\.", formatted)) {
-    formatted <- sub("0+$", "", formatted)
-    formatted <- sub("\\.$", "", formatted)
-  }
-
-  formatted
-}
 
 #' Abbreviate Time Unit for Display
 #'
@@ -101,10 +58,13 @@ get_setting_unit_suffix <- function(param_name, settings) {
 #'   group, low, base, high, range
 #' @param summary_label String for x-axis label
 #' @param facet_component Optional faceting component (if NULL, determined automatically)
+#' @param currency Logical. Format values as currency? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #' @keywords internal
-render_tornado_plot <- function(tornado_data, summary_label, facet_component = NULL) {
+render_tornado_plot <- function(tornado_data, summary_label, facet_component = NULL,
+                                axis_decimals = NULL, label_decimals = NULL,
+                                locale = NULL, abbreviate = FALSE, currency = FALSE) {
 
   # Determine faceting if not provided
   n_groups <- length(unique(tornado_data$group))
@@ -188,7 +148,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   # Create base case labels for display
   base_case_labels <- base_case_data %>%
     mutate(
-      base_label = paste0("Base Case: ", scales::comma(.data$base, accuracy = 0.01)),
+      base_label = paste0("Base Case: ", oq_format(.data$base, decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = currency)),
       y_pos = 0.5 * y_spacing  # Position above top bar
     )
 
@@ -236,7 +196,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   label_data <- tornado_long %>%
     mutate(
       # Format the value as the label text
-      label = scales::comma(.data$value, accuracy = 0.01),
+      label = oq_format(.data$value, decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = currency),
       # Detect no-impact bars (value equals base case)
       is_no_impact = abs(.data$value - .data$base) < .Machine$double.eps * 100,
       # Natural direction based on value vs base
@@ -309,7 +269,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
       size = 2.5,
       inherit.aes = FALSE
     ) +
-    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma) +
+    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)) +
     scale_y_reverse(
       breaks = seq_len(ceiling(max_y / y_spacing)) * y_spacing,
       labels = function(y) {
@@ -505,6 +465,7 @@ extract_parameter_values <- function(results, tornado_data, interventions, compa
 #'   Can be combined with interventions for N×M comparisons.
 #' @param discounted Use discounted values?
 #' @param show_parameter_values Logical. Include parameter values in labels? (default: TRUE)
+#' @param value_type Type of summary values: "all" (default), "outcome", or "cost"
 #'
 #' @return A tibble with parameter_display, strategy, group, low, base, high, range
 #' @keywords internal
@@ -515,13 +476,15 @@ prepare_dsa_tornado_data <- function(results,
                                      interventions,
                                      comparators,
                                      discounted,
-                                     show_parameter_values = TRUE) {
+                                     show_parameter_values = TRUE,
+                                     locale = NULL,
+                                     value_type = "all") {
 
   # Extract DSA summaries for needed strategies
   dsa_data <- extract_dsa_summaries(
     results,
     summary_name = summary_name,
-    value_type = "all",
+    value_type = value_type,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -661,6 +624,21 @@ prepare_dsa_tornado_data <- function(results,
     strategy_order <- unique(tornado_data$strategy)
   }
 
+  # Join range_label from dsa_metadata (BEFORE name mapping)
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      tornado_data <- tornado_data %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      tornado_data$range_label <- NA_character_
+    }
+  } else {
+    tornado_data$range_label <- NA_character_
+  }
+
   # Add parameter values to labels if requested (BEFORE name mapping)
   if (show_parameter_values) {
     # Extract parameter values from segments (using technical names)
@@ -705,36 +683,45 @@ prepare_dsa_tornado_data <- function(results,
       rowwise() %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-          {
-            # Determine unit suffix based on parameter type
-            unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-              get_setting_unit_suffix(.data$parameter, settings)
-            } else {
-              ""
-            }
+          !is.na(.data$range_label),
+          # Use custom range label
+          sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+          if_else(
+            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+            {
+              # Determine unit suffix based on parameter type
+              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                get_setting_unit_suffix(.data$parameter, settings)
+              } else {
+                ""
+              }
 
-            # Format values with unit suffix
-            if (unit_suffix != "") {
-              sprintf("%s (%s%s - %s%s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      unit_suffix,
-                      format_param_value(.data$param_high_value),
-                      unit_suffix)
-            } else {
-              sprintf("%s (%s - %s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      format_param_value(.data$param_high_value))
-            }
-          },
-          .data$parameter_display_name
+              # Format values with unit suffix
+              if (unit_suffix != "") {
+                sprintf("%s (%s%s - %s%s)",
+                        .data$parameter_display_name,
+                        oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                        unit_suffix,
+                        oq_format(.data$param_high_value, exact = TRUE, locale = locale),
+                        unit_suffix)
+              } else {
+                sprintf("%s (%s - %s)",
+                        .data$parameter_display_name,
+                        oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                        oq_format(.data$param_high_value, exact = TRUE, locale = locale))
+              }
+            },
+            .data$parameter_display_name
+          )
         )
       ) %>%
       ungroup() %>%
       select(-"param_low_value", -"param_high_value", -"param_type")
   }
+
+  # Remove range_label column after use
+  tornado_data <- tornado_data %>%
+    select(-any_of("range_label"))
 
   # Attach strategy_order as an attribute to preserve correct ordering
   if (!is.null(strategy_order)) {
@@ -771,6 +758,11 @@ prepare_dsa_tornado_data <- function(results,
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on results? (default: TRUE)
 #'   A parameter has zero impact when its range (abs(high - low)) is effectively zero.
 #'   If all parameters have zero impact, an error is thrown.
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -827,7 +819,70 @@ dsa_outcomes_plot <- function(results,
                               comparators = NULL,
                               discounted = TRUE,
                               show_parameter_values = TRUE,
-                              drop_zero_impact = TRUE) {
+                              drop_zero_impact = TRUE,
+                              top_n = NULL,
+                              axis_decimals = NULL,
+                              label_decimals = NULL,
+                              abbreviate = FALSE) {
+
+  dsa_summary_plot_impl(
+    results = results,
+    summary_name = summary_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    show_parameter_values = show_parameter_values,
+    drop_zero_impact = drop_zero_impact,
+    top_n = top_n,
+    value_type = "outcome",
+    currency = FALSE,
+    axis_decimals = axis_decimals,
+    label_decimals = label_decimals,
+    abbreviate = abbreviate
+  )
+}
+
+
+#' DSA Summary Plot Implementation
+#'
+#' Internal helper that implements the DSA summary tornado plot logic.
+#' Used by both dsa_outcomes_plot() and dsa_costs_plot().
+#'
+#' @param results A openqaly DSA results object (output from run_dsa)
+#' @param summary_name Name of the summary to plot
+#' @param groups Group selection
+#' @param strategies Character vector of strategy names to include
+#' @param interventions Character vector of intervention strategy name(s)
+#' @param comparators Character vector of comparator strategy name(s)
+#' @param discounted Logical. Use discounted values?
+#' @param show_parameter_values Logical. Include parameter values in Y-axis labels?
+#' @param drop_zero_impact Logical. Remove parameters with zero impact?
+#' @param top_n Integer or NULL. Top N parameters by impact range.
+#' @param value_type Type of summary values: "outcome" (default) or "cost"
+#' @param currency Logical. Format values as currency? (default: FALSE)
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot2 object
+#' @keywords internal
+dsa_summary_plot_impl <- function(results,
+                                  summary_name,
+                                  groups = "overall",
+                                  strategies = NULL,
+                                  interventions = NULL,
+                                  comparators = NULL,
+                                  discounted = TRUE,
+                                  show_parameter_values = TRUE,
+                                  drop_zero_impact = TRUE,
+                                  top_n = NULL,
+                                  value_type = "outcome",
+                                  currency = FALSE,
+                                  axis_decimals = NULL,
+                                  label_decimals = NULL,
+                                  abbreviate = FALSE) {
 
   # Validate that strategies is mutually exclusive with interventions/comparators
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -843,7 +898,8 @@ dsa_outcomes_plot <- function(results,
     interventions = interventions,
     comparators = comparators,
     discounted = discounted,
-    show_parameter_values = show_parameter_values
+    show_parameter_values = show_parameter_values,
+    value_type = value_type
   )
 
   # Check if data is valid
@@ -862,6 +918,14 @@ dsa_outcomes_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on results. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    tornado_data <- tornado_data %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering
@@ -894,8 +958,99 @@ dsa_outcomes_plot <- function(results,
     summary_label <- paste0("Difference in ", summary_label)
   }
 
+  # Get locale for formatting
+  locale <- get_results_locale(results)
+
   # Render tornado plot
-  render_tornado_plot(tornado_data, summary_label)
+  render_tornado_plot(tornado_data, summary_label, currency = currency,
+                      locale = locale, axis_decimals = axis_decimals,
+                      label_decimals = label_decimals, abbreviate = abbreviate)
+}
+
+
+#' Plot DSA Costs as Tornado Diagram
+#'
+#' Creates a tornado plot showing the impact of varying each DSA parameter from
+#' its low to high value on a specified cost summary. Shows horizontal
+#' bars representing the range of variation with a vertical line at the base case.
+#' Values are formatted as currency.
+#'
+#' @param results A openqaly DSA results object (output from run_dsa)
+#' @param summary_name Name of the cost summary to plot (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#'   (all groups plus aggregated)
+#' @param strategies Character vector of strategy names to include (NULL for all).
+#'   Mutually exclusive with interventions/comparators.
+#' @param interventions Character vector of intervention strategy name(s) (e.g., "new_treatment").
+#'   Can be a single value or vector. Can be combined with comparators for N x M comparisons.
+#' @param comparators Character vector of comparator strategy name(s) (e.g., "control").
+#'   Can be a single value or vector. Can be combined with interventions for N x M comparisons.
+#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param show_parameter_values Logical. Include parameter values in Y-axis labels? (default: TRUE)
+#'   When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.
+#' @param drop_zero_impact Logical. Remove parameters with zero impact on results? (default: TRUE)
+#'   A parameter has zero impact when its range (abs(high - low)) is effectively zero.
+#'   If all parameters have zero impact, an error is thrown.
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot2 object
+#'
+#' @details
+#' The tornado plot displays each DSA parameter as a horizontal bar showing the range
+#' from low to high value. Parameters are sorted by the magnitude of their impact
+#' (largest range first). A vertical line indicates the base case value.
+#' Values are formatted as currency.
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") %>%
+#'   add_variable("p_disease", 0.03) %>%
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+#' dsa_results <- run_dsa(model)
+#'
+#' # Basic cost tornado plot
+#' dsa_costs_plot(dsa_results, "total_cost")
+#'
+#' # Show differences vs control
+#' dsa_costs_plot(dsa_results, "total_cost", comparators = "control")
+#' }
+#'
+#' @export
+dsa_costs_plot <- function(results,
+                            summary_name,
+                            groups = "overall",
+                            strategies = NULL,
+                            interventions = NULL,
+                            comparators = NULL,
+                            discounted = TRUE,
+                            show_parameter_values = TRUE,
+                            drop_zero_impact = TRUE,
+                            top_n = NULL,
+                            axis_decimals = NULL,
+                            label_decimals = NULL,
+                            abbreviate = FALSE) {
+
+  dsa_summary_plot_impl(
+    results = results,
+    summary_name = summary_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    show_parameter_values = show_parameter_values,
+    drop_zero_impact = drop_zero_impact,
+    top_n = top_n,
+    value_type = "cost",
+    currency = TRUE,
+    axis_decimals = axis_decimals,
+    label_decimals = label_decimals,
+    abbreviate = abbreviate
+  )
 }
 
 
@@ -922,6 +1077,11 @@ dsa_outcomes_plot <- function(results,
 #'   When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on NMB? (default: TRUE)
 #'   A parameter has zero impact when its NMB range is effectively zero.
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -981,7 +1141,11 @@ dsa_nmb_plot <- function(results,
                          interventions = NULL,
                          comparators = NULL,
                          show_parameter_values = TRUE,
-                         drop_zero_impact = TRUE) {
+                         drop_zero_impact = TRUE,
+                         top_n = NULL,
+                         axis_decimals = NULL,
+                         label_decimals = NULL,
+                         abbreviate = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -1078,6 +1242,21 @@ dsa_nmb_plot <- function(results,
     ) %>%
     select("strategy", "group", "parameter", "parameter_display_name", "low", "base", "high", "range")
 
+  # Join range_label from dsa_metadata
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      nmb_tornado <- nmb_tornado %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      nmb_tornado$range_label <- NA_character_
+    }
+  } else {
+    nmb_tornado$range_label <- NA_character_
+  }
+
   # Add parameter values to labels if requested
   if (show_parameter_values) {
     param_values <- extract_parameter_values(results, nmb_tornado, interventions, comparators)
@@ -1090,36 +1269,44 @@ dsa_nmb_plot <- function(results,
       rowwise() %>%
       mutate(
         parameter_display_name = if_else(
-          !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-          {
-            # Determine unit suffix based on parameter type
-            unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-              get_setting_unit_suffix(.data$parameter, settings)
-            } else {
-              ""
-            }
+          !is.na(.data$range_label),
+          sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+          if_else(
+            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+            {
+              # Determine unit suffix based on parameter type
+              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                get_setting_unit_suffix(.data$parameter, settings)
+              } else {
+                ""
+              }
 
-            # Format values with unit suffix
-            if (unit_suffix != "") {
-              sprintf("%s (%s%s - %s%s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      unit_suffix,
-                      format_param_value(.data$param_high_value),
-                      unit_suffix)
-            } else {
-              sprintf("%s (%s - %s)",
-                      .data$parameter_display_name,
-                      format_param_value(.data$param_low_value),
-                      format_param_value(.data$param_high_value))
-            }
-          },
-          .data$parameter_display_name
+              # Format values with unit suffix
+              if (unit_suffix != "") {
+                sprintf("%s (%s%s - %s%s)",
+                        .data$parameter_display_name,
+                        oq_format(.data$param_low_value, exact = TRUE),
+                        unit_suffix,
+                        oq_format(.data$param_high_value, exact = TRUE),
+                        unit_suffix)
+              } else {
+                sprintf("%s (%s - %s)",
+                        .data$parameter_display_name,
+                        oq_format(.data$param_low_value, exact = TRUE),
+                        oq_format(.data$param_high_value, exact = TRUE))
+              }
+            },
+            .data$parameter_display_name
+          )
         )
       ) %>%
       ungroup() %>%
       select(-"param_low_value", -"param_high_value", -"param_type")
   }
+
+  # Remove range_label column after use
+  nmb_tornado <- nmb_tornado %>%
+    select(-any_of("range_label"))
 
   # Check if data is valid
   if (is.null(nmb_tornado) || nrow(nmb_tornado) == 0) {
@@ -1136,6 +1323,14 @@ dsa_nmb_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on NMB. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    nmb_tornado <- nmb_tornado %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering
@@ -1165,11 +1360,14 @@ dsa_nmb_plot <- function(results,
     cost_label <- map_names(cost_outcome, results$metadata$summaries, "display_name")
   }
 
-  wtp_formatted <- scales::comma(wtp)
+  locale <- get_results_locale(results)
+  wtp_formatted <- oq_format(wtp, locale = locale, currency = TRUE)
   nmb_label <- glue("Net Monetary Benefit ({cost_label}, {outcome_label}, \u03bb = {wtp_formatted})")
 
   # Render tornado plot
-  render_tornado_plot(nmb_tornado, nmb_label)
+  render_tornado_plot(nmb_tornado, nmb_label, currency = TRUE, locale = locale,
+                      axis_decimals = axis_decimals, label_decimals = label_decimals,
+                      abbreviate = abbreviate)
 }
 
 
@@ -1292,10 +1490,12 @@ detect_variation_error <- function(base_class, variation_icer) {
 #' @param icer_value Numeric ICER value (for direction change message)
 #' @param intervention_name Character display name of intervention
 #' @param comparator_name Character display name of comparator
+#' @param locale Optional locale for number formatting
 #' @return Character error message or NA_character_
 #' @keywords internal
 generate_ce_error_message <- function(error_type, variation, icer_value,
-                                      intervention_name, comparator_name) {
+                                      intervention_name, comparator_name,
+                                      locale = NULL) {
   if (is.null(error_type) || is.na(error_type)) {
     return(NA_character_)
   }
@@ -1309,7 +1509,7 @@ generate_ce_error_message <- function(error_type, variation, icer_value,
       sprintf(
         "%s value of parameter changes the directionality of ICER and cannot be displayed. ICER of %s reflects comparison of %s vs. %s",
         variation,
-        scales::comma(abs(icer_value)),
+        oq_format(abs(icer_value), locale = locale, currency = TRUE),
         comparator_name,
         intervention_name
       )
@@ -1318,7 +1518,7 @@ generate_ce_error_message <- function(error_type, variation, icer_value,
       sprintf(
         "%s value of parameter changes the directionality of ICER and cannot be displayed. ICER of %s reflects comparison of %s vs. %s",
         variation,
-        scales::comma(abs(icer_value)),
+        oq_format(abs(icer_value), locale = locale, currency = TRUE),
         intervention_name,
         comparator_name
       )
@@ -1425,7 +1625,8 @@ generate_identical_footnote <- function(asterisk, intervention_name, comparator_
 #' @param decimals Number of decimal places (default: 0)
 #' @return Formatted string
 #' @keywords internal
-format_icer_label <- function(icer_value, asterisk = "", decimals = 0) {
+format_icer_label <- function(icer_value, asterisk = "", decimals = 0,
+                              locale = NULL, abbreviate_val = FALSE) {
   # Check NaN BEFORE NA because is.na(NaN) returns TRUE
   if (is.nan(icer_value)) {
     return(paste0("Equivalent", asterisk))
@@ -1440,10 +1641,12 @@ format_icer_label <- function(icer_value, asterisk = "", decimals = 0) {
     return(paste0("Dominant", asterisk))
   }
 
-  # Format finite value
-  formatted <- scales::comma(round(abs(icer_value), decimals))
+  # Format finite value using oq_format_icer
+  formatted <- oq_format_icer(icer_value, decimals = decimals, locale = locale,
+                               abbreviate = abbreviate_val)
 
-  # Add asterisk
+  # Add asterisk (oq_format_icer adds its own * for negative ICERs,
+  # but the asterisk param here is for footnote markers)
   paste0(formatted, asterisk)
 }
 
@@ -1691,7 +1894,8 @@ prepare_dsa_ce_tornado_data <- function(results,
                                         groups,
                                         interventions,
                                         comparators,
-                                        show_parameter_values = TRUE) {
+                                        show_parameter_values = TRUE,
+                                        locale = NULL) {
 
   # Extract cost summaries (always discounted for CE)
   cost_data <- extract_dsa_summaries(
@@ -1960,6 +2164,21 @@ prepare_dsa_ce_tornado_data <- function(results,
   processed_df <- bind_rows(processed_rows)
   tornado_data <- bind_cols(tornado_data, processed_df)
 
+  # Join range_label from dsa_metadata
+  if (!is.null(results$dsa_metadata) && "range_label" %in% names(results$dsa_metadata)) {
+    range_labels <- results$dsa_metadata %>%
+      filter(!is.na(.data$range_label)) %>%
+      distinct(.data$parameter, .data$range_label)
+    if (nrow(range_labels) > 0) {
+      tornado_data <- tornado_data %>%
+        left_join(range_labels, by = "parameter")
+    } else {
+      tornado_data$range_label <- NA_character_
+    }
+  } else {
+    tornado_data$range_label <- NA_character_
+  }
+
   # Add parameter values if requested
   if (show_parameter_values) {
     param_values <- extract_parameter_values(results, tornado_data, interventions, comparators)
@@ -1973,29 +2192,33 @@ prepare_dsa_ce_tornado_data <- function(results,
         rowwise() %>%
         mutate(
           parameter_display_name = if_else(
-            !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
-            {
-              unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
-                get_setting_unit_suffix(.data$parameter, settings)
-              } else {
-                ""
-              }
+            !is.na(.data$range_label),
+            sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+            if_else(
+              !is.na(.data$param_low_value) & !is.na(.data$param_high_value),
+              {
+                unit_suffix <- if (!is.na(.data$param_type) && .data$param_type == "setting") {
+                  get_setting_unit_suffix(.data$parameter, settings)
+                } else {
+                  ""
+                }
 
-              if (unit_suffix != "") {
-                sprintf("%s (%s%s - %s%s)",
-                        .data$parameter_display_name,
-                        format_param_value(.data$param_low_value),
-                        unit_suffix,
-                        format_param_value(.data$param_high_value),
-                        unit_suffix)
-              } else {
-                sprintf("%s (%s - %s)",
-                        .data$parameter_display_name,
-                        format_param_value(.data$param_low_value),
-                        format_param_value(.data$param_high_value))
-              }
-            },
-            .data$parameter_display_name
+                if (unit_suffix != "") {
+                  sprintf("%s (%s%s - %s%s)",
+                          .data$parameter_display_name,
+                          oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                          unit_suffix,
+                          oq_format(.data$param_high_value, exact = TRUE, locale = locale),
+                          unit_suffix)
+                } else {
+                  sprintf("%s (%s - %s)",
+                          .data$parameter_display_name,
+                          oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                          oq_format(.data$param_high_value, exact = TRUE, locale = locale))
+                }
+              },
+              .data$parameter_display_name
+            )
           )
         ) %>%
         ungroup()
@@ -2007,6 +2230,10 @@ prepare_dsa_ce_tornado_data <- function(results,
       }
     }
   }
+
+  # Remove range_label column after use
+  tornado_data <- tornado_data %>%
+    select(-any_of("range_label"))
 
   # Create facet metadata
   # Note: base_label and footnotes will be finalized in render function after y_base ordering
@@ -2062,7 +2289,9 @@ prepare_dsa_ce_tornado_data <- function(results,
 #'
 #' @return A ggplot2 object
 #' @keywords internal
-render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_position = NULL) {
+render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_position = NULL,
+                                       axis_decimals = NULL, label_decimals = NULL,
+                                       locale = NULL, abbreviate = FALSE) {
 
   # Identify identical base case facets (will show error message instead of bars)
   valid_facets <- facet_metadata %>%
@@ -2647,7 +2876,7 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     filter(!.data$show_bar, !is.na(.data$error_type)) %>%
     mutate(
       # Format ICER value for direction change message
-      formatted_icer = scales::comma(abs(.data$icer_value_num), accuracy = 1),
+      formatted_icer = oq_format_icer(abs(.data$icer_value_num), decimals = label_decimals, locale = locale, abbreviate = abbreviate),
       # Determine if label goes left or right of base line
       # Low variations go left (hjust 1.1), High go right (hjust -0.1)
       # Exception: when base is dominated (right edge), both must go left
@@ -2655,7 +2884,7 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       # Single-line error labels with pre-computed asterisks
       error_label = dplyr::case_when(
         .data$error_type == "direction_change" ~
-          paste0("$", .data$formatted_icer, .data$asterisk),
+          paste0(.data$formatted_icer, .data$asterisk),
         .data$error_type == "identical" ~
           paste0("Identical", .data$asterisk),
         TRUE ~ NA_character_
@@ -2708,7 +2937,7 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = scales::comma_format(),
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate),
       expand = expansion(mult = c(0, 0), add = c(0, 0))
     ) +
     scale_y_reverse(
@@ -2819,6 +3048,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
 #'   At least one of interventions or comparators must be specified.
 #' @param show_parameter_values Logical. Include parameter values in Y-axis labels? (default: TRUE)
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on ICER? (default: TRUE)
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range
+#'   (per strategy/group facet). Useful for models with many DSA parameters.
 #'
 #' @return A ggplot2 object
 #'
@@ -2873,7 +3104,8 @@ dsa_ce_plot <- function(results,
                         interventions = NULL,
                         comparators = NULL,
                         show_parameter_values = TRUE,
-                        drop_zero_impact = TRUE) {
+                        drop_zero_impact = TRUE,
+                        top_n = NULL) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -2909,6 +3141,14 @@ dsa_ce_plot <- function(results,
       stop(sprintf("All %d parameters have zero impact on ICER. No data to plot.",
                    n_params_before))
     }
+  }
+
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    tornado_data <- tornado_data %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = abs(.data$displayable_range), n = top_n, with_ties = FALSE) %>%
+      ungroup()
   }
 
   # Factorize for proper ordering

@@ -11,8 +11,9 @@ prepare_psa_summary_table_data(
   pce_wtp = c(50000, 1e+05, 150000),
   groups = "overall",
   strategies = NULL,
-  outcome_decimals = 2,
-  cost_decimals = 0,
+  outcome_decimals = NULL,
+  cost_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }

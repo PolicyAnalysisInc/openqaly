@@ -288,6 +288,7 @@ get_psa_simulations <- function(results,
 #' @param strategies Character vector of strategies to include. For absolute outcome
 #'   values. Cannot be used with \code{interventions} or \code{comparators}.
 #' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param value_type Character. Type of value to extract: "outcome" or "cost". Default "outcome".
 #'
 #' @return A tibble with columns:
 #'   \itemize{
@@ -304,7 +305,8 @@ get_psa_outcome_simulations <- function(results,
                                         comparators = NULL,
                                         groups = "overall",
                                         strategies = NULL,
-                                        discounted = TRUE) {
+                                        discounted = TRUE,
+                                        value_type = "outcome") {
 
   # Validate mutual exclusivity of strategies vs interventions/comparators
 
@@ -373,7 +375,7 @@ get_psa_outcome_simulations <- function(results,
   outcome_data <- extract_psa_summaries(
     source_data,
     summary_name = outcome_summary,
-    value_type = "outcome",
+    value_type = value_type,
     discounted = discounted
   ) %>%
     rename(outcome = "amount")

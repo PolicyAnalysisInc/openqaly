@@ -10,8 +10,10 @@ transition_plot_heatmap(
   groups = "overall",
   strategies = NULL,
   collapsed = TRUE,
-  decimals = 3,
-  use_display_names = TRUE
+  decimals = NULL,
+  use_display_names = TRUE,
+  state_times = NULL,
+  exclude_zero_residency = NULL
 )
 }
 \arguments{
@@ -27,9 +29,18 @@ vector of groups, "all", "all_groups", or NULL}
 \item{collapsed}{Logical. If TRUE (default), use collapsed state names.
 If FALSE, use expanded state names (tunnel states).}
 
-\item{decimals}{Integer. Number of decimal places for probability labels (default: 3).}
+\item{decimals}{Integer. Number of decimal places for probability labels, or NULL for auto-precision.}
 
 \item{use_display_names}{Logical. If TRUE (default), use display names for entities.}
+
+\item{state_times}{Numeric vector of tunnel state indices to include when
+\code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+base state. Non-tunnel states are always included. Ignored when
+\code{collapsed=TRUE}.}
+
+\item{exclude_zero_residency}{Logical. Exclude expanded states with zero
+residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.}
 }
 \value{
 A ggplot2 object

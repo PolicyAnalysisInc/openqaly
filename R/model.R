@@ -4,15 +4,31 @@
 #' and running the model for each set of sampled parameters.
 #'
 #' @param model A oq_model object with sampling specifications
-#' @param n_sim Number of PSA simulations to run
-#' @param seed Random seed for reproducibility
+#' @param n_sim Number of PSA simulations to run. If NULL, falls back to
+#'   the value stored in \code{model$psa$n_sim} (set via \code{\link{set_psa}}).
+#' @param seed Random seed for reproducibility. If NULL, falls back to
+#'   the value stored in \code{model$psa$seed} (set via \code{\link{set_psa}}).
+#' @param progress Optional progress callback function. Called with
+#'   \code{progress(total = N)} to declare total units, then
+#'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
-run_psa <- function(model, n_sim, seed = NULL, ...) {
+run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
   # Finalize builders (convert to oq_model)
   if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  }
+
+  # Fall back to model$psa defaults if runtime args not provided
+  if (is.null(n_sim) && !is.null(model$psa$n_sim)) {
+    n_sim <- model$psa$n_sim
+  }
+  if (is.null(seed) && !is.null(model$psa$seed)) {
+    seed <- model$psa$seed
+  }
+  if (is.null(n_sim)) {
+    stop("n_sim must be provided either as an argument or via set_psa()", call. = FALSE)
   }
 
   # Parse model
@@ -47,17 +63,31 @@ run_psa <- function(model, n_sim, seed = NULL, ...) {
   # sampled_vars has columns: strategy, group, simulation, var1, var2, ...
   res <- list()
 
-  res$segments <- sampled_vars %>%
+  segment_list <- sampled_vars %>%
     rowwise() %>%
-    group_split() %>%
-    future_map(function(segment) run_segment(segment, parsed_model, ...), .progress = TRUE, .options = furrr_options(seed=1)) %>%
-    bind_rows()
+    group_split()
+
+  # Declare progress total and fire pre-segment checkpoints
+  if (!is.null(progress)) {
+    progress(total = get_progress_total(length(segment_list)))
+    progress(amount = 1L)  # model parsed & sampling prepared
+    progress(amount = 1L)  # segments resampled
+  }
+
+  res$segments <- future_map(
+    segment_list,
+    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    .progress = is.null(progress),
+    .options = furrr_options(seed = 1)
+  ) %>% bind_rows()
 
   # Aggregate by simulation + strategy
   res$aggregated <- aggregate_segments(res$segments, parsed_model)
+  if (!is.null(progress)) progress(amount = 1L)  # aggregation complete
 
   # Store metadata
   res$metadata <- parsed_model$metadata
+  if (!is.null(progress)) progress(amount = 1L)  # complete
 
   return(res)
 }
@@ -68,12 +98,15 @@ run_psa <- function(model, n_sim, seed = NULL, ...) {
 #' For probabilistic sensitivity analysis, use [run_psa()] instead.
 #'
 #' @param model An openqaly model object.
+#' @param progress Optional progress callback function. Called with
+#'   \code{progress(total = N)} to declare total units, then
+#'   \code{progress(amount = K)} for each completed unit.
 #' @param ... additional arguments.
 #'
 #' @return A list containing the results of the model.
 #'
 #' @export
-run_model <- function(model, ...) {
+run_model <- function(model, progress = NULL, ...) {
 
   # Base case: existing logic
   # Finalize builders (convert to oq_model)
@@ -101,24 +134,48 @@ run_model <- function(model, ...) {
   segments <- apply_override_categories(parsed_model, segments)
 
   # Split by segment, evaluate each segment in parallel, combine results
-  res$segments <- segments %>%
+  segment_list <- segments %>%
     rowwise() %>%
-    group_split() %>%
-    future_map(function(segment) run_segment(segment, parsed_model, ...), .progress = TRUE, .options = furrr_options(seed=1)) %>%
-    bind_rows()
+    group_split()
 
-  # Process the results
+  # Declare progress total and fire pre-segment checkpoints
+  if (!is.null(progress)) {
+    progress(total = get_progress_total(length(segment_list)))
+    progress(amount = 1L)  # model parsed
+    progress(amount = 1L)  # segments prepared
+  }
+
+  res$segments <- future_map(
+    segment_list,
+    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    .progress = is.null(progress),
+    .options = furrr_options(seed = 1)
+  ) %>% bind_rows()
 
   # Aggregate results by strategy
   res$aggregated <- aggregate_segments(res$segments, parsed_model)
+  if (!is.null(progress)) progress(amount = 1L)  # aggregation complete
 
   # Store metadata for flexible display options
   res$metadata <- parsed_model$metadata
+  if (!is.null(progress)) progress(amount = 1L)  # complete
 
   # Return
   res
 }
 
+
+#' Get Total Progress Units
+#'
+#' Computes the total number of progress units for a segment-based analysis.
+#' Each segment reports 8 checkpoints, plus 4 overhead (2 pre-segment, 2 post-segment).
+#'
+#' @param n_segments Number of segments to execute
+#' @return Integer total progress units
+#' @keywords internal
+get_progress_total <- function(n_segments) {
+  n_segments * 8L + 4L
+}
 
 parse_model <- function(model, ...) {
   
@@ -171,7 +228,9 @@ parse_model <- function(model, ...) {
   # Set the class of the object based on model type
   # Note: model_type should already be normalized to canonical form by normalize_and_validate_model
   model_type <- tolower(model$settings$model_type)
-  if (model_type == "psm") {
+  if (model_type == "decision_tree") {
+    model <- parse_decision_tree_model(model)
+  } else if (model_type == "psm") {
     model <- parse_psm(model)
   } else if (model_type %in% c("custom_psm", "custom psm", "psm_custom")) {
     model <- parse_psm_custom(model)

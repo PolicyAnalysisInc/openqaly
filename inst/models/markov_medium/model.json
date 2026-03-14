@@ -22,15 +22,15 @@
     },
     {
       "setting": "discount_cost",
-      "value": "0"
+      "value": "3.5"
     },
     {
       "setting": "discount_outcomes",
-      "value": "0"
+      "value": "3.5"
     },
     {
       "setting": "half_cycle_method",
-      "value": "end"
+      "value": "life-table"
     },
     {
       "setting": "reduce_state_cycle",
@@ -573,7 +573,7 @@
       "name": "p_male",
       "display_name": "resp_l1_rescue",
       "description": "resp_l1_rescue",
-      "formula": "0.53",
+      "formula": "0.47",
       "strategy": null,
       "group": null,
       "source": "resp_l1_rescue",

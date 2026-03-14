@@ -12,7 +12,8 @@ add_value(
   destination = NA,
   display_name = NULL,
   description = NULL,
-  type = "outcome"
+  type = "outcome",
+  discounting_override = NA
 )
 }
 \arguments{
@@ -31,6 +32,13 @@ add_value(
 \item{description}{Optional description}
 
 \item{type}{Value type (default: "outcome")}
+
+\item{discounting_override}{Optional formula string that overrides per-cycle
+discounting. When provided, the formula result replaces the standard discount
+factor entirely: \code{values_discounted = values * result}. The formula can
+return a scalar or a vector of length n_cycles. Available variables in the
+formula: all model variables, \code{discount_rate}, \code{discount_factors},
+and \code{trace(state_name)}.}
 }
 \value{
 The modified model object

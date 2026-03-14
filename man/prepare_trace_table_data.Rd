@@ -10,9 +10,10 @@ prepare_trace_table_data(
   groups = "overall",
   states = NULL,
   cycles = NULL,
-  decimals = 4,
+  decimals = NULL,
   time_unit = "cycle",
-  font_size = 11
+  font_size = 11,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -24,9 +25,11 @@ prepare_trace_table_data(
 
 \item{cycles}{Integer vector or range of cycles to display (NULL for all)}
 
-\item{decimals}{Number of decimal places for probabilities (default: 4)}
+\item{decimals}{Number of decimal places for probabilities (default: NULL, uses locale default)}
 
 \item{time_unit}{Which time unit to display}
+
+\item{abbreviate}{Logical. If TRUE, use abbreviated number formatting (default: FALSE)}
 }
 \value{
 List with prepared data and metadata for render_table()

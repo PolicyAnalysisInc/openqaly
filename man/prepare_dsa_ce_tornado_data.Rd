@@ -11,7 +11,8 @@ prepare_dsa_ce_tornado_data(
   groups,
   interventions,
   comparators,
-  show_parameter_values = TRUE
+  show_parameter_values = TRUE,
+  locale = NULL
 )
 }
 \arguments{

@@ -10,7 +10,8 @@ twsa_vbp_table(
   groups = "overall",
   comparators = "all",
   wtp = NULL,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   backend = c("flextable", "kable")
 )
@@ -28,7 +29,9 @@ specific group name(s)}
 
 \item{wtp}{Willingness-to-pay threshold. If NULL, extracts from VBP metadata.}
 
-\item{decimals}{Number of decimal places (default: 0)}
+\item{decimals}{Number of decimal places (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for table (default: 11)}
 

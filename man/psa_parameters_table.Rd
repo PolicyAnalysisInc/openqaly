@@ -9,7 +9,8 @@ psa_parameters_table(
   variables = NULL,
   group = NULL,
   strategies = NULL,
-  decimals = 3,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -23,7 +24,9 @@ psa_parameters_table(
 
 \item{strategies}{Single strategy to filter parameters (NULL for first strategy)}
 
-\item{decimals}{Number of decimal places (default: 3)}
+\item{decimals}{Number of decimal places (default: NULL, auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

@@ -96,13 +96,15 @@ run_segment.markov <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
 
   # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  model$settings$n_cycles <- get_n_cycles(model$settings)
+  dt_duration_days <- get_dt_duration_days(model)
+  model$settings$n_cycles <- get_n_cycles(model$settings, dt_duration_days = dt_duration_days)
 
   # Parse the specification tables provided for states,
   # variables, transitions, values, and summaries
@@ -146,7 +148,8 @@ run_segment.markov <- function(segment, model, env, ...) {
     uneval_trans,
     uneval_values
   )
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
   ns <- create_namespace(model, segment)
@@ -160,8 +163,10 @@ run_segment.markov <- function(segment, model, env, ...) {
   # values, & summaries.
   eval_vars <- eval_variables(uneval_vars, ns)
   eval_states <- eval_states(uneval_states, eval_vars)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, isTRUE(model$settings$reduce_state_cycle)) #770ms
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Determine value_names safely for evaluate_values and cppMarkovTransitionsAndTrace
   value_names <- character(0)
@@ -180,9 +185,11 @@ run_segment.markov <- function(segment, model, env, ...) {
     state_names,
     isTRUE(model$settings$reduce_state_cycle)
   ) #900ms
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
 #322 ms
   expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
 #340 ms
   calculated_trace_and_values <- calculate_trace_and_values(
@@ -192,6 +199,20 @@ run_segment.markov <- function(segment, model, env, ...) {
     value_names,
     expanded$expanded_state_map,
     model$settings$half_cycle_method
+  )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
+  # Calculate the collapsed trace early (needed for discounting_override trace() function)
+  expanded_trace_matrix <- calculated_trace_and_values[[1]]
+  collapsed_trace <- calculate_collapsed_trace(
+    expanded_trace_matrix,
+    expanded$expanded_state_map
+  )
+
+  # Calculate collapsed corrected trace (half-cycle corrected, for discounting_override trace())
+  collapsed_corrected_trace <- calculate_collapsed_trace(
+    calculated_trace_and_values$correctedTrace,
+    expanded$expanded_state_map
   )
 
   # Apply discounting to values
@@ -204,9 +225,16 @@ run_segment.markov <- function(segment, model, env, ...) {
   days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
   cycle_length_years <- cycle_length_days / days_per_year
 
-  # Calculate discount factors
-  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years)
-  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
+  # Extract discount timing and method settings
+  discount_timing <- model$settings$discount_timing %||% "start"
+  discount_method <- model$settings$discount_method %||% "by_cycle"
+
+  # Calculate DT offset for discounting
+  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
+
+  # Calculate discount factors (with DT offset if applicable)
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
 
   # Get value types from uneval_values
   type_mapping <- setNames(uneval_values$type, uneval_values$name)
@@ -220,6 +248,28 @@ run_segment.markov <- function(segment, model, env, ...) {
     type_mapping
   )
 
+  # Undo discounting for decision tree values (they are never discounted),
+  # but skip DT values that have a discounting_override (those use the formula instead)
+  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
+  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
+  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
+  for (v in dt_value_names) {
+    if (v %in% dt_override_names) next
+    if (v %in% colnames(calculated_trace_and_values$values_discounted)) {
+      calculated_trace_and_values$values_discounted[, v] <- calculated_trace_and_values$values[, v]
+    }
+  }
+
+  # Apply discounting override formulas
+  calculated_trace_and_values$values_discounted <- apply_discount_weights(
+    calculated_trace_and_values$values,
+    calculated_trace_and_values$values_discounted,
+    collapsed_corrected_trace,
+    discount_factors_cost, discount_factors_outcomes,
+    discount_cost, discount_outcomes,
+    uneval_values, type_mapping, eval_vars
+  )
+
   # Create the object to return that will summarize the results of
   # this segment.
   # Always store trace_and_values (needed for per-cycle output and aggregation)
@@ -230,15 +280,6 @@ run_segment.markov <- function(segment, model, env, ...) {
     segment$eval_vars <- list(eval_vars)
     segment$inital_state <- list(eval_states)
   }
-
-  # Extract the expanded trace matrix
-  expanded_trace_matrix <- calculated_trace_and_values[[1]]
-
-  # Calculate the collapsed trace using the expanded_state_map from handle_state_expansion
-  collapsed_trace <- calculate_collapsed_trace(
-    calculated_trace_and_values, # This is the list from cppMarkovTransitionsAndTrace
-    expanded$expanded_state_map
-  )
 
   # Add time variables to both traces
   # Generate time columns based on the actual cycle numbers from row names
@@ -287,6 +328,26 @@ run_segment.markov <- function(segment, model, env, ...) {
   segment$collapsed_trace <- list(collapsed_trace_with_time)
   segment$expanded_trace <- list(expanded_trace_with_time)
 
+  # Add time variables to corrected traces (n_cycles rows, cycles 1..n)
+  corrected_cycle_numbers <- as.numeric(rownames(collapsed_corrected_trace))
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    corrected_time_vars_df <- data.frame(
+      cycle = corrected_cycle_numbers,
+      day = corrected_cycle_numbers * cycle_length_days,
+      week = corrected_cycle_numbers * cycle_length_days / 7,
+      month = corrected_cycle_numbers * cycle_length_days / days_per_month,
+      year = corrected_cycle_numbers * cycle_length_days / days_per_year
+    )
+    rownames(corrected_time_vars_df) <- rownames(collapsed_corrected_trace)
+  } else {
+    corrected_time_vars_df <- data.frame(cycle = corrected_cycle_numbers)
+    rownames(corrected_time_vars_df) <- rownames(collapsed_corrected_trace)
+  }
+  segment$corrected_collapsed_trace <- list(cbind(corrected_time_vars_df, collapsed_corrected_trace))
+  segment$corrected_expanded_trace <- list(cbind(corrected_time_vars_df, calculated_trace_and_values$correctedTrace))
+
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate summaries: parsed_summaries is now guaranteed to be a tibble (possibly 0-row)
   # calculate_summaries should be robust to a 0-row parsed_summaries or 0-col/0-row trace values.
   if (!is.null(parsed_summaries)) { # This check might be redundant if parsed_summaries is always a tibble
@@ -317,7 +378,8 @@ run_segment.markov <- function(segment, model, env, ...) {
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   segment
 }
 
@@ -329,6 +391,7 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
   # Calculate maximum number of tunnels needed for each state
   # Join with state_time_use to only expand states that use state time
   st_maxes <- get_st_max(transitions, values, n_cycles) %>%
+    filter(.data$state != "decision_tree") %>%
     left_join(state_time_use, by = "state") %>%
     mutate(
       # If uses_st is FALSE or NA, set max_st to 1 (no expansion)
@@ -377,12 +440,19 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
   model_start_values <- filter(values, is.na(.data$state), is.na(.data$destination), .data$state_cycle == 1)
 
+  # Extract decision_tree values (state = "decision_tree") and treat as model start values
+  dt_phase_values <- filter(values, !is.na(.data$state), .data$state == "decision_tree", .data$state_cycle == 1)
+  if (nrow(dt_phase_values) > 0) {
+    dt_phase_values <- mutate(dt_phase_values, state = NA_character_)
+  }
+
   # Filter values to only include required tunnel states
   values_expanded <- select(values, -"max_st") %>%
     left_join(st_maxes, by = c('state' = 'state')) %>%
     filter(
       .data$state_cycle <= .data$max_st,
-      !(is.na(.data$state) & is.na(.data$destination) & .data$state_cycle > 1)
+      !(is.na(.data$state) & is.na(.data$destination) & .data$state_cycle > 1),
+      is.na(.data$state) | .data$state != "decision_tree"
     ) %>%
     mutate(
       .state_e = expand_state_name(.data$state, .data$state_cycle)
@@ -401,7 +471,8 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
       max_st = .data$max_st,
       values_list = .data$values_list
     ) %>%
-    bind_rows(model_start_values)
+    bind_rows(model_start_values) %>%
+    bind_rows(dt_phase_values)
 
   list(
     init = expand_init,
@@ -442,43 +513,40 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
   )
 }
 
-calculate_collapsed_trace <- function(expanded_results, expanded_state_map) {
-  
-  # The trace is the first element of the list returned by cppMarkovTransitionsAndTrace
-  expanded_trace_matrix <- expanded_results[[1]] 
-  
+calculate_collapsed_trace <- function(trace_matrix, expanded_state_map) {
+
   # Get all actual expanded state names that are column names in the trace matrix
-  actual_trace_col_names <- colnames(expanded_trace_matrix)
+  actual_trace_col_names <- colnames(trace_matrix)
   
   # Get unique original state names from the mapping
   # These will be the columns in our collapsed trace
   original_state_names <- unique(expanded_state_map$from_state)
   
   # Initialize the collapsed trace matrix
-  num_cycles <- nrow(expanded_trace_matrix)
+  num_cycles <- nrow(trace_matrix)
   if (is.null(num_cycles)) num_cycles <- 0 # Handle empty trace matrix
-  
+
   collapsed_trace <- matrix(
-    0.0, 
-    nrow = num_cycles, 
+    0.0,
+    nrow = num_cycles,
     ncol = length(original_state_names),
-    dimnames = list(rownames(expanded_trace_matrix), original_state_names)
+    dimnames = list(rownames(trace_matrix), original_state_names)
   )
-  
+
   # Iterate over each original state name
   for (original_name in original_state_names) {
     # Get the list of expanded names corresponding to this original_name from the map
     child_expanded_names_from_map <- expanded_state_map$.from_e[expanded_state_map$from_state == original_name]
-    
+
     # Filter this list to include only those expanded names that actually exist as columns in the trace matrix
     # This is a safeguard, as ideally, .from_e names used in transitions should match trace columns.
     actual_children_in_trace <- intersect(child_expanded_names_from_map, actual_trace_col_names)
-    
+
     if (length(actual_children_in_trace) > 0) {
-      # Select the sub-matrix of these children's columns from the expanded trace
+      # Select the sub-matrix of these children's columns from the trace matrix
       # drop = FALSE ensures it remains a matrix even if only one column is selected
-      sub_matrix <- expanded_trace_matrix[, actual_children_in_trace, drop = FALSE]
-      
+      sub_matrix <- trace_matrix[, actual_children_in_trace, drop = FALSE]
+
       # Sum the rows of this sub-matrix and assign to the collapsed_trace
       collapsed_trace[, original_name] <- rowSums(sub_matrix, na.rm = TRUE)
     }

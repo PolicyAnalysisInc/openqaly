@@ -13,7 +13,9 @@ outcomes_plot_line(
   comparators = NULL,
   time_unit = "cycle",
   cumulative = TRUE,
-  discounted = TRUE
+  discounted = TRUE,
+  axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -38,6 +40,10 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 If FALSE, shows per-cycle outcomes.}
 
 \item{discounted}{Logical. Use discounted values? (default: TRUE)}
+
+\item{axis_decimals}{Number of decimal places for y-axis labels (NULL for auto)}
+
+\item{abbreviate}{Logical. If TRUE, abbreviate large numbers (e.g., 1K, 1M). Default FALSE.}
 }
 \value{
 A ggplot2 object

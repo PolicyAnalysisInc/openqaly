@@ -32,8 +32,11 @@ prepare_twsa_vbp_table_data <- function(results,
                                          twsa_name = NULL,
                                          groups = "overall",
                                          comparators = "all",
-                                         decimals = 0,
+                                         decimals = NULL,
+                                         abbreviate = FALSE,
                                          font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Get VBP heatmap data using the shared preparation function
   vbp_data <- prepare_twsa_vbp_heatmap_data(
@@ -86,8 +89,9 @@ prepare_twsa_vbp_table_data <- function(results,
       x_cols <- setdiff(names(wide_data), "y_value")
       for (col in x_cols) {
         if (is.numeric(wide_data[[col]])) {
-          rounded_vals <- round(wide_data[[col]], decimals)
-          wide_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          wide_data[[col]] <- oq_format(wide_data[[col]], decimals = decimals,
+                                         locale = locale, currency = TRUE,
+                                         abbreviate = abbreviate)
         }
       }
 
@@ -130,7 +134,8 @@ prepare_twsa_vbp_table_data <- function(results,
 #' @param comparators Comparator selection: "all" (default, shows each comparator + aggregate),
 #'   "overall" (aggregate only), "all_comparators" (individuals only), or specific names
 #' @param wtp Willingness-to-pay threshold. If NULL, extracts from VBP metadata.
-#' @param decimals Number of decimal places (default: 0)
+#' @param decimals Number of decimal places (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for table (default: 11)
 #' @param backend Table rendering backend: "flextable" (default) or "kable"
 #'
@@ -152,7 +157,8 @@ twsa_vbp_table <- function(results,
                             groups = "overall",
                             comparators = "all",
                             wtp = NULL,
-                            decimals = 0,
+                            decimals = NULL,
+                            abbreviate = FALSE,
                             font_size = 11,
                             backend = c("flextable", "kable")) {
 
@@ -177,6 +183,7 @@ twsa_vbp_table <- function(results,
     groups = groups,
     comparators = comparators,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

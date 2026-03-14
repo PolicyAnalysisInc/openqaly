@@ -9,7 +9,8 @@ scenario_vbp_table(
   wtp = NULL,
   groups = "overall",
   comparators = "all",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -22,7 +23,9 @@ scenario_vbp_table(
 
 \item{comparators}{Comparator strategies: "all" (default) or specific comparator names}
 
-\item{decimals}{Number of decimal places (default: 0)}
+\item{decimals}{Number of decimal places (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 }

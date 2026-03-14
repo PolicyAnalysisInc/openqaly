@@ -28,8 +28,10 @@ prepare_incremental_ceac_table_data <- function(results,
                                                 wtp_thresholds = c(0, 20000, 50000, 100000),
                                                 groups = "overall",
                                                 strategies = NULL,
-                                                decimals = 1,
+                                                decimals = NULL,
                                                 font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Calculate incremental CEAC at specified WTP thresholds
   # Always uses discounted values (cost-effectiveness measure)
@@ -86,20 +88,16 @@ prepare_incremental_ceac_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = dollar(.data$wtp))
+    mutate(wtp_display = oq_format(.data$wtp, locale = locale, currency = TRUE))
 
   # Format probability columns as percentage strings
   strategy_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
   for (col in strategy_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- format(
-        round(pivot_data[[col]], decimals),
-        nsmall = decimals,
-        scientific = FALSE,
-        trim = TRUE
+      pivot_data[[col]] <- paste0(
+        oq_format(pivot_data[[col]], decimals = decimals, locale = locale),
+        "%"
       )
-      # Add % symbol
-      pivot_data[[col]] <- paste0(pivot_data[[col]], "%")
     }
   }
 
@@ -223,7 +221,7 @@ prepare_incremental_ceac_table_data <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param decimals Number of decimal places for percentages (default: 1)
+#' @param decimals Number of decimal places for percentages (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -259,7 +257,7 @@ incremental_ceac_table <- function(results,
                                    wtp_thresholds = c(0, 20000, 50000, 100000),
                                    groups = "overall",
                                    strategies = NULL,
-                                   decimals = 1,
+                                   decimals = NULL,
                                    font_size = 11,
                                    table_format = c("flextable", "kable")) {
 
@@ -313,9 +311,12 @@ prepare_psa_summary_table_data <- function(results,
                                           pce_wtp = c(50000, 100000, 150000),
                                           groups = "overall",
                                           strategies = NULL,
-                                          outcome_decimals = 2,
-                                          cost_decimals = 0,
+                                          outcome_decimals = NULL,
+                                          cost_decimals = NULL,
+                                          abbreviate = FALSE,
                                           font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Get PSA simulation data (always uses discounted values for CE-related summary)
   psa_data <- get_psa_simulations(
@@ -374,35 +375,26 @@ prepare_psa_summary_table_data <- function(results,
   }
   pce_data <- bind_rows(pce_results)
 
-  # Formatting helper functions (uses decimal places, not sigfigs)
-  format_with_ci <- function(mean_val, lower, upper, decimals, use_comma = FALSE) {
+  # Formatting helper functions (uses locale-aware formatting)
+  format_with_ci <- function(mean_val, lower, upper, decimals, currency = FALSE) {
     fmt <- function(v) {
-      if (use_comma) {
-        scales::comma(round(v, decimals), accuracy = 10^(-decimals))
-      } else {
-        format(round(v, decimals), nsmall = decimals, trim = TRUE)
-      }
+      oq_format(v, decimals = decimals, locale = locale, currency = currency,
+                abbreviate = abbreviate)
     }
     paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
   }
 
-  format_range <- function(min_val, max_val, decimals, use_comma = FALSE) {
+  format_range <- function(min_val, max_val, decimals, currency = FALSE) {
     fmt <- function(v) {
-      if (use_comma) {
-        scales::comma(round(v, decimals), accuracy = 10^(-decimals))
-      } else {
-        format(round(v, decimals), nsmall = decimals, trim = TRUE)
-      }
+      oq_format(v, decimals = decimals, locale = locale, currency = currency,
+                abbreviate = abbreviate)
     }
     paste0(fmt(min_val), " - ", fmt(max_val))
   }
 
-  format_numeric <- function(val, decimals, use_comma = FALSE) {
-    if (use_comma) {
-      scales::comma(round(val, decimals), accuracy = 10^(-decimals))
-    } else {
-      format(round(val, decimals), nsmall = decimals, trim = TRUE)
-    }
+  format_numeric <- function(val, decimals, currency = FALSE) {
+    oq_format(val, decimals = decimals, locale = locale, currency = currency,
+              abbreviate = abbreviate)
   }
 
   # Get unique strategies and groups (preserve order from metadata)
@@ -458,7 +450,7 @@ prepare_psa_summary_table_data <- function(results,
   # Add WTP rows
   for (wtp_val in pce_wtp) {
     wtp_id <- paste0("pce_", wtp_val)
-    wtp_label <- paste0("\u03bb = $", scales::comma(wtp_val))
+    wtp_label <- paste0("\u03bb = ", oq_format(wtp_val, locale = locale, currency = TRUE))
     row_labels_ordered <- c(row_labels_ordered, wtp_id)
     row_labels_display <- c(row_labels_display, wtp_label)
   }
@@ -480,22 +472,22 @@ prepare_psa_summary_table_data <- function(results,
         # Outcome section
         "",  # "Outcome" header
         format_with_ci(stat_row$mean_outcome, stat_row$ci_lower_outcome,
-                       stat_row$ci_upper_outcome, outcome_decimals, use_comma = FALSE),
-        format_numeric(stat_row$sd_outcome, outcome_decimals, use_comma = FALSE),
+                       stat_row$ci_upper_outcome, outcome_decimals),
+        format_numeric(stat_row$sd_outcome, outcome_decimals),
         format_with_ci(stat_row$median_outcome, stat_row$q25_outcome,
-                       stat_row$q75_outcome, outcome_decimals, use_comma = FALSE),
+                       stat_row$q75_outcome, outcome_decimals),
         format_range(stat_row$min_outcome, stat_row$max_outcome,
-                     outcome_decimals, use_comma = FALSE),
+                     outcome_decimals),
 
         # Cost section
         "",  # "Cost" header
         format_with_ci(stat_row$mean_cost, stat_row$ci_lower_cost,
-                       stat_row$ci_upper_cost, cost_decimals, use_comma = TRUE),
-        format_numeric(stat_row$sd_cost, cost_decimals, use_comma = TRUE),
+                       stat_row$ci_upper_cost, cost_decimals, currency = TRUE),
+        format_numeric(stat_row$sd_cost, cost_decimals, currency = TRUE),
         format_with_ci(stat_row$median_cost, stat_row$q25_cost,
-                       stat_row$q75_cost, cost_decimals, use_comma = TRUE),
+                       stat_row$q75_cost, cost_decimals, currency = TRUE),
         format_range(stat_row$min_cost, stat_row$max_cost,
-                     cost_decimals, use_comma = TRUE),
+                     cost_decimals, currency = TRUE),
 
         # P(CE) section
         ""  # "Probability of Cost-Effectiveness" header
@@ -512,7 +504,7 @@ prepare_psa_summary_table_data <- function(results,
         prob_formatted <- if (is.na(prob_val)) {
           "NA"
         } else {
-          paste0(format(round(prob_val * 100, 1), nsmall = 1), "%")
+          paste0(oq_format(prob_val * 100, locale = locale), "%")
         }
 
         values_col <- c(values_col, prob_formatted)
@@ -701,8 +693,9 @@ prepare_psa_summary_table_data <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param outcome_decimals Number of decimal places for outcomes (default: 2)
-#' @param cost_decimals Number of decimal places for costs (default: 0, nearest unit)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL, auto)
+#' @param cost_decimals Number of decimal places for costs (default: NULL, auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -716,9 +709,6 @@ prepare_psa_summary_table_data <- function(results,
 #'   \item Cost: Mean (95% CI), SD, Median (IQR), Range
 #'   \item Probability of Cost-Effectiveness: One row per WTP threshold
 #' }
-#'
-#' All rounding uses decimal places (not significant figures). Costs are rounded
-#' to the nearest unit by default (cost_decimals = 0).
 #'
 #' PSA summary calculations always use discounted values as this is a
 #' cost-effectiveness measure.
@@ -747,8 +737,9 @@ psa_summary_table <- function(results,
                              pce_wtp = c(50000, 100000, 150000),
                              groups = "overall",
                              strategies = NULL,
-                             outcome_decimals = 2,
-                             cost_decimals = 0,
+                             outcome_decimals = NULL,
+                             cost_decimals = NULL,
+                             abbreviate = FALSE,
                              font_size = 11,
                              table_format = c("flextable", "kable")) {
 
@@ -764,6 +755,7 @@ psa_summary_table <- function(results,
     strategies = strategies,
     outcome_decimals = outcome_decimals,
     cost_decimals = cost_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -804,8 +796,10 @@ prepare_pairwise_ceac_table_data <- function(results,
                                              comparators = NULL,
                                              wtp_thresholds = c(0, 20000, 50000, 100000),
                                              groups = "overall",
-                                             decimals = 1,
+                                             decimals = NULL,
                                              font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Calculate pairwise CEAC at specified WTP thresholds
   # Always uses discounted values (cost-effectiveness measure)
@@ -861,20 +855,16 @@ prepare_pairwise_ceac_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = dollar(.data$wtp))
+    mutate(wtp_display = oq_format(.data$wtp, locale = locale, currency = TRUE))
 
   # Format probability columns as percentage strings
   comparison_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
   for (col in comparison_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- format(
-        round(pivot_data[[col]], decimals),
-        nsmall = decimals,
-        scientific = FALSE,
-        trim = TRUE
+      pivot_data[[col]] <- paste0(
+        oq_format(pivot_data[[col]], decimals = decimals, locale = locale),
+        "%"
       )
-      # Add % symbol
-      pivot_data[[col]] <- paste0(pivot_data[[col]], "%")
     }
   }
 
@@ -1000,7 +990,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'     \item \code{"all"} or \code{NULL} - All groups + overall
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
-#' @param decimals Number of decimal places for percentages (default: 1)
+#' @param decimals Number of decimal places for percentages (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -1048,7 +1038,7 @@ pairwise_ceac_table <- function(results,
                                 comparators = NULL,
                                 wtp_thresholds = c(0, 20000, 50000, 100000),
                                 groups = "overall",
-                                decimals = 1,
+                                decimals = NULL,
                                 font_size = 11,
                                 table_format = c("flextable", "kable")) {
 
@@ -1102,8 +1092,10 @@ prepare_evpi_table_data <- function(results,
                                     wtp_thresholds = c(20000, 50000, 100000, 150000),
                                     groups = "overall",
                                     strategies = NULL,
-                                    decimals = 0,
+                                    decimals = NULL,
                                     font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Calculate EVPI at specified WTP thresholds
   # Always uses discounted values (cost-effectiveness measure)
@@ -1144,16 +1136,14 @@ prepare_evpi_table_data <- function(results,
 
   # Format WTP column as dollar amounts
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = dollar(.data$wtp))
+    mutate(wtp_display = oq_format(.data$wtp, locale = locale, currency = TRUE))
 
-  # Format EVPI columns with proper decimals and dollar formatting
+  # Format EVPI columns with proper decimals and currency formatting
   evpi_cols <- setdiff(colnames(pivot_data), c("wtp", "wtp_display"))
   for (col in evpi_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- dollar(
-        round(pivot_data[[col]], decimals),
-        accuracy = 10^(-decimals)
-      )
+      pivot_data[[col]] <- oq_format(pivot_data[[col]], decimals = decimals,
+                                      locale = locale, currency = TRUE)
     }
   }
 
@@ -1235,7 +1225,7 @@ prepare_evpi_table_data <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param decimals Number of decimal places for EVPI values (default: 0)
+#' @param decimals Number of decimal places for EVPI values (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
 #'
@@ -1276,7 +1266,7 @@ evpi_table <- function(results,
                        wtp_thresholds = c(20000, 50000, 100000, 150000),
                        groups = "overall",
                        strategies = NULL,
-                       decimals = 0,
+                       decimals = NULL,
                        font_size = 11,
                        table_format = c("flextable", "kable")) {
 
@@ -1322,8 +1312,10 @@ prepare_ce_quadrant_table_data <- function(results,
                                            comparator,
                                            groups = "overall",
                                            strategies = NULL,
-                                           decimals = 1,
+                                           decimals = NULL,
                                            font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
@@ -1410,7 +1402,7 @@ prepare_ce_quadrant_table_data <- function(results,
 
   # Format percentages
   format_pct <- function(x) {
-    paste0(format(round(x, decimals), nsmall = decimals, trim = TRUE), "%")
+    paste0(oq_format(x, decimals = decimals, locale = locale), "%")
   }
 
   # Build result table
@@ -1506,7 +1498,7 @@ prepare_ce_quadrant_table_data <- function(results,
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
 #' @param strategies Character vector of strategies to include (NULL for all)
-#' @param decimals Number of decimal places for percentages (default: 1)
+#' @param decimals Number of decimal places for percentages (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -1541,7 +1533,7 @@ ce_quadrant_table <- function(results,
                               comparator,
                               groups = "overall",
                               strategies = NULL,
-                              decimals = 1,
+                              decimals = NULL,
                               font_size = 11,
                               table_format = c("flextable", "kable")) {
 
@@ -1574,6 +1566,7 @@ ce_quadrant_table <- function(results,
 #' @param group Single group name to filter parameters (NULL for first segment)
 #' @param strategies Single strategy to filter parameters (NULL for first strategy)
 #' @param decimals Number of decimal places
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -1582,8 +1575,11 @@ prepare_psa_parameters_table_data <- function(results,
                                                variables = NULL,
                                                group = NULL,
                                                strategies = NULL,
-                                               decimals = 3,
+                                               decimals = NULL,
+                                               abbreviate = FALSE,
                                                font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Get sampled parameters - use first group/strategy if not specified
   if (is.null(group)) {
@@ -1699,7 +1695,7 @@ prepare_psa_parameters_table_data <- function(results,
   # Format numeric values
   format_num <- function(x) {
     if (is.na(x)) return("\u2014")  # em-dash
-    format(round(x, decimals), nsmall = decimals, trim = TRUE, scientific = FALSE)
+    oq_format(x, decimals = decimals, locale = locale, abbreviate = abbreviate)
   }
 
   result_data <- stats_df %>%
@@ -1743,7 +1739,8 @@ prepare_psa_parameters_table_data <- function(results,
 #' @param variables Character vector of variables to include (NULL for all)
 #' @param group Single group name to filter parameters (NULL for first segment)
 #' @param strategies Single strategy to filter parameters (NULL for first strategy)
-#' @param decimals Number of decimal places (default: 3)
+#' @param decimals Number of decimal places (default: NULL, auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -1780,7 +1777,8 @@ psa_parameters_table <- function(results,
                                   variables = NULL,
                                   group = NULL,
                                   strategies = NULL,
-                                  decimals = 3,
+                                  decimals = NULL,
+                                  abbreviate = FALSE,
                                   font_size = 11,
                                   table_format = c("flextable", "kable")) {
 
@@ -1793,6 +1791,7 @@ psa_parameters_table <- function(results,
     group = group,
     strategies = strategies,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -1801,14 +1800,14 @@ psa_parameters_table <- function(results,
 }
 
 
-#' Prepare PSA Outcomes Table Data
+#' Prepare PSA Value Summary Table Data
 #'
-#' Internal helper function that prepares PSA outcome simulation statistics
+#' Internal helper function that prepares PSA simulation statistics
 #' for rendering. Creates a transposed table with strategies/comparisons as
-#' columns and statistics as rows.
+#' columns and statistics as rows. Supports both outcome and cost summaries.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
+#' @param outcome_summary Name of the summary (e.g., "qalys", "total_cost")
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (aggregated, default)
@@ -1821,21 +1820,31 @@ psa_parameters_table <- function(results,
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
-#' @param discounted Logical. Use discounted outcome values? Default TRUE.
-#' @param decimals Number of decimal places
+#' @param discounted Logical. Use discounted values? Default TRUE.
+#' @param value_type Character. Type of value to extract: "outcome" or "cost". Default "outcome".
+#' @param currency Logical. Format values as currency? Default FALSE.
+#' @param cost_decimals Number of decimal places for costs
+#' @param outcome_decimals Number of decimal places for outcomes
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
-prepare_psa_outcomes_table_data <- function(results,
+prepare_psa_value_summary_table_data <- function(results,
                                             outcome_summary,
                                             groups = "overall",
                                             strategies = NULL,
                                             interventions = NULL,
                                             comparators = NULL,
                                             discounted = TRUE,
-                                            decimals = 2,
+                                            value_type = "outcome",
+                                            currency = FALSE,
+                                            cost_decimals = NULL,
+                                            outcome_decimals = NULL,
+                                            abbreviate = FALSE,
                                             font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Validate mutual exclusivity
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -1862,7 +1871,8 @@ prepare_psa_outcomes_table_data <- function(results,
     comparators = comparators,
     groups = groups,
     strategies = strategies,
-    discounted = discounted
+    discounted = discounted,
+    value_type = value_type
   )
 
   # Determine if absolute mode (has 'strategy') or difference mode (has 'comparison')
@@ -1904,22 +1914,22 @@ prepare_psa_outcomes_table_data <- function(results,
   has_multiple_groups <- n_groups > 1 || is.null(groups)
 
   # Formatting helper functions
-  format_with_ci <- function(mean_val, lower, upper, decs) {
+  format_with_ci <- function(mean_val, lower, upper, decimals) {
     fmt <- function(v) {
-      format(round(v, decs), nsmall = decs, trim = TRUE)
+      oq_format(v, decimals = decimals, locale = locale, abbreviate = abbreviate, currency = currency)
     }
     paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
   }
 
-  format_range <- function(min_val, max_val, decs) {
+  format_range <- function(min_val, max_val, decimals) {
     fmt <- function(v) {
-      format(round(v, decs), nsmall = decs, trim = TRUE)
+      oq_format(v, decimals = decimals, locale = locale, abbreviate = abbreviate, currency = currency)
     }
     paste0(fmt(min_val), " - ", fmt(max_val))
   }
 
-  format_numeric <- function(val, decs) {
-    format(round(val, decs), nsmall = decs, trim = TRUE)
+  format_numeric <- function(val, decimals) {
+    oq_format(val, decimals = decimals, locale = locale, abbreviate = abbreviate, currency = currency)
   }
 
   # Row labels
@@ -1938,11 +1948,11 @@ prepare_psa_outcomes_table_data <- function(results,
 
       values_col <- c(
         format_with_ci(stat_row$mean_val, stat_row$ci_lower,
-                       stat_row$ci_upper, decimals),
-        format_numeric(stat_row$sd_val, decimals),
+                       stat_row$ci_upper, outcome_decimals),
+        format_numeric(stat_row$sd_val, outcome_decimals),
         format_with_ci(stat_row$median_val, stat_row$q25,
-                       stat_row$q75, decimals),
-        format_range(stat_row$min_val, stat_row$max_val, decimals)
+                       stat_row$q75, outcome_decimals),
+        format_range(stat_row$min_val, stat_row$max_val, outcome_decimals)
       )
 
       row_data_list[[paste0(col_val, "_", grp)]] <- tibble(
@@ -2092,7 +2102,9 @@ prepare_psa_outcomes_table_data <- function(results,
 #' @param comparators Character vector of reference strategies for comparator
 #'   perspective. Use for outcome differences. Cannot be used with strategies.
 #' @param discounted Logical. Use discounted outcome values? Default TRUE.
-#' @param decimals Number of decimal places (default: 2)
+#' @param cost_decimals Number of decimal places for costs (default: NULL, auto)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL, auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -2134,14 +2146,16 @@ psa_outcomes_table <- function(results,
                                interventions = NULL,
                                comparators = NULL,
                                discounted = TRUE,
-                               decimals = 2,
+                               cost_decimals = NULL,
+                               outcome_decimals = NULL,
+                               abbreviate = FALSE,
                                font_size = 11,
                                table_format = c("flextable", "kable")) {
 
   table_format <- match.arg(table_format)
 
   # Prepare data
-  prepared <- prepare_psa_outcomes_table_data(
+  prepared <- prepare_psa_value_summary_table_data(
     results = results,
     outcome_summary = outcome_summary,
     groups = groups,
@@ -2149,7 +2163,106 @@ psa_outcomes_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     discounted = discounted,
-    decimals = decimals,
+    value_type = "outcome",
+    currency = FALSE,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    abbreviate = abbreviate,
+    font_size = font_size
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' PSA Costs Table
+#'
+#' Creates a table showing summary statistics for cost values from PSA
+#' simulations. Displays mean, SD, median (IQR), and range for each strategy
+#' or comparison.
+#'
+#' @param results A openqaly PSA results object
+#' @param outcome_summary Name of the cost summary (e.g., "total_cost")
+#' @param groups Group selection:
+#'   \itemize{
+#'     \item \code{"overall"} - Overall population (aggregated, default)
+#'     \item \code{"group_name"} - Specific group by name
+#'     \item \code{c("group1", "group2")} - Multiple specific groups (no overall)
+#'     \item \code{c("overall", "group1")} - Specific groups + overall
+#'     \item \code{"all"} or \code{NULL} - All groups + overall
+#'     \item \code{"all_groups"} - All groups without overall
+#'   }
+#' @param strategies Character vector of strategies to include (NULL for all).
+#'   Cannot be used with interventions/comparators.
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. Use for cost differences. Cannot be used with strategies.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. Use for cost differences. Cannot be used with strategies.
+#' @param discounted Logical. Use discounted cost values? Default TRUE.
+#' @param cost_decimals Number of decimal places for costs (default: NULL, auto)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL, auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The table displays summary statistics for each strategy (absolute mode) or
+#' comparison (difference mode). Statistics include:
+#' \itemize{
+#'   \item Mean (95% CI): Mean cost with 2.5th and 97.5th percentiles
+#'   \item SD: Standard deviation
+#'   \item Median (IQR): Median with interquartile range
+#'   \item Range: Minimum to maximum values
+#' }
+#'
+#' Use \code{strategies} for absolute cost values per strategy, or
+#' \code{interventions}/\code{comparators} for cost differences between pairs.
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_markov", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' # Costs table for all strategies
+#' psa_costs_table(psa_results, "total_cost")
+#'
+#' # Cost differences relative to comparator
+#' psa_costs_table(psa_results, "total_cost", comparators = "seritinib")
+#' }
+#'
+#' @export
+psa_costs_table <- function(results,
+                             outcome_summary,
+                             groups = "overall",
+                             strategies = NULL,
+                             interventions = NULL,
+                             comparators = NULL,
+                             discounted = TRUE,
+                             cost_decimals = NULL,
+                             outcome_decimals = NULL,
+                             abbreviate = FALSE,
+                             font_size = 11,
+                             table_format = c("flextable", "kable")) {
+
+  table_format <- match.arg(table_format)
+
+  # Prepare data
+  prepared <- prepare_psa_value_summary_table_data(
+    results = results,
+    outcome_summary = outcome_summary,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    value_type = "cost",
+    currency = TRUE,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -2179,7 +2292,9 @@ psa_outcomes_table <- function(results,
 #'   }
 #' @param interventions Character vector of reference strategies for intervention perspective
 #' @param comparators Character vector of reference strategies for comparator perspective
-#' @param decimals Number of decimal places
+#' @param cost_decimals Number of decimal places for costs
+#' @param outcome_decimals Number of decimal places for outcomes
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -2191,8 +2306,12 @@ prepare_psa_nmb_table_data <- function(results,
                                        groups = "overall",
                                        interventions = NULL,
                                        comparators = NULL,
-                                       decimals = 0,
+                                       cost_decimals = NULL,
+                                       outcome_decimals = NULL,
+                                       abbreviate = FALSE,
                                        font_size = 11) {
+
+  locale <- get_results_locale(results)
 
   # Validate interventions/comparators - at least one required
   if (is.null(interventions) && is.null(comparators)) {
@@ -2343,27 +2462,30 @@ prepare_psa_nmb_table_data <- function(results,
   n_groups <- length(groups_display)
   has_multiple_groups <- n_groups > 1 || is.null(groups)
 
-  # Formatting helper functions (with comma formatting for monetary values)
-  format_with_ci <- function(mean_val, lower, upper, decs) {
+  # Formatting helper functions (with locale-aware formatting for monetary values)
+  format_with_ci <- function(mean_val, lower, upper, decimals, currency = FALSE) {
     fmt <- function(v) {
-      scales::comma(round(v, decs), accuracy = 10^(-decs))
+      oq_format(v, decimals = decimals, locale = locale, currency = currency,
+                abbreviate = abbreviate)
     }
     paste0(fmt(mean_val), " (", fmt(lower), " - ", fmt(upper), ")")
   }
 
-  format_range <- function(min_val, max_val, decs) {
+  format_range <- function(min_val, max_val, decimals, currency = FALSE) {
     fmt <- function(v) {
-      scales::comma(round(v, decs), accuracy = 10^(-decs))
+      oq_format(v, decimals = decimals, locale = locale, currency = currency,
+                abbreviate = abbreviate)
     }
     paste0(fmt(min_val), " - ", fmt(max_val))
   }
 
-  format_numeric <- function(val, decs) {
-    scales::comma(round(val, decs), accuracy = 10^(-decs))
+  format_numeric <- function(val, decimals, currency = FALSE) {
+    oq_format(val, decimals = decimals, locale = locale, currency = currency,
+              abbreviate = abbreviate)
   }
 
   format_pct <- function(val) {
-    paste0(format(round(val * 100, 1), nsmall = 1), "%")
+    paste0(oq_format(val * 100, locale = locale), "%")
   }
 
   # Row labels
@@ -2382,11 +2504,11 @@ prepare_psa_nmb_table_data <- function(results,
 
       values_col <- c(
         format_with_ci(stat_row$mean_val, stat_row$ci_lower,
-                       stat_row$ci_upper, decimals),
-        format_numeric(stat_row$sd_val, decimals),
+                       stat_row$ci_upper, cost_decimals, currency = TRUE),
+        format_numeric(stat_row$sd_val, cost_decimals, currency = TRUE),
         format_with_ci(stat_row$median_val, stat_row$q25,
-                       stat_row$q75, decimals),
-        format_range(stat_row$min_val, stat_row$max_val, decimals),
+                       stat_row$q75, cost_decimals, currency = TRUE),
+        format_range(stat_row$min_val, stat_row$max_val, cost_decimals, currency = TRUE),
         format_pct(stat_row$p_positive)
       )
 
@@ -2536,7 +2658,9 @@ prepare_psa_nmb_table_data <- function(results,
 #'   perspective. At least one of interventions or comparators required.
 #' @param comparators Character vector of reference strategies for comparator
 #'   perspective. At least one of interventions or comparators required.
-#' @param decimals Number of decimal places (default: 0, appropriate for monetary values)
+#' @param cost_decimals Number of decimal places for costs (default: NULL, auto)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL, auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -2584,7 +2708,9 @@ psa_nmb_table <- function(results,
                           groups = "overall",
                           interventions = NULL,
                           comparators = NULL,
-                          decimals = 0,
+                          cost_decimals = NULL,
+                          outcome_decimals = NULL,
+                          abbreviate = FALSE,
                           font_size = 11,
                           table_format = c("flextable", "kable")) {
 
@@ -2599,7 +2725,9 @@ psa_nmb_table <- function(results,
     groups = groups,
     interventions = interventions,
     comparators = comparators,
-    decimals = decimals,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

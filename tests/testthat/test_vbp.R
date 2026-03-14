@@ -778,7 +778,7 @@ test_that("run_vbp() explicit args override model$vbp config", {
 
 test_that("run_vbp() errors when no VBP config anywhere", {
   model <- get_example_model()
-  # Ensure no model-level VBP
+  # Ensure no model start VBP
   model$vbp <- NULL
 
   expect_error(

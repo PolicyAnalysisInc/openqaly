@@ -7,8 +7,9 @@
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param time_unit Which time unit to display
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -17,9 +18,10 @@ prepare_trace_table_data <- function(results,
                                      groups = "overall",
                                      states = NULL,
                                      cycles = NULL,
-                                     decimals = 4,
+                                     decimals = NULL,
                                      time_unit = "cycle",
-                                     font_size = 11) {
+                                     font_size = 11,
+                                     abbreviate = FALSE) {
 
   # Get long format trace data (names already mapped by get_trace)
   trace_long <- get_trace(
@@ -63,33 +65,24 @@ prepare_trace_table_data <- function(results,
 
   # Select only the relevant columns before pivoting
   if (has_multiple_groups) {
-    # Multiple groups: keep group column and use it as an id column
+    # Multiple groups: keep group column for later splitting, but pivot per-group
     trace_for_pivot <- trace_long %>%
       select(all_of(c("group", time_col_name, "strategy", "state", "probability"))) %>%
-      arrange(.data$group, !!sym(time_col_name))  # Ensure group-first ordering
-
-    # Pivot wider: strategies and states become columns, group and time are row identifiers
-    trace_data <- trace_for_pivot %>%
-      pivot_wider(
-        names_from = c("strategy", "state"),
-        values_from = "probability",
-        names_sep = "_",
-        id_cols = c("group", all_of(time_col_name))
-      )
+      arrange(.data$group, !!sym(time_col_name))
   } else {
-    # Single group: no group column needed
     trace_for_pivot <- trace_long %>%
       select(all_of(c(time_col_name, "strategy", "state", "probability")))
-
-    # Pivot wider: strategies and states become columns
-    trace_data <- trace_for_pivot %>%
-      pivot_wider(
-        names_from = c("strategy", "state"),
-        values_from = "probability",
-        names_sep = "_",
-        id_cols = all_of(time_col_name)
-      )
   }
+
+  # Pivot wider: strategies and states become columns
+  pivot_id <- if (has_multiple_groups) c("group", time_col_name) else time_col_name
+  trace_data <- trace_for_pivot %>%
+    pivot_wider(
+      names_from = c("strategy", "state"),
+      values_from = "probability",
+      names_sep = "_",
+      id_cols = all_of(pivot_id)
+    )
 
   # Get time label for header
   time_label <- switch(time_unit,
@@ -104,17 +97,12 @@ prepare_trace_table_data <- function(results,
   # Add spacer columns between strategies
   spacer_indices <- integer()
 
+  # Save group assignment before restructuring columns
+  group_vector <- if (has_multiple_groups) trace_data[["group"]] else NULL
+
   # Build the column structure
-  if (has_multiple_groups) {
-    # Start with group column
-    group_col <- trace_data[, "group", drop = FALSE]
-    names(group_col) <- "Group"
-    result_cols <- group_col
-    col_counter <- 1
-  } else {
-    result_cols <- NULL
-    col_counter <- 0
-  }
+  result_cols <- NULL
+  col_counter <- 0
 
   # Add time column
   if (time_col_name %in% colnames(trace_data)) {
@@ -168,20 +156,54 @@ prepare_trace_table_data <- function(results,
   }
 
   # Format probability columns as character strings to prevent renderer reformatting
+  locale <- get_results_locale(results)
   prob_cols <- setdiff(
     colnames(trace_data),
-    c("Group", time_label, grep("^spacer_", colnames(trace_data), value = TRUE))
+    c(time_label, grep("^spacer_", colnames(trace_data), value = TRUE))
   )
   for (col in prob_cols) {
     if (is.numeric(trace_data[[col]])) {
-      rounded_vals <- round(trace_data[[col]], decimals)
-      # Fix negative zero display
-      rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-      trace_data[[col]] <- format(rounded_vals,
-                                  nsmall = decimals,
-                                  scientific = FALSE,
-                                  trim = TRUE)
+      trace_data[[col]] <- oq_format(trace_data[[col]], decimals = decimals, locale = locale, abbreviate = abbreviate)
     }
+  }
+
+  # For multi-group: restructure data with group header rows
+  group_header_rows <- integer()
+  indented_rows <- integer()
+
+  if (has_multiple_groups) {
+    all_col_names <- colnames(trace_data)
+    n_cols <- ncol(trace_data)
+
+    # Convert all columns to character for uniform rbinding with header rows
+    for (col in all_col_names) {
+      trace_data[[col]] <- as.character(trace_data[[col]])
+    }
+
+    rows_list <- list()
+    current_row <- 0
+
+    for (grp in groups_display) {
+      # Group header row
+      current_row <- current_row + 1
+      group_header_rows <- c(group_header_rows, current_row)
+
+      # Create header row: group name in first column, empty for rest
+      header_vals <- as.list(c(grp, rep("", n_cols - 1)))
+      names(header_vals) <- all_col_names
+      rows_list[[length(rows_list) + 1]] <- as.data.frame(header_vals, stringsAsFactors = FALSE, check.names = FALSE)
+
+      # Data rows for this group
+      grp_rows <- as.data.frame(trace_data[group_vector == grp, , drop = FALSE], stringsAsFactors = FALSE, check.names = FALSE)
+      n_data_rows <- nrow(grp_rows)
+      indented_rows <- c(indented_rows, seq(current_row + 1, current_row + n_data_rows))
+
+      rows_list[[length(rows_list) + 1]] <- grp_rows
+      current_row <- current_row + n_data_rows
+    }
+
+    trace_data <- do.call(rbind, rows_list)
+    rownames(trace_data) <- NULL
   }
 
   # Get column indices
@@ -189,27 +211,14 @@ prepare_trace_table_data <- function(results,
   non_spacer_indices <- which(!grepl("^spacer_", all_cols))
 
   # Build header structure for two levels: Strategies > States
-  # First row spans merged cells for group/time columns
-  if (has_multiple_groups) {
-    # Group and time columns are merged
-    header_row1_values <- c(" ", " ")  # Empty for group and time
-    header_row1_widths <- c(1, 1)
-    first_col_count <- 2
-  } else {
-    # Just time column is merged
-    header_row1_values <- c(" ")  # Empty for time
-    header_row1_widths <- c(1)
-    first_col_count <- 1
-  }
+  # First row: empty for time column
+  header_row1_values <- c(" ")
+  header_row1_widths <- c(1)
+  first_col_count <- 1
 
   # Second row has actual column names
-  if (has_multiple_groups) {
-    header_row2_values <- c("Group", time_label)
-    header_row2_widths <- c(1, 1)
-  } else {
-    header_row2_values <- c(time_label)
-    header_row2_widths <- c(1)
-  }
+  header_row2_values <- c(time_label)
+  header_row2_widths <- c(1)
 
   # Add strategies and states
   for (i in seq_along(strategies_display)) {
@@ -249,12 +258,7 @@ prepare_trace_table_data <- function(results,
 
   # First header row - merged columns and strategy names
   row1 <- list()
-  if (has_multiple_groups) {
-    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
-    row1[[2]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
-  } else {
-    row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
-  }
+  row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 0, 0))
 
   # Add strategy headers with spacers
   for (i in seq_along(strategies_display)) {
@@ -269,12 +273,7 @@ prepare_trace_table_data <- function(results,
 
   # Second header row - column labels and state names
   row2 <- list()
-  if (has_multiple_groups) {
-    row2[[1]] <- list(span = 1, text = "Group", borders = c(0, 0, 1, 0))
-    row2[[2]] <- list(span = 1, text = time_label, borders = c(0, 0, 1, 0))
-  } else {
-    row2[[1]] <- list(span = 1, text = time_label, borders = c(0, 0, 1, 0))
-  }
+  row2[[1]] <- list(span = 1, text = time_label, borders = c(0, 0, 1, 0))
 
   # Add state names with spacers
   for (i in seq_along(strategies_display)) {
@@ -289,14 +288,9 @@ prepare_trace_table_data <- function(results,
   column_alignments <- character()
   column_widths <- numeric()
 
-  # First columns
-  if (has_multiple_groups) {
-    column_alignments <- c("left", "left")
-    column_widths <- c(NA, NA)
-  } else {
-    column_alignments <- "left"
-    column_widths <- NA
-  }
+  # First column (time)
+  column_alignments <- "left"
+  column_widths <- NA
 
   # Add alignments/widths for strategy columns with spacers
   for (i in seq_along(strategies_display)) {
@@ -314,7 +308,11 @@ prepare_trace_table_data <- function(results,
     data = trace_data,
     column_alignments = column_alignments,
     column_widths = column_widths,
-    special_rows = list(),
+    special_rows = if (has_multiple_groups) list(
+      group_header_rows = group_header_rows,
+      group_boundary_rows = if (length(group_header_rows) > 1) group_header_rows[-1] else integer(),
+      indented_rows = indented_rows
+    ) else list(),
     font_size = font_size,
     font_family = "Helvetica"
   )
@@ -336,11 +334,12 @@ prepare_trace_table_data <- function(results,
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param states Character vector of states to include (NULL for all)
 #' @param cycles Integer vector or range of cycles to display (NULL for all)
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param time_unit Which time unit to display: "cycle" (default), "day", "week",
 #'   "month", or "year".
 #' @param font_size Font size for the table (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -368,10 +367,11 @@ trace_table <- function(results,
                         groups = "overall",
                         states = NULL,
                         cycles = NULL,
-                        decimals = 4,
+                        decimals = NULL,
                         time_unit = "cycle",
                         font_size = 11,
-                        table_format = c("flextable", "kable")) {
+                        table_format = c("flextable", "kable"),
+                        abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -384,7 +384,8 @@ trace_table <- function(results,
     cycles = cycles,
     decimals = decimals,
     time_unit = time_unit,
-    font_size = font_size
+    font_size = font_size,
+    abbreviate = abbreviate
   )
 
   # Render using specified backend

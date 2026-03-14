@@ -10,7 +10,9 @@
 #' @param interventions Strategies used as interventions (when plotting differences)
 #' @param comparators Strategies used as commparators (when plotting differences)
 #' @param value_labels Logical. If TRUE (default), display numeric value labels at bar edges.
-#' @param label_accuracy Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.
+#' @param label_decimals Numeric or NULL. Number of decimal places for value labels. NULL for auto.
+#' @param axis_decimals Numeric or NULL. Number of decimal places for axis labels. NULL for auto.
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.
 #'
 #' @return A ggplot2 object
 #'
@@ -44,7 +46,57 @@ outcomes_plot_bar <- function(res, outcome,
                         interventions = NULL,
                         comparators = NULL,
                         value_labels = TRUE,
-                        label_accuracy = 0.01) {
+                        label_decimals = NULL,
+                        axis_decimals = NULL,
+                        abbreviate = FALSE) {
+  summary_plot_bar_impl(
+    res = res,
+    outcome = outcome,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    value_labels = value_labels,
+    label_decimals = label_decimals,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate,
+    value_type = "outcome",
+    currency = FALSE
+  )
+}
+
+
+#' Internal implementation for summary bar plots
+#'
+#' @param res A openqaly model results object (output from run_model)
+#' @param outcome Name of the summary to plot
+#' @param groups Which groups to include in the plot.
+#' @param strategies Strategies to include (when plotting absolute values).
+#' @param interventions Strategies used as interventions (when plotting differences)
+#' @param comparators Strategies used as comparators (when plotting differences)
+#' @param value_labels Logical. If TRUE (default), display numeric value labels at bar edges.
+#' @param label_decimals Numeric or NULL. Number of decimal places for value labels. NULL for auto.
+#' @param axis_decimals Numeric or NULL. Number of decimal places for axis labels. NULL for auto.
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.
+#' @param value_type Character. Type of values to retrieve: "outcome" (default) or "cost".
+#' @param currency Logical. If TRUE, format values as currency. Default FALSE.
+#'
+#' @return A ggplot2 object
+#'
+#' @keywords internal
+summary_plot_bar_impl <- function(res, outcome,
+                        groups = "overall",
+                        strategies = NULL,
+                        interventions = NULL,
+                        comparators = NULL,
+                        value_labels = TRUE,
+                        label_decimals = NULL,
+                        axis_decimals = NULL,
+                        abbreviate = FALSE,
+                        value_type = "outcome",
+                        currency = FALSE) {
+  locale <- get_results_locale(res)
+
   # Validate mutual exclusivity
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
     stop("The 'strategies' argument cannot be provided when also providing 'interventions' or 'comparators'")
@@ -59,7 +111,8 @@ outcomes_plot_bar <- function(res, outcome,
     summaries = outcome,
     use_display_names = TRUE,
     interventions = interventions,
-    comparators = comparators
+    comparators = comparators,
+    value_type = value_type
   )
 
   # Get values for the specified outcome summary (in model-defined order)
@@ -114,7 +167,7 @@ outcomes_plot_bar <- function(res, outcome,
     )
 
   # Calculate axis breaks and limits to include 0 and extend beyond data
-  breaks_fn <- pretty_breaks(n = 5)
+  breaks_fn <- pretty_breaks(n = 4)
   x_range <- range(c(0, summaries_with_total$amount))
   x_breaks <- breaks_fn(x_range)
   x_limits <- range(x_breaks)
@@ -128,7 +181,7 @@ outcomes_plot_bar <- function(res, outcome,
       geom_text(
         aes(
           x = .data$amount,
-          label = scales::comma(.data$amount, accuracy = label_accuracy),
+          label = oq_format(.data$amount, decimals = label_decimals, locale = locale, abbreviate = abbreviate, currency = currency),
           hjust = ifelse(.data$amount < 0, 1.1, -0.1)
         ),
         size = 2.5,
@@ -138,15 +191,15 @@ outcomes_plot_bar <- function(res, outcome,
 
     has_negative <- any(summaries_with_total$amount < 0, na.rm = TRUE)
     has_positive <- any(summaries_with_total$amount >= 0, na.rm = TRUE)
-    left_expand <- if (has_negative) 0.15 else 0.05
-    right_expand <- if (has_positive) 0.15 else 0.05
+    left_expand <- if (has_negative) 0.25 else 0.05
+    right_expand <- if (has_positive) 0.25 else 0.05
 
     p <- p +
-      scale_x_continuous(breaks = x_breaks, labels = comma,
+      scale_x_continuous(breaks = x_breaks, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency),
                          expand = expansion(mult = c(left_expand, right_expand)))
   } else {
     p <- p +
-      scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = comma)
+      scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency))
   }
 
   p +
@@ -176,6 +229,8 @@ outcomes_plot_bar <- function(res, outcome,
 #' @param cumulative Logical. If TRUE (default), shows cumulative outcomes over time.
 #'   If FALSE, shows per-cycle outcomes.
 #' @param discounted Logical. Use discounted values? (default: TRUE)
+#' @param axis_decimals Number of decimal places for y-axis labels (NULL for auto)
+#' @param abbreviate Logical. If TRUE, abbreviate large numbers (e.g., 1K, 1M). Default FALSE.
 #'
 #' @return A ggplot2 object
 #'
@@ -216,7 +271,63 @@ outcomes_plot_line <- function(res, outcome,
                         comparators = NULL,
                         time_unit = "cycle",
                         cumulative = TRUE,
-                        discounted = TRUE) {
+                        discounted = TRUE,
+                        axis_decimals = NULL,
+                        abbreviate = FALSE) {
+  summary_plot_line_impl(
+    res = res,
+    outcome = outcome,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    time_unit = time_unit,
+    cumulative = cumulative,
+    discounted = discounted,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate,
+    currency = FALSE
+  )
+}
+
+
+#' Internal implementation for summary line plots
+#'
+#' @param res A openqaly model results object (output from run_model)
+#' @param outcome Name of the summary to plot
+#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Character vector of reference strategies for intervention perspective.
+#' @param comparators Character vector of reference strategies for comparator perspective.
+#' @param time_unit Time unit for x-axis: "cycle" (default), "day", "week", "month", "year"
+#' @param cumulative Logical. If TRUE (default), shows cumulative values over time.
+#' @param discounted Logical. Use discounted values? (default: TRUE)
+#' @param axis_decimals Number of decimal places for y-axis labels (NULL for auto)
+#' @param abbreviate Logical. If TRUE, abbreviate large numbers (e.g., 1K, 1M). Default FALSE.
+#' @param currency Logical. If TRUE, format values as currency. Default FALSE.
+#'
+#' @return A ggplot2 object
+#'
+#' @keywords internal
+summary_plot_line_impl <- function(res, outcome,
+                        groups = "overall",
+                        strategies = NULL,
+                        interventions = NULL,
+                        comparators = NULL,
+                        time_unit = "cycle",
+                        cumulative = TRUE,
+                        discounted = TRUE,
+                        axis_decimals = NULL,
+                        abbreviate = FALSE,
+                        currency = FALSE) {
+
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("outcomes_plot_line() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
+
+  locale <- get_results_locale(res)
 
   # Validate mutual exclusivity
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -317,11 +428,11 @@ outcomes_plot_line <- function(res, outcome,
   n_groups <- length(unique(values_with_total$group))
   n_value_names <- length(unique(values_with_total$value_name))
 
-  facet_component <- facet_grid(rows = vars(.data$value_name), cols = vars(.data$group), scales = "free_y")
+  facet_component <- facet_grid(rows = vars(.data$value_name), cols = vars(.data$group))
   if ((n_groups > 1) && (n_value_names == 1)) {
-    facet_component <- facet_wrap(vars(.data$group), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$group))
   } else if ((n_value_names > 1) && (n_groups == 1)) {
-    facet_component <- facet_wrap(vars(.data$value_name), scales = "free_y")
+    facet_component <- facet_wrap(vars(.data$value_name))
   } else if ((n_value_names == 1) && (n_groups == 1)) {
     facet_component <- NULL
   }
@@ -334,7 +445,7 @@ outcomes_plot_line <- function(res, outcome,
     p <- ggplot(values_with_total,
                 aes(x = !!sym(time_col), y = .data$amount, color = .data$strategy)) +
       geom_line(linewidth = 1) +
-      scale_y_continuous(labels = comma) +
+      scale_y_continuous(labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)) +
       theme_bw() +
       labs(
         x = time_label,
@@ -349,7 +460,7 @@ outcomes_plot_line <- function(res, outcome,
     p <- ggplot(values_with_total,
                 aes(x = !!sym(time_col), y = .data$amount)) +
       geom_line(linewidth = 1) +
-      scale_y_continuous(labels = comma) +
+      scale_y_continuous(labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)) +
       theme_bw() +
       labs(
         x = time_label,

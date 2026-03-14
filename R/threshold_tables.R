@@ -18,12 +18,14 @@ NULL
 #'
 #' @param results Threshold results from run_threshold()
 #' @param analyses Optional character vector of analysis names to include
-#' @param decimals Number of decimal places for formatting (default: 4)
+#' @param decimals Number of decimal places for formatting (default: NULL for auto)
+#' @param abbreviate Whether to abbreviate large numbers (default: FALSE)
 #' @param font_size Font size in points (default: 11)
 #' @param table_format Output format: "flextable" or "kable" (default: "flextable")
 #' @return A flextable or kable object
 #' @export
-threshold_table <- function(results, analyses = NULL, decimals = 4,
+threshold_table <- function(results, analyses = NULL, decimals = NULL,
+                            abbreviate = FALSE,
                             font_size = 11,
                             table_format = c("flextable", "kable")) {
   table_format <- match.arg(table_format)
@@ -47,7 +49,8 @@ threshold_table <- function(results, analyses = NULL, decimals = 4,
     output_label <- "Output"
   }
 
-  fmt <- function(x) formatC(x, format = "f", digits = decimals, big.mark = ",")
+  locale <- get_results_locale(results)
+  fmt <- function(x) oq_format(x, decimals = decimals, locale = locale, abbreviate = abbreviate)
 
   # Determine convergence status per analysis
   tv <- data$threshold_values
@@ -168,12 +171,14 @@ threshold_table <- function(results, analyses = NULL, decimals = 4,
 #'
 #' @param results Threshold results from run_threshold()
 #' @param analyses Optional character vector of analysis names to include
-#' @param decimals Number of decimal places for formatting (default: 4)
+#' @param decimals Number of decimal places for formatting (default: NULL for auto)
+#' @param abbreviate Whether to abbreviate large numbers (default: FALSE)
 #' @param font_size Font size in points (default: 11)
 #' @param table_format Output format: "flextable" or "kable" (default: "flextable")
 #' @return A flextable or kable object
 #' @export
-threshold_convergence_table <- function(results, analyses = NULL, decimals = 4,
+threshold_convergence_table <- function(results, analyses = NULL, decimals = NULL,
+                                        abbreviate = FALSE,
                                         font_size = 11,
                                         table_format = c("flextable", "kable")) {
   table_format <- match.arg(table_format)
@@ -197,7 +202,8 @@ threshold_convergence_table <- function(results, analyses = NULL, decimals = 4,
     output_label <- "Output"
   }
 
-  fmt <- function(x) formatC(x, format = "f", digits = decimals, big.mark = ",")
+  locale <- get_results_locale(results)
+  fmt <- function(x) oq_format(x, decimals = decimals, locale = locale, abbreviate = abbreviate)
 
   # Determine convergence status per analysis
   tv <- data$threshold_values

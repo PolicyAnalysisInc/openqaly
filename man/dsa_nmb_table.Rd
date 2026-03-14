@@ -12,9 +12,12 @@ dsa_nmb_table(
   wtp = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  decimals = NULL,
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  top_n = NULL,
+  show_parameter_values = FALSE,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -36,11 +39,17 @@ At least one of interventions or comparators must be specified.}
 \item{comparators}{Character vector of comparator strategy name(s).
 At least one of interventions or comparators must be specified.}
 
-\item{decimals}{Number of decimal places (default: 0 for monetary values)}
+\item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
+
+\item{show_parameter_values}{Logical. Include input parameter values in row labels? (default: FALSE)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A table object (flextable or kable depending on table_format)

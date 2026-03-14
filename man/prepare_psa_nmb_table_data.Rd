@@ -12,7 +12,9 @@ prepare_psa_nmb_table_data(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  cost_decimals = NULL,
+  outcome_decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -39,7 +41,11 @@ prepare_psa_nmb_table_data(
 
 \item{comparators}{Character vector of reference strategies for comparator perspective}
 
-\item{decimals}{Number of decimal places}
+\item{cost_decimals}{Number of decimal places for costs}
+
+\item{outcome_decimals}{Number of decimal places for outcomes}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)?}
 
 \item{font_size}{Font size for rendering}
 }

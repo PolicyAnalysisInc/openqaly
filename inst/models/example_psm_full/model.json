@@ -1,0 +1,654 @@
+{
+  "settings": [
+    {
+      "setting": "model_type",
+      "value": "psm"
+    },
+    {
+      "setting": "days_per_year",
+      "value": "365"
+    },
+    {
+      "setting": "half_cycle_method",
+      "value": "start"
+    },
+    {
+      "setting": "discount_cost",
+      "value": "3.5"
+    },
+    {
+      "setting": "discount_outcomes",
+      "value": "3.5"
+    },
+    {
+      "setting": "reduce_state_cycle",
+      "value": "FALSE"
+    },
+    {
+      "setting": "timeframe",
+      "value": "5"
+    },
+    {
+      "setting": "timeframe_unit",
+      "value": "years"
+    },
+    {
+      "setting": "cycle_length",
+      "value": "1"
+    },
+    {
+      "setting": "cycle_length_unit",
+      "value": "months"
+    }
+  ],
+  "strategies": [
+    {
+      "name": "chemo",
+      "display_name": "chemo",
+      "description": "chemo",
+      "abbreviation": null,
+      "enabled": 1
+    },
+    {
+      "name": "immuno",
+      "display_name": "immuno",
+      "description": "immuno",
+      "abbreviation": null,
+      "enabled": 1
+    }
+  ],
+  "groups": [
+    {
+      "name": "pd_l1_high",
+      "display_name": "pd_l1_high",
+      "description": "pd_l1_high",
+      "weight": "0.45",
+      "enabled": 1
+    },
+    {
+      "name": "pd_l1_low",
+      "display_name": "pd_l1_low",
+      "description": "pd_l1_low",
+      "weight": "0.55",
+      "enabled": 1
+    }
+  ],
+  "states": [
+    {
+      "name": "progression_free",
+      "display_name": "progression_free",
+      "description": "progression_free"
+    },
+    {
+      "name": "progressed",
+      "display_name": "progressed",
+      "description": "progressed"
+    },
+    {
+      "name": "dead",
+      "display_name": "dead",
+      "description": "dead"
+    }
+  ],
+  "transitions": [
+    {
+      "endpoint": "PFS",
+      "time_unit": "months",
+      "formula": "pfs_dist"
+    },
+    {
+      "endpoint": "OS",
+      "time_unit": "months",
+      "formula": "os_dist"
+    }
+  ],
+  "values": [
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "progression_free",
+      "destination": null,
+      "formula": "c_drug + c_admin + ae_cost",
+      "type": "cost"
+    },
+    {
+      "name": "cost_prog",
+      "display_name": "cost_prog",
+      "description": "cost_prog",
+      "state": "progressed",
+      "destination": null,
+      "formula": "c_prog_care + c_bsc",
+      "type": "cost"
+    },
+    {
+      "name": "cost_dead",
+      "display_name": "cost_dead",
+      "description": "cost_dead",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "cost"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "progression_free",
+      "destination": null,
+      "formula": "u_pfs",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "progressed",
+      "destination": null,
+      "formula": "u_prog",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "outcome"
+    }
+  ],
+  "summaries": [
+    {
+      "name": "total_costs",
+      "display_name": "total_costs",
+      "description": "total_costs",
+      "values": "cost_treat,cost_prog,cost_dead",
+      "type": "cost",
+      "wtp": null
+    },
+    {
+      "name": "total_qalys",
+      "display_name": "total_qalys",
+      "description": "total_qalys",
+      "values": "qaly",
+      "type": "outcome",
+      "wtp": 100000
+    }
+  ],
+  "variables": [
+    {
+      "name": "pfs_dist",
+      "display_name": "pfs_dist, chemo",
+      "description": "pfs_dist, chemo",
+      "formula": "define_surv_param(\"exp\", rate = 0.12)",
+      "strategy": "chemo",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "pfs_dist",
+      "display_name": "pfs_dist, immuno",
+      "description": "pfs_dist, immuno",
+      "formula": "define_surv_param(\"exp\", rate = 0.06)",
+      "strategy": "immuno",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "os_dist",
+      "display_name": "os_dist, chemo",
+      "description": "os_dist, chemo",
+      "formula": "define_surv_param(\"exp\", rate = 0.06)",
+      "strategy": "chemo",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "os_dist",
+      "display_name": "os_dist, immuno",
+      "description": "os_dist, immuno",
+      "formula": "define_surv_param(\"exp\", rate = 0.03)",
+      "strategy": "immuno",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "u_pfs",
+      "display_name": "u_pfs",
+      "description": "u_pfs",
+      "formula": "0.75",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.75, sd = 0.05)"
+    },
+    {
+      "name": "u_prog",
+      "display_name": "u_prog",
+      "description": "u_prog",
+      "formula": "0.5",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.5, sd = 0.08)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, chemo",
+      "description": "c_drug, chemo",
+      "formula": "3000",
+      "strategy": "chemo",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 3000, sd = 400)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, immuno",
+      "description": "c_drug, immuno",
+      "formula": "12000",
+      "strategy": "immuno",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 12000, sd = 1500)"
+    },
+    {
+      "name": "c_admin",
+      "display_name": "c_admin",
+      "description": "c_admin",
+      "formula": "500",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_prog_care",
+      "display_name": "c_prog_care",
+      "description": "c_prog_care",
+      "formula": "6000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_bsc",
+      "display_name": "c_bsc",
+      "description": "c_bsc",
+      "formula": "2000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_ae_grade3",
+      "display_name": "p_ae_grade3, chemo",
+      "description": "p_ae_grade3, chemo",
+      "formula": "0.2",
+      "strategy": "chemo",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_ae_grade3",
+      "display_name": "p_ae_grade3, immuno",
+      "description": "p_ae_grade3, immuno",
+      "formula": "0.1",
+      "strategy": "immuno",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_ae",
+      "display_name": "c_ae",
+      "description": "c_ae",
+      "formula": "5000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "ae_cost",
+      "display_name": "ae_cost",
+      "description": "ae_cost",
+      "formula": "p(ae, ae_tree) * c_ae",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    }
+  ],
+  "trees": [
+    {
+      "name": "ae_tree",
+      "node": "has_ae",
+      "tags": "ae",
+      "parent": null,
+      "formula": "p_ae_grade3"
+    },
+    {
+      "name": "ae_tree",
+      "node": "no_ae",
+      "tags": "none",
+      "parent": null,
+      "formula": "C"
+    },
+    {
+      "name": "ae_tree",
+      "node": "ae_hospitalized",
+      "tags": "hosp",
+      "parent": "has_ae",
+      "formula": "0.3"
+    },
+    {
+      "name": "ae_tree",
+      "node": "ae_outpatient",
+      "tags": "outpt",
+      "parent": "has_ae",
+      "formula": "C"
+    }
+  ],
+  "tables": [],
+  "scripts": [],
+  "multivariate_sampling": [
+    {
+      "name": "utility_correlation",
+      "distribution": "mvnormal(mean = c(0.75, 0.5), sd = c(0.05, 0.08), cor = 0.5)",
+      "description": "",
+      "variables": [
+        {
+          "variable": "u_pfs",
+          "strategy": null,
+          "group": null
+        },
+        {
+          "variable": "u_prog",
+          "strategy": null,
+          "group": null
+        }
+      ]
+    }
+  ],
+  "dsa_parameters": [
+    {
+      "type": "variable",
+      "name": "c_drug",
+      "low": "bc * 0.5",
+      "high": "bc * 1.5",
+      "strategy": "immuno",
+      "group": ""
+    },
+    {
+      "type": "variable",
+      "name": "u_pfs",
+      "low": "bc * 0.8",
+      "high": "bc * 1.2",
+      "strategy": "",
+      "group": ""
+    },
+    {
+      "type": "variable",
+      "name": "c_prog_care",
+      "low": "bc * 0.5",
+      "high": "bc * 1.5",
+      "strategy": "",
+      "group": ""
+    },
+    {
+      "type": "setting",
+      "name": "discount_cost",
+      "low": 0,
+      "high": 5,
+      "display_name": "discount_cost"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "Extended Horizon",
+      "description": "Extended Horizon",
+      "variable_overrides": [],
+      "setting_overrides": [
+        {
+          "name": "timeframe",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "name": "No Discounting",
+      "description": "No Discounting",
+      "variable_overrides": [],
+      "setting_overrides": [
+        {
+          "name": "discount_cost",
+          "value": 0
+        },
+        {
+          "name": "discount_outcomes",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "Lower Drug Cost",
+      "description": "Lower Drug Cost",
+      "variable_overrides": [
+        {
+          "name": "c_drug",
+          "value": 8000,
+          "strategy": "immuno",
+          "group": ""
+        }
+      ],
+      "setting_overrides": []
+    }
+  ],
+  "twsa_analyses": [
+    {
+      "name": "Drug Cost vs PFS Utility",
+      "description": "Drug Cost vs PFS Utility",
+      "parameters": [
+        {
+          "param_type": "variable",
+          "name": "c_drug",
+          "type": "range",
+          "min": "8000",
+          "max": "18000",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "immuno",
+          "group": ""
+        },
+        {
+          "param_type": "variable",
+          "name": "u_pfs",
+          "type": "range",
+          "min": "0.6",
+          "max": "0.9",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "",
+          "group": ""
+        }
+      ]
+    }
+  ],
+  "threshold_analyses": [
+    {
+      "name": "Max Immuno Cost",
+      "variable": "c_drug",
+      "variable_strategy": "immuno",
+      "variable_group": "",
+      "lower": 0,
+      "upper": 30000,
+      "active": true,
+      "condition": {
+        "output": "nmb",
+        "health_summary": "total_qalys",
+        "cost_summary": "total_costs",
+        "referent": "immuno",
+        "comparator": "chemo",
+        "discounted": true,
+        "target_value": 0,
+        "group": "",
+        "wtp": null
+      }
+    }
+  ],
+  "vbp": {
+    "price_variable": "c_drug",
+    "intervention_strategy": "immuno",
+    "outcome_summary": "total_qalys",
+    "cost_summary": "total_costs"
+  },
+  "psa": {
+    "n_sim": 1000,
+    "seed": 123
+  },
+  "override_categories": [
+    {
+      "name": "General Settings",
+      "general": true,
+      "overrides": [
+        {
+          "title": "Time Horizon",
+          "description": "",
+          "type": "setting",
+          "name": "timeframe",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "timeframe",
+          "overridden_expression": "5",
+          "input_config": []
+        },
+        {
+          "title": "Discount Rate (Costs)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_cost",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10,
+            "step_size": 0.5
+          }
+        },
+        {
+          "title": "Discount Rate (Outcomes)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_outcomes",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "Drug Parameters",
+      "general": false,
+      "overrides": [
+        {
+          "title": "Immunotherapy Cost",
+          "description": "",
+          "type": "variable",
+          "name": "c_drug",
+          "strategy": "immuno",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "12000",
+          "input_config": {
+            "min": 0,
+            "max": 30000
+          }
+        },
+        {
+          "title": "PFS Utility",
+          "description": "",
+          "type": "variable",
+          "name": "u_pfs",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "0.75",
+          "input_config": {
+            "min": 0,
+            "max": 1,
+            "step_size": 0.01
+          }
+        },
+        {
+          "title": "AE Rate (Immuno)",
+          "description": "",
+          "type": "variable",
+          "name": "p_ae_grade3",
+          "strategy": "immuno",
+          "group": "",
+          "general": false,
+          "input_type": "dropdown",
+          "overridden_expression": "0.1",
+          "input_config": {
+            "options": [
+              {
+                "label": "Low",
+                "value": "0.05",
+                "is_base_case": false
+              },
+              {
+                "label": "Base Case",
+                "value": "0.1",
+                "is_base_case": true
+              },
+              {
+                "label": "High",
+                "value": "0.2",
+                "is_base_case": false
+              }
+            ]
+          }
+        },
+        {
+          "title": "Progressed Care Cost",
+          "description": "",
+          "type": "variable",
+          "name": "c_prog_care",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "formula",
+          "overridden_expression": "6000",
+          "input_config": []
+        }
+      ]
+    }
+  ]
+}

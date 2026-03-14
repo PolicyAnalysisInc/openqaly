@@ -1,5 +1,5 @@
 
-#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone `:=`
+#' @importFrom rlang .data sym new_quosure enexpr expr is_call call2 env global_env empty_env enquo expr_text env_clone `:=` `%||%`
 #' @importFrom rlang parse_expr parse_quo eval_tidy quo_get_expr quo_set_env
 #' @import tidygraph ggraph ggplot2 future dplyr furrr tidyr openqalysurv
 #' @importFrom Rcpp sourceCpp
@@ -10,7 +10,7 @@
 #' @importFrom jsonlite fromJSON toJSON write_json validate
 #' @importFrom tibble rownames_to_column tibble as_tibble tribble
 #' @importFrom stringr str_split_fixed str_split
-#' @importFrom utils capture.output write.csv head
+#' @importFrom utils capture.output write.csv read.csv head
 #' @importFrom methods as
 #' @importFrom readr read_csv read_file
 #' @importFrom glue glue

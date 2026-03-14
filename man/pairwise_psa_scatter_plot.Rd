@@ -17,7 +17,10 @@ pairwise_psa_scatter_plot(
   title = NULL,
   xlab = NULL,
   ylab = NULL,
-  legend_position = "right"
+  legend_position = "right",
+  cost_axis_decimals = NULL,
+  outcome_axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -52,6 +55,12 @@ Mutually exclusive with interventions/comparators.}
 
 \item{legend_position}{Legend position: "bottom" (default), "right", "top",
 "left", or "none"}
+
+\item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}
+
+\item{outcome_axis_decimals}{Fixed decimal places for outcome axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

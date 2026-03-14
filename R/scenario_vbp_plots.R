@@ -83,6 +83,9 @@ prepare_scenario_vbp_bar_data <- function(results, wtp, groups, comparators) {
 #' @param wtp Willingness-to-pay threshold. If NULL, uses default WTP from model metadata.
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or specific group names
 #' @param comparators Comparator strategies: "all" (default) or specific comparator names
+#' @param axis_decimals Numeric or NULL. Number of decimal places for axis labels. NULL for auto.
+#' @param label_decimals Numeric or NULL. Number of decimal places for value labels. NULL for auto.
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.
 #'
 #' @return A ggplot2 object
 #'
@@ -104,7 +107,10 @@ prepare_scenario_vbp_bar_data <- function(results, wtp, groups, comparators) {
 scenario_vbp_plot <- function(results,
                                wtp = NULL,
                                groups = "overall",
-                               comparators = "all") {
+                               comparators = "all",
+                               axis_decimals = NULL,
+                               label_decimals = NULL,
+                               abbreviate = FALSE) {
 
   # Get WTP if not provided
   if (is.null(wtp)) {
@@ -121,6 +127,9 @@ scenario_vbp_plot <- function(results,
            call. = FALSE)
     }
   }
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # Prepare bar data
   bar_data <- prepare_scenario_vbp_bar_data(results, wtp, groups, comparators)
@@ -160,10 +169,18 @@ scenario_vbp_plot <- function(results,
       scenario_name = fct_reorder(.data$scenario_name, .data$sort_order, .desc = TRUE)
     )
 
-  # Calculate axis limits
-  x_range <- range(c(0, bar_data$value), na.rm = TRUE)
-  x_breaks <- pretty_breaks(n = 5)(x_range)
-  x_offset <- diff(range(x_breaks)) * 0.02
+  # Use facet-local label offsets so free_x panels reserve consistent label spacing.
+  bar_data <- bar_data %>%
+    group_by(.data$comparator, .data$group) %>%
+    mutate(
+      facet_x_min = min(.data$value, 0, na.rm = TRUE),
+      facet_x_max = max(.data$value, 0, na.rm = TRUE),
+      facet_x_span = pmax(.data$facet_x_max - .data$facet_x_min, 1),
+      label_x_offset = .data$facet_x_span * 0.02
+    ) %>%
+    ungroup()
+
+  x_breaks <- pretty_breaks(n = 5)
 
   # Determine expansion based on where values exist
   has_negative <- any(bar_data$value < 0, na.rm = TRUE)
@@ -182,8 +199,8 @@ scenario_vbp_plot <- function(results,
     geom_vline(xintercept = 0, linewidth = 0.5, color = "gray30") +
     geom_text(
       aes(
-        x = .data$value + x_offset * sign(if_else(.data$value == 0, 1, .data$value)),
-        label = scales::comma(.data$value, accuracy = 1)
+        x = .data$value + .data$label_x_offset * sign(if_else(.data$value == 0, 1, .data$value)),
+        label = oq_format(.data$value, decimals = label_decimals, locale = locale, currency = TRUE, abbreviate = abbreviate)
       ),
       hjust = if_else(bar_data$value >= 0, 0, 1),
       size = 2.8,
@@ -191,12 +208,12 @@ scenario_vbp_plot <- function(results,
     ) +
     scale_x_continuous(
       breaks = x_breaks,
-      labels = comma,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE),
       expand = expansion(mult = c(left_expand, right_expand))
     ) +
     labs(
       y = "Scenario",
-      x = glue("Value-Based Price (\u03bb = {scales::comma(wtp)})")
+      x = glue("Value-Based Price (\u03bb = {oq_format(wtp, locale = locale, currency = TRUE)})")
     ) +
     theme_bw() +
     theme(

@@ -11,7 +11,9 @@ create_test_model <- function() {
       timeframe = 100,
       cycle_length = 1,
       discount_cost = 3,
-      discount_outcomes = 3.5
+      discount_outcomes = 3.5,
+      country = "US",
+      number_country = "FR"
     ) |>
     add_strategy("treatment_a", display_name = "Treatment A") |>
     add_strategy("treatment_b", display_name = "Treatment B") |>
@@ -80,6 +82,8 @@ test_that("basic model survives JSON round-trip", {
   expect_equal(nrow(model$transitions), nrow(model_back$transitions))
   expect_equal(nrow(model$variables), nrow(model_back$variables))
   expect_equal(nrow(model$strategies), nrow(model_back$strategies))
+  expect_equal(toupper(model_back$settings$country), "US")
+  expect_equal(toupper(model_back$settings$number_country), "FR")
 })
 
 test_that("model with tables/scripts survives JSON round-trip", {
@@ -127,6 +131,8 @@ test_that("basic model survives YAML round-trip", {
   expect_equal(nrow(model$states), nrow(model_back$states))
   expect_equal(nrow(model$transitions), nrow(model_back$transitions))
   expect_equal(nrow(model$variables), nrow(model_back$variables))
+  expect_equal(toupper(model_back$settings$country), "US")
+  expect_equal(toupper(model_back$settings$number_country), "FR")
 
   unlink(yaml_path)
 })
@@ -502,7 +508,9 @@ create_comprehensive_model <- function() {
       intervention_strategy = "treatment",
       outcome_summary = "total_qalys",
       cost_summary = "total_costs"
-    )
+    ) |>
+    # PSA configuration
+    set_psa(n_sim = 500, seed = 12345)
 }
 
 #' Verify all model components match between two models with full field-level verification
@@ -726,6 +734,18 @@ expect_models_equivalent <- function(original, restored, label = "") {
   } else {
     expect_null(restored$vbp, label = paste0(prefix, "vbp NULL"))
   }
+
+  # === PSA CONFIGURATION ===
+  if (!is.null(original$psa)) {
+    expect_false(is.null(restored$psa),
+                 label = paste0(prefix, "psa not NULL"))
+    expect_equal(restored$psa$n_sim, original$psa$n_sim,
+                 label = paste0(prefix, "psa$n_sim"))
+    expect_equal(restored$psa$seed, original$psa$seed,
+                 label = paste0(prefix, "psa$seed"))
+  } else {
+    expect_null(restored$psa, label = paste0(prefix, "psa NULL"))
+  }
 }
 
 # ==============================================================================
@@ -740,7 +760,7 @@ expect_models_equivalent <- function(original, restored, label = "") {
 # - Script names preserve original naming (no double .R extension)
 
 test_that("Excel -> JSON -> Excel preserves all components", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model with all components including SA
   model <- create_comprehensive_model()
@@ -773,7 +793,7 @@ test_that("Excel -> JSON -> Excel preserves all components", {
 })
 
 test_that("JSON -> Excel -> JSON preserves all components", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model with all components including SA
   model <- create_comprehensive_model()
@@ -954,7 +974,7 @@ test_that("JSON -> R -> JSON preserves core components", {
 # ==============================================================================
 
 test_that("all formats produce equivalent JSON for same model", {
-  skip_on_cran()
+  skip_if_cran()
 
   # Use comprehensive model to test all components including SA
   model <- create_comprehensive_model()
@@ -1368,7 +1388,7 @@ test_that("VBP config survives R code round-trip", {
 })
 
 test_that("VBP config survives Excel round-trip", {
-  skip_on_cran()
+  skip_if_cran()
 
   model <- create_model_with_vbp()
 
@@ -1399,6 +1419,319 @@ test_that("model without VBP has NULL vbp field", {
   write_model_yaml(model, yaml_path)
   model_back <- read_model_yaml(yaml_path)
   expect_null(model_back$vbp)
+
+  unlink(yaml_path)
+})
+
+# ==============================================================================
+# PSA Configuration Round-Trip Tests
+# ==============================================================================
+
+#' Create test model with PSA configuration
+create_model_with_psa <- function(seed = 42) {
+  model <- create_test_model() |>
+    set_psa(n_sim = 500, seed = seed)
+  model
+}
+
+test_that("PSA config survives JSON round-trip", {
+  model <- create_model_with_psa()
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+})
+
+test_that("PSA config without seed survives JSON round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 100)
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 100L)
+  expect_null(model_back$psa$seed)
+})
+
+test_that("PSA config survives YAML round-trip", {
+  model <- create_model_with_psa()
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(yaml_path)
+})
+
+test_that("PSA config without seed survives YAML round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 200)
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 200L)
+  expect_null(model_back$psa$seed)
+
+  unlink(yaml_path)
+})
+
+test_that("PSA config survives R code round-trip", {
+  model <- create_model_with_psa()
+
+  r_path <- tempfile(fileext = ".R")
+  write_model(model, r_path, format = "r")
+
+  env <- new.env()
+  source(r_path, local = env)
+  model_names <- ls(env)[sapply(ls(env), function(x) inherits(env[[x]], "oq_model"))]
+  model_back <- env[[model_names[1]]]
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(r_path)
+})
+
+test_that("PSA config without seed survives R code round-trip", {
+  model <- create_test_model() |>
+    set_psa(n_sim = 300)
+
+  r_path <- tempfile(fileext = ".R")
+  write_model(model, r_path, format = "r")
+
+  env <- new.env()
+  source(r_path, local = env)
+  model_names <- ls(env)[sapply(ls(env), function(x) inherits(env[[x]], "oq_model"))]
+  model_back <- env[[model_names[1]]]
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 300L)
+  expect_null(model_back$psa$seed)
+
+  unlink(r_path)
+})
+
+test_that("PSA config survives Excel round-trip", {
+  skip_if_cran()
+
+  model <- create_model_with_psa()
+
+  excel_dir <- tempfile()
+  dir.create(excel_dir)
+  write_model(model, excel_dir, format = "excel")
+  model_back <- read_model(excel_dir)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 500L)
+  expect_equal(model_back$psa$seed, 42)
+
+  unlink(excel_dir, recursive = TRUE)
+})
+
+test_that("PSA config without seed survives Excel round-trip", {
+  skip_if_cran()
+
+  model <- create_test_model() |>
+    set_psa(n_sim = 150)
+
+  excel_dir <- tempfile()
+  dir.create(excel_dir)
+  write_model(model, excel_dir, format = "excel")
+  model_back <- read_model(excel_dir)
+
+  expect_false(is.null(model_back$psa))
+  expect_equal(model_back$psa$n_sim, 150L)
+  expect_null(model_back$psa$seed)
+
+  unlink(excel_dir, recursive = TRUE)
+})
+
+test_that("model without PSA has NULL psa field", {
+  model <- create_test_model()
+
+  # JSON
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+  expect_null(model_back$psa)
+
+  # YAML
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+  expect_null(model_back$psa)
+
+  unlink(yaml_path)
+})
+
+# ==============================================================================
+# discount_timing and discount_method Round-Trip Tests
+# ==============================================================================
+
+test_that("discount_timing and discount_method survive JSON round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  json <- write_model_json(model)
+  model_back <- read_model_json(json)
+
+  expect_equal(model_back$settings$discount_timing, "midpoint")
+  expect_equal(model_back$settings$discount_method, "by_year")
+})
+
+test_that("discount_timing and discount_method survive YAML round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "end",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model, yaml_path)
+  model_back <- read_model_yaml(yaml_path)
+
+  expect_equal(model_back$settings$discount_timing, "end")
+  expect_equal(model_back$settings$discount_method, "by_year")
+
+  unlink(yaml_path)
+})
+
+test_that("discount_timing and discount_method survive Excel round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_cycle"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  temp_dir <- tempdir()
+  write_model_excel(model, temp_dir)
+  model_back <- read_model(temp_dir)
+
+  expect_equal(model_back$settings$discount_timing, "midpoint")
+  expect_equal(model_back$settings$discount_method, "by_cycle")
+
+  unlink(file.path(temp_dir, "model.xlsx"))
+})
+
+test_that("discount_timing and discount_method survive R code generation round-trip", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "end",
+      discount_method = "by_cycle"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  code <- model_to_r_code(model)
+  # Evaluate the generated R code to reconstruct the model
+  model_back <- eval(parse(text = code))
+
+  expect_equal(model_back$settings$discount_timing, "end")
+  expect_equal(model_back$settings$discount_method, "by_cycle")
+})
+
+test_that("discount_timing and discount_method survive JSON -> YAML cross-format", {
+  model <- define_model("markov") |>
+    set_settings(
+      timeframe = 10,
+      cycle_length = 1,
+      discount_cost = 3,
+      discount_outcomes = 3.5,
+      discount_timing = "midpoint",
+      discount_method = "by_year"
+    ) |>
+    add_strategy("base") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("alive", "alive", 0.9) |>
+    add_transition("alive", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 100, state = "alive", type = "cost") |>
+    add_value("qaly", 1, state = "alive", type = "outcome") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qaly", "qaly")
+
+  # JSON -> read -> YAML -> read -> JSON -> read
+  json1 <- write_model_json(model)
+  model_from_json <- read_model_json(json1)
+
+  yaml_path <- tempfile(fileext = ".yaml")
+  write_model_yaml(model_from_json, yaml_path)
+  model_from_yaml <- read_model_yaml(yaml_path)
+
+  json2 <- write_model_json(model_from_yaml)
+  model_final <- read_model_json(json2)
+
+  expect_equal(model_final$settings$discount_timing, "midpoint")
+  expect_equal(model_final$settings$discount_method, "by_year")
 
   unlink(yaml_path)
 })

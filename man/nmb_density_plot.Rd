@@ -17,7 +17,9 @@ nmb_density_plot(
   alpha = 0.4,
   title = NULL,
   xlab = NULL,
-  legend_position = "right"
+  legend_position = "right",
+  axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -57,6 +59,10 @@ Mutually exclusive with interventions/comparators.}
 \item{xlab}{Optional x-axis label}
 
 \item{legend_position}{Legend position ("right", "bottom", "top", "left", "none")}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot object

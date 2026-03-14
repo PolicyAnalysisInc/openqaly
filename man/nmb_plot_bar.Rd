@@ -13,7 +13,9 @@ nmb_plot_bar(
   interventions = NULL,
   comparators = NULL,
   value_labels = TRUE,
-  label_accuracy = 0.01
+  label_decimals = NULL,
+  axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -35,7 +37,11 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{value_labels}{Logical. If TRUE (default), display numeric value labels at bar edges.}
 
-\item{label_accuracy}{Numeric. Precision for label formatting via `scales::comma()`. Default is 0.01.}
+\item{label_decimals}{Numeric or NULL. Number of decimal places for value labels. NULL for auto.}
+
+\item{axis_decimals}{Numeric or NULL. Number of decimal places for axis labels. NULL for auto.}
+
+\item{abbreviate}{Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.}
 }
 \value{
 A ggplot2 object

@@ -4,7 +4,7 @@
 \alias{run_single_threshold}
 \title{Run Single Threshold Analysis}
 \usage{
-run_single_threshold(parsed_model, analysis, ...)
+run_single_threshold(parsed_model, analysis, progress = NULL, ...)
 }
 \description{
 Run Single Threshold Analysis

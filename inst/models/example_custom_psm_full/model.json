@@ -1,0 +1,746 @@
+{
+  "settings": [
+    {
+      "setting": "model_type",
+      "value": "custom_psm"
+    },
+    {
+      "setting": "days_per_year",
+      "value": "365"
+    },
+    {
+      "setting": "half_cycle_method",
+      "value": "start"
+    },
+    {
+      "setting": "discount_cost",
+      "value": "3.5"
+    },
+    {
+      "setting": "discount_outcomes",
+      "value": "3.5"
+    },
+    {
+      "setting": "reduce_state_cycle",
+      "value": "FALSE"
+    },
+    {
+      "setting": "timeframe",
+      "value": "10"
+    },
+    {
+      "setting": "timeframe_unit",
+      "value": "years"
+    },
+    {
+      "setting": "cycle_length",
+      "value": "1"
+    },
+    {
+      "setting": "cycle_length_unit",
+      "value": "months"
+    }
+  ],
+  "strategies": [
+    {
+      "name": "standard_care",
+      "display_name": "standard_care",
+      "description": "standard_care",
+      "abbreviation": null,
+      "enabled": 1
+    },
+    {
+      "name": "novel_therapy",
+      "display_name": "novel_therapy",
+      "description": "novel_therapy",
+      "abbreviation": null,
+      "enabled": 1
+    }
+  ],
+  "groups": [
+    {
+      "name": "low_risk",
+      "display_name": "low_risk",
+      "description": "low_risk",
+      "weight": "0.65",
+      "enabled": 1
+    },
+    {
+      "name": "high_risk",
+      "display_name": "high_risk",
+      "description": "high_risk",
+      "weight": "0.35",
+      "enabled": 1
+    }
+  ],
+  "states": [
+    {
+      "name": "nyha_i_ii",
+      "display_name": "nyha_i_ii",
+      "description": "nyha_i_ii"
+    },
+    {
+      "name": "nyha_iii",
+      "display_name": "nyha_iii",
+      "description": "nyha_iii"
+    },
+    {
+      "name": "nyha_iv",
+      "display_name": "nyha_iv",
+      "description": "nyha_iv"
+    },
+    {
+      "name": "dead",
+      "display_name": "dead",
+      "description": "dead"
+    }
+  ],
+  "transitions": [
+    {
+      "state": "nyha_i_ii",
+      "formula": "p_mild_adj"
+    },
+    {
+      "state": "nyha_iii",
+      "formula": "p_moderate_adj"
+    },
+    {
+      "state": "nyha_iv",
+      "formula": "pmax(0, 1 - p_mild_adj - p_moderate_adj - 0.005 * cycle)"
+    },
+    {
+      "state": "dead",
+      "formula": "C"
+    }
+  ],
+  "values": [
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "nyha_i_ii",
+      "destination": null,
+      "formula": "c_drug + c_mild",
+      "type": "cost"
+    },
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "nyha_iii",
+      "destination": null,
+      "formula": "c_drug + c_moderate + hosp_cost",
+      "type": "cost"
+    },
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "nyha_iv",
+      "destination": null,
+      "formula": "c_drug + c_severe + hosp_cost * 1.5",
+      "type": "cost"
+    },
+    {
+      "name": "cost_treat",
+      "display_name": "cost_treat",
+      "description": "cost_treat",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "cost"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "nyha_i_ii",
+      "destination": null,
+      "formula": "u_mild",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "nyha_iii",
+      "destination": null,
+      "formula": "u_moderate",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "nyha_iv",
+      "destination": null,
+      "formula": "u_severe",
+      "type": "outcome"
+    },
+    {
+      "name": "qaly",
+      "display_name": "qaly",
+      "description": "qaly",
+      "state": "dead",
+      "destination": null,
+      "formula": "0",
+      "type": "outcome"
+    }
+  ],
+  "summaries": [
+    {
+      "name": "total_costs",
+      "display_name": "total_costs",
+      "description": "total_costs",
+      "values": "cost_treat",
+      "type": "cost",
+      "wtp": null
+    },
+    {
+      "name": "total_qalys",
+      "display_name": "total_qalys",
+      "description": "total_qalys",
+      "values": "qaly",
+      "type": "outcome",
+      "wtp": 50000
+    }
+  ],
+  "variables": [
+    {
+      "name": "p_mild",
+      "display_name": "p_mild, standard_care",
+      "description": "p_mild, standard_care",
+      "formula": "0.7",
+      "strategy": "standard_care",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_mild",
+      "display_name": "p_mild, novel_therapy",
+      "description": "p_mild, novel_therapy",
+      "formula": "0.8",
+      "strategy": "novel_therapy",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_moderate_base",
+      "display_name": "p_moderate_base, standard_care",
+      "description": "p_moderate_base, standard_care",
+      "formula": "0.2",
+      "strategy": "standard_care",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_moderate_base",
+      "display_name": "p_moderate_base, novel_therapy",
+      "description": "p_moderate_base, novel_therapy",
+      "formula": "0.15",
+      "strategy": "novel_therapy",
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "risk_factor",
+      "display_name": "risk_factor, low_risk",
+      "description": "risk_factor, low_risk",
+      "formula": "1",
+      "strategy": null,
+      "group": "low_risk",
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "risk_factor",
+      "display_name": "risk_factor, high_risk",
+      "description": "risk_factor, high_risk",
+      "formula": "1.3",
+      "strategy": null,
+      "group": "high_risk",
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "decay_rate",
+      "display_name": "decay_rate",
+      "description": "decay_rate",
+      "formula": "0.005",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.005, sd = 0.001)"
+    },
+    {
+      "name": "p_mild_adj",
+      "display_name": "p_mild_adj",
+      "description": "p_mild_adj",
+      "formula": "p_mild * exp(-decay_rate * cycle) * (1/risk_factor)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_moderate_adj",
+      "display_name": "p_moderate_adj",
+      "description": "p_moderate_adj",
+      "formula": "pmin(p_moderate_base * (1 + decay_rate * cycle) * risk_factor, \n    1 - p_mild_adj)",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "u_mild",
+      "display_name": "u_mild",
+      "description": "u_mild",
+      "formula": "0.8",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.8, sd = 0.05)"
+    },
+    {
+      "name": "u_moderate",
+      "display_name": "u_moderate",
+      "description": "u_moderate",
+      "formula": "0.6",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.6, sd = 0.07)"
+    },
+    {
+      "name": "u_severe",
+      "display_name": "u_severe",
+      "description": "u_severe",
+      "formula": "0.35",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": "beta(mean = 0.35, sd = 0.08)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, standard_care",
+      "description": "c_drug, standard_care",
+      "formula": "1500",
+      "strategy": "standard_care",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 1500, sd = 200)"
+    },
+    {
+      "name": "c_drug",
+      "display_name": "c_drug, novel_therapy",
+      "description": "c_drug, novel_therapy",
+      "formula": "8000",
+      "strategy": "novel_therapy",
+      "group": null,
+      "source": null,
+      "sampling": "gamma(mean = 8000, sd = 1000)"
+    },
+    {
+      "name": "c_mild",
+      "display_name": "c_mild",
+      "description": "c_mild",
+      "formula": "3000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_moderate",
+      "display_name": "c_moderate",
+      "description": "c_moderate",
+      "formula": "8000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_severe",
+      "display_name": "c_severe",
+      "description": "c_severe",
+      "formula": "18000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "c_hospitalization",
+      "display_name": "c_hospitalization",
+      "description": "c_hospitalization",
+      "formula": "25000",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_hosp",
+      "display_name": "p_hosp",
+      "description": "p_hosp",
+      "formula": "0.1",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "p_hosp_icu",
+      "display_name": "p_hosp_icu",
+      "description": "p_hosp_icu",
+      "formula": "0.3",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    },
+    {
+      "name": "hosp_cost",
+      "display_name": "hosp_cost",
+      "description": "hosp_cost",
+      "formula": "p(hosp, hosp_tree) * c_hospitalization",
+      "strategy": null,
+      "group": null,
+      "source": null,
+      "sampling": null
+    }
+  ],
+  "trees": [
+    {
+      "name": "hosp_tree",
+      "node": "hospitalized",
+      "tags": "hosp",
+      "parent": null,
+      "formula": "p_hosp"
+    },
+    {
+      "name": "hosp_tree",
+      "node": "not_hospitalized",
+      "tags": "no_hosp",
+      "parent": null,
+      "formula": "C"
+    },
+    {
+      "name": "hosp_tree",
+      "node": "icu_stay",
+      "tags": "icu",
+      "parent": "hospitalized",
+      "formula": "p_hosp_icu"
+    },
+    {
+      "name": "hosp_tree",
+      "node": "ward_stay",
+      "tags": "ward",
+      "parent": "hospitalized",
+      "formula": "C"
+    }
+  ],
+  "tables": [],
+  "scripts": [],
+  "multivariate_sampling": [
+    {
+      "name": "utility_correlation",
+      "distribution": "mvnormal(mean = c(0.8, 0.6, 0.35), sd = c(0.05, 0.07, 0.08), \n    cor = matrix(c(1, 0.6, 0.3, 0.6, 1, 0.5, 0.3, 0.5, 1), nrow = 3))",
+      "description": "",
+      "variables": [
+        {
+          "variable": "u_mild",
+          "strategy": null,
+          "group": null
+        },
+        {
+          "variable": "u_moderate",
+          "strategy": null,
+          "group": null
+        },
+        {
+          "variable": "u_severe",
+          "strategy": null,
+          "group": null
+        }
+      ]
+    }
+  ],
+  "dsa_parameters": [
+    {
+      "type": "variable",
+      "name": "c_drug",
+      "low": "bc * 0.5",
+      "high": "bc * 1.5",
+      "strategy": "novel_therapy",
+      "group": ""
+    },
+    {
+      "type": "variable",
+      "name": "decay_rate",
+      "low": "bc * 0.5",
+      "high": "bc * 2",
+      "strategy": "",
+      "group": ""
+    },
+    {
+      "type": "variable",
+      "name": "u_mild",
+      "low": "bc * 0.8",
+      "high": "bc * 1.2",
+      "strategy": "",
+      "group": ""
+    },
+    {
+      "type": "setting",
+      "name": "discount_cost",
+      "low": 0,
+      "high": 5,
+      "display_name": "discount_cost"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "Optimistic Decay",
+      "description": "Optimistic Decay",
+      "variable_overrides": [
+        {
+          "name": "decay_rate",
+          "value": 0.002,
+          "strategy": "",
+          "group": ""
+        }
+      ],
+      "setting_overrides": [
+        {
+          "name": "timeframe",
+          "value": 15
+        }
+      ]
+    },
+    {
+      "name": "High Hospitalization",
+      "description": "High Hospitalization",
+      "variable_overrides": [
+        {
+          "name": "p_hosp",
+          "value": 0.20000000000000001,
+          "strategy": "",
+          "group": ""
+        },
+        {
+          "name": "c_hospitalization",
+          "value": 30000,
+          "strategy": "",
+          "group": ""
+        }
+      ],
+      "setting_overrides": []
+    }
+  ],
+  "twsa_analyses": [
+    {
+      "name": "Drug Cost vs Decay",
+      "description": "Drug Cost vs Decay",
+      "parameters": [
+        {
+          "param_type": "variable",
+          "name": "c_drug",
+          "type": "range",
+          "min": "4000",
+          "max": "12000",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "novel_therapy",
+          "group": ""
+        },
+        {
+          "param_type": "variable",
+          "name": "decay_rate",
+          "type": "range",
+          "min": "0.002",
+          "max": "0.01",
+          "radius": null,
+          "steps": 5,
+          "values": null,
+          "display_name": null,
+          "include_base_case": true,
+          "strategy": "",
+          "group": ""
+        }
+      ]
+    }
+  ],
+  "threshold_analyses": [
+    {
+      "name": "Max Novel Drug Cost",
+      "variable": "c_drug",
+      "variable_strategy": "novel_therapy",
+      "variable_group": "",
+      "lower": 0,
+      "upper": 25000,
+      "active": true,
+      "condition": {
+        "output": "nmb",
+        "health_summary": "total_qalys",
+        "cost_summary": "total_costs",
+        "referent": "novel_therapy",
+        "comparator": "standard_care",
+        "discounted": true,
+        "target_value": 0,
+        "group": "",
+        "wtp": null
+      }
+    }
+  ],
+  "vbp": {
+    "price_variable": "c_drug",
+    "intervention_strategy": "novel_therapy",
+    "outcome_summary": "total_qalys",
+    "cost_summary": "total_costs"
+  },
+  "psa": {
+    "n_sim": 1000,
+    "seed": 99
+  },
+  "override_categories": [
+    {
+      "name": "General Settings",
+      "general": true,
+      "overrides": [
+        {
+          "title": "Time Horizon",
+          "description": "",
+          "type": "setting",
+          "name": "timeframe",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "timeframe",
+          "overridden_expression": "10",
+          "input_config": []
+        },
+        {
+          "title": "Discount Rate (Costs)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_cost",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10,
+            "step_size": 0.5
+          }
+        },
+        {
+          "title": "Discount Rate (Outcomes)",
+          "description": "",
+          "type": "setting",
+          "name": "discount_outcomes",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "3.5",
+          "input_config": {
+            "min": 0,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clinical Parameters",
+      "general": false,
+      "overrides": [
+        {
+          "title": "Drug Cost (Novel)",
+          "description": "",
+          "type": "variable",
+          "name": "c_drug",
+          "strategy": "novel_therapy",
+          "group": "",
+          "general": false,
+          "input_type": "numeric",
+          "overridden_expression": "8000",
+          "input_config": {
+            "min": 0,
+            "max": 25000
+          }
+        },
+        {
+          "title": "Disease Progression",
+          "description": "",
+          "type": "variable",
+          "name": "decay_rate",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "slider",
+          "overridden_expression": "0.005",
+          "input_config": {
+            "min": 0,
+            "max": 0.02,
+            "step_size": 0.001
+          }
+        },
+        {
+          "title": "Risk Profile (High)",
+          "description": "",
+          "type": "variable",
+          "name": "risk_factor",
+          "strategy": "",
+          "group": "high_risk",
+          "general": false,
+          "input_type": "dropdown",
+          "overridden_expression": "1.3",
+          "input_config": {
+            "options": [
+              {
+                "label": "Mild",
+                "value": "1.1",
+                "is_base_case": false
+              },
+              {
+                "label": "Base Case",
+                "value": "1.3",
+                "is_base_case": true
+              },
+              {
+                "label": "Severe",
+                "value": "1.6",
+                "is_base_case": false
+              }
+            ]
+          }
+        },
+        {
+          "title": "Hospitalization Cost",
+          "description": "",
+          "type": "variable",
+          "name": "c_hospitalization",
+          "strategy": "",
+          "group": "",
+          "general": false,
+          "input_type": "formula",
+          "overridden_expression": "25000",
+          "input_config": []
+        }
+      ]
+    }
+  ]
+}

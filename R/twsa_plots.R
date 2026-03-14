@@ -15,30 +15,6 @@
 #' @importFrom glue glue
 NULL
 
-#' Format Cell Value for Heatmap Display
-#'
-#' Internal helper to format numeric values for display inside heatmap cells.
-#' Uses appropriate precision based on value magnitude.
-#'
-#' @param x Numeric vector of values
-#' @return Character vector of formatted values
-#' @keywords internal
-format_cell_value <- function(x) {
-  sapply(x, function(val) {
-    if (is.na(val)) return("")
-    abs_val <- abs(val)
-    if (abs_val >= 10000) {
-      scales::comma(round(val))
-    } else if (abs_val >= 100) {
-      scales::comma(round(val, 1), accuracy = 0.1)
-    } else if (abs_val >= 1) {
-      format(round(val, 2), nsmall = 2)
-    } else {
-      format(round(val, 3), nsmall = 3)
-    }
-  })
-}
-
 #' Prepare TWSA Outcomes Data
 #'
 #' Internal helper function that prepares TWSA data for heatmap rendering.
@@ -52,6 +28,7 @@ format_cell_value <- function(x) {
 #' @param interventions Intervention strategy name(s)
 #' @param comparators Comparator strategy name(s)
 #' @param discounted Logical. Use discounted values?
+#' @param value_type Type of values to extract: "all" (default), "outcome", or "cost"
 #'
 #' @return Tibble with x_value, y_value, value, strategy, group, and parameter info
 #' @keywords internal
@@ -62,13 +39,14 @@ prepare_twsa_outcomes_data <- function(results,
                                        strategies = NULL,
                                        interventions = NULL,
                                        comparators = NULL,
-                                       discounted = TRUE) {
+                                       discounted = TRUE,
+                                       value_type = "all") {
 
   # Extract TWSA summaries
   twsa_data <- extract_twsa_summaries(
     results,
     summary_name = summary_name,
-    value_type = "all",
+    value_type = value_type,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -217,6 +195,45 @@ prepare_twsa_outcomes_data <- function(results,
   heatmap_data
 }
 
+#' Continuous Legend Breaks
+#'
+#' Internal helper to compute legend breaks for continuous scales.
+#'
+#' @param values Numeric vector of data values
+#' @param limits Optional numeric vector of length 2 giving the scale limits
+#' @param n Approximate number of breaks
+#'
+#' @return A numeric vector of break values
+#' @keywords internal
+continuous_legend_breaks <- function(values,
+                                     limits = NULL,
+                                     n = 5) {
+  if (is.null(limits)) {
+    finite_values <- values[is.finite(values)]
+    if (length(finite_values) == 0) {
+      return(numeric(0))
+    }
+    limits <- range(finite_values)
+  }
+
+  if (any(!is.finite(limits))) {
+    return(numeric(0))
+  }
+
+  if (limits[1] == limits[2]) {
+    return(limits[1])
+  }
+
+  interior_breaks <- pretty_breaks(n = n)(limits)
+  interior_breaks <- interior_breaks[
+    is.finite(interior_breaks) &
+      interior_breaks > limits[1] &
+      interior_breaks < limits[2]
+  ]
+
+  sort(unique(c(limits[1], interior_breaks, limits[2])))
+}
+
 #' Render TWSA Heatmap
 #'
 #' Internal helper to create heatmap visualization from prepared data.
@@ -228,6 +245,12 @@ prepare_twsa_outcomes_data <- function(results,
 #' @param legend_title Legend title
 #' @param viridis_option Viridis palette option
 #' @param show_base_case Logical. Mark base case point?
+#' @param caption Optional plot caption
+#' @param cell_decimals Number of decimal places for cell labels
+#' @param axis_label_decimals Number of decimal places for axis labels
+#' @param abbreviate Logical. Use abbreviated number format?
+#' @param currency Logical. Format values as currency?
+#' @param locale Locale for number formatting
 #'
 #' @return A ggplot2 object
 #' @keywords internal
@@ -238,7 +261,13 @@ render_twsa_heatmap <- function(heatmap_data,
                                  legend_title = "Value",
                                  viridis_option = "viridis",
                                  show_base_case = TRUE,
-                                 caption = NULL) {
+                                 caption = NULL,
+                                 cell_decimals = NULL,
+                                 axis_label_decimals = NULL,
+                                 abbreviate = FALSE,
+                                 currency = FALSE,
+                                 locale = NULL) {
+  fill_breaks <- continuous_legend_breaks(heatmap_data$value)
 
   # Get parameter display names for axis labels
   x_param_name <- unique(heatmap_data$x_param_display_name)[1]
@@ -279,9 +308,9 @@ render_twsa_heatmap <- function(heatmap_data,
   heatmap_data <- heatmap_data %>%
     mutate(
       x_factor = factor(.data$x_value, levels = x_levels,
-        labels = scales::comma(x_levels)),
+        labels = oq_unique_labels(x_levels, decimals = axis_label_decimals, locale = locale)),
       y_factor = factor(.data$y_value, levels = y_levels,
-        labels = scales::comma(y_levels))
+        labels = oq_unique_labels(y_levels, decimals = axis_label_decimals, locale = locale))
     )
 
   # Create base case tile data for overlay
@@ -297,7 +326,8 @@ render_twsa_heatmap <- function(heatmap_data,
   # Format labels for display inside cells
   heatmap_data <- heatmap_data %>%
     mutate(
-      label = format_cell_value(.data$value)
+      label = oq_format(.data$value, decimals = cell_decimals, locale = locale,
+                         abbreviate = abbreviate, currency = currency)
     )
 
   # Create heatmap with categorical axes
@@ -308,7 +338,17 @@ render_twsa_heatmap <- function(heatmap_data,
   )) +
     geom_tile(alpha = 0.9, color = "gray80", linewidth = 0.3) +
     geom_text(aes(label = .data$label), size = 3, color = "white") +
-    scale_fill_viridis_c(option = viridis_option, name = legend_title) +
+    scale_fill_viridis_c(
+      option = viridis_option,
+      name = legend_title,
+      breaks = fill_breaks,
+      labels = oq_label_fn(
+        decimals = cell_decimals,
+        locale = locale,
+        currency = currency,
+        abbreviate = abbreviate
+      )
+    ) +
     scale_x_discrete(expand = c(0, 0)) +
     scale_y_discrete(expand = c(0, 0)) +
     labs(
@@ -347,6 +387,98 @@ render_twsa_heatmap <- function(heatmap_data,
   p
 }
 
+#' TWSA Summary Plot Implementation
+#'
+#' Internal helper function that implements the shared logic for TWSA
+#' outcomes and costs heatmap plots.
+#'
+#' @param results TWSA results object from run_twsa()
+#' @param summary_name Name of the summary to display
+#' @param twsa_name Name of specific TWSA analysis to plot (NULL for first/only)
+#' @param groups Group selection
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Intervention strategy name(s) for incremental calculation
+#' @param comparators Comparator strategy name(s) for incremental calculation
+#' @param discounted Logical. Use discounted values?
+#' @param title Optional plot title
+#' @param xlab Optional x-axis label
+#' @param ylab Optional y-axis label
+#' @param legend_title Legend title
+#' @param viridis_option Viridis color palette
+#' @param show_base_case Logical. Show base case point marker?
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format?
+#' @param value_type Type of values to extract: "outcome" or "cost"
+#' @param currency Logical. Format values as currency?
+#'
+#' @return A ggplot2 object
+#' @keywords internal
+twsa_summary_plot_impl <- function(results,
+                                    summary_name,
+                                    twsa_name = NULL,
+                                    groups = "overall",
+                                    strategies = NULL,
+                                    interventions = NULL,
+                                    comparators = NULL,
+                                    discounted = TRUE,
+                                    title = NULL,
+                                    xlab = NULL,
+                                    ylab = NULL,
+                                    legend_title = NULL,
+                                    viridis_option = "viridis",
+                                    show_base_case = TRUE,
+                                    cell_decimals = NULL,
+                                    axis_label_decimals = NULL,
+                                    abbreviate = FALSE,
+                                    value_type = "outcome",
+                                    currency = FALSE) {
+
+  # Validate viridis option
+  viridis_option <- match.arg(viridis_option,
+                               c("viridis", "magma", "plasma", "inferno", "cividis"))
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
+
+  # Set default legend title
+  if (is.null(legend_title)) {
+    legend_title <- map_names_if_available(
+      summary_name,
+      results$metadata$summaries
+    )
+  }
+
+  # Prepare data
+  heatmap_data <- prepare_twsa_outcomes_data(
+    results = results,
+    summary_name = summary_name,
+    twsa_name = twsa_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    value_type = value_type
+  )
+
+  # Render plot
+  render_twsa_heatmap(
+    heatmap_data = heatmap_data,
+    title = title,
+    xlab = xlab,
+    ylab = ylab,
+    legend_title = legend_title,
+    viridis_option = viridis_option,
+    show_base_case = show_base_case,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    currency = currency,
+    locale = locale
+  )
+}
+
 #' TWSA Outcomes Heatmap Plot
 #'
 #' Creates a heatmap visualization of two-way sensitivity analysis results.
@@ -369,6 +501,9 @@ render_twsa_heatmap <- function(heatmap_data,
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #' @export
@@ -403,22 +538,12 @@ twsa_outcomes_plot <- function(results,
                                ylab = NULL,
                                legend_title = NULL,
                                viridis_option = "viridis",
-                               show_base_case = TRUE) {
+                               show_base_case = TRUE,
+                               cell_decimals = NULL,
+                               axis_label_decimals = NULL,
+                               abbreviate = FALSE) {
 
-  # Validate viridis option
-  viridis_option <- match.arg(viridis_option,
-                               c("viridis", "magma", "plasma", "inferno", "cividis"))
-
-  # Set default legend title
-  if (is.null(legend_title)) {
-    legend_title <- map_names_if_available(
-      summary_name,
-      results$metadata$summaries
-    )
-  }
-
-  # Prepare data
-  heatmap_data <- prepare_twsa_outcomes_data(
+  twsa_summary_plot_impl(
     results = results,
     summary_name = summary_name,
     twsa_name = twsa_name,
@@ -426,18 +551,98 @@ twsa_outcomes_plot <- function(results,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,
-    discounted = discounted
-  )
-
-  # Render plot
-  render_twsa_heatmap(
-    heatmap_data = heatmap_data,
+    discounted = discounted,
     title = title,
     xlab = xlab,
     ylab = ylab,
     legend_title = legend_title,
     viridis_option = viridis_option,
-    show_base_case = show_base_case
+    show_base_case = show_base_case,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    value_type = "outcome",
+    currency = FALSE
+  )
+}
+
+#' TWSA Costs Heatmap Plot
+#'
+#' Creates a heatmap visualization of two-way sensitivity analysis cost results.
+#' The heatmap shows how model costs vary across a grid of two parameter values.
+#'
+#' @param results TWSA results object from run_twsa()
+#' @param summary_name Name of the cost summary to display (e.g., "total_cost")
+#' @param twsa_name Name of specific TWSA analysis to plot (NULL for first/only)
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Intervention strategy name(s) for incremental calculation
+#' @param comparators Comparator strategy name(s) for incremental calculation
+#' @param discounted Logical. Use discounted values? (default: TRUE)
+#' @param title Optional plot title
+#' @param xlab Optional x-axis label (defaults to X parameter name)
+#' @param ylab Optional y-axis label (defaults to Y parameter name)
+#' @param legend_title Legend title (default: summary_name)
+#' @param viridis_option Viridis color palette: "viridis" (default), "magma",
+#'   "plasma", "inferno", or "cividis"
+#' @param show_base_case Logical. Show base case point marker? (default: TRUE)
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot2 object
+#' @export
+#' @examples
+#' \dontrun{
+#' results <- run_twsa(model)
+#'
+#' # Basic cost heatmap
+#' twsa_costs_plot(results, "total_cost")
+#'
+#' # Incremental cost heatmap
+#' twsa_costs_plot(results, "total_cost",
+#'   interventions = "treatment",
+#'   comparators = "standard_care")
+#' }
+twsa_costs_plot <- function(results,
+                             summary_name,
+                             twsa_name = NULL,
+                             groups = "overall",
+                             strategies = NULL,
+                             interventions = NULL,
+                             comparators = NULL,
+                             discounted = TRUE,
+                             title = NULL,
+                             xlab = NULL,
+                             ylab = NULL,
+                             legend_title = NULL,
+                             viridis_option = "viridis",
+                             show_base_case = TRUE,
+                             cell_decimals = NULL,
+                             axis_label_decimals = NULL,
+                             abbreviate = FALSE) {
+
+  twsa_summary_plot_impl(
+    results = results,
+    summary_name = summary_name,
+    twsa_name = twsa_name,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    discounted = discounted,
+    title = title,
+    xlab = xlab,
+    ylab = ylab,
+    legend_title = legend_title,
+    viridis_option = viridis_option,
+    show_base_case = show_base_case,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    value_type = "cost",
+    currency = TRUE
   )
 }
 
@@ -538,6 +743,9 @@ prepare_twsa_nmb_data <- function(results,
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #' @export
@@ -565,7 +773,10 @@ twsa_nmb_plot <- function(results,
                            xlab = NULL,
                            ylab = NULL,
                            viridis_option = "viridis",
-                           show_base_case = TRUE) {
+                           show_base_case = TRUE,
+                           cell_decimals = NULL,
+                           axis_label_decimals = NULL,
+                           abbreviate = FALSE) {
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -576,6 +787,9 @@ twsa_nmb_plot <- function(results,
   # Validate viridis option
   viridis_option <- match.arg(viridis_option,
                                c("viridis", "magma", "plasma", "inferno", "cividis"))
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # Get WTP if not provided
   if (is.null(wtp)) {
@@ -615,7 +829,7 @@ twsa_nmb_plot <- function(results,
   }
 
   # Create legend title and footnote
-  wtp_formatted <- scales::comma(wtp, accuracy = 1)
+  wtp_formatted <- oq_format(wtp, decimals = 0, locale = locale, currency = TRUE)
   legend_title <- "NMB*"
 
   # Resolve display names for footnote
@@ -636,7 +850,11 @@ twsa_nmb_plot <- function(results,
     legend_title = legend_title,
     viridis_option = viridis_option,
     show_base_case = show_base_case,
-    caption = caption
+    caption = caption,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    locale = locale
   )
 }
 
@@ -764,7 +982,13 @@ render_twsa_ce_heatmap <- function(ce_data,
                                     xlab = NULL,
                                     ylab = NULL,
                                     viridis_option = "viridis",
-                                    show_base_case = TRUE) {
+                                    show_base_case = TRUE,
+                                    cell_decimals = NULL,
+                                    axis_label_decimals = NULL,
+                                    abbreviate = FALSE,
+                                    locale = NULL) {
+  fill_limits <- range(ce_data$display_value[is.finite(ce_data$display_value)])
+  fill_breaks <- continuous_legend_breaks(ce_data$display_value, limits = fill_limits)
 
   # Get parameter display names for axis labels
   x_param_name <- unique(ce_data$x_param_display_name)[1]
@@ -804,9 +1028,9 @@ render_twsa_ce_heatmap <- function(ce_data,
   ce_data <- ce_data %>%
     mutate(
       x_factor = factor(.data$x_value, levels = x_levels,
-        labels = scales::comma(x_levels)),
+        labels = oq_unique_labels(x_levels, decimals = axis_label_decimals, locale = locale)),
       y_factor = factor(.data$y_value, levels = y_levels,
-        labels = scales::comma(y_levels))
+        labels = oq_unique_labels(y_levels, decimals = axis_label_decimals, locale = locale))
     )
 
   # Create base case tile data for overlay
@@ -827,8 +1051,8 @@ render_twsa_ce_heatmap <- function(ce_data,
         .data$ce_class == "equivalent" ~ "Equivalent",
         .data$ce_class == "dominated" ~ "Dominated",
         .data$ce_class == "dominant" ~ "Dominant",
-        .data$ce_class == "sw_quadrant" ~ paste0(format_cell_value(abs(.data$icer)), "*"),
-        TRUE ~ format_cell_value(.data$icer)
+        .data$ce_class == "sw_quadrant" ~ paste0(oq_format(abs(.data$icer), decimals = cell_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE), "*"),
+        TRUE ~ oq_format(.data$icer, decimals = cell_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE)
       )
     )
 
@@ -838,6 +1062,25 @@ render_twsa_ce_heatmap <- function(ce_data,
     "* Intervention is less costly and less effective. ICER represents cost-effectiveness of comparator vs. intervention."
   } else {
     NULL
+  }
+
+  ce_legend_label_fn <- function(x) {
+    numeric_idx <- !(is.na(x) | x >= max_display * 0.95 | x == 0)
+    labels <- ifelse(is.na(x), "Equivalent",
+                     ifelse(x >= max_display * 0.95, "Dominated",
+                            ifelse(x == 0, "Dominant", NA_character_)))
+
+    if (any(numeric_idx)) {
+      labels[numeric_idx] <- oq_unique_labels(
+        x[numeric_idx],
+        decimals = cell_decimals,
+        locale = locale,
+        currency = TRUE,
+        abbreviate = abbreviate
+      )
+    }
+
+    labels
   }
 
   # Create heatmap with NA handling for equivalent cases
@@ -852,11 +1095,8 @@ render_twsa_ce_heatmap <- function(ce_data,
       option = viridis_option,
       name = "ICER",
       na.value = "gray80",  # Gray for equivalent/undefined
-      labels = function(x) {
-        ifelse(is.na(x), "Equivalent",
-               ifelse(x >= max_display * 0.95, "Dominated",
-                      ifelse(x == 0, "Dominant", scales::comma(x, accuracy = 1))))
-      }
+      breaks = fill_breaks,
+      labels = ce_legend_label_fn
     ) +
     scale_x_discrete(expand = c(0, 0)) +
     scale_y_discrete(expand = c(0, 0)) +
@@ -918,6 +1158,9 @@ render_twsa_ce_heatmap <- function(ce_data,
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -954,11 +1197,17 @@ twsa_ce_plot <- function(results,
                           xlab = NULL,
                           ylab = NULL,
                           viridis_option = "viridis",
-                          show_base_case = TRUE) {
+                          show_base_case = TRUE,
+                          cell_decimals = NULL,
+                          axis_label_decimals = NULL,
+                          abbreviate = FALSE) {
 
   # Validate viridis option
   viridis_option <- match.arg(viridis_option,
                                c("viridis", "magma", "plasma", "inferno", "cividis"))
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # Prepare CE data
   ce_data <- prepare_twsa_ce_data(
@@ -984,6 +1233,10 @@ twsa_ce_plot <- function(results,
     xlab = xlab,
     ylab = ylab,
     viridis_option = viridis_option,
-    show_base_case = show_base_case
+    show_base_case = show_base_case,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    locale = locale
   )
 }

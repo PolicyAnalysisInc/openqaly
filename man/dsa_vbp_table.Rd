@@ -9,7 +9,8 @@ dsa_vbp_table(
   wtp = NULL,
   comparators = "all",
   groups = "overall",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   ...
 )
@@ -26,7 +27,9 @@ uses the WTP from the outcome summary specified in the VBP analysis.}
 \item{groups}{Group selection: "overall" (default), "all" (overall + all groups),
 "all_groups" (all groups without overall), or specific group name(s)}
 
-\item{decimals}{Number of decimal places for VBP values (default: 0)}
+\item{decimals}{Number of decimal places for VBP values (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

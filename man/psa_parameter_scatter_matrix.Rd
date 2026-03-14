@@ -14,7 +14,8 @@ psa_parameter_scatter_matrix(
   label_wrap_width = 20,
   upper = list(continuous = "cor"),
   lower = list(continuous = "points"),
-  diag = list(continuous = "densityDiag")
+  diag = list(continuous = "densityDiag"),
+  axis_decimals = NULL
 )
 }
 \arguments{
@@ -50,6 +51,8 @@ See GGally::ggpairs documentation for options.}
 \item{lower}{List specifying lower triangle display. Default shows scatter points.}
 
 \item{diag}{List specifying diagonal display. Default shows density plots.}
+
+\item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
 }
 \value{
 A GGally ggpairs object

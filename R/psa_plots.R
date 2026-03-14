@@ -22,6 +22,8 @@
 #' @param ylab Y-axis label. Default is "Probability of Being Most Cost-Effective"
 #' @param legend_position Legend position: "bottom" (default), "right", "top",
 #'   "left", or "none"
+#' @param wtp_axis_decimals Fixed decimal places for WTP axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -60,7 +62,16 @@ incremental_ceac_plot <- function(results,
                                   title = NULL,
                                   xlab = "Willingness to Pay",
                                   ylab = "Probability of Being Most Cost-Effective",
-                                  legend_position = "bottom") {
+                                  legend_position = "bottom",
+                                  wtp_axis_decimals = NULL,
+                                  abbreviate = FALSE) {
+
+  # Get locale for formatting
+  locale <- if ("metadata" %in% names(results) && !is.null(results$metadata)) {
+    get_results_locale(results)
+  } else {
+    get_locale("US")
+  }
 
   # Check if results is pre-calculated CEAC data or model results
   if ("wtp" %in% names(results) && "probability" %in% names(results)) {
@@ -102,8 +113,8 @@ incremental_ceac_plot <- function(results,
   # Create base plot
   p <- ggplot(ceac_data, aes(x = .data$wtp, y = .data$probability, color = .data$strategy)) +
     geom_line(linewidth = 1) +
-    scale_y_continuous(limits = c(0, 1), labels = percent) +
-    scale_x_continuous(labels = comma) +
+    scale_y_continuous(limits = c(0, 1), labels = oq_percent_label_fn(locale = locale)) +
+    scale_x_continuous(labels = oq_label_fn(decimals = wtp_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)) +
     theme_bw() +
     labs(
       title = title,
@@ -135,6 +146,9 @@ incremental_ceac_plot <- function(results,
 #' @inheritParams incremental_ceac_plot
 #' @param show_means Logical. Show mean values as larger points? Default is TRUE
 #' @param alpha Transparency of scatter points (0-1). Default is 0.3
+#' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
+#' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -168,7 +182,13 @@ psa_scatter_plot <- function(results,
                              title = NULL,
                              xlab = NULL,
                              ylab = NULL,
-                             legend_position = "right") {
+                             legend_position = "right",
+                             cost_axis_decimals = NULL,
+                             outcome_axis_decimals = NULL,
+                             abbreviate = FALSE) {
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
@@ -228,12 +248,12 @@ psa_scatter_plot <- function(results,
     scale_y_continuous(
       breaks = y_breaks,
       limits = y_limits,
-      labels = comma
+      labels = oq_label_fn(decimals = cost_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)
     ) +
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = number
+      labels = oq_label_fn(decimals = outcome_axis_decimals, locale = locale, abbreviate = abbreviate)
     ) +
     theme_bw() +
     labs(
@@ -301,6 +321,8 @@ psa_scatter_plot <- function(results,
 #' @param ylab Y-axis label. Default is "Probability of Cost-Effectiveness"
 #' @param legend_position Legend position: "bottom" (default), "right", "top",
 #'   "left", or "none"
+#' @param wtp_axis_decimals Fixed decimal places for WTP axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -343,7 +365,12 @@ pairwise_ceac_plot <- function(results,
                               title = NULL,
                               xlab = "Willingness to Pay",
                               ylab = "Probability of Cost-Effectiveness",
-                              legend_position = "bottom") {
+                              legend_position = "bottom",
+                              wtp_axis_decimals = NULL,
+                              abbreviate = FALSE) {
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -378,8 +405,8 @@ pairwise_ceac_plot <- function(results,
     p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability, color = .data$comparison)) +
       geom_line(linewidth = 1) +
       geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
-      scale_y_continuous(limits = c(0, 1), labels = percent) +
-      scale_x_continuous(labels = comma) +
+      scale_y_continuous(limits = c(0, 1), labels = oq_percent_label_fn(locale = locale)) +
+      scale_x_continuous(labels = oq_label_fn(decimals = wtp_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)) +
       theme_bw() +
       labs(
         title = title,
@@ -398,8 +425,8 @@ pairwise_ceac_plot <- function(results,
     p <- ggplot(pairwise_data, aes(x = .data$wtp, y = .data$probability)) +
       geom_line(linewidth = 1, color = "blue") +
       geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
-      scale_y_continuous(limits = c(0, 1), labels = percent) +
-      scale_x_continuous(labels = comma) +
+      scale_y_continuous(limits = c(0, 1), labels = oq_percent_label_fn(locale = locale)) +
+      scale_x_continuous(labels = oq_label_fn(decimals = wtp_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)) +
       theme_bw() +
       labs(
         title = title,
@@ -455,6 +482,7 @@ pairwise_ceac_plot <- function(results,
 #'   See GGally::ggpairs documentation for options.
 #' @param lower List specifying lower triangle display. Default shows scatter points.
 #' @param diag List specifying diagonal display. Default shows density plots.
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
 #'
 #' @return A GGally ggpairs object
 #'
@@ -535,7 +563,11 @@ psa_parameter_scatter_matrix <- function(results,
                                          label_wrap_width = 20,
                                          upper = list(continuous = "cor"),
                                          lower = list(continuous = "points"),
-                                         diag = list(continuous = "densityDiag")) {
+                                         diag = list(continuous = "densityDiag"),
+                                         axis_decimals = NULL) {
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Check that GGally is available
   if (!requireNamespace("GGally", quietly = TRUE)) {
@@ -562,6 +594,31 @@ psa_parameter_scatter_matrix <- function(results,
   # Check we have at least 2 variables
   if (ncol(plot_data) < 2) {
     stop("Need at least 2 variables to create a scatter matrix. Found ", ncol(plot_data))
+  }
+
+  axis_label_fn <- oq_label_fn(decimals = axis_decimals, locale = locale)
+
+  default_lower_points <- is.list(lower) &&
+    identical(lower$continuous, "points")
+  default_diag_density <- is.list(diag) &&
+    identical(diag$continuous, "densityDiag")
+
+  if (default_lower_points) {
+    lower <- lower
+    lower$continuous <- function(data, mapping, ...) {
+      GGally::ggally_points(data, mapping, alpha = alpha, size = 0.5, ...) +
+        scale_x_continuous(labels = axis_label_fn) +
+        scale_y_continuous(labels = axis_label_fn)
+    }
+  }
+
+  if (default_diag_density) {
+    diag <- diag
+    diag$continuous <- function(data, mapping, ...) {
+      GGally::ggally_densityDiag(data, mapping, ...) +
+        scale_x_continuous(labels = axis_label_fn) +
+        scale_y_continuous(labels = axis_label_fn)
+    }
   }
 
   # Set default title if not provided
@@ -603,19 +660,6 @@ psa_parameter_scatter_matrix <- function(results,
     )
   }
 
-  # Adjust alpha for scatter plots if points are in lower triangle
-  if (!is.null(lower$continuous) && lower$continuous == "points") {
-    p <- p + theme_bw()
-
-    # Apply alpha to scatter plots in lower triangle
-    for (i in 2:ncol(plot_data)) {
-      for (j in 1:(i-1)) {
-        p[i, j] <- p[i, j] +
-          geom_point(alpha = alpha, size = 0.5)
-      }
-    }
-  }
-
   return(p)
 }
 
@@ -644,6 +688,8 @@ psa_parameter_scatter_matrix <- function(results,
 #' @param ylab Y-axis label. Default is "Expected Value of Perfect Information"
 #' @param legend_position Legend position: "bottom" (default), "right", "top",
 #'   "left", or "none"
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -690,7 +736,16 @@ evpi_plot <- function(results,
                       title = NULL,
                       xlab = "Willingness to Pay",
                       ylab = "Expected Value of Perfect Information",
-                      legend_position = "bottom") {
+                      legend_position = "bottom",
+                      axis_decimals = NULL,
+                      abbreviate = FALSE) {
+
+  # Get locale for formatting
+  locale <- if ("metadata" %in% names(results) && !is.null(results$metadata)) {
+    get_results_locale(results)
+  } else {
+    get_locale("US")
+  }
 
   # Check if results is pre-calculated EVPI data or model results
   if ("wtp" %in% names(results) && "evpi" %in% names(results)) {
@@ -743,12 +798,12 @@ evpi_plot <- function(results,
     scale_y_continuous(
       breaks = y_breaks,
       limits = y_limits,
-      labels = comma
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate)
     ) +
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = comma
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)
     ) +
     theme_bw() +
     labs(
@@ -787,6 +842,9 @@ evpi_plot <- function(results,
 #' @param alpha Transparency of scatter points (0-1). Default is 0.3
 #' @param xlab X-axis label. If NULL, auto-generated from outcome_summary
 #' @param ylab Y-axis label. If NULL, auto-generated from cost_summary
+#' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
+#' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -873,7 +931,13 @@ pairwise_psa_scatter_plot <- function(results,
                                       title = NULL,
                                       xlab = NULL,
                                       ylab = NULL,
-                                      legend_position = "right") {
+                                      legend_position = "right",
+                                      cost_axis_decimals = NULL,
+                                      outcome_axis_decimals = NULL,
+                                      abbreviate = FALSE) {
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # 1. Parameter Validation
   # Validate strategies is mutually exclusive with interventions/comparators
@@ -1096,8 +1160,8 @@ pairwise_psa_scatter_plot <- function(results,
 
   # Add scales and theme
   p <- p +
-    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = number) +
-    scale_y_continuous(breaks = y_breaks, limits = y_limits, labels = comma) +
+    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = outcome_axis_decimals, locale = locale, abbreviate = abbreviate)) +
+    scale_y_continuous(breaks = y_breaks, limits = y_limits, labels = oq_label_fn(decimals = cost_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)) +
     theme_bw() +
     labs(
       title = title,
@@ -1124,6 +1188,44 @@ pairwise_psa_scatter_plot <- function(results,
   p
 }
 
+#' PSA Density X Scale
+#'
+#' Internal helper for density plot x-axis breaks and limits.
+#'
+#' @param x Numeric vector of plotted x-values
+#' @param include Optional numeric vector that must be included in the x-axis range
+#' @param n Approximate number of pretty breaks
+#'
+#' @return A list with \code{breaks} and \code{limits}
+#' @keywords internal
+psa_density_x_scale <- function(x, include = NULL, n = 4) {
+  x_values <- x[is.finite(x)]
+  include_values <- include[is.finite(include)]
+  scale_values <- c(x_values, include_values)
+
+  if (length(scale_values) == 0) {
+    scale_values <- c(0, 1)
+  }
+
+  x_range <- range(scale_values)
+
+  if (x_range[1] == x_range[2]) {
+    expand_amount <- max(abs(x_range[1]) * 0.05, 1)
+    x_range <- x_range + c(-expand_amount, expand_amount)
+  }
+
+  x_breaks <- pretty_breaks(n = n)(x_range)
+  x_breaks <- x_breaks[is.finite(x_breaks)]
+
+  if (length(x_breaks) == 0) {
+    x_breaks <- x_range
+  }
+
+  list(
+    breaks = x_breaks,
+    limits = range(x_breaks)
+  )
+}
 
 #' Incremental Net Monetary Benefit Density Plot
 #'
@@ -1154,6 +1256,8 @@ pairwise_psa_scatter_plot <- function(results,
 #' @param title Optional plot title
 #' @param xlab Optional x-axis label
 #' @param legend_position Legend position ("right", "bottom", "top", "left", "none")
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot object
 #'
@@ -1207,7 +1311,12 @@ nmb_density_plot <- function(results,
                              alpha = 0.4,
                              title = NULL,
                              xlab = NULL,
-                             legend_position = "right") {
+                             legend_position = "right",
+                             axis_decimals = NULL,
+                             abbreviate = FALSE) {
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Validate that strategies is mutually exclusive with interventions/comparators
   if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
@@ -1359,17 +1468,18 @@ nmb_density_plot <- function(results,
     xlab <- "Incremental Net Monetary Benefit"
   }
 
-  # Set default title if not provided
-  if (is.null(title)) {
-    title <- paste0("Incremental NMB Distribution at WTP = ", dollar(wtp))
-  }
+  x_scale <- psa_density_x_scale(plot_data$nmb, include = 0)
 
   # Create density plot
   p <- ggplot(plot_data, aes(x = .data$nmb, fill = .data$strategy, color = .data$strategy)) +
     geom_density(alpha = alpha) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-    scale_x_continuous(labels = comma) +
-    scale_y_continuous(labels = number) +
+    scale_x_continuous(
+      breaks = x_scale$breaks,
+      limits = x_scale$limits,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)
+    ) +
+    scale_y_continuous(labels = oq_label_fn(locale = locale)) +
     theme_bw() +
     labs(
       title = title,
@@ -1419,44 +1529,55 @@ nmb_density_plot <- function(results,
 }
 
 
-#' Outcome Density Plot
+#' Density Plot Implementation
 #'
-#' Creates a density plot of outcome values from PSA simulations. Can display
-#' either absolute outcome distributions per strategy or distributions of
-#' outcome differences between intervention/comparator pairs.
+#' Internal helper that creates a density plot of values from PSA simulations.
+#' Can display either absolute distributions per strategy or distributions of
+#' differences between intervention/comparator pairs.
 #'
 #' @param results A openqaly PSA results object (from run_psa)
-#' @param outcome_summary Name of the outcome summary to plot (e.g., "total_qalys")
+#' @param outcome_summary Name of the summary to plot (e.g., "total_qalys", "total_cost")
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #'   Cannot be used with \code{strategies}.
 #' @param comparators Reference strategies for comparison (comparator perspective).
 #'   Cannot be used with \code{strategies}.
 #' @param groups Which groups to include. Options: "overall" (default), "all",
 #'   "all_groups", or a character vector of specific group names.
-#' @param strategies Character vector of strategies to include. For absolute outcome
+#' @param strategies Character vector of strategies to include. For absolute
 #'   values. Cannot be used with \code{interventions} or \code{comparators}.
-#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param discounted Logical. Use discounted values? Default TRUE.
+#' @param value_type Character. Type of value to extract: "outcome" or "cost". Default "outcome".
+#' @param currency Logical. Format values as currency? Default FALSE.
 #' @param show_mean Logical. Add vertical dashed lines at means? Default TRUE.
 #' @param alpha Numeric. Transparency level for density fill (0-1). Default 0.4.
-#' @param title Character. Plot title. If NULL (default), auto-generated.
+#' @param title Character. Plot title. If NULL (default), no title is shown.
 #' @param xlab Character. X-axis label. If NULL (default), auto-generated.
 #' @param legend_position Position of the legend. Default "right".
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot object
 #'
-#' @export
-outcome_density_plot <- function(results,
-                                 outcome_summary,
-                                 interventions = NULL,
-                                 comparators = NULL,
-                                 groups = "overall",
-                                 strategies = NULL,
-                                 discounted = TRUE,
-                                 show_mean = TRUE,
-                                 alpha = 0.4,
-                                 title = NULL,
-                                 xlab = NULL,
-                                 legend_position = "right") {
+#' @keywords internal
+density_plot_impl <- function(results,
+                              outcome_summary,
+                              interventions = NULL,
+                              comparators = NULL,
+                              groups = "overall",
+                              strategies = NULL,
+                              discounted = TRUE,
+                              value_type = "outcome",
+                              currency = FALSE,
+                              show_mean = TRUE,
+                              alpha = 0.4,
+                              title = NULL,
+                              xlab = NULL,
+                              legend_position = "right",
+                              axis_decimals = NULL,
+                              abbreviate = FALSE) {
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Get data from getter (handles all validation and data retrieval)
   plot_data <- get_psa_outcome_simulations(
@@ -1466,7 +1587,8 @@ outcome_density_plot <- function(results,
     comparators = comparators,
     groups = groups,
     strategies = strategies,
-    discounted = discounted
+    discounted = discounted,
+    value_type = value_type
   )
 
   # Determine if absolute or difference mode
@@ -1491,15 +1613,6 @@ outcome_density_plot <- function(results,
     }
   }
 
-  # Set default title
-  if (is.null(title)) {
-    if (is_difference_mode) {
-      title <- paste0("Incremental ", outcome_label, " Distribution")
-    } else {
-      title <- paste0(outcome_label, " Distribution")
-    }
-  }
-
   # Determine column and legend labels based on mode
   if (is_difference_mode) {
     fill_col <- "comparison"
@@ -1509,11 +1622,17 @@ outcome_density_plot <- function(results,
     legend_label <- "Strategy"
   }
 
+  x_scale <- psa_density_x_scale(plot_data$outcome)
+
   # Create density plot (NO geom_vline at 0)
   p <- ggplot(plot_data, aes(x = .data$outcome, fill = .data[[fill_col]], color = .data[[fill_col]])) +
     geom_density(alpha = alpha) +
-    scale_x_continuous(labels = number) +
-    scale_y_continuous(labels = number) +
+    scale_x_continuous(
+      breaks = x_scale$breaks,
+      limits = x_scale$limits,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)
+    ) +
+    scale_y_continuous(labels = oq_label_fn(locale = locale)) +
     theme_bw() +
     labs(
       title = title,
@@ -1560,4 +1679,132 @@ outcome_density_plot <- function(results,
   }
 
   p
+}
+
+
+#' Outcome Density Plot
+#'
+#' Creates a density plot of outcome values from PSA simulations. Can display
+#' either absolute outcome distributions per strategy or distributions of
+#' outcome differences between intervention/comparator pairs.
+#'
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome_summary Name of the outcome summary to plot (e.g., "total_qalys")
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param groups Which groups to include. Options: "overall" (default), "all",
+#'   "all_groups", or a character vector of specific group names.
+#' @param strategies Character vector of strategies to include. For absolute outcome
+#'   values. Cannot be used with \code{interventions} or \code{comparators}.
+#' @param discounted Logical. Use discounted outcome values? Default TRUE.
+#' @param show_mean Logical. Add vertical dashed lines at means? Default TRUE.
+#' @param alpha Numeric. Transparency level for density fill (0-1). Default 0.4.
+#' @param title Character. Plot title. If NULL (default), no title is shown.
+#' @param xlab Character. X-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "right".
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot object
+#'
+#' @export
+outcome_density_plot <- function(results,
+                                 outcome_summary,
+                                 interventions = NULL,
+                                 comparators = NULL,
+                                 groups = "overall",
+                                 strategies = NULL,
+                                 discounted = TRUE,
+                                 show_mean = TRUE,
+                                 alpha = 0.4,
+                                 title = NULL,
+                                 xlab = NULL,
+                                 legend_position = "right",
+                                 axis_decimals = NULL,
+                                 abbreviate = FALSE) {
+
+  density_plot_impl(
+    results = results,
+    outcome_summary = outcome_summary,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted,
+    value_type = "outcome",
+    currency = FALSE,
+    show_mean = show_mean,
+    alpha = alpha,
+    title = title,
+    xlab = xlab,
+    legend_position = legend_position,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate
+  )
+}
+
+
+#' Cost Density Plot
+#'
+#' Creates a density plot of cost values from PSA simulations. Can display
+#' either absolute cost distributions per strategy or distributions of
+#' cost differences between intervention/comparator pairs.
+#'
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome_summary Name of the cost summary to plot (e.g., "total_cost")
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param groups Which groups to include. Options: "overall" (default), "all",
+#'   "all_groups", or a character vector of specific group names.
+#' @param strategies Character vector of strategies to include. For absolute cost
+#'   values. Cannot be used with \code{interventions} or \code{comparators}.
+#' @param discounted Logical. Use discounted cost values? Default TRUE.
+#' @param show_mean Logical. Add vertical dashed lines at means? Default TRUE.
+#' @param alpha Numeric. Transparency level for density fill (0-1). Default 0.4.
+#' @param title Character. Plot title. If NULL (default), no title is shown.
+#' @param xlab Character. X-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "right".
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot object
+#'
+#' @export
+cost_density_plot <- function(results,
+                              outcome_summary,
+                              interventions = NULL,
+                              comparators = NULL,
+                              groups = "overall",
+                              strategies = NULL,
+                              discounted = TRUE,
+                              show_mean = TRUE,
+                              alpha = 0.4,
+                              title = NULL,
+                              xlab = NULL,
+                              legend_position = "right",
+                              axis_decimals = NULL,
+                              abbreviate = FALSE) {
+
+  density_plot_impl(
+    results = results,
+    outcome_summary = outcome_summary,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted,
+    value_type = "cost",
+    currency = TRUE,
+    show_mean = show_mean,
+    alpha = alpha,
+    title = title,
+    xlab = xlab,
+    legend_position = legend_position,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate
+  )
 }

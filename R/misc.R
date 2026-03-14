@@ -69,7 +69,8 @@ read_model <- function(path) {
         high = deserialize_to_formula(row$high, param_type),
         strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
         group = if (is.na(row$group) || row$group == "") "" else row$group,
-        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name
+        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name,
+        range_label = if ("range_label" %in% names(row) && !is.na(row$range_label) && row$range_label != "") row$range_label else NULL
       )
     })
     class(model$dsa_parameters) <- "dsa_parameters"
@@ -190,6 +191,26 @@ read_model <- function(path) {
     model$vbp <- as.list(model$vbp[1, ])
   } else {
     model$vbp <- NULL
+  }
+
+  # Read PSA configuration sheet
+  if ("psa" %in% names(model) && is.data.frame(model$psa) && nrow(model$psa) > 0) {
+    psa_row <- as.list(model$psa[1, ])
+    model$psa <- list(n_sim = as.integer(psa_row$n_sim))
+    if (!is.null(psa_row$seed) && !is.na(psa_row$seed)) {
+      model$psa$seed <- psa_row$seed
+    } else {
+      model$psa$seed <- NULL
+    }
+  } else {
+    model$psa <- NULL
+  }
+
+  # Read decision_tree configuration sheet
+  if ("decision_tree" %in% names(model) && is.data.frame(model$decision_tree) && nrow(model$decision_tree) > 0) {
+    model$decision_tree <- as.list(model$decision_tree[1, ])
+  } else {
+    model$decision_tree <- NULL
   }
 
   # Read override categories sheets
@@ -382,6 +403,44 @@ convert_settings_from_df <- function(settings_df) {
     settings[["half_cycle_method"]] <- "start"
   }
 
+  # Handle discount_timing setting
+  if ("discount_timing" %in% names(settings)) {
+    val <- settings[["discount_timing"]]
+    if (is.character(val)) {
+      val_lower <- tolower(val)
+      if (val_lower %in% c("start", "end", "midpoint")) {
+        settings[["discount_timing"]] <- val_lower
+      } else {
+        warning(glue("Invalid discount_timing: {val} - must be 'start', 'end', or 'midpoint'. Defaulting to 'start'"))
+        settings[["discount_timing"]] <- "start"
+      }
+    } else {
+      warning(glue("discount_timing must be a string, got: {class(val)} - defaulting to 'start'"))
+      settings[["discount_timing"]] <- "start"
+    }
+  } else {
+    settings[["discount_timing"]] <- "start"
+  }
+
+  # Handle discount_method setting
+  if ("discount_method" %in% names(settings)) {
+    val <- settings[["discount_method"]]
+    if (is.character(val)) {
+      val_lower <- tolower(val)
+      if (val_lower %in% c("by_cycle", "by_year")) {
+        settings[["discount_method"]] <- val_lower
+      } else {
+        warning(glue("Invalid discount_method: {val} - must be 'by_cycle' or 'by_year'. Defaulting to 'by_cycle'"))
+        settings[["discount_method"]] <- "by_cycle"
+      }
+    } else {
+      warning(glue("discount_method must be a string, got: {class(val)} - defaulting to 'by_cycle'"))
+      settings[["discount_method"]] <- "by_cycle"
+    }
+  } else {
+    settings[["discount_method"]] <- "by_cycle"
+  }
+
   # Validate that discount rates are provided (mandatory)
   if (!("discount_cost" %in% names(settings))) {
     stop("discount_cost is required but was not provided in settings")
@@ -423,6 +482,13 @@ read_workbook <- function(path) {
 define_object_ <- function(obj, class) {
   class(obj) <- class
   obj
+}
+
+#' @keywords internal
+fast_tibble <- function(...) {
+  args <- list(...)
+  args <- lapply(args, function(x) if (is.null(x)) NA else x)
+  as_tibble(args)
 }
 
 create_default_group <- function() {
@@ -1140,6 +1206,8 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     "psm"
   } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
     "custom_psm"
+  } else if (model_type_lower %in% c("decision_tree", "decision tree", "decisiontree")) {
+    "decision_tree"
   } else {
     # Try to match partial strings
     if (model_type_lower %in% c("markov")) {
@@ -1148,6 +1216,8 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
       "psm"
     } else if (model_type_lower %in% c("custom_psm", "custom psm", "custompsm", "psm_custom")) {
       "custom_psm"
+    } else if (model_type_lower %in% c("decision_tree", "decision tree", "decisiontree")) {
+      "decision_tree"
     } else {
       warning("Invalid model_type '", model_type, "'. Defaulting to 'markov'.")
       "markov"
@@ -1159,52 +1229,29 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     model$settings$model_type <- model_type
   }
 
-  # Load type-specific specs
-  spec_path <- system.file('model_input_specs', package = 'openqaly')
-
-  states_spec_file <- if (model_type %in% c("psm", "custom_psm")) {
-    "psm_states.csv"
+  # Load type-specific specs from cached model_input_specs
+  states_spec_key <- if (model_type %in% c("psm", "custom_psm", "decision_tree")) {
+    "psm_states"
   } else {
-    "states.csv"
+    "states"
   }
 
-  trans_spec_file <- if (model_type == "psm") {
-    "psm_transitions.csv"
+  trans_spec_key <- if (model_type == "psm") {
+    "psm_transitions"
   } else if (model_type == "custom_psm") {
-    "psm_custom_transitions.csv"
+    "psm_custom_transitions"
   } else {
-    "transitions.csv"
+    "transitions"
   }
 
   specs <- list(
-    states = read_csv(file.path(spec_path, states_spec_file),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    transitions = read_csv(file.path(spec_path, trans_spec_file),
-                                  col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                               'default' = 'c', 'fallback' = 'c'),
-                                  progress = FALSE, show_col_types = FALSE),
-    values = read_csv(file.path(spec_path, "values.csv"),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    strategies = read_csv(file.path(spec_path, "strategies.csv"),
-                                 col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                              'default' = 'c', 'fallback' = 'c'),
-                                 progress = FALSE, show_col_types = FALSE),
-    groups = read_csv(file.path(spec_path, "groups.csv"),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    variables = read_csv(file.path(spec_path, "variables.csv"),
-                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                             'default' = 'c', 'fallback' = 'c'),
-                                progress = FALSE, show_col_types = FALSE),
-    summaries = read_csv(file.path(spec_path, "summaries.csv"),
-                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                             'default' = 'c', 'fallback' = 'c'),
-                                progress = FALSE, show_col_types = FALSE)
+    states = model_input_specs[[states_spec_key]],
+    transitions = model_input_specs[[trans_spec_key]],
+    values = model_input_specs[["values"]],
+    strategies = model_input_specs[["strategies"]],
+    groups = model_input_specs[["groups"]],
+    variables = model_input_specs[["variables"]],
+    summaries = model_input_specs[["summaries"]]
   )
 
   # Convert settings to list if needed
@@ -1297,6 +1344,11 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     model$vbp <- NULL
   }
 
+  # Ensure psa is valid if present
+  if (!is.null(model$psa) && !is.list(model$psa)) {
+    model$psa <- NULL
+  }
+
   # Ensure override_categories exists and is valid
   if (is.null(model$override_categories)) {
     model$override_categories <- list()
@@ -1326,9 +1378,35 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     }
   }
 
+  # Ensure decision_tree field exists
+  if (is.null(model$decision_tree)) {
+    # Leave as NULL
+  }
+
+  # Validate decision tree configuration if present
+  validate_decision_tree(model)
+
   # Validate group names (no reserved keywords)
   if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
     validate_group_names(model$groups$name)
+  }
+
+  # Validate no name collisions between tables and values
+  if (length(model$tables) > 0 && is.data.frame(model$values) && nrow(model$values) > 0) {
+    table_names <- names(model$tables)
+    value_names <- unique(model$values$name[!is.na(model$values$name)])
+    collisions <- intersect(table_names, value_names)
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+        paste(collisions, collapse = ", ")
+      ))
+    }
+  }
+
+  # Validate no name collisions between trees and other components
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    validate_tree_name_collisions(unique(model$trees$name), model)
   }
 
   # Set class
@@ -1478,7 +1556,8 @@ read_model_json <- function(json_string) {
         high = deserialize_to_formula(p$high, param_type),
         strategy = p$strategy %||% "",
         group = p$group %||% "",
-        display_name = p$display_name
+        display_name = if (!is.null(p$display_name) && !is.na(p$display_name) && p$display_name != "") p$display_name else NULL,
+        range_label = if (!is.null(p$range_label) && !is.na(p$range_label) && p$range_label != "") p$range_label else NULL
       )
     }
     model$dsa_parameters <- dsa_list
@@ -1505,12 +1584,19 @@ read_model_json <- function(json_string) {
       # Handle variable_overrides which may be nested
       var_overrides <- list()
       if (!is.null(s$variable_overrides) && length(s$variable_overrides) > 0) {
-        override_items <- if (is.data.frame(s$variable_overrides)) {
-          lapply(seq_len(nrow(s$variable_overrides)), function(j) {
-            as.list(s$variable_overrides[j, ])
+        # Unwrap list-wrapped data.frame (fromJSON with simplifyVector=TRUE on
+        # data.frame scenarios wraps nested arrays in a length-1 list)
+        vo <- s$variable_overrides
+        if (is.list(vo) && !is.data.frame(vo) && length(vo) == 1 && is.data.frame(vo[[1]])) {
+          vo <- vo[[1]]
+        }
+
+        override_items <- if (is.data.frame(vo)) {
+          lapply(seq_len(nrow(vo)), function(j) {
+            as.list(vo[j, ])
           })
         } else {
-          s$variable_overrides
+          vo
         }
 
         for (j in seq_along(override_items)) {
@@ -1543,19 +1629,35 @@ read_model_json <- function(json_string) {
       # Handle setting_overrides
       setting_overrides <- list()
       if (!is.null(s$setting_overrides) && length(s$setting_overrides) > 0) {
-        override_items <- if (is.data.frame(s$setting_overrides)) {
-          lapply(seq_len(nrow(s$setting_overrides)), function(j) {
-            as.list(s$setting_overrides[j, ])
+        # Unwrap list-wrapped data.frame (fromJSON with simplifyVector=TRUE on
+        # data.frame scenarios wraps nested arrays in a length-1 list)
+        so <- s$setting_overrides
+        if (is.list(so) && !is.data.frame(so) && length(so) == 1 && is.data.frame(so[[1]])) {
+          so <- so[[1]]
+        }
+
+        override_items <- if (is.data.frame(so)) {
+          lapply(seq_len(nrow(so)), function(j) {
+            as.list(so[j, ])
           })
         } else {
-          s$setting_overrides
+          so
         }
 
         for (j in seq_along(override_items)) {
           st <- override_items[[j]]
           # Skip empty entries (can occur with simplifyVector = TRUE on empty arrays)
           if (is.null(st$name) || length(st) == 0) next
-          setting_overrides[[length(setting_overrides) + 1]] <- list(name = st$name, value = st$value)
+          # Handle case where st is still a data.frame (multi-row)
+          if (is.data.frame(st)) {
+            for (k in seq_len(nrow(st))) {
+              setting_overrides[[length(setting_overrides) + 1]] <- list(
+                name = st$name[k], value = st$value[k]
+              )
+            }
+          } else {
+            setting_overrides[[length(setting_overrides) + 1]] <- list(name = st$name, value = st$value)
+          }
         }
       }
 
@@ -1624,7 +1726,7 @@ read_model_json <- function(json_string) {
             values = deserialize_to_formula(p$values, param_type),
             strategy = (p$strategy %||% "")[1],
             group = (p$group %||% "")[1],
-            display_name = if (!is.null(p$display_name)) p$display_name[1] else NULL,
+            display_name = if (!is.null(p$display_name) && !is.na(p$display_name[1]) && p$display_name[1] != "") p$display_name[1] else NULL,
             include_base_case = (p$include_base_case %||% TRUE)[1]
           )
         }
@@ -1704,6 +1806,32 @@ read_model_json <- function(json_string) {
                          "outcome_summary", "cost_summary")
     if (!all(expected_fields %in% names(model$vbp))) {
       model$vbp <- NULL
+    }
+  }
+
+  # Parse PSA configuration from JSON
+  if (!is.null(model$psa)) {
+    if (is.data.frame(model$psa)) {
+      model$psa <- as.list(model$psa[1, ])
+    }
+    if (!is.null(model$psa$n_sim)) {
+      model$psa$n_sim <- as.integer(model$psa$n_sim)
+      if (is.null(model$psa$seed) || (length(model$psa$seed) == 1 && is.na(model$psa$seed))) {
+        model$psa$seed <- NULL
+      }
+    } else {
+      model$psa <- NULL
+    }
+  }
+
+  # Parse decision_tree configuration from JSON
+  if (!is.null(model$decision_tree)) {
+    if (is.data.frame(model$decision_tree)) {
+      model$decision_tree <- as.list(model$decision_tree[1, ])
+    }
+    # Ensure it has the expected fields
+    if (!all(c("tree_name", "duration", "duration_unit") %in% names(model$decision_tree))) {
+      model$decision_tree <- NULL
     }
   }
 
@@ -1833,22 +1961,8 @@ read_model_json <- function(json_string) {
 #' Ensures that data frames in the model are properly formatted
 #' 
 #' @param model The model list parsed from JSON
-#' @param values_spec Optional values specification list
 #' @return The model with properly formatted data frames
-convert_json_dataframes <- function(model, values_spec = NULL) {
-  # Load all specs if not provided
-  if (is.null(values_spec)) {
-    model_input_specs <- system.file('model_input_specs', package = 'openqaly') %>%
-      list.files() %>%
-      set_names(str_split_fixed(., '\\.', Inf)[,1]) %>%
-      map(function(x) {
-        suppressWarnings(read_csv(
-          system.file('model_input_specs', x, package = 'openqaly'),
-          col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
-          progress = FALSE
-        ))
-      })
-  }
+convert_json_dataframes <- function(model) {
 
   expected_dfs <- c("strategies", "groups", "states", "transitions",
                     "values", "summaries", "variables")
@@ -2080,8 +2194,14 @@ deserialize_to_formula <- function(x, type) {
   if (is.null(x)) return(NULL)
   # Ensure type is scalar
   type <- type[1]
-  # Settings use literal values
-  if (type == "setting") return(x)
+  # Settings use literal values - ensure numeric conversion after JSON round-trip
+  if (type == "setting") {
+    if (is.character(x)) {
+      num <- suppressWarnings(as.numeric(x))
+      if (!is.na(num)) return(num)
+    }
+    return(x)
+  }
   # Variables: convert strings to oq_formula, keep numerics as-is
   if (is.character(x)) return(as.oq_formula(x))
   if (is.numeric(x)) return(x)
@@ -2261,6 +2381,7 @@ write_model_json <- function(model) {
         dsa_entry$group <- param$group %||% ""
       }
       dsa_entry$display_name <- param$display_name
+      dsa_entry$range_label <- param$range_label
       dsa_array[[i]] <- dsa_entry
     }
     json_model$dsa_parameters <- dsa_array
@@ -2342,6 +2463,16 @@ write_model_json <- function(model) {
   # VBP configuration
   if (!is.null(model$vbp)) {
     json_model$vbp <- model$vbp
+  }
+
+  # PSA configuration
+  if (!is.null(model$psa)) {
+    json_model$psa <- model$psa
+  }
+
+  # Decision tree configuration
+  if (!is.null(model$decision_tree)) {
+    json_model$decision_tree <- model$decision_tree
   }
 
   # Convert override_categories to array format
@@ -2622,6 +2753,11 @@ apply_parameter_overrides <- function(segment, ns, uneval_vars) {
 
   for (var_name in names(override_vals)) {
     val <- override_vals[[var_name]]
+    # Evaluate oq_formula objects in the namespace so formula-type overrides
+    # resolve to concrete values before being assigned to the environment.
+    if (inherits(val, "oq_formula")) {
+      val <- rlang::eval_tidy(val$quo, env = ns$env)
+    }
     assign(var_name, val, envir = ns$env)
   }
 

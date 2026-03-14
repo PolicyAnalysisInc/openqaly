@@ -588,7 +588,7 @@ test_that("add_value rejects transitional values for custom_psm", {
     add_value(model, "cost", 100, state = "alive", type = "cost")
   )
 
-  # Model-level values should work
+  # model start values should work
   expect_no_error(
     add_value(model, "admin", 50, type = "cost")
   )
@@ -614,4 +614,41 @@ test_that("custom_psm model runs end-to-end via builder", {
   results <- run_model(model)
   expect_true(!is.null(results$aggregated))
   expect_true(!is.null(results$aggregated$collapsed_trace))
+})
+
+test_that("Name collision between tables and values is detected (table first)", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(n_cycles = 10, cycle_length = "year") |>
+      add_state("alive", initial_prob = 1) |>
+      add_state("dead", initial_prob = 0) |>
+      add_table("ae_costs", data.frame(x = 1)) |>
+      add_value("ae_costs", 100, state = "alive", type = "cost"),
+    "Name collision"
+  )
+})
+
+test_that("Name collision between tables and values is detected (value first)", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(n_cycles = 10, cycle_length = "year") |>
+      add_state("alive", initial_prob = 1) |>
+      add_state("dead", initial_prob = 0) |>
+      add_value("ae_costs", 100, state = "alive", type = "cost") |>
+      add_table("ae_costs", data.frame(x = 1)),
+    "Name collision"
+  )
+})
+
+test_that("No collision when table and value names differ", {
+  model <- define_model("markov") |>
+    set_settings(n_cycles = 10, cycle_length = "year") |>
+    add_state("alive", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_table("ae_costs_table", data.frame(x = 1)) |>
+    add_value("ae_costs", 100, state = "alive", type = "cost")
+
+  expect_no_error(
+    normalize_and_validate_model(model)
+  )
 })

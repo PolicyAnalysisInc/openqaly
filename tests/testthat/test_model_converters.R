@@ -85,7 +85,9 @@ test_that("convert_model detects raw JSON string input", {
   json_str <- as_json(model)
   excel_out <- tempfile()
 
-  convert_model(json_str, excel_out, to = "excel")
+  expect_no_warning(
+    convert_model(json_str, excel_out, to = "excel")
+  )
 
   # Verify Excel structure created
   expect_true(file.exists(file.path(excel_out, "model.xlsx")))

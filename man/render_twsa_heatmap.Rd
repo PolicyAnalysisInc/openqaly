@@ -12,7 +12,12 @@ render_twsa_heatmap(
   legend_title = "Value",
   viridis_option = "viridis",
   show_base_case = TRUE,
-  caption = NULL
+  caption = NULL,
+  cell_decimals = NULL,
+  axis_label_decimals = NULL,
+  abbreviate = FALSE,
+  currency = FALSE,
+  locale = NULL
 )
 }
 \arguments{
@@ -29,6 +34,18 @@ render_twsa_heatmap(
 \item{viridis_option}{Viridis palette option}
 
 \item{show_base_case}{Logical. Mark base case point?}
+
+\item{caption}{Optional plot caption}
+
+\item{cell_decimals}{Number of decimal places for cell labels}
+
+\item{axis_label_decimals}{Number of decimal places for axis labels}
+
+\item{abbreviate}{Logical. Use abbreviated number format?}
+
+\item{currency}{Logical. Format values as currency?}
+
+\item{locale}{Locale for number formatting}
 }
 \value{
 A ggplot2 object

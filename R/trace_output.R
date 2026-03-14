@@ -405,6 +405,13 @@ trace_plot_area <- function(res,
                        collapsed = TRUE,
                        use_display_names = TRUE,
                        time_unit = "cycle") {
+  locale <- get_results_locale(res)
+
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("trace_plot_area() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
 
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(res,
@@ -491,8 +498,13 @@ trace_plot_area <- function(res,
   # Create base plot using the appropriate time column
   p <- ggplot(trace_data, aes(x = .data[[time_col_name]], y = .data$probability, fill = .data$state)) +
     geom_area(position = "stack") +
-    scale_x_continuous(breaks = time_breaks, limits = time_limits, expand = c(0, 0, 0, 0)) +
-    scale_y_continuous(expand = c(0, 0, 0, 0)) +
+    scale_x_continuous(
+      breaks = time_breaks,
+      limits = time_limits,
+      labels = oq_label_fn(locale = locale),
+      expand = c(0, 0, 0, 0)
+    ) +
+    scale_y_continuous(labels = oq_label_fn(locale = locale), expand = c(0, 0, 0, 0)) +
     theme_bw() +
     labs(
       x = time_label,
@@ -560,6 +572,13 @@ trace_plot_line <- function(res,
                               collapsed = TRUE,
                               use_display_names = TRUE,
                               time_unit = "cycle") {
+  locale <- get_results_locale(res)
+
+  if (!is.null(res$metadata$settings$model_type) &&
+      tolower(res$metadata$settings$model_type) == "decision_tree") {
+    stop("trace_plot_line() is not supported for decision tree models. ",
+         "Decision trees produce single-point results without a time dimension.")
+  }
 
   # Get trace data in long format (names already mapped by get_trace)
   trace_data <- get_trace(res,
@@ -663,7 +682,7 @@ trace_plot_line <- function(res,
                                 color = .data$state,
                                 group = interaction(.data$state, .data$strategy))) +
       geom_line(linewidth = 1) +
-      scale_x_continuous(breaks = time_breaks, limits = time_limits) +
+      scale_x_continuous(breaks = time_breaks, limits = time_limits, labels = oq_label_fn(locale = locale)) +
       theme_bw() +
       labs(
         x = time_label,
@@ -675,7 +694,7 @@ trace_plot_line <- function(res,
                                 color = .data$strategy,
                                 group = interaction(.data$strategy, .data$state))) +
       geom_line(linewidth = 1) +
-      scale_x_continuous(breaks = time_breaks, limits = time_limits) +
+      scale_x_continuous(breaks = time_breaks, limits = time_limits, labels = oq_label_fn(locale = locale)) +
       theme_bw() +
       labs(
         x = time_label,

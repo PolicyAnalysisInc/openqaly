@@ -4,7 +4,13 @@
 \alias{extract_transitions_long}
 \title{Extract Transition Data from Segments (Long Format)}
 \usage{
-extract_transitions_long(source_data, collapsed, metadata, name_field)
+extract_transitions_long(
+  source_data,
+  collapsed,
+  metadata,
+  name_field,
+  internal_state_filter = NULL
+)
 }
 \arguments{
 \item{source_data}{Data frame of segments}
@@ -14,6 +20,9 @@ extract_transitions_long(source_data, collapsed, metadata, name_field)
 \item{metadata}{Model metadata}
 
 \item{name_field}{Which name field to use}
+
+\item{internal_state_filter}{Optional character vector of expanded state names
+to keep. Applied before display name mapping.}
 }
 \value{
 Data frame in long format

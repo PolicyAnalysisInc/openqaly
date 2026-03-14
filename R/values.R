@@ -17,6 +17,7 @@ parse_values <- function(x, states, extra_vars) {
       destination = character(0),
       formula = list(), # Formulas are parsed to oq_formula objects, so list() for empty case
       type = character(0),
+      discounting_override = character(0),
       max_st = numeric(0),
       .rows = 0
     )
@@ -50,7 +51,7 @@ parse_values <- function(x, states, extra_vars) {
     group_by(.data$state, .data$destination) %>%
     do({
       as.data.frame(.) %>%
-        select("name", "display_name", "description", "state", "destination", "formula", "type") %>%
+        select("name", "display_name", "description", "state", "destination", "formula", "type", any_of("discounting_override")) %>%
         mutate(formula = map(.data$formula, as.oq_formula)) %>%
         sort_variables(extra_vars)
     }) %>%
@@ -90,6 +91,18 @@ check_values_df <- function(x) {
     }, error = function(e) {
       stop(glue("Invalid formula syntax for value '{x$name[i]}': {e$message}"))
     })
+  }
+
+  # Transitional values require both state and destination
+  has_dest <- !is.na(x$destination) & x$destination != "NA" & x$destination != ""
+  has_state <- !is.na(x$state) & x$state != "NA" & x$state != ""
+  invalid_tv <- has_dest & !has_state
+  if (any(invalid_tv)) {
+    bad_rows <- x[invalid_tv, , drop = FALSE]
+    bad_names <- paste(unique(bad_rows$name), collapse = ", ")
+    stop("Transitional values must specify both 'state' and 'destination'. ",
+         "The following values have a destination but no state: ", bad_names,
+         call. = FALSE)
   }
 
   # Validate "All" / "All Other" rules
@@ -378,7 +391,21 @@ evaluate_values <- function(df, ns, value_names, state_names, simplify = FALSE) 
       
       value_names_in_df <- intersect(colnames(state_res), value_names) # Re-calc based on state_res with 'state'
       value_names_in_env <- intersect(names(state_ns$env), value_names)
-      
+
+      # Type-check environment values to prevent non-numeric objects (e.g., tables) reaching C++
+      for (env_val_name in value_names_in_env) {
+        env_val <- state_ns$env[[env_val_name]]
+        if (!is.numeric(env_val) && !is.integer(env_val)) {
+          validate_value_result(
+            env_val,
+            value_name = env_val_name,
+            state = x_group$state[1],
+            destination = x_group$destination[1],
+            formula_text = NULL
+          )
+        }
+      }
+
       current_max_st <- x_group$max_st[1]
 
       if (simplify && length(value_names_in_df) > 0 && nrow(state_res) > 0) {

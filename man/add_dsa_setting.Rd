@@ -4,7 +4,14 @@
 \alias{add_dsa_setting}
 \title{Add Deterministic Sensitivity Analysis Setting to Model}
 \usage{
-add_dsa_setting(model, setting, low, high, display_name = NULL)
+add_dsa_setting(
+  model,
+  setting,
+  low,
+  high,
+  display_name = NULL,
+  range_label = NULL
+)
 }
 \arguments{
 \item{model}{A oq_model_builder object}
@@ -17,6 +24,10 @@ add_dsa_setting(model, setting, low, high, display_name = NULL)
 \item{high}{Value for the high bound (numeric or character depending on setting)}
 
 \item{display_name}{Optional display name for plots and tables}
+
+\item{range_label}{Optional custom text for the input range portion of tornado labels.
+When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+"Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".}
 }
 \value{
 The modified model object

@@ -15,7 +15,9 @@ incremental_ceac_plot(
   title = NULL,
   xlab = "Willingness to Pay",
   ylab = "Probability of Being Most Cost-Effective",
-  legend_position = "bottom"
+  legend_position = "bottom",
+  wtp_axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -47,6 +49,10 @@ specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{legend_position}{Legend position: "bottom" (default), "right", "top",
 "left", or "none"}
+
+\item{wtp_axis_decimals}{Fixed decimal places for WTP axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

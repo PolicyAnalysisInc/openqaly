@@ -117,7 +117,7 @@ get_multi_group_test_results <- function() {
 test_that("outcomes_table() Total row equals sum of component values", {
   results <- get_test_results()
 
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results, outcome = "total_qalys",
     groups = "overall", show_total = TRUE, decimals = 2
   )
@@ -148,7 +148,7 @@ test_that("outcomes_table() with comparators calculates differences correctly", 
   expected_diff <- new_qalys - standard_qalys
 
   # Now get difference via comparators
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results, outcome = "total_qalys",
     groups = "overall", comparators = "standard",
     show_total = TRUE, decimals = 2
@@ -196,7 +196,7 @@ test_that("outcomes_table() errors when strategies used with comparators", {
 test_that("Three-level mode has spacer columns between groups", {
   results <- get_multi_group_test_results()
 
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results, outcome = "total_qalys",
     groups = "all", show_total = TRUE, decimals = 2
   )
@@ -216,7 +216,7 @@ test_that("Three-level mode has spacer columns between groups", {
 test_that("Three-level mode has two-level header structure", {
   results <- get_multi_group_test_results()
 
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results, outcome = "total_qalys",
     groups = "all", show_total = TRUE, decimals = 2
   )
@@ -241,7 +241,7 @@ test_that("Three-level mode has two-level header structure", {
 test_that("Three-level mode values match get_summaries() for each group-strategy", {
   results <- get_multi_group_test_results()
 
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results, outcome = "total_qalys",
     groups = "all", show_total = TRUE, decimals = 2
   )
@@ -300,4 +300,21 @@ test_that("outcomes_table() with flextable renders correctly with multiple group
 
   tbl <- outcomes_table(results, "total_qalys", groups = "all", table_format = "flextable")
   expect_s3_class(tbl, "flextable")
+})
+
+# ============================================================================
+# Tests for costs_table()
+# ============================================================================
+
+test_that("costs_table() returns flextable object", {
+  skip_if_not_installed("flextable")
+  results <- get_test_results()
+  ft <- costs_table(results, "total_cost")
+  expect_s3_class(ft, "flextable")
+})
+
+test_that("costs_table() returns kable object", {
+  results <- get_test_results()
+  tbl <- costs_table(results, "total_cost", table_format = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })

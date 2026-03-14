@@ -12,7 +12,8 @@ outcomes_table(
   interventions = NULL,
   comparators = NULL,
   show_total = TRUE,
-  decimals = 2,
+  decimals = NULL,
+  abbreviate = FALSE,
   discounted = TRUE,
   font_size = 11,
   table_format = c("flextable", "kable")
@@ -34,6 +35,8 @@ outcomes_table(
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: 2)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{discounted}{Logical. Use discounted values?}
 

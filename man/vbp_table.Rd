@@ -9,7 +9,8 @@ vbp_table(
   wtp_thresholds = NULL,
   comparators = "all",
   groups = "overall",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -36,7 +37,9 @@ If NULL, generates a default sequence based on outcome summary metadata.}
   \item \code{NULL} or \code{"all"} - All groups plus overall
 }}
 
-\item{decimals}{Number of decimal places for VBP values (default: 0)}
+\item{decimals}{Number of decimal places for VBP values (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

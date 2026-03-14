@@ -11,7 +11,7 @@ prepare_evpi_table_data(
   wtp_thresholds = c(20000, 50000, 1e+05, 150000),
   groups = "overall",
   strategies = NULL,
-  decimals = 0,
+  decimals = NULL,
   font_size = 11
 )
 }

@@ -13,7 +13,8 @@ twsa_outcomes_table(
   interventions = NULL,
   comparators = NULL,
   discounted = TRUE,
-  decimals = 2,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   backend = c("flextable", "kable")
 )
@@ -36,7 +37,9 @@ specific group name(s)}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{decimals}{Number of decimal places (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for table (default: 11)}
 

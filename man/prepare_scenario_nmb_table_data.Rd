@@ -12,7 +12,8 @@ prepare_scenario_nmb_table_data(
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -31,7 +32,9 @@ prepare_scenario_nmb_table_data(
 
 \item{comparators}{Comparator strategies}
 
-\item{decimals}{Number of decimal places}
+\item{decimals}{Number of decimal places (NULL for auto-precision)}
+
+\item{abbreviate}{Logical. Use K/M/B/T suffixes?}
 
 \item{font_size}{Font size}
 }

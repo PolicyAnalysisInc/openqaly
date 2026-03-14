@@ -93,7 +93,7 @@ write_model <- function(model, path, format = c("excel", "json", "r", "yaml")) {
 write_model_excel <- function(model, path) {
   # Prepare settings dataframe
   if (!is.null(model$settings) && is.list(model$settings)) {
-    settings_df <- tibble(
+    settings_df <- fast_tibble(
       setting = names(model$settings),
       value = as.character(unlist(model$settings))
     )
@@ -118,6 +118,15 @@ write_model_excel <- function(model, path) {
     wb_list$trees <- model$trees
   }
 
+  # Handle decision_tree config if present
+  if (!is.null(model$decision_tree)) {
+    wb_list$decision_tree <- fast_tibble(
+      tree_name = model$decision_tree$tree_name,
+      duration = model$decision_tree$duration,
+      duration_unit = model$decision_tree$duration_unit
+    )
+  }
+
   # Handle multivariate sampling if present
   if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
     # Create multivariate_sampling sheet
@@ -128,7 +137,7 @@ write_model_excel <- function(model, path) {
       # Add to multivariate_sampling sheet
       mv_sampling_df <- bind_rows(
         mv_sampling_df,
-        tibble(
+        fast_tibble(
           name = mv_spec$name,
           distribution = mv_spec$distribution,
           description = mv_spec$description %||% ""
@@ -148,7 +157,7 @@ write_model_excel <- function(model, path) {
             select("sampling_name", "variable", "strategy", "group")
         } else if (is.character(vars_df)) {
           # Convert character vector to dataframe
-          vars_df <- tibble(
+          vars_df <- fast_tibble(
             sampling_name = mv_spec$name,
             variable = vars_df,
             strategy = "",
@@ -164,7 +173,7 @@ write_model_excel <- function(model, path) {
   }
 
   # Build metadata sheet for table/script descriptions
-  metadata_df <- tibble(
+  metadata_df <- fast_tibble(
     component_type = character(),
     name = character(),
     description = character()
@@ -176,7 +185,7 @@ write_model_excel <- function(model, path) {
       tbl <- model$tables[[tbl_name]]
       desc <- if (is.list(tbl)) tbl$description else NULL
       if (!is.null(desc) && !is.na(desc) && desc != "") {
-        metadata_df <- bind_rows(metadata_df, tibble(
+        metadata_df <- bind_rows(metadata_df, fast_tibble(
           component_type = "table",
           name = tbl_name,
           description = desc
@@ -191,7 +200,7 @@ write_model_excel <- function(model, path) {
       scr <- model$scripts[[scr_name]]
       desc <- if (is.list(scr)) scr$description else NULL
       if (!is.null(desc) && !is.na(desc) && desc != "") {
-        metadata_df <- bind_rows(metadata_df, tibble(
+        metadata_df <- bind_rows(metadata_df, fast_tibble(
           component_type = "script",
           name = scr_name,
           description = desc
@@ -206,24 +215,26 @@ write_model_excel <- function(model, path) {
 
   # Add DSA parameters sheet
   if (length(model$dsa_parameters) > 0) {
-    dsa_df <- tibble(
+    dsa_df <- fast_tibble(
       type = character(),
       name = character(),
       low = character(),
       high = character(),
       strategy = character(),
       group = character(),
-      display_name = character()
+      display_name = character(),
+      range_label = character()
     )
     for (p in model$dsa_parameters) {
-      dsa_df <- bind_rows(dsa_df, tibble(
+      dsa_df <- bind_rows(dsa_df, fast_tibble(
         type = p$type,
         name = p$name,
         low = as.character(serialize_formula_or_value(p$low)),
         high = as.character(serialize_formula_or_value(p$high)),
         strategy = p$strategy %||% "",
         group = p$group %||% "",
-        display_name = p$display_name %||% ""
+        display_name = p$display_name %||% "",
+        range_label = p$range_label %||% ""
       ))
     }
     wb_list$dsa_parameters <- dsa_df
@@ -231,8 +242,8 @@ write_model_excel <- function(model, path) {
 
   # Add scenarios sheets
   if (length(model$scenarios) > 0) {
-    scenarios_df <- tibble(name = character(), description = character())
-    overrides_df <- tibble(
+    scenarios_df <- fast_tibble(name = character(), description = character())
+    overrides_df <- fast_tibble(
       scenario_name = character(),
       override_type = character(),
       name = character(),
@@ -242,14 +253,14 @@ write_model_excel <- function(model, path) {
     )
 
     for (s in model$scenarios) {
-      scenarios_df <- bind_rows(scenarios_df, tibble(
+      scenarios_df <- bind_rows(scenarios_df, fast_tibble(
         name = s$name,
         description = s$description %||% ""
       ))
 
       if (!is.null(s$variable_overrides)) {
         for (v in s$variable_overrides) {
-          overrides_df <- bind_rows(overrides_df, tibble(
+          overrides_df <- bind_rows(overrides_df, fast_tibble(
             scenario_name = s$name,
             override_type = "variable",
             name = v$name,
@@ -262,7 +273,7 @@ write_model_excel <- function(model, path) {
 
       if (!is.null(s$setting_overrides)) {
         for (st in s$setting_overrides) {
-          overrides_df <- bind_rows(overrides_df, tibble(
+          overrides_df <- bind_rows(overrides_df, fast_tibble(
             scenario_name = s$name,
             override_type = "setting",
             name = st$name,
@@ -280,8 +291,8 @@ write_model_excel <- function(model, path) {
 
   # Add TWSA sheets
   if (length(model$twsa_analyses) > 0) {
-    twsa_df <- tibble(name = character(), description = character())
-    params_df <- tibble(
+    twsa_df <- fast_tibble(name = character(), description = character())
+    params_df <- fast_tibble(
       twsa_name = character(),
       param_type = character(),
       name = character(),
@@ -298,14 +309,14 @@ write_model_excel <- function(model, path) {
     )
 
     for (t in model$twsa_analyses) {
-      twsa_df <- bind_rows(twsa_df, tibble(
+      twsa_df <- bind_rows(twsa_df, fast_tibble(
         name = t$name,
         description = t$description %||% ""
       ))
 
       if (!is.null(t$parameters)) {
         for (p in t$parameters) {
-          params_df <- bind_rows(params_df, tibble(
+          params_df <- bind_rows(params_df, fast_tibble(
             twsa_name = t$name,
             param_type = p$param_type,
             name = p$name,
@@ -358,10 +369,19 @@ write_model_excel <- function(model, path) {
     ))
   }
 
+  # Add PSA configuration sheet
+  if (!is.null(model$psa)) {
+    psa_df <- data.frame(n_sim = model$psa$n_sim, stringsAsFactors = FALSE)
+    if (!is.null(model$psa$seed)) {
+      psa_df$seed <- model$psa$seed
+    }
+    wb_list$psa <- tibble::as_tibble(psa_df)
+  }
+
   # Add override categories sheets
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
-    categories_df <- tibble(category_name = character(), general = logical())
-    overrides_df <- tibble(
+    categories_df <- fast_tibble(category_name = character(), general = logical())
+    overrides_df <- fast_tibble(
       category_name = character(),
       title = character(),
       description = character(),
@@ -376,7 +396,7 @@ write_model_excel <- function(model, path) {
       config_max = character(),
       config_step_size = character()
     )
-    dropdown_options_df <- tibble(
+    dropdown_options_df <- fast_tibble(
       category_name = character(),
       override_title = character(),
       label = character(),
@@ -385,13 +405,13 @@ write_model_excel <- function(model, path) {
     )
 
     for (cat_item in model$override_categories) {
-      categories_df <- bind_rows(categories_df, tibble(
+      categories_df <- bind_rows(categories_df, fast_tibble(
         category_name = cat_item$name,
         general = cat_item$general
       ))
 
       for (ovr in cat_item$overrides) {
-        overrides_df <- bind_rows(overrides_df, tibble(
+        overrides_df <- bind_rows(overrides_df, fast_tibble(
           category_name = cat_item$name,
           title = ovr$title,
           description = ovr$description %||% "",
@@ -410,7 +430,7 @@ write_model_excel <- function(model, path) {
         # Collect dropdown options
         if (ovr$input_type == "dropdown" && !is.null(ovr$input_config$options)) {
           for (opt in ovr$input_config$options) {
-            dropdown_options_df <- bind_rows(dropdown_options_df, tibble(
+            dropdown_options_df <- bind_rows(dropdown_options_df, fast_tibble(
               category_name = cat_item$name,
               override_title = ovr$title,
               label = opt$label,
@@ -506,7 +526,11 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
       # Already a model object
       model <- input
     } else if (is.character(input) && length(input) == 1) {
-      if (dir.exists(input)) {
+      # Parse raw JSON strings before filesystem checks to avoid path warnings
+      # when long JSON content is passed as input.
+      if (validate(input)) {
+        model <- read_model_json(input)
+      } else if (dir.exists(input)) {
         # Check if it's an Excel model folder
         excel_file <- file.path(input, "model.xlsx")
         if (file.exists(excel_file)) {
@@ -540,12 +564,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
           stop("Unknown file extension: ", ext)
         }
       } else {
-        # Try to parse as JSON string
-        if (validate(input)) {
-          model <- read_model_json(input)
-        } else {
-          stop("Input not recognized as file, folder, or valid JSON: ", input)
-        }
+        stop("Input not recognized as file, folder, or valid JSON: ", input)
       }
     } else {
       stop("Invalid input type")
@@ -715,6 +734,11 @@ read_model_yaml <- function(path) {
     model$trees <- flatten_trees(yaml_data$trees)
   }
 
+  # Read decision_tree configuration
+  if (!is.null(yaml_data$decision_tree)) {
+    model$decision_tree <- as.list(yaml_data$decision_tree)
+  }
+
   # Read multivariate sampling
   if (!is.null(yaml_data$multivariate_sampling)) {
     model$multivariate_sampling <- parse_yaml_multivariate_sampling(
@@ -760,6 +784,16 @@ read_model_yaml <- function(path) {
     )
   } else {
     model$vbp <- NULL
+  }
+
+  # Read PSA configuration
+  if (!is.null(yaml_data$psa)) {
+    model$psa <- list(
+      n_sim = as.integer(yaml_data$psa$n_sim),
+      seed = yaml_data$psa$seed
+    )
+  } else {
+    model$psa <- NULL
   }
 
   # Read override categories
@@ -860,7 +894,7 @@ parse_yaml_multivariate_sampling <- function(mv_list) {
         yaml_list_to_tibble(mv$variables)
       }
     } else {
-      tibble(variable = character(0), strategy = character(0), group = character(0))
+      fast_tibble(variable = character(0), strategy = character(0), group = character(0))
     }
 
     list(
@@ -888,7 +922,8 @@ parse_yaml_dsa_parameters <- function(dsa_list) {
       high = deserialize_to_formula(p$high, param_type),
       strategy = p$strategy %||% "",
       group = p$group %||% "",
-      display_name = p$display_name
+      display_name = p$display_name,
+      range_label = p$range_label
     )
   })
 
@@ -1108,6 +1143,11 @@ write_model_yaml <- function(model, path) {
     yaml_data$trees <- nest_trees(model$trees)
   }
 
+  # Decision tree configuration
+  if (!is.null(model$decision_tree)) {
+    yaml_data$decision_tree <- model$decision_tree
+  }
+
   # Multivariate sampling
   if (!is.null(model$multivariate_sampling) &&
       length(model$multivariate_sampling) > 0) {
@@ -1141,6 +1181,11 @@ write_model_yaml <- function(model, path) {
     yaml_data$vbp <- model$vbp
   }
 
+  # PSA configuration
+  if (!is.null(model$psa)) {
+    yaml_data$psa <- model$psa
+  }
+
   # Override categories
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     yaml_data$override_categories <- format_override_categories_yaml(model$override_categories)
@@ -1171,6 +1216,7 @@ format_csv_for_yaml <- function(df) {
     return("")
   }
   # Write to string
+  csv_output <- NULL
   conn <- textConnection("csv_output", "w", local = TRUE)
   on.exit(close(conn))
   write.csv(df, conn, row.names = FALSE)
@@ -1305,6 +1351,7 @@ format_dsa_yaml <- function(dsa_params) {
     result <- add_optional_field(result, "strategy", p$strategy)
     result <- add_optional_field(result, "group", p$group)
     result <- add_optional_field(result, "display_name", p$display_name)
+    result <- add_optional_field(result, "range_label", p$range_label)
     result
   })
 }
@@ -1524,4 +1571,3 @@ write_yaml_file <- function(data, path) {
   )
   writeLines(yaml_str, path)
 }
-

@@ -10,6 +10,7 @@ run_vbp(
   intervention_strategy = NULL,
   outcome_summary = NULL,
   cost_summary = NULL,
+  progress = NULL,
   ...
 )
 }
@@ -23,6 +24,10 @@ run_vbp(
 \item{outcome_summary}{Name of the outcome summary to use (default: "total_qalys")}
 
 \item{cost_summary}{Name of the cost summary to use (default: "total_cost")}
+
+\item{progress}{Optional progress callback function. Called with
+\code{progress(total = N)} to declare total units, then
+\code{progress(amount = K)} for each completed unit.}
 
 \item{...}{Additional arguments passed to run_segment}
 }

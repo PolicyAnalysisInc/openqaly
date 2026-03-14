@@ -9,7 +9,8 @@ prepare_vbp_table_data(
   wtp_thresholds = NULL,
   comparators = "all",
   groups = "overall",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -33,7 +34,9 @@ If NULL, generates a default sequence based on outcome metadata.}
   \item \code{"group_name"} - Specific group by name
 }}
 
-\item{decimals}{Number of decimal places for VBP values}
+\item{decimals}{Number of decimal places for VBP values (NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)?}
 
 \item{font_size}{Font size for rendering}
 }

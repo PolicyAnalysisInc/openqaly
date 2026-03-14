@@ -7,7 +7,8 @@
 threshold_convergence_table(
   results,
   analyses = NULL,
-  decimals = 4,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -17,7 +18,9 @@ threshold_convergence_table(
 
 \item{analyses}{Optional character vector of analysis names to include}
 
-\item{decimals}{Number of decimal places for formatting (default: 4)}
+\item{decimals}{Number of decimal places for formatting (default: NULL for auto)}
+
+\item{abbreviate}{Whether to abbreviate large numbers (default: FALSE)}
 
 \item{font_size}{Font size in points (default: 11)}
 

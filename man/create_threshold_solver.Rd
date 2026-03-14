@@ -4,17 +4,19 @@
 \alias{create_threshold_solver}
 \title{Create Threshold Solver}
 \usage{
-create_threshold_solver(parsed_model, analysis, ...)
+create_threshold_solver(parsed_model, analysis, progress = NULL, ...)
 }
 \arguments{
 \item{parsed_model}{Parsed model object}
 
 \item{analysis}{Threshold analysis specification}
 
+\item{progress}{Optional progress callback function}
+
 \item{...}{Additional arguments passed to run_segment}
 }
 \value{
-A list with run_iteration() and get_history() functions
+A list with run_iteration(), get_history(), and complete_progress() functions
 }
 \description{
 Creates a solver instance (closure) for a single threshold analysis.

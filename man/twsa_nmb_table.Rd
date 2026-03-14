@@ -13,7 +13,8 @@ twsa_nmb_table(
   interventions = NULL,
   comparators = NULL,
   wtp = NULL,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   backend = c("flextable", "kable")
 )
@@ -38,7 +39,9 @@ or comparators must be specified.}
 
 \item{wtp}{Willingness-to-pay threshold. If NULL, extracts from outcome metadata.}
 
-\item{decimals}{Number of decimal places (default: 0)}
+\item{decimals}{Number of decimal places (default: NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for table (default: 11)}
 

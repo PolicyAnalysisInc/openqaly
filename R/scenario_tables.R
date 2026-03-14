@@ -9,10 +9,10 @@
 #' @importFrom tibble tibble
 NULL
 
-#' Prepare Scenario Outcomes Table Data
+#' Prepare Scenario Summary Table Data
 #'
-#' Internal helper function that prepares scenario outcomes data for table rendering.
-#' Creates a table showing the outcome value for each scenario across strategies.
+#' Internal helper function that prepares scenario summary data for table rendering.
+#' Creates a table showing the value for each scenario across strategies.
 #'
 #' @param results A openqaly scenario results object
 #' @param outcome Name of outcome to display
@@ -20,21 +20,27 @@ NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Intervention strategy name
 #' @param comparators Comparator strategy name
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes?
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering
+#' @param value_type Character. Type of values to extract: "outcome", "cost", or "all"
+#' @param currency Logical. Format values as currency? (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
-prepare_scenario_outcomes_table_data <- function(results,
+prepare_scenario_summary_table_data <- function(results,
                                                   outcome,
                                                   groups = "overall",
                                                   strategies = NULL,
                                                   interventions = NULL,
                                                   comparators = NULL,
-                                                  decimals = 2,
+                                                  decimals = NULL,
+                                                  abbreviate = FALSE,
                                                   discounted = TRUE,
-                                                  font_size = 11) {
+                                                  font_size = 11,
+                                                  value_type = "all",
+                                                  currency = FALSE) {
 
   # Use prepare_scenario_bar_data which handles all the extraction and comparison logic
   scenario_data <- prepare_scenario_bar_data(
@@ -44,8 +50,12 @@ prepare_scenario_outcomes_table_data <- function(results,
     strategies = strategies,
     interventions = interventions,
     comparators = comparators,
-    discounted = discounted
+    discounted = discounted,
+    value_type = value_type
   )
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Get unique strategies and groups
   strategies_display <- unique(scenario_data$strategy)
@@ -81,9 +91,9 @@ prepare_scenario_outcomes_table_data <- function(results,
     # Format numeric columns
     for (col in strategies_display) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-        result_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE)
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                         locale = locale, abbreviate = abbreviate,
+                                         currency = currency)
       }
     }
 
@@ -146,9 +156,9 @@ prepare_scenario_outcomes_table_data <- function(results,
       # Format numeric columns
       for (col in strategies_display) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          grp_data[[col]] <- format(rounded_vals, nsmall = decimals, scientific = FALSE, trim = TRUE)
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                        locale = locale, abbreviate = abbreviate,
+                                        currency = currency)
         }
       }
 
@@ -208,7 +218,8 @@ prepare_scenario_outcomes_table_data <- function(results,
 #' @param interventions Character vector of intervention strategy name(s).
 #'   When specified, shows differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #'
@@ -232,11 +243,12 @@ scenario_outcomes_table <- function(results,
                                      strategies = NULL,
                                      interventions = NULL,
                                      comparators = NULL,
-                                     decimals = 2,
+                                     decimals = NULL,
+                                     abbreviate = FALSE,
                                      discounted = TRUE,
                                      font_size = 11) {
 
-  table_spec <- prepare_scenario_outcomes_table_data(
+  table_spec <- prepare_scenario_summary_table_data(
     results,
     outcome,
     groups = groups,
@@ -244,8 +256,72 @@ scenario_outcomes_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,
+    abbreviate = abbreviate,
     discounted = discounted,
-    font_size = font_size
+    font_size = font_size,
+    value_type = "outcome",
+    currency = FALSE
+  )
+
+  render_table(table_spec)
+}
+
+
+#' Scenario Costs Table
+#'
+#' Creates a table showing scenario cost values. Each row represents a scenario,
+#' with columns for each strategy showing the cost value.
+#'
+#' @param results A openqaly scenario results object (output from run_scenario)
+#' @param outcome Name of cost outcome to display (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), specific group name, or NULL
+#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param interventions Character vector of intervention strategy name(s).
+#'   When specified, shows differences (intervention - comparator).
+#' @param comparators Character vector of comparator strategy name(s).
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param font_size Font size for rendering (default: 11)
+#'
+#' @return A gt table object
+#'
+#' @examples
+#' \dontrun{
+#' results <- run_scenario(model)
+#'
+#' # Basic cost table
+#' scenario_costs_table(results, "total_cost")
+#'
+#' # Show differences vs comparator
+#' scenario_costs_table(results, "total_cost", comparators = "control")
+#' }
+#'
+#' @export
+scenario_costs_table <- function(results,
+                                  outcome,
+                                  groups = "overall",
+                                  strategies = NULL,
+                                  interventions = NULL,
+                                  comparators = NULL,
+                                  decimals = NULL,
+                                  abbreviate = FALSE,
+                                  discounted = TRUE,
+                                  font_size = 11) {
+
+  table_spec <- prepare_scenario_summary_table_data(
+    results,
+    outcome,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    decimals = decimals,
+    abbreviate = abbreviate,
+    discounted = discounted,
+    font_size = font_size,
+    value_type = "cost",
+    currency = TRUE
   )
 
   render_table(table_spec)
@@ -262,7 +338,10 @@ scenario_outcomes_table <- function(results,
 #' @param groups Group selection
 #' @param interventions Intervention strategies
 #' @param comparators Comparator strategies
-#' @param decimals Number of decimal places
+#' @param cost_decimals Number of decimal places for costs (NULL for auto-precision)
+#' @param outcome_decimals Number of decimal places for outcomes (NULL for auto-precision)
+#' @param icer_decimals Number of decimal places for ICER (NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes?
 #' @param font_size Font size
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -273,7 +352,10 @@ prepare_scenario_ce_table_data <- function(results,
                                             groups = "overall",
                                             interventions = NULL,
                                             comparators = NULL,
-                                            decimals = 0,
+                                            cost_decimals = NULL,
+                                            outcome_decimals = NULL,
+                                            icer_decimals = NULL,
+                                            abbreviate = FALSE,
                                             font_size = 11) {
 
   # Get outcome data (always discounted for CE)
@@ -297,6 +379,9 @@ prepare_scenario_ce_table_data <- function(results,
     comparators = comparators,
     discounted = TRUE
   )
+
+  # Get locale for formatting
+  locale <- get_results_locale(results)
 
   # Calculate ICER
   ce_data <- outcome_data %>%
@@ -361,7 +446,7 @@ prepare_scenario_ce_table_data <- function(results,
     character(0)
   }
 
-  # Generate display values
+  # Generate display values using oq_format_icer
   # Tables: flipped gets asterisk only (no comparison direction text), identical has no asterisk
   ce_data <- ce_data %>%
     mutate(
@@ -370,10 +455,10 @@ prepare_scenario_ce_table_data <- function(results,
         .data$ce_class == "dominated" ~ "Dominated",
         .data$ce_class == "dominant" ~ "Dominant",
         .data$ce_class == "flipped" ~ paste0(
-          scales::comma(round(abs(.data$icer), decimals)),
+          oq_format(abs(.data$icer), decimals = icer_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE),
           "*"
         ),
-        TRUE ~ scales::comma(round(.data$icer, decimals))
+        TRUE ~ oq_format(.data$icer, decimals = icer_decimals, locale = locale, abbreviate = abbreviate, currency = TRUE)
       )
     )
 
@@ -407,8 +492,10 @@ prepare_scenario_ce_table_data <- function(results,
     result_data <- ce_data %>%
       mutate(
         sort_order = if_else(.data$is_base_case, 0L, as.integer(.data$scenario_id)),
-        delta_cost_fmt = scales::comma(round(.data$delta_cost, 2), accuracy = 0.01),
-        delta_outcome_fmt = scales::comma(round(.data$delta_outcome, 4), accuracy = 0.0001)
+        delta_cost_fmt = oq_format(.data$delta_cost, decimals = cost_decimals,
+                                    locale = locale, currency = TRUE, abbreviate = abbreviate),
+        delta_outcome_fmt = oq_format(.data$delta_outcome, decimals = outcome_decimals,
+                                       locale = locale, abbreviate = abbreviate)
       ) %>%
       arrange(.data$sort_order) %>%
       select("scenario_name", "strategy", "delta_cost_fmt", "delta_outcome_fmt", "icer_display")
@@ -507,8 +594,10 @@ prepare_scenario_ce_table_data <- function(results,
         filter(.data$group == grp) %>%
         mutate(
           sort_order = if_else(.data$is_base_case, 0L, as.integer(.data$scenario_id)),
-          delta_cost_fmt = scales::comma(round(.data$delta_cost, 2), accuracy = 0.01),
-          delta_outcome_fmt = scales::comma(round(.data$delta_outcome, 4), accuracy = 0.0001)
+          delta_cost_fmt = oq_format(.data$delta_cost, decimals = cost_decimals,
+                                      locale = locale, currency = TRUE, abbreviate = abbreviate),
+          delta_outcome_fmt = oq_format(.data$delta_outcome, decimals = outcome_decimals,
+                                         locale = locale, abbreviate = abbreviate)
         ) %>%
         arrange(.data$sort_order) %>%
         select("scenario_name", "strategy", "delta_cost_fmt", "delta_outcome_fmt", "icer_display") %>%
@@ -594,7 +683,10 @@ prepare_scenario_ce_table_data <- function(results,
 #' @param interventions Character vector of intervention strategy name(s).
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
-#' @param decimals Number of decimal places for ICER (default: 0)
+#' @param cost_decimals Number of decimal places for costs (default: NULL for auto-precision)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL for auto-precision)
+#' @param icer_decimals Number of decimal places for ICER (default: NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -631,7 +723,10 @@ scenario_ce_table <- function(results,
                                groups = "overall",
                                interventions = NULL,
                                comparators = NULL,
-                               decimals = 0,
+                               cost_decimals = NULL,
+                               outcome_decimals = NULL,
+                               icer_decimals = NULL,
+                               abbreviate = FALSE,
                                font_size = 11,
                                table_format = c("flextable", "kable")) {
 
@@ -649,7 +744,10 @@ scenario_ce_table <- function(results,
     groups = groups,
     interventions = interventions,
     comparators = comparators,
-    decimals = decimals,
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    icer_decimals = icer_decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -686,7 +784,8 @@ scenario_ce_table <- function(results,
 #' @param groups Group selection
 #' @param interventions Intervention strategies
 #' @param comparators Comparator strategies
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes?
 #' @param font_size Font size
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -698,7 +797,8 @@ prepare_scenario_nmb_table_data <- function(results,
                                              groups = "overall",
                                              interventions = NULL,
                                              comparators = NULL,
-                                             decimals = 0,
+                                             decimals = NULL,
+                                             abbreviate = FALSE,
                                              font_size = 11) {
 
   # Get outcome data
@@ -734,6 +834,9 @@ prepare_scenario_nmb_table_data <- function(results,
       nmb = (.data$delta_outcome * wtp) - .data$delta_cost
     )
 
+  # Get locale for formatting
+  locale <- get_results_locale(results)
+
   # Similar structure to outcomes table
   strategies_display <- unique(nmb_data$strategy)
   groups_display <- unique(nmb_data$group)
@@ -759,8 +862,8 @@ prepare_scenario_nmb_table_data <- function(results,
     # Format numeric columns
     for (col in strategies_display) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                         locale = locale, abbreviate = abbreviate, currency = TRUE)
       }
     }
 
@@ -808,8 +911,8 @@ prepare_scenario_nmb_table_data <- function(results,
 
       for (col in strategies_display) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                        locale = locale, abbreviate = abbreviate, currency = TRUE)
         }
       }
 
@@ -862,7 +965,8 @@ prepare_scenario_nmb_table_data <- function(results,
 #' @param interventions Character vector of intervention strategy name(s).
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
-#' @param decimals Number of decimal places (default: 0)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
+#' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #'
 #' @return A gt table object
@@ -884,7 +988,8 @@ scenario_nmb_table <- function(results,
                                 groups = "overall",
                                 interventions = NULL,
                                 comparators = NULL,
-                                decimals = 0,
+                                decimals = NULL,
+                                abbreviate = FALSE,
                                 font_size = 11) {
 
   if (is.null(interventions) && is.null(comparators)) {
@@ -920,6 +1025,7 @@ scenario_nmb_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

@@ -12,7 +12,9 @@ prepare_dsa_tornado_data(
   interventions,
   comparators,
   discounted,
-  show_parameter_values = TRUE
+  show_parameter_values = TRUE,
+  locale = NULL,
+  value_type = "all"
 )
 }
 \arguments{
@@ -34,6 +36,8 @@ Can be combined with interventions for N×M comparisons.}
 \item{discounted}{Use discounted values?}
 
 \item{show_parameter_values}{Logical. Include parameter values in labels? (default: TRUE)}
+
+\item{value_type}{Type of summary values: "all" (default), "outcome", or "cost"}
 }
 \value{
 A tibble with parameter_display, strategy, group, low, base, high, range

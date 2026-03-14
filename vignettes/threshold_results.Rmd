@@ -314,7 +314,7 @@ Control the number of significant figures in the threshold value label:
 threshold_plot(
   results,
   analyses = "Volantor Cost such that Volantor is CE vs Seritinib",
-  decimals = 2
+  label_decimals = 2
 )
 ```
 
@@ -381,8 +381,7 @@ threshold_table(results)
 ```{r}
 threshold_table(
   results,
-  analyses = "Utility (Mild) such that Seritinib QALYs = 8",
-  decimals = 2
+  analyses = "Utility (Mild) such that Seritinib QALYs = 8"
 )
 ```
 

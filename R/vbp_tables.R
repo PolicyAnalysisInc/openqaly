@@ -95,7 +95,8 @@ extract_vbp_default_wtp <- function(vbp_results) {
 #'     \item \code{"overall"} - Overall population (default)
 #'     \item \code{"group_name"} - Specific group by name
 #'   }
-#' @param decimals Number of decimal places for VBP values
+#' @param decimals Number of decimal places for VBP values (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -104,8 +105,13 @@ prepare_vbp_table_data <- function(vbp_results,
                                    wtp_thresholds = NULL,
                                    comparators = "all",
                                    groups = "overall",
-                                   decimals = 0,
+                                   decimals = NULL,
+                                   abbreviate = FALSE,
                                    font_size = 11) {
+
+  # Get locale from VBP results metadata
+  metadata_for_locale <- attr(vbp_results$aggregated, "metadata")
+  locale <- get_results_locale(list(metadata = metadata_for_locale))
 
   # Handle group selection for tables
   if (is.null(groups) || identical(groups, "all")) {
@@ -144,6 +150,7 @@ prepare_vbp_table_data <- function(vbp_results,
       comparators = comparators,
       groups_to_process = groups_to_process,
       decimals = decimals,
+      abbreviate = abbreviate,
       font_size = font_size
     ))
   }
@@ -263,17 +270,17 @@ prepare_vbp_table_data <- function(vbp_results,
     ) %>%
     arrange(.data$wtp)
 
-  # Format WTP column with thousand separators
+  # Format WTP column with locale-aware formatting
   pivot_data <- pivot_data %>%
-    mutate(wtp_display = comma(.data$wtp))
+    mutate(wtp_display = oq_format(.data$wtp, decimals = 0, locale = locale,
+                                    currency = TRUE, abbreviate = abbreviate))
 
-  # Format VBP columns with thousand separators
+  # Format VBP columns with locale-aware formatting
   for (comp in comparators_display) {
     if (comp %in% colnames(pivot_data) && is.numeric(pivot_data[[comp]])) {
-      pivot_data[[comp]] <- comma(
-        round(pivot_data[[comp]], decimals),
-        accuracy = if (decimals == 0) 1 else 10^(-decimals)
-      )
+      pivot_data[[comp]] <- oq_format(pivot_data[[comp]], decimals = decimals,
+                                       locale = locale, currency = TRUE,
+                                       abbreviate = abbreviate)
     }
   }
 
@@ -338,7 +345,8 @@ prepare_vbp_table_data <- function(vbp_results,
 #'     \item Character vector - Specific comparator name(s)
 #'   }
 #' @param groups_to_process Character vector of groups to include
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
@@ -347,8 +355,13 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
                                                 wtp_thresholds = NULL,
                                                 comparators = "all",
                                                 groups_to_process,
-                                                decimals = 0,
+                                                decimals = NULL,
+                                                abbreviate = FALSE,
                                                 font_size = 11) {
+
+  # Get locale from VBP results metadata
+  metadata_for_locale <- attr(vbp_results$aggregated, "metadata")
+  locale <- get_results_locale(list(metadata = metadata_for_locale))
 
   # Generate WTP thresholds if not provided
   if (is.null(wtp_thresholds)) {
@@ -467,7 +480,8 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
     # Calculate VBP at each WTP for this group
     grp_rows <- tibble()
     for (wtp_val in wtp_thresholds) {
-      row_data <- tibble(WTP = comma(wtp_val))
+      row_data <- tibble(WTP = oq_format(wtp_val, decimals = 0, locale = locale,
+                                          currency = TRUE, abbreviate = abbreviate))
 
       for (i in seq_along(comparators_for_calc)) {
         comp <- comparators_for_calc[i]
@@ -480,9 +494,9 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
             comparator = comp,
             group = grp
           )
-          row_data[[paste0("vs. ", comp_display)]] <- comma(
-            round(vbp_price, decimals),
-            accuracy = if (decimals == 0) 1 else 10^(-decimals)
+          row_data[[paste0("vs. ", comp_display)]] <- oq_format(
+            vbp_price, decimals = decimals, locale = locale,
+            currency = TRUE, abbreviate = abbreviate
           )
         }
       }
@@ -493,9 +507,9 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
           calculate_vbp_price(vbp_results, wtp = wtp_val, comparator = comp, group = grp)
         })
         min_vbp <- min(all_vbps)
-        row_data[["vs. All Comparators"]] <- comma(
-          round(min_vbp, decimals),
-          accuracy = if (decimals == 0) 1 else 10^(-decimals)
+        row_data[["vs. All Comparators"]] <- oq_format(
+          min_vbp, decimals = decimals, locale = locale,
+          currency = TRUE, abbreviate = abbreviate
         )
       }
 
@@ -571,7 +585,8 @@ prepare_vbp_table_data_multi_group <- function(vbp_results,
 #'     \item \code{"all_groups"} - All groups (excluding overall)
 #'     \item \code{NULL} or \code{"all"} - All groups plus overall
 #'   }
-#' @param decimals Number of decimal places for VBP values (default: 0)
+#' @param decimals Number of decimal places for VBP values (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" or "kable"
 #'
@@ -620,7 +635,8 @@ vbp_table <- function(vbp_results,
                       wtp_thresholds = NULL,
                       comparators = "all",
                       groups = "overall",
-                      decimals = 0,
+                      decimals = NULL,
+                      abbreviate = FALSE,
                       font_size = 11,
                       table_format = c("flextable", "kable")) {
 
@@ -633,6 +649,7 @@ vbp_table <- function(vbp_results,
     comparators = comparators,
     groups = groups,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 

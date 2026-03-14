@@ -53,7 +53,7 @@ parse_psm_custom <- function(model) {
 
     if (nrow(transitional_values) > 0) {
       invalid_names <- unique(transitional_values$name)
-      stop(glue("Custom PSM models do not support transitional values (state + destination). Invalid values: {paste(invalid_names, collapse = ', ')}. Use residency values (state only) or model-level values instead."))
+      stop(glue("Custom PSM models do not support transitional values (state + destination). Invalid values: {paste(invalid_names, collapse = ', ')}. Use residency values (state only) or model start values instead."))
     }
   }
 
@@ -90,13 +90,15 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
 
   # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  model$settings$n_cycles <- get_n_cycles(model$settings)
+  dt_duration_days <- get_dt_duration_days(model)
+  model$settings$n_cycles <- get_n_cycles(model$settings, dt_duration_days = dt_duration_days)
 
   # Parse the specification tables provided for states and variables
   uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year, model_type = "psm_custom")
@@ -127,6 +129,8 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     )
   }
 
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a namespace which will contain evaluated variables
   # For PSM Custom, include cycle 0 for trace calculation (state probabilities at t=0)
   ns <- create_namespace(model, segment, include_cycle_zero = TRUE)
@@ -138,12 +142,14 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Custom PSM doesn't use initial state probabilities (determined by formulas at cycle 0)
   eval_states <- NULL
 
   # Parse state probability formulas from transitions
   state_prob_formulas <- parse_state_probability_formulas(model$transitions, unique(model$states$name))
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate Custom PSM trace and values
   calculated_trace_and_values <- calculate_psm_custom_trace_and_values(
@@ -155,6 +161,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     model$settings$n_cycles,
     model$settings$half_cycle_method
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
@@ -166,9 +173,16 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
   cycle_length_years <- cycle_length_days / days_per_year
 
-  # Calculate discount factors
-  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years)
-  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
+  # Extract discount timing and method settings
+  discount_timing <- model$settings$discount_timing %||% "start"
+  discount_method <- model$settings$discount_method %||% "by_cycle"
+
+  # Calculate DT offset for discounting
+  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
+
+  # Calculate discount factors (with DT offset if applicable)
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
 
   # Get value types from uneval_values
   type_mapping <- setNames(uneval_values$type, uneval_values$name)
@@ -181,6 +195,29 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     discount_factors_outcomes,
     type_mapping
   )
+
+  # Undo discounting for decision tree values (they are never discounted),
+  # but skip DT values that have a discounting_override (those use the formula instead)
+  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
+  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
+  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
+  for (v in dt_value_names) {
+    if (v %in% dt_override_names) next
+    if (v %in% colnames(calculated_trace_and_values$values_discounted)) {
+      calculated_trace_and_values$values_discounted[, v] <- calculated_trace_and_values$values[, v]
+    }
+  }
+
+  # Apply discounting override formulas
+  calculated_trace_and_values$values_discounted <- apply_discount_weights(
+    calculated_trace_and_values$values,
+    calculated_trace_and_values$values_discounted,
+    calculated_trace_and_values$corrected_trace,
+    discount_factors_cost, discount_factors_outcomes,
+    discount_cost, discount_outcomes,
+    uneval_values, type_mapping, eval_vars
+  )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Create the object to return
   # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
@@ -234,8 +271,30 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   }
 
   segment$collapsed_trace <- list(trace_with_time)
-  # PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
+  # Custom PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
   segment$expanded_trace <- list(trace_with_time)
+
+  # Add corrected trace to segment (n_cycles rows)
+  corrected_trace <- calculated_trace_and_values$corrected_trace
+  corrected_cycle_numbers <- as.numeric(rownames(corrected_trace))
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    corrected_time_vars_df <- data.frame(
+      cycle = corrected_cycle_numbers,
+      day = corrected_cycle_numbers * cycle_length_days,
+      week = corrected_cycle_numbers * cycle_length_days / 7,
+      month = corrected_cycle_numbers * cycle_length_days / days_per_month,
+      year = corrected_cycle_numbers * cycle_length_days / days_per_year
+    )
+    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
+  } else {
+    corrected_time_vars_df <- data.frame(cycle = corrected_cycle_numbers)
+    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
+  }
+  corrected_trace_with_time <- cbind(corrected_time_vars_df, corrected_trace)
+  segment$corrected_collapsed_trace <- list(corrected_trace_with_time)
+  segment$corrected_expanded_trace <- list(corrected_trace_with_time)
+
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate summaries for both discounted and undiscounted values
   if (!is.null(parsed_summaries)) {
@@ -254,6 +313,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Calculate segment weight
   segment$weight <- calculate_segment_weight(segment, model, eval_vars)
@@ -262,6 +322,7 @@ run_segment.psm_custom <- function(segment, model, env, ...) {
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   segment
 }
@@ -396,7 +457,7 @@ calculate_psm_custom_trace_and_values <- function(
 
   oq_error_checkpoint()
 
-  # Calculate values (residency and model-level only)
+  # Calculate values (residency and model start only)
   # Values are for cycles 1:n_cycles, so prune cycle 0 from namespace
   values_ns <- prune_namespace_cycle_zero(namespace)
   values_matrix <- calculate_psm_custom_values(
@@ -409,7 +470,15 @@ calculate_psm_custom_trace_and_values <- function(
     half_cycle_method
   )
 
-  list(trace = trace, values = values_matrix)
+  # Pre-compute corrected trace for discounting_override trace() function
+  corrected_trace <- switch(half_cycle_method,
+    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
+    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
+    trace[1:n_cycles, , drop = FALSE]  # "start" default
+  )
+  rownames(corrected_trace) <- 1:n_cycles
+
+  list(trace = trace, values = values_matrix, corrected_trace = corrected_trace)
 }
 
 #' Prune Cycle Zero from Namespace
@@ -428,7 +497,7 @@ prune_namespace_cycle_zero <- function(namespace) {
 
 #' Calculate Custom PSM Values
 #'
-#' Calculates residency and model-level values for Custom PSM models.
+#' Calculates residency and model start values for Custom PSM models.
 #' Transitional values are not supported.
 #'
 #' @param uneval_values Unevaluated values specifications
@@ -458,6 +527,13 @@ calculate_psm_custom_values <- function(
     return(values_matrix)
   }
 
+  # Pre-compute corrected trace (half-cycle corrected state probs, n_cycles rows)
+  corrected_trace <- switch(half_cycle_method,
+    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
+    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
+    trace[1:n_cycles, , drop = FALSE]  # "start" default
+  )
+
   # Process each value (vectorized evaluation)
   for (i in 1:nrow(uneval_values)) {
     value_row <- uneval_values[i, ]
@@ -482,6 +558,12 @@ calculate_psm_custom_values <- function(
     if (is_oq_error(evaluated)) {
       accumulate_oq_error(evaluated, context_msg = glue("Value '{value_name}'"))
       evaluated <- rep(0, n_cycles)
+    } else if (!is.numeric(evaluated)) {
+      accumulate_oq_error(
+        define_error(glue("Value '{value_name}' must evaluate to a numeric value.")),
+        context_msg = "Custom PSM value validation"
+      )
+      evaluated <- rep(0, n_cycles)
     }
 
     # Handle scalar -> replicate to vector
@@ -498,25 +580,19 @@ calculate_psm_custom_values <- function(
       evaluated <- rep(0, n_cycles)
     }
 
-    if (!is.na(value_row$state)) {
-      # Residency value - multiply by state probs
+    if (!is.na(value_row$state) && value_row$state == "decision_tree") {
+      # Decision tree value - first cycle only, no state multiplication
+      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+    } else if (!is.na(value_row$state)) {
+      # Residency value - multiply by pre-computed corrected state probs
       state_idx <- which(state_names == value_row$state)
       if (length(state_idx) == 1) {
-        # Get state probs based on half-cycle method
-        state_probs <- if (half_cycle_method == "end") {
-          trace[2:(n_cycles + 1), state_idx]
-        } else if (half_cycle_method == "life-table") {
-          avg <- (trace[1:n_cycles, state_idx] + trace[2:(n_cycles + 1), state_idx]) / 2
-          avg[n_cycles] <- trace[n_cycles + 1, state_idx]
-          avg
-        } else {  # "start"
-          trace[1:n_cycles, state_idx]
-        }
+        state_probs <- corrected_trace[, state_idx]
         values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * state_probs
       }
     } else {
-      # Model-level value
-      values_matrix[, value_name] <- values_matrix[, value_name] + evaluated
+      # model start value
+      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
     }
   }
 

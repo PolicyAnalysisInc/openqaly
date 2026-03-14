@@ -45,13 +45,15 @@ run_segment.psm <- function(segment, model, env, ...) {
 
   # Capture the extra arguments provided to function
   dots <- list(...)
+  .progress_callback <- dots$.progress_callback
 
   # Apply setting overrides if present (DSA mode)
   model <- apply_setting_overrides(segment, model)
 
   # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
   model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  model$settings$n_cycles <- get_n_cycles(model$settings)
+  dt_duration_days <- get_dt_duration_days(model)
+  model$settings$n_cycles <- get_n_cycles(model$settings, dt_duration_days = dt_duration_days)
 
   # Parse the specification tables provided for states and variables
   uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year, model_type = "psm")
@@ -82,8 +84,11 @@ run_segment.psm <- function(segment, model, env, ...) {
     )
   }
 
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Create a namespace which will contain evaluated variables
-  ns <- create_namespace(model, segment)
+  # Include cycle 0 for survival probability calculation at t=0
+  ns <- create_namespace(model, segment, include_cycle_zero = TRUE)
 
   # Apply parameter overrides if present (PSA, DSA, or VBP mode)
   override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
@@ -92,14 +97,16 @@ run_segment.psm <- function(segment, model, env, ...) {
 
   # Evaluate variables
   eval_vars <- eval_variables(uneval_vars, ns)
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # PSM doesn't use initial state probabilities (determined by survival functions)
   # Set to NULL for PSM
   eval_states <- NULL
-  
+
   # For PSM, parse and evaluate survival distributions from transitions
   survival_distributions <- parse_and_eval_psm_transitions(model$transitions, segment, eval_vars)
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate PSM trace and values
   calculated_trace_and_values <- calculate_psm_trace_and_values(
     survival_distributions,
@@ -110,6 +117,7 @@ run_segment.psm <- function(segment, model, env, ...) {
     model$settings$n_cycles,
     model$settings$half_cycle_method
   )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Apply discounting to values
   n_cycles <- model$settings$n_cycles
@@ -121,9 +129,16 @@ run_segment.psm <- function(segment, model, env, ...) {
   days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
   cycle_length_years <- cycle_length_days / days_per_year
 
-  # Calculate discount factors
-  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years)
-  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years)
+  # Extract discount timing and method settings
+  discount_timing <- model$settings$discount_timing %||% "start"
+  discount_method <- model$settings$discount_method %||% "by_cycle"
+
+  # Calculate DT offset for discounting
+  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
+
+  # Calculate discount factors (with DT offset if applicable)
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
 
   # Get value types from uneval_values
   type_mapping <- setNames(uneval_values$type, uneval_values$name)
@@ -136,6 +151,29 @@ run_segment.psm <- function(segment, model, env, ...) {
     discount_factors_outcomes,
     type_mapping
   )
+
+  # Undo discounting for decision tree values (they are never discounted),
+  # but skip DT values that have a discounting_override (those use the formula instead)
+  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
+  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
+  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
+  for (v in dt_value_names) {
+    if (v %in% dt_override_names) next
+    if (v %in% colnames(calculated_trace_and_values$values_discounted)) {
+      calculated_trace_and_values$values_discounted[, v] <- calculated_trace_and_values$values[, v]
+    }
+  }
+
+  # Apply discounting override formulas
+  calculated_trace_and_values$values_discounted <- apply_discount_weights(
+    calculated_trace_and_values$values,
+    calculated_trace_and_values$values_discounted,
+    calculated_trace_and_values$corrected_trace,
+    discount_factors_cost, discount_factors_outcomes,
+    discount_cost, discount_outcomes,
+    uneval_values, type_mapping, eval_vars
+  )
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
 
   # Create the object to return
   # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
@@ -192,6 +230,28 @@ run_segment.psm <- function(segment, model, env, ...) {
   # PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
   segment$expanded_trace <- list(trace_with_time)
 
+  # Add corrected trace to segment (n_cycles rows)
+  corrected_trace <- calculated_trace_and_values$corrected_trace
+  corrected_cycle_numbers <- as.numeric(rownames(corrected_trace))
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    corrected_time_vars_df <- data.frame(
+      cycle = corrected_cycle_numbers,
+      day = corrected_cycle_numbers * cycle_length_days,
+      week = corrected_cycle_numbers * cycle_length_days / 7,
+      month = corrected_cycle_numbers * cycle_length_days / days_per_month,
+      year = corrected_cycle_numbers * cycle_length_days / days_per_year
+    )
+    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
+  } else {
+    corrected_time_vars_df <- data.frame(cycle = corrected_cycle_numbers)
+    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
+  }
+  corrected_trace_with_time <- cbind(corrected_time_vars_df, corrected_trace)
+  segment$corrected_collapsed_trace <- list(corrected_trace_with_time)
+  segment$corrected_expanded_trace <- list(corrected_trace_with_time)
+
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate summaries for both discounted and undiscounted values
   if (!is.null(parsed_summaries)) {
     summaries_undiscounted <- calculate_summaries(
@@ -209,15 +269,17 @@ run_segment.psm <- function(segment, model, env, ...) {
     segment$summaries <- list(empty_summary)
     segment$summaries_discounted <- list(empty_summary)
   }
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   # Calculate segment weight
   segment$weight <- calculate_segment_weight(segment, model, eval_vars)
-  
+
   # Reorder columns to have strategy, group, weight first
   col_order <- c("strategy", "group", "weight")
   other_cols <- setdiff(names(segment), col_order)
   segment <- segment[, c(col_order, other_cols)]
-  
+  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+
   segment
 }
 
@@ -373,10 +435,17 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   pfs_time_unit <- attr(pfs_dist, "time_unit")
   os_time_unit <- attr(os_dist, "time_unit")
   
-  # Convert cycle times to appropriate units
-  # Use the namespace to access time conversion variables
-  pfs_times <- convert_cycles_to_time_unit(cycle_times, pfs_time_unit, namespace)
-  os_times <- convert_cycles_to_time_unit(cycle_times, os_time_unit, namespace)
+  # Map time_unit to the pre-computed column in namespace$df
+  time_col <- function(unit) {
+    switch(tolower(unit),
+      "days" = "day", "weeks" = "week",
+      "months" = "month", "years" = "year", NULL
+    )
+  }
+  pfs_col <- if (!is.null(pfs_time_unit)) time_col(pfs_time_unit) else NULL
+  os_col  <- if (!is.null(os_time_unit))  time_col(os_time_unit)  else NULL
+  pfs_times <- if (!is.null(pfs_col)) namespace$df[[pfs_col]] else cycle_times
+  os_times  <- if (!is.null(os_col))  namespace$df[[os_col]]  else cycle_times
   
   # Get survival probabilities
   pfs_surv <- surv_prob(pfs_dist, pfs_times)
@@ -404,17 +473,22 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   # For probabilities, use absolute tolerance since comparing to fixed value (1.0)
   tol <- 10 * sqrt(.Machine$double.eps)  # ~1.49e-07
 
-  for (cycle_idx in 1:(n_cycles + 1)) {
-    row_sum <- sum(trace[cycle_idx, ])
-    if (abs(row_sum - 1.0) > tol) {
-      error_msg <- glue("PSM trace probabilities do not sum to 1 at cycle {cycle_idx - 1} (sum = {row_sum})")
+  # Validate bounds
+  out_of_bounds <- which(trace < -tol | trace > 1 + tol, arr.ind = TRUE)
+  if (nrow(out_of_bounds) > 0) {
+    for (k in 1:nrow(out_of_bounds)) {
+      r <- out_of_bounds[k, 1]
+      error_msg <- glue("PSM trace contains invalid probabilities at cycle {r - 1} (must be in [0, 1])")
       accumulate_oq_error(define_error(error_msg), context_msg = "PSM trace validation")
     }
-    # Allow small floating point errors beyond [0, 1] bounds
-    if (any(trace[cycle_idx, ] < -tol | trace[cycle_idx, ] > 1 + tol)) {
-      error_msg <- glue("PSM trace contains invalid probabilities at cycle {cycle_idx - 1} (must be in [0, 1])")
-      accumulate_oq_error(define_error(error_msg), context_msg = "PSM trace validation")
-    }
+  }
+
+  # Validate row sums
+  row_sums <- rowSums(trace)
+  bad_rows <- which(abs(row_sums - 1.0) > tol)
+  for (r in bad_rows) {
+    error_msg <- glue("PSM trace probabilities do not sum to 1 at cycle {r - 1} (sum = {row_sums[r]})")
+    accumulate_oq_error(define_error(error_msg), context_msg = "PSM trace validation")
   }
   oq_error_checkpoint()
 
@@ -423,10 +497,11 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   trans_pfs_to_pp <- c(0, diff(-prob_pfs))  # Decrease in PFS
   trans_pp_to_dead <- c(0, diff(prob_dead))  # Increase in dead
   
-  # Calculate values
+  # Values are for cycles 1:n_cycles, so prune cycle 0 from namespace
+  values_ns <- prune_namespace_cycle_zero(namespace)
   values_matrix <- calculate_psm_values(
     uneval_values,
-    namespace,
+    values_ns,
     trace,
     trans_pfs_to_pp,
     trans_pp_to_dead,
@@ -436,157 +511,106 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
     half_cycle_method
   )
   
-  list(trace = trace, values = values_matrix)
-}
+  # Pre-compute corrected trace for discounting_override trace() function
+  corrected_trace <- switch(half_cycle_method,
+    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
+    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
+    trace[1:n_cycles, , drop = FALSE]  # "start" default
+  )
+  rownames(corrected_trace) <- 1:n_cycles
 
-#' Convert Cycles to Time Unit
-#'
-#' Converts cycle numbers to the appropriate time unit for survival distributions.
-#'
-#' @param cycles Vector of cycle numbers
-#' @param time_unit The target time unit (days/weeks/months/years)
-#' @param namespace The namespace containing time variables
-#'
-#' @return Vector of times in the specified unit
-#' @keywords internal
-convert_cycles_to_time_unit <- function(cycles, time_unit, namespace) {
-  
-  if (is.null(time_unit)) {
-    warning("No time unit specified for survival distribution. Assuming cycles.")
-    return(cycles)
-  }
-  
-  time_unit <- tolower(time_unit)
-  
-  # For cycle 0, time is always 0
-  # For other cycles, use the appropriate time variable from namespace
-  result <- numeric(length(cycles))
-  
-  for (i in seq_along(cycles)) {
-    if (cycles[i] == 0) {
-      result[i] <- 0
-    } else {
-      # Get the time value for this cycle from the namespace
-      # The namespace df should have time variables for each cycle
-      cycle_row <- namespace$df[namespace$df$cycle == cycles[i], ]
-      if (nrow(cycle_row) > 0) {
-        result[i] <- switch(time_unit,
-          "days" = cycle_row$day[1],
-          "weeks" = cycle_row$week[1],
-          "months" = cycle_row$month[1],
-          "years" = cycle_row$year[1],
-          cycles[i]  # Default to cycle number
-        )
-      } else {
-        # Fallback: estimate based on cycle length
-        cycle_length_var <- switch(time_unit,
-          "days" = namespace["cycle_length_days"],
-          "weeks" = namespace["cycle_length_weeks"],
-          "months" = namespace["cycle_length_months"],
-          "years" = namespace["cycle_length_years"],
-          1
-        )
-        result[i] <- cycles[i] * as.numeric(cycle_length_var)
-      }
-    }
-  }
-  
-  result
+  list(trace = trace, values = values_matrix, corrected_trace = corrected_trace)
 }
 
 calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles, half_cycle_method = "start") {
-  
+
   # Initialize values matrix
   values_matrix <- matrix(0, nrow = n_cycles, ncol = length(value_names))
   colnames(values_matrix) <- value_names
   rownames(values_matrix) <- 1:n_cycles
-  
+
   if (length(value_names) == 0 || nrow(uneval_values) == 0) {
     return(values_matrix)
   }
-  
-  # Evaluate values for each cycle
-  for (cycle in 1:n_cycles) {
-    
-    # Set current cycle in namespace
-    cycle_ns <- clone_namespace(namespace)
-    cycle_ns$df$cycle <- cycle
-    cycle_ns$df$state_cycle <- cycle  # PSM doesn't use state_cycle differently
-    
-    # Process each value
-    for (i in 1:nrow(uneval_values)) {
-      value_row <- uneval_values[i, ]
-      value_name <- value_row$name
-      
-      if (is.na(value_name) || !(value_name %in% value_names)) {
-        next
-      }
-      
-      # Evaluate the formula
-      evaluated_value <- eval_formula(value_row$formula[[1]], cycle_ns)
-      
-      if (is_oq_error(evaluated_value)) {
-        accumulate_oq_error(evaluated_value, context_msg = glue("Evaluation of value '{value_name}' in cycle {cycle}"))
-        evaluated_value <- 0
-      } else if (!is.numeric(evaluated_value) || length(evaluated_value) != 1) {
-        error_msg <- glue("Value '{value_name}' in cycle {cycle} must evaluate to a single numeric value.")
-        accumulate_oq_error(define_error(error_msg), context_msg = "PSM value validation")
-        evaluated_value <- 0
-      }
-      
-      # Apply value based on type (residency vs transitional)
-      if (!is.na(value_row$state) && is.na(value_row$destination)) {
-        # Residency value
-        state_index <- which(state_names == value_row$state)
-        if (length(state_index) == 1) {
-          # Calculate state probability based on half-cycle method
-          # Note: PSM trace is 0-indexed (cycle 0 = initial, cycle 1 = first cycle, etc.)
-          state_prob <- if (half_cycle_method == "end") {
-            trace[cycle + 1, state_index]  # End of cycle
-          } else if (half_cycle_method == "life-table") {
-            if (cycle == 1) {
-              # First cycle: average of initial (row 1) and end of cycle 1 (row 2)
-              (trace[1, state_index] + trace[2, state_index]) / 2
-            } else if (cycle == n_cycles) {
-              # Last cycle: just use end probability
-              trace[cycle + 1, state_index]
-            } else {
-              # Middle cycles: average of start (row cycle) and end (row cycle+1)
-              (trace[cycle, state_index] + trace[cycle + 1, state_index]) / 2
-            }
-          } else {  # "start" or default
-            trace[cycle, state_index]  # Start of cycle
-          }
 
-          # Multiply by state occupancy probability
-          values_matrix[cycle, value_name] <- values_matrix[cycle, value_name] +
-            evaluated_value * state_prob
-        }
-      } else if (!is.na(value_row$state) && !is.na(value_row$destination)) {
-        # Transitional value
-        from_state <- value_row$state
-        to_state <- value_row$destination
-        
-        # Determine transition probability
-        trans_prob <- 0
-        if (from_state == state_names[1] && to_state == state_names[2]) {
-          # PFS to post-progression
-          trans_prob <- trans_pfs_to_pp[cycle]
-        } else if (from_state == state_names[2] && to_state == state_names[3]) {
-          # Post-progression to dead
-          trans_prob <- trans_pp_to_dead[cycle]
-        }
-        # Note: PFS to dead transition is assumed to be 0 as per specification
-        
-        values_matrix[cycle, value_name] <- values_matrix[cycle, value_name] + 
-          evaluated_value * trans_prob
-      } else if (is.na(value_row$state) && is.na(value_row$destination)) {
-        # Model-level value (applied regardless of state)
-        values_matrix[cycle, value_name] <- values_matrix[cycle, value_name] + evaluated_value
+  # Pre-compute corrected trace (half-cycle corrected state probs, n_cycles rows)
+  corrected_trace <- switch(half_cycle_method,
+    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
+    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
+    trace[1:n_cycles, , drop = FALSE]  # "start" default
+  )
+
+  # Process each value (vectorized evaluation)
+  for (i in 1:nrow(uneval_values)) {
+    value_row <- uneval_values[i, ]
+    value_name <- value_row$name
+
+    if (is.na(value_name) || !(value_name %in% value_names)) {
+      next
+    }
+
+    # Evaluate formula once (returns vector of length n_cycles)
+    evaluated <- eval_formula(value_row$formula[[1]], namespace)
+
+    if (is_oq_error(evaluated)) {
+      accumulate_oq_error(evaluated, context_msg = glue("Value '{value_name}'"))
+      evaluated <- rep(0, n_cycles)
+    } else if (!is.numeric(evaluated)) {
+      accumulate_oq_error(
+        define_error(glue("Value '{value_name}' must evaluate to a single numeric value.")),
+        context_msg = "PSM value validation"
+      )
+      evaluated <- rep(0, n_cycles)
+    }
+
+    # Handle scalar -> replicate to vector
+    if (length(evaluated) == 1) {
+      evaluated <- rep(evaluated, n_cycles)
+    }
+
+    # Check length
+    if (length(evaluated) != n_cycles) {
+      accumulate_oq_error(
+        define_error(glue("Value '{value_name}' has length {length(evaluated)}, expected {n_cycles}")),
+        context_msg = "PSM value validation"
+      )
+      evaluated <- rep(0, n_cycles)
+    }
+
+    # Apply value based on type (decision_tree vs residency vs transitional)
+    if (!is.na(value_row$state) && value_row$state == "decision_tree") {
+      # Decision tree value - first cycle only, no state multiplication
+      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+    } else if (!is.na(value_row$state) && is.na(value_row$destination)) {
+      # Residency value - multiply by pre-computed corrected state probs
+      state_idx <- which(state_names == value_row$state)
+      if (length(state_idx) == 1) {
+        state_probs <- corrected_trace[, state_idx]
+        values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * state_probs
       }
+    } else if (!is.na(value_row$state) && !is.na(value_row$destination)) {
+      # Transitional value
+      from_state <- value_row$state
+      to_state <- value_row$destination
+
+      # Determine transition probability vector
+      trans_probs <- rep(0, n_cycles)
+      if (from_state == state_names[1] && to_state == state_names[2]) {
+        # PFS to post-progression
+        trans_probs <- trans_pfs_to_pp[1:n_cycles]
+      } else if (from_state == state_names[2] && to_state == state_names[3]) {
+        # Post-progression to dead
+        trans_probs <- trans_pp_to_dead[1:n_cycles]
+      }
+      # Note: PFS to dead transition is assumed to be 0 as per specification
+
+      values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * trans_probs
+    } else if (is.na(value_row$state) && is.na(value_row$destination)) {
+      # model start value
+      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
     }
   }
-  
+
   oq_error_checkpoint()
 
   values_matrix

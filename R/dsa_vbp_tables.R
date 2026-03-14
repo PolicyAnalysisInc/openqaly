@@ -22,7 +22,8 @@ NULL
 #'   "overall" (aggregate only), "all_comparators" (individuals only), or specific comparator name(s)
 #' @param groups Group selection: "overall" (default), "all" (overall + all groups),
 #'   "all_groups" (all groups without overall), or specific group name(s)
-#' @param decimals Number of decimal places for VBP values (default: 0)
+#' @param decimals Number of decimal places for VBP values (default: NULL for auto)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param ... Additional arguments (reserved for future use)
 #'
@@ -48,7 +49,8 @@ dsa_vbp_table <- function(results,
                            wtp = NULL,
                            comparators = "all",
                            groups = "overall",
-                           decimals = 0,
+                           decimals = NULL,
+                           abbreviate = FALSE,
                            font_size = 11,
                            ...) {
 
@@ -69,6 +71,7 @@ dsa_vbp_table <- function(results,
     comparators = comparators,
     groups = groups,
     decimals = decimals,
+    abbreviate = abbreviate,
     font_size = font_size
   )
 
@@ -96,7 +99,10 @@ prepare_dsa_vbp_table_data <- function(results,
                                         comparators,
                                         groups,
                                         decimals,
+                                        abbreviate = FALSE,
                                         font_size) {
+
+  locale <- get_results_locale(results)
 
   equations <- results$dsa_vbp_equations
 
@@ -220,8 +226,9 @@ prepare_dsa_vbp_table_data <- function(results,
     # Format numeric columns
     for (col in setdiff(colnames(result_data), "parameter_display_name")) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                        locale = locale, currency = TRUE,
+                                        abbreviate = abbreviate)
       }
     }
 
@@ -291,8 +298,9 @@ prepare_dsa_vbp_table_data <- function(results,
       # Format numeric columns
       for (col in setdiff(colnames(grp_data), "parameter_display_name")) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                        locale = locale, currency = TRUE,
+                                        abbreviate = abbreviate)
         }
       }
 

@@ -557,13 +557,15 @@ test_that("incremental_ce_table() formats numeric columns with decimals", {
   # Both formats should handle decimals parameter
   tbl_kable <- incremental_ce_table(
     results, "total_qalys", "total_cost",
-    decimals = 2, table_format = "kable"
+    cost_decimals = 2, outcome_decimals = 2, icer_decimals = 2,
+    table_format = "kable"
   )
 
   if (requireNamespace("flextable", quietly = TRUE)) {
     tbl_flex <- incremental_ce_table(
       results, "total_qalys", "total_cost",
-      decimals = 2, table_format = "flextable"
+      cost_decimals = 2, outcome_decimals = 2, icer_decimals = 2,
+      table_format = "flextable"
     )
     expect_s3_class(tbl_flex, "flextable")
   }

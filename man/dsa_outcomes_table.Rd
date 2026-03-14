@@ -11,10 +11,13 @@ dsa_outcomes_table(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = 2,
+  decimals = NULL,
   discounted = TRUE,
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  top_n = NULL,
+  show_parameter_values = FALSE,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -33,13 +36,20 @@ If provided, shows interventions - comparators comparisons. Mutually exclusive w
 \item{comparators}{Single reference strategy for comparator perspective.
 If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
 \item{discounted}{Logical. Use discounted values? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
 \item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+
+\item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
+
+\item{show_parameter_values}{Logical. Include input parameter values in row labels? (default: FALSE)
+When TRUE, labels show "Parameter Name (low - high)" format.}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A table object (flextable or kable depending on table_format)

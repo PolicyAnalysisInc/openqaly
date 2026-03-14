@@ -35,6 +35,9 @@ NULL
 #'   "all_groups" (all groups without overall), or specific group name(s)
 #' @param show_parameter_values Logical. Show parameter values in y-axis labels?
 #'   (default: TRUE)
+#' @param axis_decimals Numeric or NULL. Number of decimal places for axis labels. NULL for auto.
+#' @param label_decimals Numeric or NULL. Number of decimal places for value labels. NULL for auto.
+#' @param abbreviate Logical. If TRUE, use abbreviated number formatting (e.g., 1K, 1M). Default FALSE.
 #' @param ... Additional arguments (reserved for future use)
 #'
 #' @return A ggplot2 tornado plot object
@@ -60,6 +63,9 @@ dsa_vbp_plot <- function(results,
                                   comparators = "all",
                                   groups = "overall",
                                   show_parameter_values = TRUE,
+                                  axis_decimals = NULL,
+                                  label_decimals = NULL,
+                                  abbreviate = FALSE,
                                   ...) {
 
   # Check that VBP equations exist
@@ -86,11 +92,18 @@ dsa_vbp_plot <- function(results,
     stop("No valid data for tornado plot after filtering")
   }
 
+  # Extract locale from results
+  locale <- get_results_locale(results)
+
   # Create x-axis label
-  summary_label <- paste0("Value-Based Price at WTP = ", scales::comma(wtp))
+  summary_label <- paste0("Value-Based Price at WTP = ", oq_format(wtp, locale = locale, currency = TRUE))
 
   # Render the tornado plot using the shared helper from dsa_plots.R
-  render_tornado_plot(tornado_data, summary_label)
+  render_tornado_plot(tornado_data, summary_label,
+                      axis_decimals = axis_decimals,
+                      label_decimals = label_decimals,
+                      locale = locale,
+                      abbreviate = abbreviate)
 }
 
 #' Prepare DSA+VBP Tornado Data

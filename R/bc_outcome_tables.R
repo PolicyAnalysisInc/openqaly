@@ -1,6 +1,6 @@
-#' Prepare Outcomes Summary Table Data
+#' Prepare Summary Table Data
 #'
-#' Internal helper function that prepares outcomes summary data for rendering.
+#' Internal helper function that prepares summary data for rendering.
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly model results object
@@ -11,21 +11,26 @@
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row?
 #' @param decimals Number of decimal places
+#' @param value_type Character. Type of value: "outcome" (default) or "cost"
+#' @param currency Logical. Format values as currency? (default: FALSE)
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
-prepare_outcomes_table_data <- function(results,
-                                        outcome,
-                                        groups = "overall",
-                                        strategies = NULL,
-                                        interventions = NULL,
-                                        comparators = NULL,
-                                        show_total = TRUE,
-                                        decimals = 2,
-                                        discounted = TRUE,
-                                        font_size = 11) {
+prepare_summary_table_data <- function(results,
+                                       outcome,
+                                       groups = "overall",
+                                       strategies = NULL,
+                                       interventions = NULL,
+                                       comparators = NULL,
+                                       show_total = TRUE,
+                                       decimals = NULL,
+                                       abbreviate = FALSE,
+                                       discounted = TRUE,
+                                       value_type = "outcome",
+                                       currency = FALSE,
+                                       font_size = 11) {
 
   # Get summary data (names already mapped by get_summaries)
   summary_data <- get_summaries(
@@ -33,7 +38,7 @@ prepare_outcomes_table_data <- function(results,
     groups = groups,
     strategies = strategies,
     summaries = outcome,
-    value_type = "outcome",
+    value_type = value_type,
     discounted = discounted,
     use_display_names = TRUE,
     interventions = interventions,
@@ -89,15 +94,8 @@ prepare_outcomes_table_data <- function(results,
       arrange(.data$value_display)
   }
 
-  # Round values first (keep as numeric for now)
-  value_cols <- setdiff(colnames(pivot_data), "value_display")
-  for (col in value_cols) {
-    if (is.numeric(pivot_data[[col]])) {
-      pivot_data[[col]] <- round(pivot_data[[col]], decimals)
-    }
-  }
-
   # Track total row index if requested
+  value_cols <- setdiff(colnames(pivot_data), "value_display")
   total_row_index <- NULL
   if (show_total) {
     total_row <- pivot_data %>%
@@ -107,16 +105,13 @@ prepare_outcomes_table_data <- function(results,
     total_row_index <- nrow(pivot_data)
   }
 
-  # NOW format values as character strings to prevent renderer reformatting
+  # Format values as character strings using locale-aware formatting
+  locale <- get_results_locale(results)
   for (col in value_cols) {
     if (is.numeric(pivot_data[[col]])) {
-      rounded_vals <- pivot_data[[col]]
-      # Fix negative zero display
-      rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-      pivot_data[[col]] <- format(rounded_vals,
-                                  nsmall = decimals,
-                                  scientific = FALSE,
-                                  trim = TRUE)
+      pivot_data[[col]] <- oq_format(pivot_data[[col]], decimals = decimals,
+                                      locale = locale, abbreviate = abbreviate,
+                                      currency = currency)
     }
   }
 
@@ -318,6 +313,7 @@ prepare_outcomes_table_data <- function(results,
 #' @param comparators Character vector of reference strategies for comparator perspective
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: 2)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
@@ -344,7 +340,8 @@ outcomes_table <- function(results,
                            interventions = NULL,
                            comparators = NULL,
                            show_total = TRUE,
-                           decimals = 2,
+                           decimals = NULL,
+                           abbreviate = FALSE,
                            discounted = TRUE,
                            font_size = 11,
                            table_format = c("flextable", "kable")) {
@@ -357,7 +354,7 @@ outcomes_table <- function(results,
   }
 
   # Prepare data
-  prepared <- prepare_outcomes_table_data(
+  prepared <- prepare_summary_table_data(
     results = results,
     outcome = outcome,
     groups = groups,
@@ -366,7 +363,10 @@ outcomes_table <- function(results,
     comparators = comparators,
     show_total = show_total,
     decimals = decimals,
+    abbreviate = abbreviate,
     discounted = discounted,
+    value_type = "outcome",
+    currency = FALSE,
     font_size = font_size
   )
 

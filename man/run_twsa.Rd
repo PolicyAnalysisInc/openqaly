@@ -10,6 +10,7 @@ run_twsa(
   vbp_intervention = NULL,
   vbp_outcome_summary = NULL,
   vbp_cost_summary = NULL,
+  progress = NULL,
   ...
 )
 }
@@ -27,6 +28,10 @@ Defaults to "total_qalys" from model metadata if available.}
 
 \item{vbp_cost_summary}{Cost summary name for VBP analysis.
 Defaults to "total_cost" from model metadata if available.}
+
+\item{progress}{Optional progress callback function. Called with
+\code{progress(total = N)} to declare total units, then
+\code{progress(amount = K)} for each completed unit.}
 
 \item{...}{Additional arguments passed to run_segment}
 }

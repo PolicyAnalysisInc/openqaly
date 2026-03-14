@@ -10,6 +10,7 @@ prepare_dsa_vbp_table_data(
   comparators,
   groups,
   decimals,
+  abbreviate = FALSE,
   font_size
 )
 }

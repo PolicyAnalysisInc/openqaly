@@ -161,6 +161,9 @@ prepare_twsa_vbp_heatmap_data <- function(results,
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
+#' @param cell_decimals Fixed decimal places for cell labels, or NULL for auto-precision
+#' @param axis_label_decimals Fixed decimal places for axis tick labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #' @export
@@ -184,7 +187,10 @@ twsa_vbp_plot <- function(results,
                            xlab = NULL,
                            ylab = NULL,
                            viridis_option = "viridis",
-                           show_base_case = TRUE) {
+                           show_base_case = TRUE,
+                           cell_decimals = NULL,
+                           axis_label_decimals = NULL,
+                           abbreviate = FALSE) {
 
   # Check VBP equations exist
   if (is.null(results$twsa_vbp_equations) || nrow(results$twsa_vbp_equations) == 0) {
@@ -195,6 +201,9 @@ twsa_vbp_plot <- function(results,
   # Validate viridis option
   viridis_option <- match.arg(viridis_option,
                                c("viridis", "magma", "plasma", "inferno", "cividis"))
+
+  # Extract locale from results
+  locale <- get_results_locale(results)
 
   # Get WTP if not provided
   if (is.null(wtp)) {
@@ -217,7 +226,7 @@ twsa_vbp_plot <- function(results,
   }
 
   # Create legend title with WTP
-  wtp_formatted <- scales::comma(wtp)
+  wtp_formatted <- oq_format(wtp, decimals = 0, locale = locale)
   legend_title <- glue("VBP (\u03bb = {wtp_formatted})")
 
   # Render heatmap
@@ -228,6 +237,11 @@ twsa_vbp_plot <- function(results,
     ylab = ylab,
     legend_title = legend_title,
     viridis_option = viridis_option,
-    show_base_case = show_base_case
+    show_base_case = show_base_case,
+    cell_decimals = cell_decimals,
+    axis_label_decimals = axis_label_decimals,
+    abbreviate = abbreviate,
+    currency = TRUE,
+    locale = locale
   )
 }

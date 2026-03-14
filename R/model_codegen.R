@@ -117,6 +117,14 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add decision tree configuration (if any)
+  if (!is.null(model$decision_tree)) {
+    dt_code <- generate_decision_tree_code(model$decision_tree)
+    if (length(dt_code) > 0) {
+      code <- c(code, "", dt_code)
+    }
+  }
+
   # Add DSA parameters (if any)
   if (!is.null(model$dsa_parameters) && length(model$dsa_parameters) > 0) {
     dsa_code <- generate_dsa_code(model$dsa_parameters)
@@ -162,6 +170,14 @@ model_to_r_code <- function(model, file = NULL) {
     vbp_code <- generate_vbp_code(model$vbp)
     if (length(vbp_code) > 0) {
       code <- c(code, "", vbp_code)
+    }
+  }
+
+  # Add PSA configuration (if any)
+  if (!is.null(model$psa)) {
+    psa_code <- generate_psa_code(model$psa)
+    if (length(psa_code) > 0) {
+      code <- c(code, "", psa_code)
     }
   }
 
@@ -325,6 +341,9 @@ generate_values_code <- function(values) {
     }
     if ("type" %in% names(v) && !is.na(v$type) && v$type != "outcome") {
       args <- args %&% glue(', type = "{v$type}"')
+    }
+    if ("discounting_override" %in% names(v) && !is.na(v$discounting_override) && v$discounting_override != "") {
+      args <- args %&% glue(', discounting_override = "{v$discounting_override}"')
     }
 
     code <- c(code, glue('  add_value({args}) |>'))
@@ -981,6 +1000,39 @@ generate_vbp_code <- function(vbp) {
     glue('  outcome_summary = "{vbp$outcome_summary}",'),
     glue('  cost_summary = "{vbp$cost_summary}"'),
     ")"
+  )
+}
+
+#' Generate PSA Code
+#' @keywords internal
+generate_psa_code <- function(psa) {
+  if (is.null(psa)) return(character(0))
+
+  args <- glue('  n_sim = {psa$n_sim}')
+  if (!is.null(psa$seed)) {
+    args <- c(paste0(args, ","), glue('  seed = {psa$seed}'))
+  }
+
+  c(
+    "# Set PSA configuration",
+    "model <- set_psa(model,",
+    args,
+    ")"
+  )
+}
+
+#' Generate Decision Tree Code
+#' @keywords internal
+generate_decision_tree_code <- function(decision_tree) {
+  if (is.null(decision_tree)) return(character(0))
+
+  tree_name <- decision_tree$tree_name
+  duration <- decision_tree$duration
+  duration_unit <- decision_tree$duration_unit
+
+  c(
+    "# Set decision tree configuration",
+    glue('model <- set_decision_tree(model, "{tree_name}", {duration}, duration_unit = "{duration_unit}")')
   )
 }
 

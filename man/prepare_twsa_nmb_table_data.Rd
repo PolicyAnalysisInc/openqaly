@@ -13,7 +13,8 @@ prepare_twsa_nmb_table_data(
   interventions = NULL,
   comparators = NULL,
   wtp,
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }
@@ -34,7 +35,9 @@ prepare_twsa_nmb_table_data(
 
 \item{wtp}{Willingness-to-pay threshold}
 
-\item{decimals}{Number of decimal places}
+\item{decimals}{Number of decimal places (NULL for auto)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting?}
 
 \item{font_size}{Font size for rendering}
 }

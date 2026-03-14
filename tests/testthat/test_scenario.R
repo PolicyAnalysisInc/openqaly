@@ -335,15 +335,62 @@ build_scenario_ce_model <- function() {
     add_transition("sick", "sick", "0.8") %>%
     add_transition("dead", "dead", "1") %>%
     # Values
-    add_value("cost", "c_healthy + c_treatment", state = "healthy") %>%
-    add_value("cost", "c_sick + c_treatment", state = "sick") %>%
-    add_value("cost", "0", state = "dead") %>%
-    add_value("qalys", "u_healthy", state = "healthy") %>%
-    add_value("qalys", "u_sick", state = "sick") %>%
-    add_value("qalys", "0", state = "dead") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy", type = "cost") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick", type = "cost") %>%
+    add_value("cost", "0", state = "dead", type = "cost") %>%
+    add_value("qalys", "u_healthy", state = "healthy", type = "outcome") %>%
+    add_value("qalys", "u_sick", state = "sick", type = "outcome") %>%
+    add_value("qalys", "0", state = "dead", type = "outcome") %>%
     # Summaries
-    add_summary("total_cost", "cost") %>%
-    add_summary("total_qalys", "qalys", wtp = 50000)
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome", wtp = 50000)
+}
+
+build_scenario_vbp_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      n_cycles = 10, timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_strategy("seritinib") %>%
+    add_strategy("volantor") %>%
+    add_strategy("cendralimab") %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("p_sick", 0.1) %>%
+    add_variable("p_death", 0.05) %>%
+    add_variable("c_healthy", 1000) %>%
+    add_variable("c_sick", 5000) %>%
+    add_variable("c_treatment", 500, strategy = "seritinib") %>%
+    add_variable("c_treatment", 2500, strategy = "volantor") %>%
+    add_variable("c_treatment", 7000, strategy = "cendralimab") %>%
+    add_variable("u_healthy", 0.9) %>%
+    add_variable("u_sick", 0.5) %>%
+    add_variable("effect_mult", 1.0, strategy = "seritinib") %>%
+    add_variable("effect_mult", 0.8, strategy = "volantor") %>%
+    add_variable("effect_mult", 0.55, strategy = "cendralimab") %>%
+    add_scenario("High Efficacy") %>%
+    add_scenario_variable("High Efficacy", "effect_mult", 0.45, strategy = "cendralimab") %>%
+    add_scenario("Low Cost") %>%
+    add_scenario_variable("Low Cost", "c_treatment", 3500, strategy = "cendralimab") %>%
+    add_scenario("Worst Case") %>%
+    add_scenario_variable("Worst Case", "effect_mult", 1.2, strategy = "cendralimab") %>%
+    add_scenario_variable("Worst Case", "c_treatment", 12000, strategy = "cendralimab") %>%
+    add_transition("healthy", "sick", "p_sick * effect_mult") %>%
+    add_transition("healthy", "dead", "p_death") %>%
+    add_transition("healthy", "healthy", "1 - p_sick * effect_mult - p_death") %>%
+    add_transition("sick", "dead", "0.2") %>%
+    add_transition("sick", "sick", "0.8") %>%
+    add_transition("dead", "dead", "1") %>%
+    add_value("cost", "c_healthy + c_treatment", state = "healthy", type = "cost") %>%
+    add_value("cost", "c_sick + c_treatment", state = "sick", type = "cost") %>%
+    add_value("cost", "0", state = "dead", type = "cost") %>%
+    add_value("qalys", "u_healthy", state = "healthy", type = "outcome") %>%
+    add_value("qalys", "u_sick", state = "sick", type = "outcome") %>%
+    add_value("qalys", "0", state = "dead", type = "outcome") %>%
+    add_summary("costs", "cost", type = "cost") %>%
+    add_summary("qalys", "qalys", type = "outcome", wtp = 50000)
 }
 
 test_that("scenario_ce_plot() returns ggplot object", {
@@ -494,7 +541,7 @@ test_that("scenario CE table correctly classifies ICERs", {
     groups = "overall",
     interventions = "treatment",
     comparators = "control",
-    decimals = 0,
+    icer_decimals = 0,
     font_size = 11
   )
 
@@ -565,7 +612,7 @@ test_that("Scenario CE table adds asterisks for flipped scenarios", {
     groups = "overall",
     interventions = "treatment",
     comparators = "control",
-    decimals = 0,
+    icer_decimals = 0,
     font_size = 11
   )
 
@@ -593,7 +640,7 @@ test_that("Scenario CE table footnotes are generated for flipped scenarios", {
     groups = "overall",
     interventions = "treatment",
     comparators = "control",
-    decimals = 0,
+    icer_decimals = 0,
     font_size = 11
   )
 
@@ -614,4 +661,56 @@ test_that("Scenario CE plot handles flipped base case correctly", {
   # Build the plot to verify it renders correctly
   built <- ggplot2::ggplot_build(p)
   expect_true(length(built$data) > 0)
+})
+
+# ============================================================================
+# Tests for scenario_costs_table()
+# ============================================================================
+
+test_that("scenario_costs_table() returns a rendered table", {
+  model <- build_scenario_ce_model()
+  results <- run_scenario(model)
+  tbl <- scenario_costs_table(results, "total_cost")
+  expect_s3_class(tbl, "flextable")
+})
+
+# ============================================================================
+# Tests for scenario_costs_plot()
+# ============================================================================
+
+test_that("scenario_costs_plot() returns ggplot object", {
+  model <- build_scenario_ce_model()
+  results <- run_scenario(model)
+  p <- scenario_costs_plot(results, "total_cost")
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("scenario_costs_plot() computes x breaks per free_x facet", {
+  model <- build_scenario_ce_model()
+  results <- run_scenario(model)
+
+  p <- scenario_costs_plot(results, "total_cost", strategies = c("control", "treatment"))
+  panel_params <- ggplot_build(p)$layout$panel_params
+  break_counts <- vapply(panel_params, function(panel) sum(!is.na(panel$x$breaks)), integer(1))
+
+  expect_true(length(panel_params) > 1)
+  expect_true(all(break_counts >= 3))
+})
+
+test_that("scenario_vbp_plot() computes x breaks per free_x facet", {
+  model <- build_scenario_vbp_model()
+  results <- run_scenario(
+    model,
+    vbp_price_variable = "c_treatment",
+    vbp_intervention = "cendralimab",
+    vbp_outcome_summary = "qalys",
+    vbp_cost_summary = "costs"
+  )
+
+  p <- scenario_vbp_plot(results, wtp = 50000)
+  panel_params <- ggplot_build(p)$layout$panel_params
+  break_counts <- vapply(panel_params, function(panel) sum(!is.na(panel$x$breaks)), integer(1))
+
+  expect_true(length(panel_params) > 1)
+  expect_true(all(break_counts >= 3))
 })

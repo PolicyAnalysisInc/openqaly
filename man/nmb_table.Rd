@@ -13,7 +13,8 @@ nmb_table(
   interventions = NULL,
   comparators = NULL,
   show_total = TRUE,
-  decimals = 2,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -35,7 +36,9 @@ nmb_table(
 
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{decimals}{Number of decimal places (default: NULL, uses locale default)}
+
+\item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

@@ -73,26 +73,7 @@ icer <- function(dcost, deffect) {
 #' @return A character vector with formatted ICER values
 #' @export
 format.icer <- function(x, digits = 2, big.mark = ",", ...) {
-  fmt_num <- function(v) {
-    prettyNum(round(v, digits = digits),
-              big.mark = big.mark,
-              preserve.width = "none",
-              scientific = FALSE)
-  }
-
-  out <- character(length(x))
-  out[is.na(x)] <- ""  # Explicit NA handling for blank display (reference strategy)
-  out[is.nan(x)] <- "Equivalent"
-  out[is.infinite(x)] <- "Dominated"
-  out[!is.nan(x) & !is.infinite(x) & !is.na(x) & x == 0] <- "Dominant"
-
-  pos <- !is.nan(x) & !is.infinite(x) & !is.na(x) & x > 0
-  out[pos] <- fmt_num(x[pos])
-
-  neg <- !is.nan(x) & !is.infinite(x) & !is.na(x) & x < 0
-  out[neg] <- paste0(fmt_num(-x[neg]), "*")  # print the opposite + asterisk
-
-  out
+  oq_format_icer(x, decimals = digits, locale = get_locale("US"))
 }
 
 #' Printing for ICER vectors

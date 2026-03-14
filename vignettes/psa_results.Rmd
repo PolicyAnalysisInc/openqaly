@@ -272,6 +272,41 @@ outcome_density_plot(
 )
 ```
 
+### Cost Density Plot
+
+The `cost_density_plot()` function creates density plots of cost values from PSA simulations with currency formatting.
+
+#### Basic usage (absolute mode)
+
+```{r, fig.width=9, fig.height=6}
+cost_density_plot(
+  psa_results,
+  outcome_summary = "costs",
+  strategies = c("seritinib", "volantor", "cendralimab")
+)
+```
+
+#### Incremental mode
+
+```{r, fig.width=9, fig.height=6}
+cost_density_plot(
+  psa_results,
+  outcome_summary = "costs",
+  comparators = "seritinib"
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=6}
+cost_density_plot(
+  psa_results,
+  outcome_summary = "costs",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  groups = "all_groups"
+)
+```
+
 ### PSA Outcomes Table
 
 The `psa_outcomes_table()` function displays summary statistics for outcome values from PSA simulations, including mean, SD, median (IQR), and range.
@@ -311,6 +346,39 @@ psa_outcomes_table(
 psa_outcomes_table(
   psa_results,
   outcome_summary = "qalys",
+  groups = "all_groups"
+)
+```
+
+### PSA Costs Table
+
+The `psa_costs_table()` function displays summary statistics for cost values from PSA simulations with currency formatting.
+
+#### Basic usage
+
+```{r}
+psa_costs_table(
+  psa_results,
+  outcome_summary = "costs"
+)
+```
+
+#### Differences relative to comparator
+
+```{r}
+psa_costs_table(
+  psa_results,
+  outcome_summary = "costs",
+  comparators = "seritinib"
+)
+```
+
+#### Results by population subgroup
+
+```{r}
+psa_costs_table(
+  psa_results,
+  outcome_summary = "costs",
   groups = "all_groups"
 )
 ```

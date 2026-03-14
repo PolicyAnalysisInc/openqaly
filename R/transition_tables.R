@@ -7,8 +7,9 @@
 #' @param cycle Integer. Which cycle's transition matrix to display.
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param groups Group selection
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param font_size Font size for the table (default: 11)
+#' @param abbreviate Logical. If TRUE, abbreviate large numbers (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -16,18 +17,24 @@ prepare_transition_matrix_table_data <- function(results,
                                                   cycle = 1,
                                                   strategies = NULL,
                                                   groups = "overall",
-                                                  decimals = 4,
-                                                  font_size = 11) {
+                                                  collapsed = TRUE,
+                                                  decimals = NULL,
+                                                  font_size = 11,
+                                                  state_times = NULL,
+                                                  exclude_zero_residency = NULL,
+                                                  abbreviate = FALSE) {
 
   # Get long format transition data
   trans_long <- get_transitions(
     results,
     format = "long",
-    collapsed = TRUE,
+    collapsed = collapsed,
     strategies = strategies,
     groups = groups,
     cycles = cycle,
-    use_display_names = TRUE
+    use_display_names = TRUE,
+    state_times = state_times,
+    exclude_zero_residency = exclude_zero_residency
   )
 
   # Get unique strategies, groups, and states
@@ -44,8 +51,13 @@ prepare_transition_matrix_table_data <- function(results,
   # Preserve state order from metadata
   if (!is.null(results$metadata) && !is.null(results$metadata$states)) {
     state_levels <- results$metadata$states$display_name
-    from_states_display <- state_levels[state_levels %in% from_states_display]
-    to_states_display <- state_levels[state_levels %in% to_states_display]
+    if (collapsed) {
+      from_states_display <- state_levels[state_levels %in% from_states_display]
+      to_states_display <- state_levels[state_levels %in% to_states_display]
+    } else {
+      from_states_display <- sort_expanded_states(from_states_display, state_levels)
+      to_states_display <- sort_expanded_states(to_states_display, state_levels)
+    }
   }
 
   n_to_states <- length(to_states_display)
@@ -205,18 +217,17 @@ prepare_transition_matrix_table_data <- function(results,
   rownames(trace_data) <- NULL
 
   # Format probability columns
+  locale <- get_results_locale(results)
   prob_cols <- setdiff(
     colnames(trace_data),
     c("Group", "From", grep("^spacer_", colnames(trace_data), value = TRUE))
   )
   for (col in prob_cols) {
     if (is.numeric(trace_data[[col]])) {
-      rounded_vals <- round(trace_data[[col]], decimals)
-      rounded_vals[abs(rounded_vals) < 10^(-decimals - 1)] <- 0
-      trace_data[[col]] <- format(rounded_vals,
-                                  nsmall = decimals,
-                                  scientific = FALSE,
-                                  trim = TRUE)
+      trace_data[[col]] <- oq_format(trace_data[[col]],
+                                      decimals = decimals,
+                                      locale = locale,
+                                      abbreviate = abbreviate)
     }
   }
 
@@ -303,9 +314,19 @@ prepare_transition_matrix_table_data <- function(results,
 #' @param cycle Integer. Which cycle's transition matrix to display (default: 1).
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#' @param decimals Number of decimal places for probabilities (default: 4)
+#' @param collapsed Logical. If TRUE (default), use collapsed state names.
+#'   If FALSE, use expanded state names (tunnel states).
+#' @param decimals Number of decimal places for probabilities (default: NULL, uses locale default)
 #' @param font_size Font size for the table (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param state_times Numeric vector of tunnel state indices to include when
+#'   \code{collapsed=FALSE}. Use \code{Inf} for the last tunnel state of each
+#'   base state. Non-tunnel states are always included. Ignored when
+#'   \code{collapsed=TRUE}.
+#' @param exclude_zero_residency Logical. Exclude expanded states with zero
+#'   residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
+#'   FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.
+#' @param abbreviate Logical. If TRUE, abbreviate large numbers (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -326,9 +347,13 @@ transition_matrix_table <- function(results,
                                     cycle = 1,
                                     strategies = NULL,
                                     groups = "overall",
-                                    decimals = 4,
+                                    collapsed = TRUE,
+                                    decimals = NULL,
                                     font_size = 11,
-                                    table_format = c("flextable", "kable")) {
+                                    table_format = c("flextable", "kable"),
+                                    state_times = NULL,
+                                    exclude_zero_residency = NULL,
+                                    abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -337,8 +362,12 @@ transition_matrix_table <- function(results,
     cycle = cycle,
     strategies = strategies,
     groups = groups,
+    collapsed = collapsed,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    state_times = state_times,
+    exclude_zero_residency = exclude_zero_residency,
+    abbreviate = abbreviate
   )
 
   render_table(prepared, format = table_format)

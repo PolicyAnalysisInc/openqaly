@@ -10,10 +10,11 @@ trace_table(
   groups = "overall",
   states = NULL,
   cycles = NULL,
-  decimals = 4,
+  decimals = NULL,
   time_unit = "cycle",
   font_size = 11,
-  table_format = c("flextable", "kable")
+  table_format = c("flextable", "kable"),
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -27,7 +28,7 @@ trace_table(
 
 \item{cycles}{Integer vector or range of cycles to display (NULL for all)}
 
-\item{decimals}{Number of decimal places for probabilities (default: 4)}
+\item{decimals}{Number of decimal places for probabilities (default: NULL, uses locale default)}
 
 \item{time_unit}{Which time unit to display: "cycle" (default), "day", "week",
 "month", or "year".}
@@ -35,6 +36,8 @@ trace_table(
 \item{font_size}{Font size for the table (default: 11)}
 
 \item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
+
+\item{abbreviate}{Logical. If TRUE, use abbreviated number formatting (default: FALSE)}
 }
 \value{
 A table object (flextable or kable depending on table_format)

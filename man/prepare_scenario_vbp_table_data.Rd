@@ -9,7 +9,8 @@ prepare_scenario_vbp_table_data(
   wtp,
   groups = "overall",
   comparators = "all",
-  decimals = 0,
+  decimals = NULL,
+  abbreviate = FALSE,
   font_size = 11
 )
 }

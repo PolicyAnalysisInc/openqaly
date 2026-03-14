@@ -11,7 +11,8 @@ prepare_scenario_bar_data(
   strategies,
   interventions,
   comparators,
-  discounted
+  discounted,
+  value_type = "all"
 )
 }
 \arguments{

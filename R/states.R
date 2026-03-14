@@ -143,6 +143,19 @@ eval_states <- function(x, ns) {
     }
   }
 
+  # Resolve complement (C) markers in initial probabilities
+  c_mask <- result[1, ] == -pi
+  if (any(c_mask)) {
+    if (sum(c_mask) > 1) {
+      accumulate_oq_error(
+        define_error("Only one state may use complement (C) for initial probability"),
+        context_msg = "Initial state validation"
+      )
+      oq_error_checkpoint()
+    }
+    result[1, c_mask] <- 1 - sum(result[1, !c_mask])
+  }
+
   # Validate that initial probabilities sum to 1
   prob_sum <- sum(result[1, ])
   tol <- sqrt(.Machine$double.eps)  # Standard tolerance for floating point comparison

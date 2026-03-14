@@ -11,7 +11,7 @@ ce_quadrant_table(
   comparator,
   groups = "overall",
   strategies = NULL,
-  decimals = 1,
+  decimals = NULL,
   font_size = 11,
   table_format = c("flextable", "kable")
 )
@@ -37,7 +37,7 @@ ce_quadrant_table(
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
-\item{decimals}{Number of decimal places for percentages (default: 1)}
+\item{decimals}{Number of decimal places for percentages (default: NULL, auto)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 

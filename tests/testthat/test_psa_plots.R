@@ -288,6 +288,26 @@ test_that("psa_parameter_scatter_matrix() extracts correct variables", {
   expect_equal(p$nrow, 2)
 })
 
+test_that("psa_parameter_scatter_matrix() does not emit duplicate scale warnings", {
+  skip_if_not_installed("GGally")
+  results <- get_cached_psa_results()
+
+  warnings <- character()
+  withCallingHandlers(
+    psa_parameter_scatter_matrix(
+      results,
+      variables = c("p_sick", "c_healthy", "u_healthy"),
+      strategies = "standard"
+    ),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+
+  expect_false(any(grepl("Scale for [xy] is already present", warnings)))
+})
+
 test_that("psa_parameter_scatter_matrix() errors with less than 2 variables", {
   skip_if_not_installed("GGally")
   results <- get_cached_psa_results()
@@ -591,19 +611,17 @@ test_that("nmb_density_plot() show_mean adds vertical lines", {
   expect_gt(length(built_with$data), length(built_without$data))
 })
 
-test_that("nmb_density_plot() title includes WTP value", {
+test_that("nmb_density_plot() has no default title", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$name
 
-  wtp_test <- 75000
   p <- nmb_density_plot(
     results, "total_qalys", "total_cost",
-    wtp = wtp_test,
+    wtp = 75000,
     comparators = strategies[1]
   )
 
-  # Title should mention the WTP value
-  expect_true(grepl("75,000", p$labels$title) || grepl("75000", p$labels$title))
+  expect_null(p$labels$title)
 })
 
 test_that("nmb_density_plot() custom title is applied", {
@@ -653,6 +671,23 @@ test_that("nmb_density_plot() x-axis has incremental NMB label", {
   expect_equal(p$labels$x, "Incremental Net Monetary Benefit")
 })
 
+test_that("nmb_density_plot() x-axis labels use currency formatting", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    comparators = strategies[1]
+  )
+  built <- ggplot_build(p)
+  x_scale <- built$plot$scales$get_scales("x")
+  labels <- x_scale$get_labels(x_scale$get_breaks())
+
+  expect_true(any(grepl("\\$", labels, fixed = FALSE)))
+  expect_true(any(grepl("K|M|B|T", labels)))
+})
+
 test_that("nmb_density_plot() includes reference line at zero", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$name
@@ -668,6 +703,29 @@ test_that("nmb_density_plot() includes reference line at zero", {
   # Layer 2 should be the reference line (after density)
   vline_data <- built$data[[2]]
   expect_true(0 %in% vline_data$xintercept)
+})
+
+test_that("nmb_density_plot() x-axis breaks cover the full plotted data and include zero", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- nmb_density_plot(
+    results, "total_qalys", "total_cost",
+    wtp = 50000,
+    comparators = strategies[1]
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+  x_scale <- built$plot$scales$get_scales("x")
+  x_breaks <- x_scale$get_breaks()
+  x_limits <- x_scale$get_limits()
+
+  expect_lte(min(density_data$x, na.rm = TRUE), max(x_breaks, na.rm = TRUE))
+  expect_gte(max(density_data$x, na.rm = TRUE), min(x_breaks, na.rm = TRUE))
+  expect_gte(min(density_data$x, na.rm = TRUE), min(x_breaks, na.rm = TRUE))
+  expect_lte(max(density_data$x, na.rm = TRUE), max(x_breaks, na.rm = TRUE))
+  expect_lte(min(x_limits), 0)
+  expect_gte(max(x_limits), 0)
 })
 
 test_that("nmb_density_plot() creates multiple comparisons with interventions", {
@@ -884,6 +942,18 @@ test_that("outcome_density_plot() respects alpha parameter", {
   expect_equal(unique(density_data$alpha), 0.7)
 })
 
+test_that("outcome_density_plot() has no default title", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies
+  )
+
+  expect_null(p$labels$title)
+})
+
 test_that("outcome_density_plot() custom title is applied", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$name
@@ -912,4 +982,55 @@ test_that("outcome_density_plot() creates multiple comparisons with intervention
   # Should have comparisons for n-1 strategies
   n_comparisons <- length(unique(density_data$fill))
   expect_equal(n_comparisons, length(strategies) - 1)
+})
+
+test_that("outcome_density_plot() x-axis breaks cover the full plotted data", {
+  results <- get_cached_psa_results()
+  strategies <- results$metadata$strategies$name
+
+  p <- outcome_density_plot(
+    results, "total_qalys",
+    strategies = strategies
+  )
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+  x_scale <- built$plot$scales$get_scales("x")
+  x_breaks <- x_scale$get_breaks()
+
+  expect_gte(min(density_data$x, na.rm = TRUE), min(x_breaks, na.rm = TRUE))
+  expect_lte(max(density_data$x, na.rm = TRUE), max(x_breaks, na.rm = TRUE))
+})
+
+# ============================================================================
+# Tests for cost_density_plot()
+# ============================================================================
+
+test_that("cost_density_plot() returns ggplot object", {
+  results <- get_cached_psa_results()
+  all_strats <- unique(results$aggregated$strategy)
+  p <- cost_density_plot(results, "total_cost", strategies = all_strats)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("cost_density_plot() has no default title", {
+  results <- get_cached_psa_results()
+  all_strats <- unique(results$aggregated$strategy)
+
+  p <- cost_density_plot(results, "total_cost", strategies = all_strats)
+
+  expect_null(p$labels$title)
+})
+
+test_that("cost_density_plot() x-axis breaks cover the full plotted data", {
+  results <- get_cached_psa_results()
+  all_strats <- unique(results$aggregated$strategy)
+
+  p <- cost_density_plot(results, "total_cost", strategies = all_strats)
+  built <- ggplot_build(p)
+  density_data <- built$data[[1]]
+  x_scale <- built$plot$scales$get_scales("x")
+  x_breaks <- x_scale$get_breaks()
+
+  expect_gte(min(density_data$x, na.rm = TRUE), min(x_breaks, na.rm = TRUE))
+  expect_lte(max(density_data$x, na.rm = TRUE), max(x_breaks, na.rm = TRUE))
 })

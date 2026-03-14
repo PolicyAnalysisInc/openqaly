@@ -472,3 +472,173 @@ test_that("build_twsa_segments uses correct bc values for strategy-specific para
   # seritinib should only have u_mild overrides
   expect_true("u_mild" %in% names(seritinib_first$parameter_overrides[[1]]))
 })
+
+# ============================================================================
+# Tests for twsa_costs_table()
+# ============================================================================
+
+test_that("twsa_costs_table() returns a rendered table", {
+  results <- get_cached_twsa_vbp_results()
+  tbl <- twsa_costs_table(results, "costs", backend = "kable")
+  expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})
+
+# ============================================================================
+# Tests for twsa_costs_plot()
+# ============================================================================
+
+test_that("twsa_costs_plot() returns ggplot object", {
+  results <- get_cached_twsa_vbp_results()
+  p <- twsa_costs_plot(results, "costs")
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("render_twsa_heatmap uses unique auto-formatted axis labels", {
+  heatmap_data <- tibble::tibble(
+    x_value = c(0.775, 0.8, 0.825),
+    y_value = c(0.5, 0.5, 0.5),
+    value = c(1, 2, 3),
+    strategy = "Strategy A",
+    group = "Overall",
+    x_param_display_name = "Utility (Mild)",
+    y_param_display_name = "Utility (Severe)"
+  )
+
+  p <- openqaly:::render_twsa_heatmap(heatmap_data, show_base_case = FALSE)
+
+  expect_equal(length(unique(levels(p$data$x_factor))), 3)
+})
+
+test_that("render_twsa_heatmap includes legend ticks at both scale endpoints", {
+  heatmap_data <- tibble::tibble(
+    x_value = rep(c(0.775, 0.8, 0.825), each = 2),
+    y_value = rep(c(0.5, 0.55), times = 3),
+    value = c(0.207, 0.24, 0.272, 0.304, 0.337, 0.456),
+    strategy = "Strategy A",
+    group = "Overall",
+    x_param_display_name = "Utility (Mild)",
+    y_param_display_name = "Utility (Severe)"
+  )
+
+  p <- openqaly:::render_twsa_heatmap(heatmap_data, show_base_case = FALSE)
+  built <- ggplot2::ggplot_build(p)
+  breaks <- built$plot$scales$get_scales("fill")$get_breaks()
+
+  expect_equal(breaks[1], min(heatmap_data$value))
+  expect_equal(breaks[length(breaks)], max(heatmap_data$value))
+})
+
+test_that("render_twsa_heatmap keeps endpoint ticks for narrow ranges", {
+  heatmap_data <- tibble::tibble(
+    x_value = rep(c(0.775, 0.8, 0.825), each = 2),
+    y_value = rep(c(0.5, 0.55), times = 3),
+    value = c(10.51, 10.56, 10.62, 10.68, 10.74, 10.79),
+    strategy = "Strategy A",
+    group = "Overall",
+    x_param_display_name = "Utility (Mild)",
+    y_param_display_name = "Utility (Severe)"
+  )
+
+  p <- openqaly:::render_twsa_heatmap(heatmap_data, show_base_case = FALSE)
+  built <- ggplot2::ggplot_build(p)
+  breaks <- built$plot$scales$get_scales("fill")$get_breaks()
+
+  expect_equal(breaks[1], min(heatmap_data$value))
+  expect_equal(breaks[length(breaks)], max(heatmap_data$value))
+})
+
+test_that("render_twsa_ce_heatmap uses auto-precision for numeric legend labels", {
+  ce_data <- tibble::tibble(
+    x_value = c(0.775, 0.8, 0.825),
+    y_value = c(0.5, 0.5, 0.5),
+    icer = c(1000.01, 1000.02, 2000),
+    display_value = c(1000.01, 1000.02, 2000),
+    ce_class = c("regular", "regular", "regular"),
+    strategy = "Strategy A",
+    group = "Overall",
+    x_param_display_name = "Utility (Mild)",
+    y_param_display_name = "Utility (Severe)"
+  )
+
+  p <- openqaly:::render_twsa_ce_heatmap(ce_data, show_base_case = FALSE)
+  labels <- p$scales$get_scales("fill")$labels(c(1000.01, 1000.02, 2000))
+
+  expect_equal(length(unique(labels)), 3)
+  expect_true(any(grepl("\\.", labels)))
+})
+
+test_that("render_twsa_ce_heatmap includes endpoint legend ticks with labels", {
+  ce_data <- tibble::tibble(
+    x_value = rep(c(0.775, 0.8, 0.825), each = 2),
+    y_value = rep(c(0.5, 0.55), times = 3),
+    icer = c(1200, 1600, 2200, 2800, 3400, 4000),
+    display_value = c(1200, 1600, 2200, 2800, 3400, 4000),
+    ce_class = rep("regular", 6),
+    strategy = "Strategy A",
+    group = "Overall",
+    x_param_display_name = "Utility (Mild)",
+    y_param_display_name = "Utility (Severe)"
+  )
+
+  p <- openqaly:::render_twsa_ce_heatmap(ce_data, show_base_case = FALSE)
+  built <- ggplot2::ggplot_build(p)
+  fill_scale <- built$plot$scales$get_scales("fill")
+  breaks <- fill_scale$get_breaks()
+  labels <- fill_scale$get_labels(breaks)
+
+  expect_equal(breaks[1], min(ce_data$display_value))
+  expect_equal(breaks[length(breaks)], max(ce_data$display_value))
+  expect_false(any(is.na(labels)))
+  expect_true(all(nzchar(labels)))
+})
+
+test_that("cost-sensitive TWSA cost plots vary across the grid", {
+  model <- define_model("markov") |>
+    set_settings(n_cycles = 10, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("seritinib") |>
+    add_strategy("volantor") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_state("dead", initial_prob = 0) |>
+    add_variable("p_sick", 0.1) |>
+    add_variable("p_death_healthy", 0.02) |>
+    add_variable("p_death_sick", 0.15) |>
+    add_variable("c_healthy", 1000) |>
+    add_variable("c_sick", 5000) |>
+    add_variable("c_treatment", 500, strategy = "seritinib") |>
+    add_variable("c_treatment", 3000, strategy = "volantor") |>
+    add_variable("u_mild", 0.85) |>
+    add_variable("u_severe", 0.55) |>
+    add_transition("healthy", "sick", "p_sick") |>
+    add_transition("healthy", "dead", "p_death_healthy") |>
+    add_transition("healthy", "healthy", "1 - p_sick - p_death_healthy") |>
+    add_transition("sick", "dead", "p_death_sick") |>
+    add_transition("sick", "sick", "1 - p_death_sick") |>
+    add_transition("dead", "dead", "1") |>
+    add_value("cost", "c_healthy + c_treatment", state = "healthy", type = "cost") |>
+    add_value("cost", "c_sick + c_treatment", state = "sick", type = "cost") |>
+    add_value("cost", "0", state = "dead", type = "cost") |>
+    add_value("qalys", "u_mild", state = "healthy", type = "outcome") |>
+    add_value("qalys", "u_severe", state = "sick", type = "outcome") |>
+    add_value("qalys", "0", state = "dead", type = "outcome") |>
+    add_summary("qalys", "qalys", type = "outcome") |>
+    add_summary("costs", "cost", type = "cost") |>
+    add_twsa("Cost Sensitivity") |>
+    add_twsa_variable("Cost Sensitivity", "c_treatment",
+      type = "custom", values = c(1500, 3000, 4500),
+      display_name = "Treatment Cost", strategy = "volantor") |>
+    add_twsa_variable("Cost Sensitivity", "c_sick",
+      type = "custom", values = c(3500, 5000, 6500),
+      display_name = "Cost (Sick)")
+
+  results <- run_twsa(model)
+  plot_data <- openqaly:::prepare_twsa_outcomes_data(
+    results = results,
+    summary_name = "costs",
+    twsa_name = "Cost Sensitivity",
+    groups = "overall",
+    discounted = TRUE
+  )
+
+  expect_gt(dplyr::n_distinct(plot_data$value), 1)
+})

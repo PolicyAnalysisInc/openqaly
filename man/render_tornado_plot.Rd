@@ -4,7 +4,16 @@
 \alias{render_tornado_plot}
 \title{Render Tornado Plot from Prepared Data}
 \usage{
-render_tornado_plot(tornado_data, summary_label, facet_component = NULL)
+render_tornado_plot(
+  tornado_data,
+  summary_label,
+  facet_component = NULL,
+  axis_decimals = NULL,
+  label_decimals = NULL,
+  locale = NULL,
+  abbreviate = FALSE,
+  currency = FALSE
+)
 }
 \arguments{
 \item{tornado_data}{Prepared tibble with columns: parameter_display_name, strategy,
@@ -13,6 +22,8 @@ group, low, base, high, range}
 \item{summary_label}{String for x-axis label}
 
 \item{facet_component}{Optional faceting component (if NULL, determined automatically)}
+
+\item{currency}{Logical. Format values as currency? (default: FALSE)}
 }
 \value{
 A ggplot2 object

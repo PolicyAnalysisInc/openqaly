@@ -1,6 +1,89 @@
-#' Prepare DSA Outcomes Table Data
+#' Enhance Table Parameter Labels with Input Values
 #'
-#' Internal helper function that prepares DSA outcomes data for table rendering.
+#' Internal helper that adds input range values to parameter_display_name labels
+#' for table output. Uses custom range_label if available, otherwise auto-formats
+#' from DSA metadata parameter values.
+#'
+#' @param data A data frame with parameter and parameter_display_name columns
+#' @param results DSA results object containing dsa_metadata
+#' @return The data frame with enhanced parameter_display_name
+#' @keywords internal
+enhance_table_parameter_labels <- function(data, results, locale = NULL) {
+  if (is.null(results$dsa_metadata)) return(data)
+
+  # Use parameter_display_name as key since parameter names may be duplicated
+  # (e.g., same variable varied for different groups)
+  meta <- results$dsa_metadata %>%
+    filter(.data$parameter_type != "base")
+
+  # Build a lookup: one row per unique parameter_display_name with low/high values and range_label
+  low_vals <- meta %>%
+    filter(.data$variation == "low") %>%
+    select("parameter", "parameter_display_name", "parameter_type", "override_value",
+           "range_label") %>%
+    rename(param_low = "override_value")
+
+  high_vals <- meta %>%
+    filter(.data$variation == "high") %>%
+    select("parameter_display_name", param_high = "override_value")
+
+  param_info <- low_vals %>%
+    inner_join(high_vals, by = "parameter_display_name")
+
+  if (nrow(param_info) == 0) return(data)
+
+  data <- data %>%
+    left_join(
+      param_info %>% select("parameter", "parameter_display_name", "parameter_type",
+                            "param_low", "param_high", "range_label"),
+      by = c("parameter", "parameter_display_name")
+    )
+
+  settings <- results$metadata$settings
+
+  data <- data %>%
+    rowwise() %>%
+    mutate(
+      parameter_display_name = if_else(
+        !is.na(.data$range_label),
+        sprintf("%s (%s)", .data$parameter_display_name, .data$range_label),
+        if_else(
+          !is.na(.data$param_low) & !is.na(.data$param_high),
+          {
+            unit_suffix <- if (!is.na(.data$parameter_type) && .data$parameter_type == "setting") {
+              get_setting_unit_suffix(.data$parameter, settings)
+            } else {
+              ""
+            }
+
+            if (unit_suffix != "") {
+              sprintf("%s (%s%s - %s%s)",
+                      .data$parameter_display_name,
+                      oq_format(as.numeric(.data$param_low), exact = TRUE, locale = locale),
+                      unit_suffix,
+                      oq_format(as.numeric(.data$param_high), exact = TRUE, locale = locale),
+                      unit_suffix)
+            } else {
+              sprintf("%s (%s - %s)",
+                      .data$parameter_display_name,
+                      oq_format(as.numeric(.data$param_low), exact = TRUE, locale = locale),
+                      oq_format(as.numeric(.data$param_high), exact = TRUE, locale = locale))
+            }
+          },
+          .data$parameter_display_name
+        )
+      )
+    ) %>%
+    ungroup() %>%
+    select(-any_of(c("param_low", "param_high", "parameter_type", "range_label")))
+
+  data
+}
+
+
+#' Prepare DSA Summary Table Data
+#'
+#' Internal helper function that prepares DSA summary data for table rendering.
 #' Creates a table showing low, base case, and high values for each parameter
 #' across strategies.
 #'
@@ -10,27 +93,40 @@
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param interventions Intervention strategy name
 #' @param comparators Comparator strategy name
-#' @param decimals Number of decimal places
+#' @param decimals Number of decimal places (NULL for auto-precision)
 #' @param discounted Logical. Use discounted values?
 #' @param font_size Font size for rendering
+#' @param top_n Integer or NULL for top N parameters
+#' @param show_parameter_values Logical. Include input parameter values in row labels?
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
+#'
+#' @param value_type Type of summary values: "all" (default), "outcome", or "cost"
+#' @param currency Logical. Format values as currency? (default: FALSE)
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
-prepare_dsa_outcomes_table_data <- function(results,
+prepare_dsa_summary_table_data <- function(results,
                                             outcome,
                                             groups = "overall",
                                             strategies = NULL,
                                             interventions = NULL,
                                             comparators = NULL,
-                                            decimals = 2,
+                                            decimals = NULL,
                                             discounted = TRUE,
-                                            font_size = 11) {
+                                            font_size = 11,
+                                            top_n = NULL,
+                                            show_parameter_values = FALSE,
+                                            abbreviate = FALSE,
+                                            value_type = "all",
+                                            currency = FALSE) {
+
+  locale <- get_results_locale(results)
 
   # Extract DSA summaries
   dsa_data <- extract_dsa_summaries(
     results,
     summary_name = outcome,
-    value_type = "all",
+    value_type = value_type,
     groups = groups,
     strategies = strategies,
     discounted = discounted
@@ -159,6 +255,21 @@ prepare_dsa_outcomes_table_data <- function(results,
     }
   }
 
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    combined_data <- combined_data %>%
+      mutate(.range = abs(.data$high - .data$low)) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    combined_data <- enhance_table_parameter_labels(combined_data, results, locale = locale)
+  }
+
   # Get unique strategies and groups
   strategies_display <- unique(combined_data$strategy)
   groups_display <- unique(combined_data$group)
@@ -198,9 +309,9 @@ prepare_dsa_outcomes_table_data <- function(results,
     # Format numeric columns
     for (col in setdiff(colnames(result_data), "parameter_display_name")) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                        locale = locale, abbreviate = abbreviate,
+                                        currency = currency)
       }
     }
 
@@ -276,9 +387,9 @@ prepare_dsa_outcomes_table_data <- function(results,
       # Format numeric columns
       for (col in setdiff(colnames(grp_data), "parameter_display_name")) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                       locale = locale, abbreviate = abbreviate,
+                                       currency = currency)
         }
       }
 
@@ -354,10 +465,14 @@ prepare_dsa_outcomes_table_data <- function(results,
 #'   If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.
 #' @param comparators Single reference strategy for comparator perspective.
 #'   If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param discounted Logical. Use discounted values? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
+#'   When TRUE, labels show "Parameter Name (low - high)" format.
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -399,10 +514,13 @@ dsa_outcomes_table <- function(results,
                                strategies = NULL,
                                interventions = NULL,
                                comparators = NULL,
-                               decimals = 2,
+                               decimals = NULL,
                                discounted = TRUE,
                                font_size = 11,
-                               table_format = c("flextable", "kable")) {
+                               table_format = c("flextable", "kable"),
+                               top_n = NULL,
+                               show_parameter_values = FALSE,
+                               abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -412,7 +530,7 @@ dsa_outcomes_table <- function(results,
   }
 
   # Prepare data
-  prepared <- prepare_dsa_outcomes_table_data(
+  prepared <- prepare_dsa_summary_table_data(
     results = results,
     outcome = outcome,
     groups = groups,
@@ -421,7 +539,106 @@ dsa_outcomes_table <- function(results,
     comparators = comparators,
     decimals = decimals,
     discounted = discounted,
-    font_size = font_size
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values,
+    abbreviate = abbreviate,
+    value_type = "outcome",
+    currency = FALSE
+  )
+
+  # Render using specified backend
+  render_table(prepared, format = table_format)
+}
+
+
+#' Format DSA Costs as Summary Table
+#'
+#' Creates a table showing DSA cost outcomes with low, base case, and high values
+#' for each parameter across strategies. Values are formatted as currency.
+#'
+#' @param results A openqaly DSA results object (output from run_dsa)
+#' @param outcome Name of cost outcome to display (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), specific group, or NULL
+#'   (all groups)
+#' @param strategies Character vector of strategies to include (NULL for all)
+#' @param interventions Single reference strategy for intervention perspective.
+#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.
+#' @param comparators Single reference strategy for comparator perspective.
+#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
+#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param font_size Font size for rendering (default: 11)
+#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
+#'   When TRUE, labels show "Parameter Name (low - high)" format.
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A table object (flextable or kable depending on table_format)
+#'
+#' @details
+#' The table shows each DSA parameter as a row with three columns per strategy:
+#' Low, Base, and High values. Values are formatted as currency.
+#'
+#' When multiple groups need to be displayed (groups = NULL), uses group label rows
+#' (in bold) followed by indented parameter rows for each group.
+#'
+#' When interventions or comparators is specified, shows differences between strategies
+#' instead of absolute values.
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") %>%
+#'   add_variable("p_disease", 0.03) %>%
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+#' dsa_results <- run_dsa(model)
+#'
+#' # Basic DSA costs table
+#' dsa_costs_table(dsa_results, "total_cost")
+#'
+#' # Show differences vs control
+#' dsa_costs_table(dsa_results, "total_cost", comparators = "control")
+#' }
+#'
+#' @export
+dsa_costs_table <- function(results,
+                             outcome,
+                             groups = "overall",
+                             strategies = NULL,
+                             interventions = NULL,
+                             comparators = NULL,
+                             decimals = NULL,
+                             discounted = TRUE,
+                             font_size = 11,
+                             table_format = c("flextable", "kable"),
+                             top_n = NULL,
+                             show_parameter_values = FALSE,
+                             abbreviate = FALSE) {
+
+  table_format <- match.arg(table_format)
+
+  # Validate interventions/comparators
+  if (!is.null(interventions) && !is.null(comparators)) {
+    stop("Only one of 'interventions' or 'comparators' should be provided, not both")
+  }
+
+  # Prepare data
+  prepared <- prepare_dsa_summary_table_data(
+    results = results,
+    outcome = outcome,
+    groups = groups,
+    strategies = strategies,
+    interventions = interventions,
+    comparators = comparators,
+    decimals = decimals,
+    discounted = discounted,
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values,
+    abbreviate = abbreviate,
+    value_type = "cost",
+    currency = TRUE
   )
 
   # Render using specified backend
@@ -454,8 +671,13 @@ prepare_dsa_nmb_table_data <- function(results,
                                        wtp = NULL,
                                        interventions = NULL,
                                        comparators = NULL,
-                                       decimals = 0,
-                                       font_size = 11) {
+                                       decimals = NULL,
+                                       font_size = 11,
+                                       top_n = NULL,
+                                       show_parameter_values = FALSE,
+                                       abbreviate = FALSE) {
+
+  locale <- get_results_locale(results)
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -543,6 +765,21 @@ prepare_dsa_nmb_table_data <- function(results,
     ) %>%
     select("strategy", "group", "parameter", "parameter_display_name", "low", "base", "high")
 
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    nmb_data <- nmb_data %>%
+      mutate(.range = abs(.data$high - .data$low)) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    nmb_data <- enhance_table_parameter_labels(nmb_data, results, locale = locale)
+  }
+
   # Get unique strategies and groups
   strategies_display <- unique(nmb_data$strategy)
   groups_display <- unique(nmb_data$group)
@@ -582,9 +819,8 @@ prepare_dsa_nmb_table_data <- function(results,
     # Format numeric columns
     for (col in setdiff(colnames(result_data), "parameter_display_name")) {
       if (is.numeric(result_data[[col]])) {
-        rounded_vals <- round(result_data[[col]], decimals)
-        rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-        result_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+        result_data[[col]] <- oq_format(result_data[[col]], decimals = decimals,
+                                        locale = locale, abbreviate = abbreviate, currency = TRUE)
       }
     }
 
@@ -660,9 +896,8 @@ prepare_dsa_nmb_table_data <- function(results,
       # Format numeric columns
       for (col in setdiff(colnames(grp_data), "parameter_display_name")) {
         if (is.numeric(grp_data[[col]])) {
-          rounded_vals <- round(grp_data[[col]], decimals)
-          rounded_vals[abs(rounded_vals) < 10^(-decimals-1)] <- 0
-          grp_data[[col]] <- scales::comma(rounded_vals, accuracy = 10^(-decimals))
+          grp_data[[col]] <- oq_format(grp_data[[col]], decimals = decimals,
+                                       locale = locale, abbreviate = abbreviate, currency = TRUE)
         }
       }
 
@@ -740,9 +975,12 @@ prepare_dsa_nmb_table_data <- function(results,
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
 #'   At least one of interventions or comparators must be specified.
-#' @param decimals Number of decimal places (default: 0 for monetary values)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -787,9 +1025,12 @@ dsa_nmb_table <- function(results,
                           wtp = NULL,
                           interventions = NULL,
                           comparators = NULL,
-                          decimals = 0,
+                          decimals = NULL,
                           font_size = 11,
-                          table_format = c("flextable", "kable")) {
+                          table_format = c("flextable", "kable"),
+                          top_n = NULL,
+                          show_parameter_values = FALSE,
+                          abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -803,7 +1044,10 @@ dsa_nmb_table <- function(results,
     interventions = interventions,
     comparators = comparators,
     decimals = decimals,
-    font_size = font_size
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values,
+    abbreviate = abbreviate
   )
 
   # Render using specified backend
@@ -838,45 +1082,6 @@ is_flipped_icer <- function(icer_value) {
 }
 
 
-#' Format CE Table Cell Value
-#'
-#' Internal helper to format ICER values for table cells.
-#' Asterisk is added when the ICER differs from the REQUESTED direction
-#' (i.e., when ICER is negative indicating SW quadrant / flipped comparison).
-#'
-#' @param icer_value Numeric ICER value
-#' @param decimals Number of decimal places
-#' @param add_asterisk Logical whether to add asterisk for flipped ICERs (default TRUE)
-#' @return Formatted string
-#' @keywords internal
-format_ce_cell <- function(icer_value, decimals = 0, add_asterisk = TRUE) {
-  # Check NaN BEFORE NA because is.na(NaN) returns TRUE
-  if (is.nan(icer_value)) {
-    return("Equivalent")
-  }
-  if (is.na(icer_value)) {
-    return("")
-  }
-  if (is.infinite(icer_value) && icer_value > 0) {
-    return("Dominated")
-  }
-  if (icer_value == 0) {
-    return("Dominant")
-  }
-
-  # Format finite value
-  formatted <- scales::comma(round(abs(icer_value), decimals))
-
-  # Add asterisk if ICER is flipped (negative = SW quadrant)
-  # This indicates the comparison differs from the user's requested direction
-  # Only add asterisk for parameter VARIATIONS, not base case (per requirements)
-  if (add_asterisk && is_flipped_icer(icer_value)) {
-    formatted <- paste0(formatted, "*")
-  }
-
-  formatted
-}
-
 
 #' Prepare DSA CE Table Data
 #'
@@ -890,8 +1095,13 @@ format_ce_cell <- function(icer_value, decimals = 0, add_asterisk = TRUE) {
 #' @param groups Group selection
 #' @param interventions Intervention strategy name(s)
 #' @param comparators Comparator strategy name(s)
-#' @param decimals Number of decimal places
+#' @param cost_decimals Number of decimal places for costs (NULL for auto)
+#' @param outcome_decimals Number of decimal places for outcomes (NULL for auto)
+#' @param icer_decimals Number of decimal places for ICERs (NULL for auto)
 #' @param font_size Font size for rendering
+#' @param top_n Integer or NULL for top N parameters
+#' @param show_parameter_values Logical. Include input parameter values in row labels?
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)?
 #'
 #' @return List with prepared data and metadata for render_table()
 #' @keywords internal
@@ -901,8 +1111,15 @@ prepare_dsa_ce_table_data <- function(results,
                                       groups = "overall",
                                       interventions = NULL,
                                       comparators = NULL,
-                                      decimals = 0,
-                                      font_size = 11) {
+                                      cost_decimals = NULL,
+                                      outcome_decimals = NULL,
+                                      icer_decimals = NULL,
+                                      font_size = 11,
+                                      top_n = NULL,
+                                      show_parameter_values = FALSE,
+                                      abbreviate = FALSE) {
+
+  locale <- get_results_locale(results)
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -1050,15 +1267,36 @@ prepare_dsa_ce_table_data <- function(results,
     inner_join(high_data, by = c("strategy", "group", "parameter", "parameter_display_name")) %>%
     inner_join(base_data, by = c("strategy", "group"))
 
+  # Filter to top N parameters by impact range if requested
+  if (!is.null(top_n)) {
+    ce_data <- ce_data %>%
+      mutate(.range = abs(as.numeric(.data$high_icer) - as.numeric(.data$low_icer))) %>%
+      group_by(.data$strategy, .data$group) %>%
+      slice_max(order_by = .data$.range, n = top_n, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(-".range")
+  }
+
+  # Enhance parameter labels with input values if requested
+  if (show_parameter_values) {
+    ce_data <- enhance_table_parameter_labels(ce_data, results, locale = locale)
+  }
+
   # Format cells and detect flipped ICERs (which need asterisks)
   # Asterisk appears when ICER differs from REQUESTED direction (negative = SW quadrant)
+  # Use oq_format_icer for low/high (adds asterisks for negatives)
+  # Use oq_format_icer for all ICER formatting
+  # Base case uses abs() to suppress asterisk (only variations get asterisks)
   ce_data <- ce_data %>%
     rowwise() %>%
     mutate(
-      low_formatted = format_ce_cell(.data$low_icer, decimals),
+      low_formatted = oq_format_icer(.data$low_icer, decimals = icer_decimals,
+                                     locale = locale, abbreviate = abbreviate),
       # Base case never gets asterisk - only parameter VARIATIONS get asterisks (per requirements)
-      base_formatted = format_ce_cell(.data$base_icer, decimals, add_asterisk = FALSE),
-      high_formatted = format_ce_cell(.data$high_icer, decimals),
+      base_formatted = oq_format_icer(abs(.data$base_icer), decimals = icer_decimals,
+                                      locale = locale, abbreviate = abbreviate),
+      high_formatted = oq_format_icer(.data$high_icer, decimals = icer_decimals,
+                                      locale = locale, abbreviate = abbreviate),
       # Track if any VARIATION ICER is flipped (for footnote generation)
       # Only Low/High variations get asterisks, so only they trigger footnotes
       has_flipped_icer = is_flipped_icer(.data$low_icer) ||
@@ -1264,9 +1502,14 @@ prepare_dsa_ce_table_data <- function(results,
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
 #'   At least one of interventions or comparators must be specified.
-#' @param decimals Number of decimal places (default: 0 for ICERs)
+#' @param cost_decimals Number of decimal places for costs (default: NULL for auto-precision)
+#' @param outcome_decimals Number of decimal places for outcomes (default: NULL for auto-precision)
+#' @param icer_decimals Number of decimal places for ICERs (default: NULL for auto-precision)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
+#' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
+#' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -1316,9 +1559,14 @@ dsa_ce_table <- function(results,
                          groups = "overall",
                          interventions = NULL,
                          comparators = NULL,
-                         decimals = 0,
+                         cost_decimals = NULL,
+                         outcome_decimals = NULL,
+                         icer_decimals = NULL,
                          font_size = 11,
-                         table_format = c("flextable", "kable")) {
+                         table_format = c("flextable", "kable"),
+                         top_n = NULL,
+                         show_parameter_values = FALSE,
+                         abbreviate = FALSE) {
 
   table_format <- match.arg(table_format)
 
@@ -1330,8 +1578,13 @@ dsa_ce_table <- function(results,
     groups = groups,
     interventions = interventions,
     comparators = comparators,
-    decimals = decimals,
-    font_size = font_size
+    cost_decimals = cost_decimals,
+    outcome_decimals = outcome_decimals,
+    icer_decimals = icer_decimals,
+    font_size = font_size,
+    top_n = top_n,
+    show_parameter_values = show_parameter_values,
+    abbreviate = abbreviate
   )
 
   # Render using specified backend

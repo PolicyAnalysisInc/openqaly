@@ -8,6 +8,9 @@
 #' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
 #' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
 #' @param strategies Character vector of strategies to include (NULL for all)
+#' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
+#' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -37,7 +40,13 @@ incremental_ce_plot <- function(res,
                                 outcome_summary,
                                 cost_summary,
                                 groups = "overall",
-                                strategies = NULL) {
+                                strategies = NULL,
+                                cost_axis_decimals = NULL,
+                                outcome_axis_decimals = NULL,
+                                abbreviate = FALSE) {
+
+  # Extract locale from results
+  locale <- get_results_locale(res)
 
   # Calculate incremental CE (always uses discounted values)
   ce_data <- calculate_incremental_ce(
@@ -109,12 +118,12 @@ incremental_ce_plot <- function(res,
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = comma
+      labels = oq_label_fn(decimals = outcome_axis_decimals, locale = locale, abbreviate = abbreviate)
     ) +
     scale_y_continuous(
       breaks = y_breaks,
       limits = y_limits,
-      labels = comma
+      labels = oq_label_fn(decimals = cost_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)
     ) +
     labs(x = outcome_label, y = cost_label, color = "Strategy") +
     theme_bw() +
@@ -146,6 +155,9 @@ incremental_ce_plot <- function(res,
 #' @param wtp Willingness-to-pay threshold for the WTP line. If NULL (default), uses
 #'   the WTP from the outcome summary metadata if available. If neither is available,
 #'   no WTP line is drawn.
+#' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
+#' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #'
 #' @return A ggplot2 object
 #'
@@ -194,7 +206,13 @@ pairwise_ce_plot <- function(res,
                              groups = "overall",
                              interventions = NULL,
                              comparators = NULL,
-                             wtp = NULL) {
+                             wtp = NULL,
+                             cost_axis_decimals = NULL,
+                             outcome_axis_decimals = NULL,
+                             abbreviate = FALSE) {
+
+  # Extract locale from results
+  locale <- get_results_locale(res)
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -265,8 +283,8 @@ pairwise_ce_plot <- function(res,
                    x = 0, y = 0, alpha = 0.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-      scale_x_continuous(labels = comma, limits = x_limits) +
-      scale_y_continuous(labels = comma, limits = y_limits) +
+      scale_x_continuous(labels = oq_label_fn(decimals = outcome_axis_decimals, locale = locale, abbreviate = abbreviate), limits = x_limits) +
+      scale_y_continuous(labels = oq_label_fn(decimals = cost_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE), limits = y_limits) +
       labs(x = paste0("\u0394 ", outcome_label),
            y = paste0("\u0394 ", cost_label),
            color = "Comparison") +
@@ -286,8 +304,8 @@ pairwise_ce_plot <- function(res,
                    x = 0, y = 0, color = "gray50", alpha = 0.5) +
       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
       geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-      scale_x_continuous(labels = comma, limits = x_limits) +
-      scale_y_continuous(labels = comma, limits = y_limits) +
+      scale_x_continuous(labels = oq_label_fn(decimals = outcome_axis_decimals, locale = locale, abbreviate = abbreviate), limits = x_limits) +
+      scale_y_continuous(labels = oq_label_fn(decimals = cost_axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE), limits = y_limits) +
       labs(x = paste0("\u0394 ", outcome_label),
            y = paste0("\u0394 ", cost_label)) +
       theme_bw() +

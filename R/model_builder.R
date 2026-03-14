@@ -23,18 +23,25 @@ NULL
 #' model <- define_model("psm")
 #' model <- define_model("custom_psm")
 define_model <- function(type = "markov") {
-  type <- match.arg(tolower(type), c("markov", "psm", "custom_psm"))
+  type <- match.arg(tolower(type), c("markov", "psm", "custom_psm", "decision_tree"))
 
   # Type-specific state initialization
   # PSM and Custom PSM use same 3-column state structure
-  states_init <- if (type %in% c("psm", "custom_psm")) {
-    tibble(
+  # Decision tree models have no states
+  states_init <- if (type == "decision_tree") {
+    fast_tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0)
+    )
+  } else if (type %in% c("psm", "custom_psm")) {
+    fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0)
     )
   } else {
-    tibble(
+    fast_tibble(
       name = character(0),
       initial_probability = character(0),
       display_name = character(0),
@@ -47,19 +54,26 @@ define_model <- function(type = "markov") {
   }
 
   # Type-specific transitions initialization
-  transitions_init <- if (type == "psm") {
-    tibble(
+  # Decision tree models have no transitions
+  transitions_init <- if (type == "decision_tree") {
+    fast_tibble(
+      from_state = character(0),
+      to_state = character(0),
+      formula = character(0)
+    )
+  } else if (type == "psm") {
+    fast_tibble(
       endpoint = character(0),
       time_unit = character(0),
       formula = character(0)
     )
   } else if (type == "custom_psm") {
-    tibble(
+    fast_tibble(
       state = character(0),
       formula = character(0)
     )
   } else {
-    tibble(
+    fast_tibble(
       from_state = character(0),
       to_state = character(0),
       formula = character(0)
@@ -73,11 +87,13 @@ define_model <- function(type = "markov") {
       half_cycle_method = "start",
       discount_cost = 0,
       discount_outcomes = 0,
+      discount_timing = "start",
+      discount_method = "by_cycle",
       reduce_state_cycle = FALSE
     ),
     states = states_init,
     transitions = transitions_init,
-    values = tibble(
+    values = fast_tibble(
       name = character(0),
       formula = character(0),
       state = character(0),
@@ -86,7 +102,7 @@ define_model <- function(type = "markov") {
       description = character(0),
       type = character(0)
     ),
-    variables = tibble(
+    variables = fast_tibble(
       name = character(0),
       formula = character(0),
       display_name = character(0),
@@ -96,20 +112,20 @@ define_model <- function(type = "markov") {
       source = character(0),
       sampling = character(0)
     ),
-    strategies = tibble(
+    strategies = fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       enabled = numeric(0)
     ),
-    groups = tibble(
+    groups = fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       weight = character(0),
       enabled = numeric(0)
     ),
-    summaries = tibble(
+    summaries = fast_tibble(
       name = character(0),
       values = character(0),
       display_name = character(0),
@@ -120,13 +136,15 @@ define_model <- function(type = "markov") {
     tables = list(),
     scripts = list(),
     trees = NULL,
+    decision_tree = NULL,
     multivariate_sampling = list(),
     dsa_parameters = structure(list(), class = "dsa_parameters"),
     scenarios = list(),
     twsa_analyses = list(),
     override_categories = list(),
     threshold_analyses = list(),
-    vbp = NULL
+    vbp = NULL,
+    psa = NULL
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -165,8 +183,12 @@ set_settings <- function(model, ...) {
     discount_cost = "discount_cost",
     discount_outcomes = "discount_outcomes",
     half_cycle_method = "half_cycle_method",
+    discount_timing = "discount_timing",
+    discount_method = "discount_method",
     reduce_state_cycle = "reduce_state_cycle",
-    days_per_year = "days_per_year"
+    days_per_year = "days_per_year",
+    country = "country",
+    number_country = "number_country"
   )
 
   # Apply settings
@@ -241,6 +263,136 @@ set_vbp <- function(model, price_variable, intervention_strategy,
   model
 }
 
+#' Set PSA Configuration
+#'
+#' Configure probabilistic sensitivity analysis (PSA) parameters on the model
+#' so they can be serialized and used as defaults by \code{run_psa()}.
+#'
+#' @param model An oq_model_builder object
+#' @param n_sim Number of PSA simulations to run (positive integer)
+#' @param seed Random seed for reproducibility (NULL or single numeric value)
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_psa(n_sim = 1000, seed = 42)
+set_psa <- function(model, n_sim, seed = NULL) {
+  # Validate n_sim
+  if (!is.numeric(n_sim) || length(n_sim) != 1 || is.na(n_sim) ||
+      n_sim < 1 || n_sim != as.integer(n_sim)) {
+    stop("n_sim must be a positive integer", call. = FALSE)
+  }
+
+  # Validate seed
+  if (!is.null(seed)) {
+    if (!is.numeric(seed) || length(seed) != 1 || is.na(seed)) {
+      stop("seed must be NULL or a single numeric value", call. = FALSE)
+    }
+  }
+
+  model$psa <- list(
+    n_sim = as.integer(n_sim),
+    seed = seed
+  )
+
+  model
+}
+
+#' Add a Tree Node
+#'
+#' Add a node to a decision tree in the model. Creates the trees tibble if it
+#' doesn't exist yet.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string for the tree name
+#' @param node Character string for the node name
+#' @param parent Character string for the parent node name (NA for root)
+#' @param formula An unquoted R expression for the node probability
+#' @param tags Optional character string for node tags
+#'
+#' @return The modified model object
+#'
+#' @export
+add_tree_node <- function(model, tree_name, node, parent = NA, formula, tags = NA) {
+  # Capture the formula expression using NSE
+  formula_quo <- enquo(formula)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
+  # If formula was passed as a string, use it directly
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
+
+  new_row <- fast_tibble(
+    name = tree_name,
+    node = node,
+    parent = if (is.na(parent)) NA_character_ else as.character(parent),
+    formula = formula_str,
+    tags = if (is.na(tags)) NA_character_ else as.character(tags)
+  )
+
+  if (is.null(model$trees)) {
+    model$trees <- new_row
+  } else {
+    model$trees <- bind_rows(model$trees, new_row)
+  }
+
+  validate_tree_name_collisions(tree_name, model)
+
+  model
+}
+
+#' Set Decision Tree Configuration
+#'
+#' Configure a decision tree to run before the main model. The tree produces
+#' one-time payoffs and a duration that offsets downstream discounting.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string referencing a tree in model$trees
+#' @param duration An unquoted R expression for the duration (can reference variables for PSA)
+#' @param duration_unit Character string for the time unit ("days", "weeks", "months", "years")
+#'
+#' @return The modified model object
+#'
+#' @export
+set_decision_tree <- function(model, tree_name, duration, duration_unit = "days") {
+  # Validate duration_unit
+  valid_units <- c("days", "weeks", "months", "years")
+  duration_unit <- match.arg(tolower(duration_unit), valid_units)
+
+  # Capture the duration expression using NSE
+  duration_quo <- enquo(duration)
+  duration_expr <- quo_get_expr(duration_quo)
+  duration_str <- expr_text(duration_expr)
+  if (is.character(duration_expr) && length(duration_expr) == 1) {
+    duration_str <- duration_expr
+  }
+
+  model$decision_tree <- list(
+    tree_name = tree_name,
+    duration = duration_str,
+    duration_unit = duration_unit
+  )
+
+  model
+}
+
+#' Remove Decision Tree Configuration
+#'
+#' Remove the decision tree configuration from the model.
+#'
+#' @param model An oq_model_builder object
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_decision_tree <- function(model) {
+  model$decision_tree <- NULL
+  model
+}
+
 #' Add States to Model
 #'
 #' Add one or more states to the model.
@@ -276,6 +428,22 @@ add_state <- function(model, name, display_name = NULL,
   # Get immutable model type
   model_type <- tolower(model$settings$model_type)
 
+  # Decision tree models don't have states
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support states. Use add_value() with state = 'decision_tree' instead.",
+         call. = FALSE)
+  }
+
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
   if (model_type %in% c("psm", "custom_psm")) {
     # PSM and Custom PSM: Reject Markov-specific parameters
     if (!is.null(initial_prob)) {
@@ -292,7 +460,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create PSM/Custom PSM state (3 columns only)
-    new_state <- tibble(
+    new_state <- fast_tibble(
       name = name,
       display_name = display_name %||% name,
       description = description %||% display_name %||% name
@@ -304,7 +472,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create Markov state (8 columns)
-    new_state <- tibble(
+    new_state <- fast_tibble(
       name = name,
       initial_probability = as.character(initial_prob),
       display_name = display_name %||% name,
@@ -317,9 +485,6 @@ add_state <- function(model, name, display_name = NULL,
   }
 
   model$states <- bind_rows(model$states, new_state)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -344,6 +509,9 @@ add_transition <- function(model, from_state, to_state, formula) {
   # Check model type for appropriate structure
   model_type <- tolower(model$settings$model_type %||% "markov")
 
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
   if (model_type == "psm") {
     stop("For PSM models, use add_psm_transition() instead")
   }
@@ -361,16 +529,13 @@ add_transition <- function(model, from_state, to_state, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     from_state = from_state,
     to_state = to_state,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -398,16 +563,13 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     endpoint = endpoint,
     time_unit = time_unit,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -453,15 +615,12 @@ add_custom_psm_transition <- function(model, state, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     state = state,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -478,6 +637,12 @@ add_custom_psm_transition <- function(model, state, formula) {
 #' @param display_name Optional display name
 #' @param description Optional description
 #' @param type Value type (default: "outcome")
+#' @param discounting_override Optional formula string that overrides per-cycle
+#'   discounting. When provided, the formula result replaces the standard discount
+#'   factor entirely: \code{values_discounted = values * result}. The formula can
+#'   return a scalar or a vector of length n_cycles. Available variables in the
+#'   formula: all model variables, \code{discount_rate}, \code{discount_factors},
+#'   and \code{trace(state_name)}.
 #'
 #' @return The modified model object
 #'
@@ -487,7 +652,7 @@ add_custom_psm_transition <- function(model, state, formula) {
 #'   add_value("cost", base_cost + extra_cost, state = "sick")
 add_value <- function(model, name, formula, state = NA, destination = NA,
                      display_name = NULL, description = NULL,
-                     type = "outcome") {
+                     type = "outcome", discounting_override = NA) {
 
   # Check for transitional values in custom_psm (not supported)
   model_type <- tolower(model$settings$model_type %||% "markov")
@@ -496,8 +661,26 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     has_dest <- !is.na(destination) && destination != "NA"
     if (has_state && has_dest) {
       stop("Custom PSM models do not support transitional values (both state and destination). ",
-           "Use residency values (state only) or model-level values (no state/destination).")
+           "Use residency values (state only) or model start values (no state/destination).")
     }
+  }
+
+  # Validate decision_tree state: destination must be NA
+  if (!is.na(state) && as.character(state) == "decision_tree") {
+    if (!is.na(destination) && as.character(destination) != "NA" && as.character(destination) != "") {
+      stop("Values with state = 'decision_tree' cannot have a destination. ",
+           "Decision tree values are one-time payoffs, not transitional values.",
+           call. = FALSE)
+    }
+  }
+
+  # Transitional values require both state and destination
+  has_state_for_tv <- !is.na(state) && as.character(state) != "NA" && as.character(state) != ""
+  has_dest_for_tv <- !is.na(destination) && as.character(destination) != "NA" && as.character(destination) != ""
+  if (has_dest_for_tv && !has_state_for_tv) {
+    stop("Transitional values must specify both 'state' and 'destination'. ",
+         "Value '", name, "' has destination '", destination, "' but no state.",
+         call. = FALSE)
   }
 
   # Capture the formula expression using NSE
@@ -548,20 +731,36 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     }
   }
 
-  new_value <- tibble(
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
+  # Check for name collision with tables
+  if (length(model$tables) > 0 && name %in% names(model$tables)) {
+    stop(sprintf(
+      "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+      name
+    ))
+  }
+
+  new_value <- fast_tibble(
     name = name,
     formula = formula_str,
     state = state_str,
     destination = dest_str,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
-    type = type
+    type = type,
+    discounting_override = as.character(discounting_override)
   )
 
   model$values <- bind_rows(model$values, new_value)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -694,7 +893,17 @@ add_variable <- function(model, name, formula, display_name = NULL,
     }
   }
 
-  new_var <- tibble(
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
+  new_var <- fast_tibble(
     name = name,
     formula = formula_str,
     display_name = display_name,
@@ -738,7 +947,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
 add_strategy <- function(model, name, display_name = NULL,
                         description = NULL, enabled = 1) {
 
-  new_strat <- tibble(
+  new_strat <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -769,7 +978,7 @@ add_strategy <- function(model, name, display_name = NULL,
 add_group <- function(model, name, display_name = NULL,
                      description = NULL, weight = "1", enabled = 1) {
 
-  new_group <- tibble(
+  new_group <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -810,12 +1019,22 @@ add_summary <- function(model, name, values, display_name = NULL,
     stop("Summary type must be 'outcome' or 'cost'")
   }
 
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+
   # Validate that WTP is not specified for cost summaries
   if (type == "cost" && !is.null(wtp)) {
     stop(sprintf("WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.", name))
   }
 
-  new_summary <- tibble(
+  new_summary <- fast_tibble(
     name = name,
     values = values,
     display_name = display_name %||% name,
@@ -844,6 +1063,22 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
+  # Check for name collision with trees
+  if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+    if (name %in% unique(model$trees$name)) {
+      stop(sprintf(
+        'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+        name
+      ), call. = FALSE)
+    }
+  }
+  # Check for name collision with values
+  if (is.data.frame(model$values) && nrow(model$values) > 0 && name %in% model$values$name) {
+    stop(sprintf(
+      "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+      name
+    ))
+  }
   # Store as structured list with data and optional description
   model$tables[[name]] <- list(
     data = data,
@@ -971,7 +1206,7 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   # Convert variables to tibble format
   if (is.character(variables)) {
     # Simple character vector -> tibble with just variable names
-    variables_df <- tibble(
+    variables_df <- fast_tibble(
       variable = variables,
       strategy = NA_character_,
       group = NA_character_
@@ -1103,6 +1338,9 @@ validate_variable_targeting <- function(model, variable, strategy, group,
 #' @param group Optional group name to limit DSA to specific group
 #' @param display_name Optional display name for plots and tables. If not provided,
 #'   inherits from the variable definition. Required to be unique across all DSA parameters.
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
 #'
 #' @return The modified model object
 #'
@@ -1148,7 +1386,8 @@ validate_variable_targeting <- function(model, variable, strategy, group,
 #' }
 add_dsa_variable <- function(model, variable, low, high,
                              strategy = "", group = "",
-                             display_name = NULL) {
+                             display_name = NULL,
+                             range_label = NULL) {
 
   # Validate variable name
   if (!is.character(variable) || length(variable) != 1) {
@@ -1208,7 +1447,8 @@ add_dsa_variable <- function(model, variable, low, high,
     high = high_formula,    # Store as oq_formula object
     strategy = as.character(strategy),
     group = as.character(group),
-    display_name = display_name
+    display_name = display_name,
+    range_label = range_label
   )
 
   # Add to model's dsa_parameters list
@@ -1230,6 +1470,9 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @param low Value for the low bound (numeric or character depending on setting)
 #' @param high Value for the high bound (numeric or character depending on setting)
 #' @param display_name Optional display name for plots and tables
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
 #'
 #' @return The modified model object
 #'
@@ -1242,7 +1485,8 @@ add_dsa_variable <- function(model, variable, low, high,
 #'   add_dsa_setting("timeframe", low = 10, high = 30)
 #' }
 add_dsa_setting <- function(model, setting, low, high,
-                            display_name = NULL) {
+                            display_name = NULL,
+                            range_label = NULL) {
 
   # Validate inputs
   if (!is.character(setting) || length(setting) != 1) {
@@ -1271,7 +1515,8 @@ add_dsa_setting <- function(model, setting, low, high,
     name = setting,
     low = low,           # Store as literal value
     high = high,         # Store as literal value
-    display_name = display_name %||% setting
+    display_name = display_name %||% setting,
+    range_label = range_label
   )
 
   # Add to model's dsa_parameters list

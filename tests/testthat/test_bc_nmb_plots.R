@@ -128,6 +128,22 @@ test_that("nmb_plot_bar() orders values correctly: outcomes, costs, Total", {
               info = "Outcomes should appear at top (last in factor levels)")
 })
 
+test_that("nmb_plot_bar() uses currency formatting on x-axis and WTP label", {
+  results <- get_test_results()
+
+  p <- nmb_plot_bar(results,
+                    health_outcome = "total_qalys",
+                    cost_outcome = "total_cost",
+                    comparators = "standard")
+  built <- ggplot_build(p)
+  labels <- built$layout$panel_params[[1]]$x$get_labels()
+
+  expect_true(any(grepl("\\$", labels, fixed = FALSE)))
+  expect_true(any(grepl("K|M|B|T", labels)))
+  expect_true(grepl("\\$", p$labels$x))
+  expect_true(grepl("Net Monetary Benefit", p$labels$x))
+})
+
 # ============================================================================
 # Tests for nmb_plot_line()
 # ============================================================================
@@ -189,6 +205,22 @@ test_that("nmb_plot_line() errors without interventions or comparators", {
                   cost_outcome = "total_cost"),
     "must be provided"
   )
+})
+
+test_that("nmb_plot_line() uses currency formatting on y-axis and full NMB label", {
+  results <- get_test_results()
+
+  p <- nmb_plot_line(results,
+                     health_outcome = "total_qalys",
+                     cost_outcome = "total_cost",
+                     comparators = "standard")
+  built <- ggplot_build(p)
+  labels <- built$layout$panel_params[[1]]$y$get_labels()
+
+  expect_true(any(grepl("\\$", labels, fixed = FALSE)))
+  expect_true(any(grepl("K|M|B|T", labels)))
+  expect_true(grepl("Net Monetary Benefit", p$labels$y))
+  expect_true(grepl("\\$", p$labels$y))
 })
 
 # ============================================================================

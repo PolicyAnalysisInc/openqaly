@@ -11,7 +11,8 @@ add_dsa_variable(
   high,
   strategy = "",
   group = "",
-  display_name = NULL
+  display_name = NULL,
+  range_label = NULL
 )
 }
 \arguments{
@@ -31,6 +32,10 @@ Can use `bc` keyword to reference the base case value and other model variables.
 
 \item{display_name}{Optional display name for plots and tables. If not provided,
 inherits from the variable definition. Required to be unique across all DSA parameters.}
+
+\item{range_label}{Optional custom text for the input range portion of tornado labels.
+When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+"Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".}
 }
 \value{
 The modified model object

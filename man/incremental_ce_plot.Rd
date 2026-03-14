@@ -9,7 +9,10 @@ incremental_ce_plot(
   outcome_summary,
   cost_summary,
   groups = "overall",
-  strategies = NULL
+  strategies = NULL,
+  cost_axis_decimals = NULL,
+  outcome_axis_decimals = NULL,
+  abbreviate = FALSE
 )
 }
 \arguments{
@@ -22,6 +25,12 @@ incremental_ce_plot(
 \item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
+
+\item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}
+
+\item{outcome_axis_decimals}{Fixed decimal places for outcome axis labels, or NULL for auto-precision}
+
+\item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 }
 \value{
 A ggplot2 object

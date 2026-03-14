@@ -29,7 +29,7 @@ get_days_per_year <- function(settings) {
   days_per_year
 }
 
-get_n_cycles <- function(settings) {
+get_n_cycles <- function(settings, dt_duration_days = 0) {
   # If n_cycles is directly specified, use it
   if (!is.null(settings$n_cycles) && !is.na(settings$n_cycles)) {
     return(as.integer(settings$n_cycles))
@@ -53,8 +53,18 @@ get_n_cycles <- function(settings) {
   days_per_tf_unit <- days_per_unit(tf_unit, settings$cycle_length_days, settings$days_per_year)
   days_per_cl_unit <- days_per_unit(cl_unit, settings$cycle_length_days, settings$days_per_year)
 
+  # Subtract decision tree duration from total timeframe
+  total_days <- tf * days_per_tf_unit
+  markov_days <- total_days - dt_duration_days
+  if (markov_days <= 0) {
+    stop("Decision tree duration (", dt_duration_days, " days) exceeds or equals ",
+         "the total model timeframe (", total_days, " days). ",
+         "Increase the timeframe or reduce the decision tree duration.",
+         call. = FALSE)
+  }
+
   # Calculate number of cycles
-  as.integer(ceiling((tf * days_per_tf_unit) / (cl * days_per_cl_unit)))
+  as.integer(ceiling(markov_days / (cl * days_per_cl_unit)))
 }
 
 days_per_unit <- function(unit, cycle_length_days, days_per_year) {
@@ -150,7 +160,7 @@ cycle_length_variables <- function(settings) {
 
   # Return NA values if cycle length couldn't be determined
   if (is.na(cl)) {
-    return(tibble(
+    return(list(
       cycle_length_days = NA_real_,
       cycle_length_weeks = NA_real_,
       cycle_length_months = NA_real_,
@@ -158,7 +168,7 @@ cycle_length_variables <- function(settings) {
     ))
   }
 
-  tibble(
+  list(
     cycle_length_days = cl,
     cycle_length_weeks = convert_time(cl, from = 'Days', to = 'Weeks', settings),
     cycle_length_months = convert_time(cl, from = 'Days', to = 'Months', settings),
