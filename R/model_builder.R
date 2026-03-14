@@ -29,19 +29,19 @@ define_model <- function(type = "markov") {
   # PSM and Custom PSM use same 3-column state structure
   # Decision tree models have no states
   states_init <- if (type == "decision_tree") {
-    tibble(
+    fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0)
     )
   } else if (type %in% c("psm", "custom_psm")) {
-    tibble(
+    fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0)
     )
   } else {
-    tibble(
+    fast_tibble(
       name = character(0),
       initial_probability = character(0),
       display_name = character(0),
@@ -56,24 +56,24 @@ define_model <- function(type = "markov") {
   # Type-specific transitions initialization
   # Decision tree models have no transitions
   transitions_init <- if (type == "decision_tree") {
-    tibble(
+    fast_tibble(
       from_state = character(0),
       to_state = character(0),
       formula = character(0)
     )
   } else if (type == "psm") {
-    tibble(
+    fast_tibble(
       endpoint = character(0),
       time_unit = character(0),
       formula = character(0)
     )
   } else if (type == "custom_psm") {
-    tibble(
+    fast_tibble(
       state = character(0),
       formula = character(0)
     )
   } else {
-    tibble(
+    fast_tibble(
       from_state = character(0),
       to_state = character(0),
       formula = character(0)
@@ -93,7 +93,7 @@ define_model <- function(type = "markov") {
     ),
     states = states_init,
     transitions = transitions_init,
-    values = tibble(
+    values = fast_tibble(
       name = character(0),
       formula = character(0),
       state = character(0),
@@ -102,7 +102,7 @@ define_model <- function(type = "markov") {
       description = character(0),
       type = character(0)
     ),
-    variables = tibble(
+    variables = fast_tibble(
       name = character(0),
       formula = character(0),
       display_name = character(0),
@@ -112,20 +112,20 @@ define_model <- function(type = "markov") {
       source = character(0),
       sampling = character(0)
     ),
-    strategies = tibble(
+    strategies = fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       enabled = numeric(0)
     ),
-    groups = tibble(
+    groups = fast_tibble(
       name = character(0),
       display_name = character(0),
       description = character(0),
       weight = character(0),
       enabled = numeric(0)
     ),
-    summaries = tibble(
+    summaries = fast_tibble(
       name = character(0),
       values = character(0),
       display_name = character(0),
@@ -325,7 +325,7 @@ add_tree_node <- function(model, tree_name, node, parent = NA, formula, tags = N
     formula_str <- formula_expr
   }
 
-  new_row <- tibble(
+  new_row <- fast_tibble(
     name = tree_name,
     node = node,
     parent = if (is.na(parent)) NA_character_ else as.character(parent),
@@ -460,7 +460,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create PSM/Custom PSM state (3 columns only)
-    new_state <- tibble(
+    new_state <- fast_tibble(
       name = name,
       display_name = display_name %||% name,
       description = description %||% display_name %||% name
@@ -472,7 +472,7 @@ add_state <- function(model, name, display_name = NULL,
     }
 
     # Create Markov state (8 columns)
-    new_state <- tibble(
+    new_state <- fast_tibble(
       name = name,
       initial_probability = as.character(initial_prob),
       display_name = display_name %||% name,
@@ -485,9 +485,6 @@ add_state <- function(model, name, display_name = NULL,
   }
 
   model$states <- bind_rows(model$states, new_state)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -532,16 +529,13 @@ add_transition <- function(model, from_state, to_state, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     from_state = from_state,
     to_state = to_state,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -569,16 +563,13 @@ add_psm_transition <- function(model, endpoint, time_unit, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     endpoint = endpoint,
     time_unit = time_unit,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -624,15 +615,12 @@ add_custom_psm_transition <- function(model, state, formula) {
     formula_str <- formula_expr
   }
 
-  new_trans <- tibble(
+  new_trans <- fast_tibble(
     state = state,
     formula = formula_str
   )
 
   model$transitions <- bind_rows(model$transitions, new_trans)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -753,7 +741,15 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     }
   }
 
-  new_value <- tibble(
+  # Check for name collision with tables
+  if (length(model$tables) > 0 && name %in% names(model$tables)) {
+    stop(sprintf(
+      "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+      name
+    ))
+  }
+
+  new_value <- fast_tibble(
     name = name,
     formula = formula_str,
     state = state_str,
@@ -765,9 +761,6 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
   )
 
   model$values <- bind_rows(model$values, new_value)
-
-  # Incremental validation
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
 
   return(model)
 }
@@ -910,7 +903,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
     }
   }
 
-  new_var <- tibble(
+  new_var <- fast_tibble(
     name = name,
     formula = formula_str,
     display_name = display_name,
@@ -954,7 +947,7 @@ add_variable <- function(model, name, formula, display_name = NULL,
 add_strategy <- function(model, name, display_name = NULL,
                         description = NULL, enabled = 1) {
 
-  new_strat <- tibble(
+  new_strat <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -985,7 +978,7 @@ add_strategy <- function(model, name, display_name = NULL,
 add_group <- function(model, name, display_name = NULL,
                      description = NULL, weight = "1", enabled = 1) {
 
-  new_group <- tibble(
+  new_group <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
@@ -1041,7 +1034,7 @@ add_summary <- function(model, name, values, display_name = NULL,
     stop(sprintf("WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.", name))
   }
 
-  new_summary <- tibble(
+  new_summary <- fast_tibble(
     name = name,
     values = values,
     display_name = display_name %||% name,
@@ -1213,7 +1206,7 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   # Convert variables to tibble format
   if (is.character(variables)) {
     # Simple character vector -> tibble with just variable names
-    variables_df <- tibble(
+    variables_df <- fast_tibble(
       variable = variables,
       strategy = NA_character_,
       group = NA_character_

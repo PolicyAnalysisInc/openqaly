@@ -484,6 +484,13 @@ define_object_ <- function(obj, class) {
   obj
 }
 
+#' @keywords internal
+fast_tibble <- function(...) {
+  args <- list(...)
+  args <- lapply(args, function(x) if (is.null(x)) NA else x)
+  as_tibble(args)
+}
+
 create_default_group <- function() {
   tibble(
     name = 'all_patients',
@@ -1222,52 +1229,29 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     model$settings$model_type <- model_type
   }
 
-  # Load type-specific specs
-  spec_path <- system.file('model_input_specs', package = 'openqaly')
-
-  states_spec_file <- if (model_type %in% c("psm", "custom_psm", "decision_tree")) {
-    "psm_states.csv"
+  # Load type-specific specs from cached model_input_specs
+  states_spec_key <- if (model_type %in% c("psm", "custom_psm", "decision_tree")) {
+    "psm_states"
   } else {
-    "states.csv"
+    "states"
   }
 
-  trans_spec_file <- if (model_type == "psm") {
-    "psm_transitions.csv"
+  trans_spec_key <- if (model_type == "psm") {
+    "psm_transitions"
   } else if (model_type == "custom_psm") {
-    "psm_custom_transitions.csv"
+    "psm_custom_transitions"
   } else {
-    "transitions.csv"
+    "transitions"
   }
 
   specs <- list(
-    states = read_csv(file.path(spec_path, states_spec_file),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    transitions = read_csv(file.path(spec_path, trans_spec_file),
-                                  col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                               'default' = 'c', 'fallback' = 'c'),
-                                  progress = FALSE, show_col_types = FALSE),
-    values = read_csv(file.path(spec_path, "values.csv"),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    strategies = read_csv(file.path(spec_path, "strategies.csv"),
-                                 col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                              'default' = 'c', 'fallback' = 'c'),
-                                 progress = FALSE, show_col_types = FALSE),
-    groups = read_csv(file.path(spec_path, "groups.csv"),
-                            col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                         'default' = 'c', 'fallback' = 'c'),
-                            progress = FALSE, show_col_types = FALSE),
-    variables = read_csv(file.path(spec_path, "variables.csv"),
-                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                             'default' = 'c', 'fallback' = 'c'),
-                                progress = FALSE, show_col_types = FALSE),
-    summaries = read_csv(file.path(spec_path, "summaries.csv"),
-                                col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c',
-                                             'default' = 'c', 'fallback' = 'c'),
-                                progress = FALSE, show_col_types = FALSE)
+    states = model_input_specs[[states_spec_key]],
+    transitions = model_input_specs[[trans_spec_key]],
+    values = model_input_specs[["values"]],
+    strategies = model_input_specs[["strategies"]],
+    groups = model_input_specs[["groups"]],
+    variables = model_input_specs[["variables"]],
+    summaries = model_input_specs[["summaries"]]
   )
 
   # Convert settings to list if needed
@@ -1977,22 +1961,8 @@ read_model_json <- function(json_string) {
 #' Ensures that data frames in the model are properly formatted
 #' 
 #' @param model The model list parsed from JSON
-#' @param values_spec Optional values specification list
 #' @return The model with properly formatted data frames
-convert_json_dataframes <- function(model, values_spec = NULL) {
-  # Load all specs if not provided
-  if (is.null(values_spec)) {
-    model_input_specs <- system.file('model_input_specs', package = 'openqaly') %>%
-      list.files() %>%
-      set_names(str_split_fixed(., '\\.', Inf)[,1]) %>%
-      map(function(x) {
-        suppressWarnings(read_csv(
-          system.file('model_input_specs', x, package = 'openqaly'),
-          col_types = c('name' = 'c', 'required' = 'l', 'type' = 'c', 'default' = 'c', 'fallback' = 'c'),
-          progress = FALSE
-        ))
-      })
-  }
+convert_json_dataframes <- function(model) {
 
   expected_dfs <- c("strategies", "groups", "states", "transitions",
                     "values", "summaries", "variables")
