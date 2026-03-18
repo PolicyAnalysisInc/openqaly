@@ -67,13 +67,15 @@ calculate_discount_factors <- function(n_cycles, discount_rate, cycle_length_yea
 #' @param discount_factors_cost Vector of discount factors for costs
 #' @param discount_factors_outcomes Vector of discount factors for outcomes
 #' @param types Named vector indicating type ("cost" or "outcome") for each value
+#' @param skip Character vector of value names to skip (leave undiscounted). Default is empty.
 #'
 #' @return Matrix or data frame with discounted values
 #' @export
 apply_discounting <- function(values_matrix,
                              discount_factors_cost,
                              discount_factors_outcomes,
-                             types) {
+                             types,
+                             skip = character(0)) {
 
   # Handle case where values_matrix is a data frame
   if (is.data.frame(values_matrix)) {
@@ -93,6 +95,8 @@ apply_discounting <- function(values_matrix,
   # Apply discounting column by column based on value type
   for (i in seq_along(value_names)) {
     value_name <- value_names[i]
+
+    if (value_name %in% skip) next
 
     # Determine which discount factors to use
     if (!is.null(types) && value_name %in% names(types)) {
@@ -242,6 +246,52 @@ apply_discount_weights <- function(values_matrix, values_discounted, trace_matri
     # Replace discounted values: undiscounted * override result
     values_discounted[, v_name] <- values_matrix[, v_name] * result
   }
+
+  values_discounted
+}
+
+apply_segment_discounting <- function(model, eval_vars, uneval_values,
+                                       values_undiscounted, corrected_trace,
+                                       n_cycles, cycle_length_days) {
+  discount_cost <- model$settings$discount_cost
+  discount_outcomes <- model$settings$discount_outcomes
+
+  days_per_year <- get_days_per_year(model$settings)
+  cycle_length_years <- cycle_length_days / days_per_year
+
+  discount_timing <- model$settings$discount_timing %||% "start"
+  discount_method <- model$settings$discount_method %||% "by_cycle"
+
+  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
+
+  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
+  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
+
+  type_mapping <- setNames(uneval_values$type, uneval_values$name)
+  type_mapping <- type_mapping[!is.na(names(type_mapping))]
+
+  # Identify DT values without overrides — these should never be discounted
+  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
+  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
+  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
+  dt_skip <- setdiff(dt_value_names, dt_override_names)
+
+  values_discounted <- apply_discounting(
+    values_undiscounted,
+    discount_factors_cost,
+    discount_factors_outcomes,
+    type_mapping,
+    skip = dt_skip
+  )
+
+  values_discounted <- apply_discount_weights(
+    values_undiscounted,
+    values_discounted,
+    corrected_trace,
+    discount_factors_cost, discount_factors_outcomes,
+    discount_cost, discount_outcomes,
+    uneval_values, type_mapping, eval_vars
+  )
 
   values_discounted
 }

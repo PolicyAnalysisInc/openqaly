@@ -5,6 +5,10 @@ cppMarkovTransitionsAndTrace <- function(transitions, valuesTransitional, values
     .Call('_openqaly_cppMarkovTransitionsAndTrace', PACKAGE = 'openqaly', transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod)
 }
 
+cppSortVariables <- function(names, dep_lists, fo_dep_lists, extra_names, extra_dep_lists) {
+    .Call('_openqaly_cppSortVariables', PACKAGE = 'openqaly', names, dep_lists, fo_dep_lists, extra_names, extra_dep_lists)
+}
+
 cppCalculateTraceAndValues <- function(init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method = "start") {
     .Call('_openqaly_cppCalculateTraceAndValues', PACKAGE = 'openqaly', init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method)
 }

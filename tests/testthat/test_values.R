@@ -659,7 +659,7 @@ test_that("parse_values detects duplicate values", {
   duplicate_values <- tibble::tibble(
     name = c("cost", "cost"),
     display_name = c("Cost", "Cost"),
-    description = c("Cost 1", "Cost 2"),
+    description = c("Cost", "Cost"),
     state = c("healthy", "healthy"),
     destination = c(NA_character_, NA_character_),
     formula = c("100", "200"),
@@ -907,4 +907,138 @@ test_that("evaluate_values processes multiple states correctly", {
   cost_values <- values[values$value_name == "cost", ]
   expect_true(all(!is.na(cost_values$amount)))
   expect_true(all(cost_values$amount >= 0))
+})
+
+# =============================================================================
+# Value display_name/description Consistency Validation Tests
+# =============================================================================
+
+test_that("matching display_name across states passes validation", {
+  model <- define_model("markov") |>
+    set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("standard") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_transition("healthy", "healthy", "0.9") |>
+    add_transition("healthy", "sick", "0.1") |>
+    add_transition("sick", "sick", "1") |>
+    add_value("cost", "100", state = "healthy", display_name = "Cost", description = "Total cost") |>
+    add_value("cost", "200", state = "sick", display_name = "Cost", description = "Total cost")
+
+  expect_true(!is.null(model))
+  expect_equal(nrow(model$values), 2)
+})
+
+test_that("mismatched display_name across states errors in builder", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+      add_strategy("standard") |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("sick", initial_prob = 0) |>
+      add_transition("healthy", "healthy", "0.9") |>
+      add_transition("healthy", "sick", "0.1") |>
+      add_transition("sick", "sick", "1") |>
+      add_value("cost", "100", state = "healthy", display_name = "Cost") |>
+      add_value("cost", "200", state = "sick", display_name = "Total Cost"),
+    "display_name must be consistent"
+  )
+})
+
+test_that("mismatched description across states errors in builder", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+      add_strategy("standard") |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("sick", initial_prob = 0) |>
+      add_transition("healthy", "healthy", "0.9") |>
+      add_transition("healthy", "sick", "0.1") |>
+      add_transition("sick", "sick", "1") |>
+      add_value("cost", "100", state = "healthy", display_name = "Cost", description = "Desc A") |>
+      add_value("cost", "200", state = "sick", display_name = "Cost", description = "Desc B"),
+    "description must be consistent"
+  )
+})
+
+test_that("default display_name (NULL -> name) on multiple rows passes", {
+  model <- define_model("markov") |>
+    set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("standard") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_transition("healthy", "healthy", "0.9") |>
+    add_transition("healthy", "sick", "0.1") |>
+    add_transition("sick", "sick", "1") |>
+    add_value("cost", "100", state = "healthy") |>
+    add_value("cost", "200", state = "sick")
+
+  expect_true(!is.null(model))
+  # Both should default to "cost"
+  expect_equal(unique(model$values$display_name), "cost")
+})
+
+test_that("one explicit display_name + one default errors", {
+  expect_error(
+    define_model("markov") |>
+      set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+      add_strategy("standard") |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("sick", initial_prob = 0) |>
+      add_transition("healthy", "healthy", "0.9") |>
+      add_transition("healthy", "sick", "0.1") |>
+      add_transition("sick", "sick", "1") |>
+      add_value("cost", "100", state = "healthy") |>
+      add_value("cost", "200", state = "sick", display_name = "Total Cost"),
+    "display_name must be consistent"
+  )
+})
+
+test_that("single-row value always passes validation", {
+  model <- define_model("markov") |>
+    set_settings(n_cycles = 3, cycle_length = 1, cycle_length_unit = "years") |>
+    add_strategy("standard") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_transition("healthy", "healthy", "0.9") |>
+    add_transition("healthy", "sick", "0.1") |>
+    add_transition("sick", "sick", "1") |>
+    add_value("cost", "100", state = "healthy", display_name = "My Cost")
+
+  expect_true(!is.null(model))
+  expect_equal(nrow(model$values), 1)
+})
+
+test_that("validate_value_display_names works directly on data frames", {
+  # Valid: consistent display_name
+  valid_df <- tibble::tibble(
+    name = c("cost", "cost"),
+    display_name = c("Cost", "Cost"),
+    description = c("Desc", "Desc"),
+    state = c("healthy", "sick"),
+    destination = c(NA_character_, NA_character_)
+  )
+  expect_equal(openqaly:::validate_value_display_names(valid_df), "")
+
+  # Invalid: inconsistent display_name
+  invalid_df <- tibble::tibble(
+    name = c("cost", "cost"),
+    display_name = c("Cost", "Total Cost"),
+    description = c("Desc", "Desc"),
+    state = c("healthy", "sick"),
+    destination = c(NA_character_, NA_character_)
+  )
+  result <- openqaly:::validate_value_display_names(invalid_df)
+  expect_true(grepl("display_name must be consistent", result))
+
+  # Invalid: inconsistent description
+  invalid_desc_df <- tibble::tibble(
+    name = c("cost", "cost"),
+    display_name = c("Cost", "Cost"),
+    description = c("Desc A", "Desc B"),
+    state = c("healthy", "sick"),
+    destination = c(NA_character_, NA_character_)
+  )
+  result <- openqaly:::validate_value_display_names(invalid_desc_df)
+  expect_true(grepl("description must be consistent", result))
 })

@@ -378,6 +378,11 @@ write_model_excel <- function(model, path) {
     wb_list$psa <- tibble::as_tibble(psa_df)
   }
 
+  # Add documentation sheet
+  if (!is.null(model$documentation)) {
+    wb_list$documentation <- fast_tibble(text = model$documentation)
+  }
+
   # Add override categories sheets
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     categories_df <- fast_tibble(category_name = character(), general = logical())
@@ -796,6 +801,13 @@ read_model_yaml <- function(path) {
     model$psa <- NULL
   }
 
+  # Read documentation
+  if (!is.null(yaml_data$documentation)) {
+    model$documentation <- as.character(yaml_data$documentation)
+  } else {
+    model$documentation <- NULL
+  }
+
   # Read override categories
   if (!is.null(yaml_data$override_categories)) {
     model$override_categories <- parse_yaml_override_categories(yaml_data$override_categories)
@@ -1189,6 +1201,11 @@ write_model_yaml <- function(model, path) {
   # Override categories
   if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
     yaml_data$override_categories <- format_override_categories_yaml(model$override_categories)
+  }
+
+  # Documentation
+  if (!is.null(model$documentation)) {
+    yaml_data$documentation <- model$documentation
   }
 
   # Write YAML file

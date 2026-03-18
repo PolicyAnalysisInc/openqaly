@@ -505,6 +505,217 @@ List cppMarkovTransitionsAndTrace(
 }
 
 // ============================================================================
+// Topological Sort with Transitive Closure (for sort_variables)
+// ============================================================================
+
+// [[Rcpp::export]]
+List cppSortVariables(
+    CharacterVector names,       // variable names to sort
+    List dep_lists,              // List<CharacterVector>: sort deps per var (depends + after, filtered to names)
+    List fo_dep_lists,           // List<CharacterVector>: first-order deps for transitive closure
+    CharacterVector extra_names, // extra variable names (not sorted, participate in closure)
+    List extra_dep_lists         // List<CharacterVector>: deps for extras
+) {
+  const int n = names.size();
+  const int n_extra = extra_names.size();
+
+  // === Phase A: Setup with integer-based indexing ===
+
+  // Cache all string conversions upfront
+  std::vector<std::string> names_cached(n);
+  for (int i = 0; i < n; ++i) {
+    names_cached[i] = as<std::string>(names[i]);
+  }
+  std::vector<std::string> extra_cached(n_extra);
+  for (int i = 0; i < n_extra; ++i) {
+    extra_cached[i] = as<std::string>(extra_names[i]);
+  }
+
+  // Build combined name->index map covering ALL dep names
+  // Variables: [0, n), Extras: [n, n+n_extra), Others: [n+n_extra, ...)
+  std::unordered_map<std::string, int> combined_to_idx;
+  combined_to_idx.reserve(static_cast<size_t>(n + n_extra) * 3);
+
+  for (int i = 0; i < n; ++i) {
+    combined_to_idx.emplace(names_cached[i], i);
+  }
+  for (int i = 0; i < n_extra; ++i) {
+    combined_to_idx.emplace(extra_cached[i], n + i);
+  }
+
+  // Pre-parse all dep lists as strings and discover "other" dep names
+  std::vector<std::vector<std::string>> fo_dep_strings(n);
+  for (int i = 0; i < n; ++i) {
+    CharacterVector d = fo_dep_lists[i];
+    fo_dep_strings[i].reserve(d.size());
+    for (int j = 0; j < d.size(); ++j) {
+      std::string s = as<std::string>(d[j]);
+      if (combined_to_idx.find(s) == combined_to_idx.end()) {
+        combined_to_idx.emplace(s, static_cast<int>(combined_to_idx.size()));
+      }
+      fo_dep_strings[i].push_back(std::move(s));
+    }
+  }
+
+  std::vector<std::vector<std::string>> extra_dep_strings(n_extra);
+  for (int i = 0; i < n_extra; ++i) {
+    CharacterVector d = extra_dep_lists[i];
+    extra_dep_strings[i].reserve(d.size());
+    for (int j = 0; j < d.size(); ++j) {
+      std::string s = as<std::string>(d[j]);
+      if (combined_to_idx.find(s) == combined_to_idx.end()) {
+        combined_to_idx.emplace(s, static_cast<int>(combined_to_idx.size()));
+      }
+      extra_dep_strings[i].push_back(std::move(s));
+    }
+  }
+
+  const int n_combined = static_cast<int>(combined_to_idx.size());
+
+  // Build reverse lookup for output conversion
+  std::vector<std::string> idx_to_name(n_combined);
+  for (const auto& kv : combined_to_idx) {
+    idx_to_name[kv.second] = kv.first;
+  }
+
+  // Convert fo_deps to integer vectors
+  std::vector<std::vector<int>> fo_deps_int(n);
+  for (int i = 0; i < n; ++i) {
+    fo_deps_int[i].reserve(fo_dep_strings[i].size());
+    for (const auto& s : fo_dep_strings[i]) {
+      fo_deps_int[i].push_back(combined_to_idx[s]);
+    }
+  }
+
+  // Convert sort deps to integer vectors (filtered to [0, n))
+  std::vector<std::vector<int>> sort_deps(n);
+  std::vector<int> in_degree(n, 0);
+  for (int i = 0; i < n; ++i) {
+    CharacterVector d = dep_lists[i];
+    sort_deps[i].reserve(d.size());
+    for (int j = 0; j < d.size(); ++j) {
+      auto it = combined_to_idx.find(as<std::string>(d[j]));
+      if (it != combined_to_idx.end() && it->second < n) {
+        sort_deps[i].push_back(it->second);
+      }
+    }
+    in_degree[i] = static_cast<int>(sort_deps[i].size());
+  }
+
+  // Build reverse adjacency for Kahn's
+  std::vector<std::vector<int>> reverse_deps(n);
+  for (int i = 0; i < n; ++i) {
+    for (int dep : sort_deps[i]) {
+      reverse_deps[dep].push_back(i);
+    }
+  }
+
+  // Initialize all_expanded with original deps (integer-based)
+  // Sized to n_combined: "other" indices stay empty (matches find() miss behavior)
+  std::vector<std::vector<int>> all_expanded(n_combined);
+  for (int i = 0; i < n; ++i) {
+    all_expanded[i] = fo_deps_int[i]; // seed with original fo_deps
+  }
+  for (int i = 0; i < n_extra; ++i) {
+    std::vector<int> edeps;
+    edeps.reserve(extra_dep_strings[i].size());
+    for (const auto& s : extra_dep_strings[i]) {
+      edeps.push_back(combined_to_idx[s]);
+    }
+    all_expanded[n + i] = std::move(edeps);
+  }
+
+  // === Phase B: Kahn's sort with integer transitive closure ===
+
+  std::vector<int> queue;
+  queue.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    if (in_degree[i] == 0) {
+      queue.push_back(i);
+    }
+  }
+
+  std::vector<int> sorted_order;
+  sorted_order.reserve(n);
+
+  // Expanded deps result per variable (integer-based)
+  std::vector<std::vector<int>> expanded_deps_int(n);
+
+  // Reuse expanded_set across iterations
+  std::unordered_set<int> expanded_set;
+
+  size_t head = 0;
+  while (head < queue.size()) {
+    int cur = queue[head++];
+    sorted_order.push_back(cur);
+
+    // Compute transitive closure using integer ops
+    expanded_set.clear();
+    for (int dep_idx : fo_deps_int[cur]) {
+      expanded_set.insert(dep_idx);
+      // Look up expanded deps of this dependency
+      const auto& transitive = all_expanded[dep_idx];
+      for (int t : transitive) {
+        expanded_set.insert(t);
+      }
+    }
+
+    std::vector<int> expanded_vec(expanded_set.begin(), expanded_set.end());
+    all_expanded[cur] = expanded_vec; // copy before move
+    expanded_deps_int[cur] = std::move(expanded_vec);
+
+    // Decrease in-degree of dependents
+    for (int dependent : reverse_deps[cur]) {
+      --in_degree[dependent];
+      if (in_degree[dependent] == 0) {
+        queue.push_back(dependent);
+      }
+    }
+  }
+
+  // Cycle detection
+  if (static_cast<int>(sorted_order.size()) != n) {
+    std::vector<std::string> cycle_vars;
+    for (int i = 0; i < n; ++i) {
+      if (in_degree[i] > 0) {
+        cycle_vars.push_back(names_cached[i]);
+      }
+    }
+    std::string err_msg = "Circular reference detected: ";
+    for (size_t i = 0; i < cycle_vars.size(); ++i) {
+      if (i > 0) err_msg += ", ";
+      err_msg += "\"" + cycle_vars[i] + "\"";
+    }
+    stop(err_msg);
+  }
+
+  // === Phase C: Output ===
+
+  // Build 1-based order
+  IntegerVector order_out(n);
+  for (int i = 0; i < n; ++i) {
+    order_out[i] = sorted_order[i] + 1;
+  }
+
+  // Convert integer deps back to strings for output
+  List expanded_out(n);
+  for (int i = 0; i < n; ++i) {
+    int idx = sorted_order[i];
+    const auto& int_deps = expanded_deps_int[idx];
+    CharacterVector cv(int_deps.size());
+    for (size_t j = 0; j < int_deps.size(); ++j) {
+      cv[j] = idx_to_name[int_deps[j]];
+    }
+    expanded_out[i] = cv;
+  }
+
+  return List::create(
+    Named("order") = order_out,
+    Named("expanded_deps") = expanded_out
+  );
+}
+
+// ============================================================================
 // New Comprehensive cppCalculateTraceAndValues Function
 // ============================================================================
 

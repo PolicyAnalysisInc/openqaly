@@ -990,14 +990,17 @@ test_that("calculate_psm_trace_and_values handles PFS > OS crossover correctly",
   )
   uneval_values$formula <- list()
 
-  result <- openqaly:::calculate_psm_trace_and_values(
-    list(pfs = pfs_dist, os = os_dist),
-    uneval_values,
-    namespace,
-    character(0),
-    c("pfs", "progressed", "dead"),
-    n_cycles,
-    "start"
+  expect_warning(
+    result <- openqaly:::calculate_psm_trace_and_values(
+      list(pfs = pfs_dist, os = os_dist),
+      uneval_values,
+      namespace,
+      character(0),
+      c("pfs", "progressed", "dead"),
+      n_cycles,
+      "start"
+    ),
+    "PFS survival exceeds OS survival"
   )
 
   # At each cycle, PFS state should be min(S_PFS, S_OS)

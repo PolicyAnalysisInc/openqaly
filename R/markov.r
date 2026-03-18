@@ -91,294 +91,147 @@ calculate_segment_weight <- function(segment, model, namespace) {
   return(evaluate_group_weight(group_row, namespace))
 }
 
-#' @export
-run_segment.markov <- function(segment, model, env, ...) {
+make_progress <- function(...) {
+  cb <- list(...)$.progress_callback
+  if (is.null(cb)) return(function(amount = 1L) invisible(NULL))
+  function(amount = 1L) cb(amount = amount)
+}
 
-  # Capture the extra arguments provided to function
-  dots <- list(...)
-  .progress_callback <- dots$.progress_callback
-
-  # Apply setting overrides if present (DSA mode)
-  model <- apply_setting_overrides(segment, model)
-
-  # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
-  model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  dt_duration_days <- get_dt_duration_days(model)
-  model$settings$n_cycles <- get_n_cycles(model$settings, dt_duration_days = dt_duration_days)
-
-  # Parse the specification tables provided for states,
-  # variables, transitions, values, and summaries
-  uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year)
-  uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
-  uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars)
-  uneval_values <- parse_values(model$values, uneval_states, uneval_vars)
-  
-  # Determine model_value_names safely for parse_summaries
-  model_value_names <- character(0)
-  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
-    # Filter out NA names before unique, as unique(NA) is NA, which can cause issues
-    valid_names <- model$values$name[!is.na(model$values$name)]
-    if (length(valid_names) > 0) {
-      model_value_names <- unique(valid_names)
-    }
-  }
-
-  # Parse summaries if they exist, ensuring parsed_summaries is always a structured tibble
-  if (!is.null(model$summaries) && nrow(model$summaries) > 0) { # model$summaries is now a structured tibble
-    parsed_summaries <- parse_summaries(model$summaries, model_value_names) 
-  } else {
-    # Create an empty structured tibble for summaries, including the parsed_values column
-    parsed_summaries <- tibble(
-      name = character(0),
-      display_name = character(0),
-      description = character(0),
-      values = character(0),
-      type = character(0),
-      wtp = numeric(0),
-      parsed_values = list() # parse_summaries adds this, so we ensure it exists
-    )
-  }
-
-  # Check inside the variables, transitions, & values for
-  # any state-time dependency since this will inform the
-  # creation of tunnel states
-  state_time_use <- check_state_time(
-    uneval_vars,
-    uneval_states,
-    uneval_trans,
-    uneval_values
-  )
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Create a "namespace" which will contain evaluated
-  # variables so that they can be referenced.
-  ns <- create_namespace(model, segment)
-
-  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
-  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
-  ns <- override_result$ns
-  uneval_vars <- override_result$uneval_vars
-
-  # Evaluate variables, initial state probabilities, transitions,
-  # values, & summaries.
-  eval_vars <- eval_variables(uneval_vars, ns)
-  eval_states <- eval_states(uneval_states, eval_vars)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, isTRUE(model$settings$reduce_state_cycle)) #770ms
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Determine value_names safely for evaluate_values and cppMarkovTransitionsAndTrace
-  value_names <- character(0)
-  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
-    valid_names <- model$values$name[!is.na(model$values$name)]
-    if (length(valid_names) > 0) {
-      value_names <- unique(valid_names)
-    }
-  }
-  state_names <- unique(model$states$name) # Assuming model$states is always non-empty and has a name column
-
-  eval_values <- evaluate_values(
-    uneval_values,
-    eval_vars,
-    value_names,
-    state_names,
-    isTRUE(model$settings$reduce_state_cycle)
-  ) #900ms
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-#322 ms
-  expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-#340 ms
-  calculated_trace_and_values <- calculate_trace_and_values(
-    expanded$init,
-    expanded$transitions,
-    expanded$values,
-    value_names,
-    expanded$expanded_state_map,
-    model$settings$half_cycle_method
-  )
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Calculate the collapsed trace early (needed for discounting_override trace() function)
-  expanded_trace_matrix <- calculated_trace_and_values[[1]]
-  collapsed_trace <- calculate_collapsed_trace(
-    expanded_trace_matrix,
-    expanded$expanded_state_map
-  )
-
-  # Calculate collapsed corrected trace (half-cycle corrected, for discounting_override trace())
-  collapsed_corrected_trace <- calculate_collapsed_trace(
-    calculated_trace_and_values$correctedTrace,
-    expanded$expanded_state_map
-  )
-
-  # Apply discounting to values
-  n_cycles <- model$settings$n_cycles
-  discount_cost <- model$settings$discount_cost
-  discount_outcomes <- model$settings$discount_outcomes
-
-  # Calculate cycle length in years for discounting
-  cycle_length_days <- model$settings$cycle_length_days
-  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
-  cycle_length_years <- cycle_length_days / days_per_year
-
-  # Extract discount timing and method settings
-  discount_timing <- model$settings$discount_timing %||% "start"
-  discount_method <- model$settings$discount_method %||% "by_cycle"
-
-  # Calculate DT offset for discounting
-  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
-
-  # Calculate discount factors (with DT offset if applicable)
-  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
-  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
-
-  # Get value types from uneval_values
-  type_mapping <- setNames(uneval_values$type, uneval_values$name)
-  type_mapping <- type_mapping[!is.na(names(type_mapping))]
-
-  # Apply discounting to get discounted values
-  calculated_trace_and_values$values_discounted <- apply_discounting(
-    calculated_trace_and_values$values,
-    discount_factors_cost,
-    discount_factors_outcomes,
-    type_mapping
-  )
-
-  # Undo discounting for decision tree values (they are never discounted),
-  # but skip DT values that have a discounting_override (those use the formula instead)
-  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
-  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
-  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
-  for (v in dt_value_names) {
-    if (v %in% dt_override_names) next
-    if (v %in% colnames(calculated_trace_and_values$values_discounted)) {
-      calculated_trace_and_values$values_discounted[, v] <- calculated_trace_and_values$values[, v]
-    }
-  }
-
-  # Apply discounting override formulas
-  calculated_trace_and_values$values_discounted <- apply_discount_weights(
-    calculated_trace_and_values$values,
-    calculated_trace_and_values$values_discounted,
-    collapsed_corrected_trace,
-    discount_factors_cost, discount_factors_outcomes,
-    discount_cost, discount_outcomes,
-    uneval_values, type_mapping, eval_vars
-  )
-
-  # Create the object to return that will summarize the results of
-  # this segment.
-  # Always store trace_and_values (needed for per-cycle output and aggregation)
-  segment$trace_and_values <- list(calculated_trace_and_values)
-  # In override mode (PSA/DSA), skip heavy diagnostic objects
+store_segment_diagnostics <- function(segment, trace_and_values, uneval_vars, eval_vars, eval_states) {
+  segment$trace_and_values <- list(trace_and_values)
   if (!"parameter_overrides" %in% names(segment)) {
     segment$uneval_vars <- list(uneval_vars)
     segment$eval_vars <- list(eval_vars)
     segment$inital_state <- list(eval_states)
   }
+  segment
+}
 
-  # Add time variables to both traces
-  # Generate time columns based on the actual cycle numbers from row names
-  n_trace_rows <- nrow(collapsed_trace)
+store_segment_traces <- function(segment, cycle_length_days, days_per_year,
+                                  collapsed, expanded,
+                                  corrected_collapsed, corrected_expanded) {
+  cld <- cycle_length_days
+  dpy <- days_per_year
+  segment$collapsed_trace <- list(add_time_variables_to_trace(collapsed, cld, dpy))
+  segment$expanded_trace <- list(add_time_variables_to_trace(expanded, cld, dpy))
+  segment$corrected_collapsed_trace <- list(add_time_variables_to_trace(corrected_collapsed, cld, dpy))
+  segment$corrected_expanded_trace <- list(add_time_variables_to_trace(corrected_expanded, cld, dpy))
+  segment
+}
 
-  # The row names indicate the actual cycle numbers (0, 1, 2, ...)
-  cycle_numbers <- as.numeric(rownames(collapsed_trace))
-
-  # Get cycle length info from model settings
-  cycle_length_days <- model$settings$cycle_length_days
-  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
-
-  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
-    # Generate time columns based on cycle numbers and cycle length
-    # Use consistent conversion factors with time.R
-    days_per_month <- days_per_year / 12
-    time_vars_df <- data.frame(
-      cycle = cycle_numbers,
-      day = cycle_numbers * cycle_length_days,
-      week = cycle_numbers * cycle_length_days / 7,
-      month = cycle_numbers * cycle_length_days / days_per_month,
-      year = cycle_numbers * cycle_length_days / days_per_year
-    )
-
-    # Ensure row names match before cbind
-    rownames(time_vars_df) <- rownames(collapsed_trace)
-
-    # Convert collapsed_trace matrix to data frame and add time columns
-    collapsed_trace_with_time <- cbind(time_vars_df, collapsed_trace)
-  } else {
-    # No cycle length info, just add cycle numbers
-    time_vars_df <- data.frame(cycle = cycle_numbers)
-    rownames(time_vars_df) <- rownames(collapsed_trace)
-    collapsed_trace_with_time <- cbind(time_vars_df, collapsed_trace)
-  }
-
-  # Also create expanded trace with time variables
-  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
-    # Reuse the same time_vars_df that was created above
-    expanded_trace_with_time <- cbind(time_vars_df, expanded_trace_matrix)
-  } else {
-    # Reuse the simple time_vars_df with just cycle
-    expanded_trace_with_time <- cbind(time_vars_df, expanded_trace_matrix)
-  }
-
-  segment$collapsed_trace <- list(collapsed_trace_with_time)
-  segment$expanded_trace <- list(expanded_trace_with_time)
-
-  # Add time variables to corrected traces (n_cycles rows, cycles 1..n)
-  corrected_cycle_numbers <- as.numeric(rownames(collapsed_corrected_trace))
-  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
-    corrected_time_vars_df <- data.frame(
-      cycle = corrected_cycle_numbers,
-      day = corrected_cycle_numbers * cycle_length_days,
-      week = corrected_cycle_numbers * cycle_length_days / 7,
-      month = corrected_cycle_numbers * cycle_length_days / days_per_month,
-      year = corrected_cycle_numbers * cycle_length_days / days_per_year
-    )
-    rownames(corrected_time_vars_df) <- rownames(collapsed_corrected_trace)
-  } else {
-    corrected_time_vars_df <- data.frame(cycle = corrected_cycle_numbers)
-    rownames(corrected_time_vars_df) <- rownames(collapsed_corrected_trace)
-  }
-  segment$corrected_collapsed_trace <- list(cbind(corrected_time_vars_df, collapsed_corrected_trace))
-  segment$corrected_expanded_trace <- list(cbind(corrected_time_vars_df, calculated_trace_and_values$correctedTrace))
-
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Calculate summaries: parsed_summaries is now guaranteed to be a tibble (possibly 0-row)
-  # calculate_summaries should be robust to a 0-row parsed_summaries or 0-col/0-row trace values.
-  if (!is.null(parsed_summaries)) { # This check might be redundant if parsed_summaries is always a tibble
-                                   # but good for safety if parse_summaries could return NULL.
-                                   # parse_summaries should ideally return empty structured tibble, not NULL.
-    summaries_undiscounted <- calculate_summaries(
-      parsed_summaries,
-      calculated_trace_and_values$values
-    )
-    summaries_discounted <- calculate_summaries(
-      parsed_summaries,
-      calculated_trace_and_values$values_discounted
-    )
-    segment$summaries <- list(summaries_undiscounted)
-    segment$summaries_discounted <- list(summaries_discounted)
-  } else {
-    # Fallback: ensure summaries field exists as an empty list or tibble
-    # This path should ideally not be taken if parsed_summaries is always initialized properly.
-    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
-    segment$summaries <- list(empty_summary)
-    segment$summaries_discounted <- list(empty_summary)
-  }
-  
-  # Calculate segment weight
+finalize_segment <- function(segment, model, eval_vars) {
   segment$weight <- calculate_segment_weight(segment, model, eval_vars)
-  
-  # Reorder columns to have strategy, group, weight first
-  col_order <- c("strategy", "group", "weight")
-  other_cols <- setdiff(names(segment), col_order)
-  segment <- segment[, c(col_order, other_cols)]
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  reorder_segment_columns(segment)
+}
+
+#' @export
+run_segment.markov <- function(segment, model, env, ...) {
+
+  tick <- make_progress(...)
+
+  # Segments in analysis modes (DSA, scenarios) can override model settings
+  # like timeframe or discount rates. Apply those before computing anything.
+  model <- apply_setting_overrides(segment, model)
+
+  # Derive cycle_length_days, n_cycles, and days_per_year from raw settings.
+  # These are computed once here and passed explicitly to avoid mutating
+  # model$settings with derived values.
+  time_ctx <- compute_time_context(model$settings, dt_duration_days = get_dt_duration_days(model))
+
+  # --- Parse phase: convert raw model tables into typed, formula-bearing objects ---
+  # Each parse_* call validates structure, converts formula strings to oq_formula
+  # objects, and attaches metadata (state groups, tunnel limits, dependencies).
+
+  # States: initial probability formulas + tunnel state limits (max_state_time)
+  uneval_states <- parse_states(model$states, time_ctx$cycle_length_days, time_ctx$days_per_year)
+  # Variables: filtered to this segment's strategy/group, with formulas parsed
+  uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
+  # Transitions: from_state -> to_state formulas in longform, with state group metadata
+  uneval_trans <- parse_trans_markov(model$transitions, uneval_states, uneval_vars)
+  # Values: costs/outcomes per state (residency) or transition, with "All" expanded
+  uneval_values <- parse_values(model$values, uneval_states, uneval_vars)
+  value_names <- get_value_names(model$values)
+  state_names <- unique(model$states$name)
+  # Summaries: user-defined aggregations (e.g. "Total QALYs" = sum of named values)
+  parsed_summaries <- parse_summaries(model$summaries, value_names)
+  # Detect which states reference state_cycle/state_day in any formula — only
+  # those states need tunnel expansion, saving memory and compute.
+  state_time_use <- check_state_time(uneval_vars, uneval_states, uneval_trans, uneval_values)
+  tick()
+
+  # --- Namespace + override phase ---
+  # A namespace is the evaluation context: a dataframe of per-cycle vectors
+  # (cycle, day, month, year, state_cycle, ...) plus an environment for
+  # non-vector objects. All formula evaluation resolves names against this.
+  ns <- create_namespace(model, segment, n_cycles = time_ctx$n_cycles)
+
+  # Parameter overrides (from DSA/PSA) inject fixed values into the namespace,
+  # replacing the variable's formula. This is distinct from setting overrides
+  # which modify model structure (timeframe, discount rates, etc.).
+  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
+  ns <- override_result$ns
+  uneval_vars <- override_result$uneval_vars
+
+  # --- Evaluation phase: resolve formulas to numeric vectors/matrices ---
+  # Variables are evaluated first (they can depend on each other but not on
+  # transitions/values). Results go back into the namespace so downstream
+  # formulas can reference them.
+  eval_vars <- eval_variables(uneval_vars, ns)
+  # Initial state probabilities (evaluated at cycle 0 only, must sum to 1)
+  eval_states <- eval_states(uneval_states, eval_vars)
+  tick()
+
+  # Evaluate each transition formula across all (cycle, state_cycle) combos,
+  # producing a longform table of concrete probabilities.
+  eval_trans <- eval_trans_markov_lf(uneval_trans, eval_vars, isTRUE(model$settings$reduce_state_cycle))
+  tick()
+
+  # Evaluate value formulas (costs/outcomes) across cycles and states
+  eval_values <- evaluate_values(
+    uneval_values, eval_vars, value_names, state_names,
+    isTRUE(model$settings$reduce_state_cycle)
+  )
+  tick()
+
+  # --- Tunnel expansion + trace calculation ---
+  # States that use state_cycle are expanded into tunnel states (e.g. sick[1],
+  # sick[2], sick[3]) so the Markov chain can track time-in-state. This expands
+  # the initial vector, transition matrix, and values to match.
+  expanded <- handle_state_expansion(eval_states, eval_trans, eval_values, state_time_use)
+  tick()
+
+  # Core Markov engine (C++): multiplies the cohort vector by the transition
+  # matrix each cycle to produce the trace (state occupancy over time) and
+  # accumulates weighted values. Also applies half-cycle correction.
+  calculated <- calculate_trace_and_values(
+    expanded$init, expanded$transitions, expanded$values,
+    value_names, expanded$expanded_state_map, model$settings$half_cycle_method
+  )
+  tick()
+
+  # --- Post-processing: collapse, discount, store ---
+  # The trace from C++ uses expanded tunnel state names. Collapse back to
+  # original state names by summing tunnel variants (e.g. sick[1]+sick[2] -> sick).
+  expanded_trace <- calculated[[1]]
+  collapsed_trace <- calculate_collapsed_trace(expanded_trace, expanded$expanded_state_map)
+  corrected_collapsed <- calculate_collapsed_trace(calculated$correctedTrace, expanded$expanded_state_map)
+
+  # Apply time-value-of-money discounting: costs and outcomes get separate
+  # discount rates. Decision tree values are skipped (already at time zero).
+  calculated$values_discounted <- apply_segment_discounting(
+    model, eval_vars, uneval_values, calculated$values, corrected_collapsed,
+    n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
+  )
+
+  # Attach all results to the segment row for downstream aggregation
+  segment <- store_segment_diagnostics(segment, calculated, uneval_vars, eval_vars, eval_states)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace, corrected_collapsed, calculated$correctedTrace)
+  tick()
+  # Compute user-defined summary totals (e.g. sum of all QALY values)
+  segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
+  # Calculate group weight and reorder columns to standard layout
+  segment <- finalize_segment(segment, model, eval_vars)
+  tick()
 
   segment
 }
@@ -658,7 +511,7 @@ check_trans_markov <- function(x, state_names) {
     dupe_names <- unique(trans_names[dupe])
     plural <- if (length(dupe_names) > 1) 's' else ''
     dupe_msg <- paste(dupe_names, collapse = ', ')
-    error_msg <- glue('Transitions definition contains duplicate enties for transition{plural}: {dupe_msg}.')
+    error_msg <- glue('Transitions definition contains duplicate entries for transition{plural}: {dupe_msg}.')
     stop(error_msg, call. = F)
   }
   
@@ -918,6 +771,50 @@ as.lf_markov_trans.data.frame <- function(x) {
 # Ensure this is defined if not already, e.g., from R/misc.R or a common utils file
 # For this edit, assuming it might not be directly available and defining a local version for safety.
 # If R/misc.R is always sourced/loaded first, this redefinition is not strictly needed here.
+store_segment_summaries <- function(segment, parsed_summaries, values, values_discounted) {
+  if (!is.null(parsed_summaries) && nrow(parsed_summaries) > 0) {
+    segment$summaries <- list(calculate_summaries(parsed_summaries, values))
+    segment$summaries_discounted <- list(calculate_summaries(parsed_summaries, values_discounted))
+  } else {
+    empty <- tibble(summary = character(), value = character(), amount = numeric())
+    segment$summaries <- list(empty)
+    segment$summaries_discounted <- list(empty)
+  }
+  segment
+}
+
+reorder_segment_columns <- function(segment) {
+  col_order <- c("strategy", "group", "weight")
+  other_cols <- setdiff(names(segment), col_order)
+  segment[, c(col_order, other_cols)]
+}
+
+add_time_variables_to_trace <- function(trace_matrix, cycle_length_days, days_per_year) {
+  cycle_numbers <- as.numeric(rownames(trace_matrix))
+  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
+    days_per_month <- days_per_year / 12
+    time_vars <- data.frame(
+      cycle = cycle_numbers,
+      day = cycle_numbers * cycle_length_days,
+      week = cycle_numbers * cycle_length_days / 7,
+      month = cycle_numbers * cycle_length_days / days_per_month,
+      year = cycle_numbers * cycle_length_days / days_per_year
+    )
+  } else {
+    time_vars <- data.frame(cycle = cycle_numbers)
+  }
+  rownames(time_vars) <- rownames(trace_matrix)
+  cbind(time_vars, trace_matrix)
+}
+
+get_value_names <- function(values_df) {
+  if (nrow(values_df) > 0 && "name" %in% colnames(values_df)) {
+    valid_names <- values_df$name[!is.na(values_df$name)]
+    if (length(valid_names) > 0) return(unique(valid_names))
+  }
+  character(0)
+}
+
 create_empty_summaries_stubs_with_parsed <- function() {
   tibble(
     name = character(0),
@@ -1006,7 +903,7 @@ parse_summaries <- function(summaries, model_values) {
   # with columns: name, display_name, description, values.
 
   # If summaries is a 0-row tibble, return the standard empty structure for parsed summaries.
-  if (nrow(summaries) == 0) {
+  if (is.null(summaries) || nrow(summaries) == 0) {
     return(create_empty_summaries_stubs_with_parsed())
   }
   

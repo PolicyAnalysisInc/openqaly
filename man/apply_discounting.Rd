@@ -8,7 +8,8 @@ apply_discounting(
   values_matrix,
   discount_factors_cost,
   discount_factors_outcomes,
-  types
+  types,
+  skip = character(0)
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ apply_discounting(
 \item{discount_factors_outcomes}{Vector of discount factors for outcomes}
 
 \item{types}{Named vector indicating type ("cost" or "outcome") for each value}
+
+\item{skip}{Character vector of value names to skip (leave undiscounted). Default is empty.}
 }
 \value{
 Matrix or data frame with discounted values

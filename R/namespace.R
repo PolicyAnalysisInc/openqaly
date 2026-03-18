@@ -1,16 +1,16 @@
-create_namespace <- function(model, segment, include_cycle_zero = FALSE) {
+create_namespace <- function(model, segment, include_cycle_zero = FALSE, n_cycles = NULL) {
 
   # Calculate cycle lengths and times in days/weeks/months/years
   # for each model cycle.
   cl_vars <- cycle_length_variables(model$settings)
-  time_vars <- time_variables(model$settings, model$states, include_cycle_zero = include_cycle_zero)
+  time_vars <- time_variables(model$settings, model$states, include_cycle_zero = include_cycle_zero, n_cycles = n_cycles)
   unit_vars <- time_unit_variables(model$settings)
 
   # Create a "namespace" which will contain evaluated
   # variables so that they can be referenced.
   ns <- define_namespace(model$env, time_vars, cl_vars, unit_vars) %>%
     update_segment_ns(segment)
-  
+
   ns
 }
 
@@ -34,19 +34,19 @@ define_namespace <- function(env, df, additional = NULL, ...) {
     all_dfs <- list(df, additional)
     all_dfs <- c(all_dfs, extra_dfs)
     all_dfs <- all_dfs[!sapply(all_dfs, is.null)]
-    
+
     # Check if all are dataframes
     df_mask <- sapply(all_dfs, is.data.frame)
     df_list <- all_dfs[df_mask]
     non_df_list <- all_dfs[!df_mask]
-    
+
     # Merge dataframes by columns
     if (length(df_list) > 1) {
       df <- do.call(cbind, df_list)
     } else if (length(df_list) == 1) {
       df <- df_list[[1]]
     }
-    
+
     # Handle non-dataframe additional items
     additional <- if (length(non_df_list) > 0) {
       do.call(c, non_df_list)
@@ -56,7 +56,7 @@ define_namespace <- function(env, df, additional = NULL, ...) {
     df <- cbind(df, additional)
     additional <- NULL
   }
-  
+
   ns <- list(df = df, env = env_clone(env))
   if (!is.null(additional)) {
     for (nm in names(additional)) {
@@ -88,13 +88,13 @@ get_names <- function(ns, type = "all", keywords = T) {
   res
 }
 #' Clone a Namespace
-#' 
+#'
 #' Clones a namespace object.
-#' 
+#'
 #' @param x The namespace to be cloned.
-#' 
+#'
 #' @return An identical copy of the namespace.
-#' 
+#'
 #' @keywords internal
 clone_namespace <- function(x) {
   new <- x
@@ -108,7 +108,7 @@ summary.namespace <- function(object, ...) {
   # Extract names from namespaces
   env_names <- get_names(object, "env", keywords = F)
   df_names <- get_names(object, "df", keywords = F)
-  
+
   if (length(df_names) > 0) {
     res_df <- pivot_longer(
         object$df,
@@ -169,16 +169,16 @@ summary.namespace <- function(object, ...) {
 }
 
 #' Export a Variable
-#' 
+#'
 #' Generates output representing the evaluated value for a given variable. This
 #' is done by outputing its class, and the result of its print and summary
 #' methods.
-#' 
+#'
 #' @param x The object being exported.
-#' 
+#'
 #' @return a list containing the class of the result, and the output of its
 #' print and summary methods.
-#' 
+#'
 #' @export
 export <- function(x) {
   UseMethod("export", x)
@@ -188,50 +188,141 @@ export <- function(x) {
 #' @export
 export.default <- function(x) {
   res <- list()
-  res$class <- tryCatch({
-    class(x)
-  }, error = function(e) {
-    NULL
-  })
-  res$print <- tryCatch({
-    paste(capture.output(x, split = F), collapse = "\n")
-  }, error = function(e) {
-    NULL
-  })
-  res$summary <- tryCatch({
-    paste(capture.output(summary(x)), collapse = "\n")
-  }, error = function(e) {
-    NULL
+  res$class <- tryCatch(class(x), error = function(e) NULL)
+  res$print <- tryCatch(
+    paste(capture.output(x, split = FALSE), collapse = "\n"),
+    error = function(e) NULL
+  )
+  res$summary <- tryCatch(
+    paste(capture.output(summary(x)), collapse = "\n"),
+    error = function(e) NULL
+  )
+
+  if (is.numeric(x) && !is.list(x)) {
+    if (length(x) == 1) {
+      res$type <- "scalar"
+      res$value <- as.numeric(x)
+    } else {
+      res$type <- "vector"
+      res$values <- as.numeric(x)
+    }
+  } else {
+    res$type <- "object"
+  }
+  res
+}
+
+#' @export
+export.eval_decision_tree <- function(x) {
+  res <- list()
+  res$type <- "eval_decision_tree"
+  res$class <- class(x)
+  res$print <- tryCatch(
+    paste(capture.output(x, split = FALSE), collapse = "\n"),
+    error = function(e) NULL
+  )
+  res$terminal_nodes <- lapply(x$terminal_nodes, function(node) {
+    list(
+      node = node$node,
+      probability = node$prob,
+      tags = node$tags
+    )
   })
   res
 }
 
+#' @export
+export.data.frame <- function(x) {
+  res <- list()
+  res$type <- "data.frame"
+  res$class <- class(x)
+  res$print <- tryCatch(
+    paste(capture.output(print(x, n = 20), split = FALSE), collapse = "\n"),
+    error = function(e) {
+      tryCatch(
+        paste(capture.output(x, split = FALSE), collapse = "\n"),
+        error = function(e2) NULL
+      )
+    }
+  )
+  res$columns <- colnames(x)
+  res$nrow <- nrow(x)
+  res$ncol <- ncol(x)
+  res$data <- lapply(seq_len(nrow(x)), function(i) as.list(x[i, , drop = FALSE]))
+  res
+}
+
+#' Export a Survival Distribution
+#'
+#' Generates a type-aware representation of a survival distribution
+#' for use in variable diagnostics.
+#'
+#' @param x A `surv_dist` object.
+#'
+#' @return A list with fields: `type`, `class`, `print`, and `probabilities`
+#'   (a data frame with `time` and `survival` columns).
+#'
+#' @export
+export.surv_dist <- function(x) {
+  res <- list()
+  res$type <- "surv_dist"
+  res$class <- class(x)
+  res$print <- tryCatch(
+    paste(capture.output(x, split = FALSE), collapse = "\n"),
+    error = function(e) NULL
+  )
+
+  # Generate survival curve at ~200 evenly spaced time points
+  # Use a reasonable time horizon (0 to 100 years in days)
+  max_time <- 365.25 * 100
+  times <- seq(0, max_time, length.out = 200)
+  probs <- tryCatch(
+    surv_prob(x, times),
+    error = function(e) NULL
+  )
+
+  if (!is.null(probs)) {
+    # Trim to where survival is still meaningfully > 0
+    meaningful <- which(probs > 1e-6)
+    if (length(meaningful) > 0) {
+      last_idx <- max(meaningful)
+      # Keep one extra point beyond to show the tail reaching 0
+      last_idx <- min(last_idx + 1, length(times))
+      times <- times[seq_len(last_idx)]
+      probs <- probs[seq_len(last_idx)]
+    }
+    res$probabilities <- data.frame(time = times, survival = probs)
+  }
+
+  res
+}
+
 update_segment_ns <- function(x, newdata) {
-  
+
   # Clone the namespace
   new_ns <- clone_namespace(x)
-  
+
   # Clear overlapping column names from dataframe
   names_to_clear <- intersect(colnames(newdata), colnames(new_ns$df))
   new_ns$df <- select(new_ns$df, !all_of(names_to_clear))
-  
+
   # Store new data in environment
   iwalk(newdata, function(x, n) {
     assign(n, x[[1]], envir = new_ns$env)
   })
-  
+
   # Return namespace
   new_ns
-  
+
 }
 
 #' @export
 `[.namespace` <- function(x, i, ...) {
   df_names <- get_names(x, 'df')
   if (i %in% df_names) return(x$df[[i]])
-  
+
   env_names <- get_names(x, 'env')
   if (i %in% env_names) return(get(i, envir = x$env))
-  
+
   stop('Object not found')
 }

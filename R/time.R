@@ -49,9 +49,10 @@ get_n_cycles <- function(settings, dt_duration_days = 0) {
     return(NA_integer_)
   }
 
-  # Calculate days per timeframe/cycle length unit
-  days_per_tf_unit <- days_per_unit(tf_unit, settings$cycle_length_days, settings$days_per_year)
-  days_per_cl_unit <- days_per_unit(cl_unit, settings$cycle_length_days, settings$days_per_year)
+  # Compute cycle_length_days fresh from raw settings
+  cld <- get_cycle_length_days(settings)
+  days_per_tf_unit <- days_per_unit(tf_unit, cld, settings$days_per_year)
+  days_per_cl_unit <- days_per_unit(cl_unit, cld, settings$days_per_year)
 
   # Subtract decision tree duration from total timeframe
   total_days <- tf * days_per_tf_unit
@@ -87,15 +88,15 @@ convert_time <- function(x, from, to, settings) {
 }
 
 # Generate time variables
-time_variables <- function(settings, states, include_cycle_zero = FALSE) {
+time_variables <- function(settings, states, include_cycle_zero = FALSE, n_cycles = NULL) {
 
-  n_cycles <- get_n_cycles(settings)
+  n_cycles <- n_cycles %||% get_n_cycles(settings)
   cl <- get_cycle_length_days(settings)
 
   # For Markov models with tunnel states, calculate max state time
   # For PSM models, states don't have state_cycle_limit, so st_cycles = 1
   if ("state_cycle_limit_unit" %in% names(states) && "state_cycle_limit" %in% names(states)) {
-    st_days <- days_per_unit(states$state_cycle_limit_unit, settings$cycle_length_days, settings$days_per_year) *
+    st_days <- days_per_unit(states$state_cycle_limit_unit, cl, settings$days_per_year) *
         as.numeric(states$state_cycle_limit)
     st_days[st_days == 0] <- Inf
     st_days_max <- max(st_days, na.rm = TRUE)
@@ -182,6 +183,14 @@ time_unit_variables <- function(settings) {
   tibble(
     days_per_year = days_per_year,
     days_per_month = days_per_year / 12
+  )
+}
+
+compute_time_context <- function(settings, dt_duration_days = 0) {
+  list(
+    cycle_length_days = get_cycle_length_days(settings),
+    n_cycles = get_n_cycles(settings, dt_duration_days = dt_duration_days),
+    days_per_year = get_days_per_year(settings)
   )
 }
 

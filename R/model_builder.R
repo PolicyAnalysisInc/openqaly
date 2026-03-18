@@ -144,7 +144,8 @@ define_model <- function(type = "markov") {
     override_categories = list(),
     threshold_analyses = list(),
     vbp = NULL,
-    psa = NULL
+    psa = NULL,
+    documentation = NULL
   )
 
   class(model) <- c("oq_model_builder", "oq_model")
@@ -300,6 +301,28 @@ set_psa <- function(model, n_sim, seed = NULL) {
   model
 }
 
+#' Set Model Documentation
+#'
+#' Set a markdown documentation string on the model describing its purpose,
+#' assumptions, and other relevant details.
+#'
+#' @param model An oq_model_builder object
+#' @param text A character string containing the documentation (typically markdown)
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' model <- define_model("markov")
+#' model <- set_documentation(model, "# My Model\n\nA cost-effectiveness model.")
+set_documentation <- function(model, text) {
+  if (!is.character(text) || length(text) != 1) {
+    stop("text must be a single character string", call. = FALSE)
+  }
+  model$documentation <- text
+  model
+}
+
 #' Add a Tree Node
 #'
 #' Add a node to a decision tree in the model. Creates the trees tibble if it
@@ -393,6 +416,193 @@ remove_decision_tree <- function(model) {
   model
 }
 
+#' Edit a Decision Tree Node
+#'
+#' Edit an existing tree node identified by tree_name and node.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string for the tree name
+#' @param node Character string for the node name
+#' @param formula An unquoted R expression for the node probability
+#' @param tags Optional character string for node tags
+#' @param parent Character string for the parent node name
+#' @param new_node_name Character string to rename the node
+#' @param new_tree_name Character string to rename the entire tree
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_tree_node <- function(model, tree_name, node, formula, tags, parent,
+                           new_node_name, new_tree_name) {
+  if (is.null(model$trees)) {
+    stop("No trees exist in this model.", call. = FALSE)
+  }
+
+  match_idx <- which(model$trees$name == tree_name & model$trees$node == node)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Tree node "%s" in tree "%s" not found in model.', node, tree_name),
+         call. = FALSE)
+  }
+
+  if (!missing(formula)) {
+    formula_quo <- enquo(formula)
+    formula_expr <- quo_get_expr(formula_quo)
+    formula_str <- expr_text(formula_expr)
+    if (is.character(formula_expr) && length(formula_expr) == 1) {
+      formula_str <- formula_expr
+    }
+    model$trees$formula[match_idx] <- formula_str
+  }
+
+  if (!missing(tags)) {
+    model$trees$tags[match_idx] <- if (is.na(tags)) NA_character_ else as.character(tags)
+  }
+
+  if (!missing(parent)) {
+    model$trees$parent[match_idx] <- if (is.na(parent)) NA_character_ else as.character(parent)
+  }
+
+  if (!missing(new_node_name)) {
+    conflict <- which(model$trees$name == tree_name & model$trees$node == new_node_name)
+    if (length(conflict) > 0) {
+      stop(sprintf('Node "%s" already exists in tree "%s".', new_node_name, tree_name),
+           call. = FALSE)
+    }
+    # Cascade: update parent references for children in same tree
+    child_mask <- model$trees$name == tree_name & model$trees$parent %in% node
+    model$trees$parent[child_mask] <- new_node_name
+    model$trees$node[match_idx] <- new_node_name
+  }
+
+  if (!missing(new_tree_name)) {
+    validate_tree_name_collisions(new_tree_name, model)
+    tree_mask <- model$trees$name == tree_name
+    model$trees$name[tree_mask] <- new_tree_name
+    if (!is.null(model$decision_tree) && identical(model$decision_tree$tree_name, tree_name)) {
+      model$decision_tree$tree_name <- new_tree_name
+    }
+  }
+
+  model
+}
+
+#' Remove a Decision Tree Node
+#'
+#' Remove a tree node and all its descendants from the model.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string for the tree name
+#' @param node Character string for the node name
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_tree_node <- function(model, tree_name, node) {
+  if (is.null(model$trees)) {
+    stop("No trees exist in this model.", call. = FALSE)
+  }
+
+  match_idx <- which(model$trees$name == tree_name & model$trees$node == node)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Tree node "%s" in tree "%s" not found in model.', node, tree_name),
+         call. = FALSE)
+  }
+
+  # BFS to find all descendants
+  nodes_to_remove <- node
+  queue <- node
+  while (length(queue) > 0) {
+    children <- model$trees$node[model$trees$name == tree_name & model$trees$parent %in% queue]
+    queue <- setdiff(children, nodes_to_remove)
+    nodes_to_remove <- c(nodes_to_remove, queue)
+  }
+
+  model$trees <- model$trees[!(model$trees$name == tree_name & model$trees$node %in% nodes_to_remove), ]
+
+  # If no nodes remain for this tree and it's the config tree, clear config
+  remaining_in_tree <- sum(model$trees$name == tree_name)
+  if (remaining_in_tree == 0 && !is.null(model$decision_tree) &&
+      identical(model$decision_tree$tree_name, tree_name)) {
+    model$decision_tree <- NULL
+  }
+
+  # If no trees remain at all, set to NULL
+  if (nrow(model$trees) == 0) {
+    model$trees <- NULL
+  }
+
+  model
+}
+
+#' Remove an Entire Decision Tree
+#'
+#' Remove all nodes of a tree from the model.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string for the tree name
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_tree <- function(model, tree_name) {
+  if (is.null(model$trees) || !any(model$trees$name == tree_name)) {
+    stop(sprintf('Tree "%s" not found in model.', tree_name), call. = FALSE)
+  }
+
+  model$trees <- model$trees[model$trees$name != tree_name, ]
+
+  if (!is.null(model$decision_tree) && identical(model$decision_tree$tree_name, tree_name)) {
+    model$decision_tree <- NULL
+  }
+
+  if (nrow(model$trees) == 0) {
+    model$trees <- NULL
+  }
+
+  model
+}
+
+#' Edit Decision Tree Configuration
+#'
+#' Edit the decision tree configuration on the model.
+#'
+#' @param model An oq_model_builder object
+#' @param tree_name Character string referencing a tree in model$trees
+#' @param duration An unquoted R expression for the duration
+#' @param duration_unit Character string for the time unit
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_decision_tree <- function(model, tree_name, duration, duration_unit) {
+  if (is.null(model$decision_tree)) {
+    stop("No decision tree configuration exists. Use set_decision_tree() first.",
+         call. = FALSE)
+  }
+
+  if (!missing(tree_name)) {
+    model$decision_tree$tree_name <- tree_name
+  }
+
+  if (!missing(duration)) {
+    duration_quo <- enquo(duration)
+    duration_expr <- quo_get_expr(duration_quo)
+    duration_str <- expr_text(duration_expr)
+    if (is.character(duration_expr) && length(duration_expr) == 1) {
+      duration_str <- duration_expr
+    }
+    model$decision_tree$duration <- duration_str
+  }
+
+  if (!missing(duration_unit)) {
+    valid_units <- c("days", "weeks", "months", "years")
+    duration_unit <- match.arg(tolower(duration_unit), valid_units)
+    model$decision_tree$duration_unit <- duration_unit
+  }
+
+  model
+}
+
 #' Add States to Model
 #'
 #' Add one or more states to the model.
@@ -419,6 +629,11 @@ add_state <- function(model, name, display_name = NULL,
                      share_state_time = FALSE, state_cycle_limit = NULL,
                      state_cycle_limit_unit = "cycles", initial_prob = NULL) {
 
+  # Validate state name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || trimws(name) == "") {
+    stop("State name must be a non-empty character string.", call. = FALSE)
+  }
+
   # Block reserved state names
   if (name %in% c("All", "All Other")) {
     stop(glue("'{name}' is a reserved state name and cannot be used as a state name. ",
@@ -441,6 +656,13 @@ add_state <- function(model, name, display_name = NULL,
         'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
         name
       ), call. = FALSE)
+    }
+  }
+
+  # Check for duplicate state name
+  if (!is.null(model$states) && is.data.frame(model$states) && nrow(model$states) > 0) {
+    if (name %in% model$states$name) {
+      stop(sprintf("A state named '%s' already exists. State names must be unique.", name), call. = FALSE)
     }
   }
 
@@ -489,6 +711,232 @@ add_state <- function(model, name, display_name = NULL,
   return(model)
 }
 
+#' Edit a State in the Model
+#'
+#' Modify an existing state's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the state are updated (transitions, values,
+#' and threshold analyses).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the state to edit
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param state_group Optional new state group (Markov only)
+#' @param share_state_time Optional new share_state_time flag (Markov only)
+#' @param state_cycle_limit Optional new cycle limit (Markov only)
+#' @param state_cycle_limit_unit Optional new cycle limit unit (Markov only)
+#' @param initial_prob Optional new initial probability (Markov only)
+#' @param new_name Optional new name for the state. If provided, the state
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_state <- function(model, name, display_name, description, state_group,
+                       share_state_time, state_cycle_limit,
+                       state_cycle_limit_unit, initial_prob, new_name) {
+  model_type <- tolower(model$settings$model_type)
+
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support states.", call. = FALSE)
+  }
+
+  match_idx <- which(model$states$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('State "%s" not found in model.', name), call. = FALSE)
+  }
+
+  # Scalar field updates — common to all model types
+  if (!missing(display_name)) {
+    model$states$display_name[match_idx] <- display_name
+  }
+  if (!missing(description)) {
+    model$states$description[match_idx] <- description
+  }
+
+  # Markov-only fields
+  markov_fields_provided <- !missing(state_group) || !missing(share_state_time) ||
+    !missing(state_cycle_limit) || !missing(state_cycle_limit_unit) || !missing(initial_prob)
+
+  if (markov_fields_provided && model_type %in% c("psm", "custom_psm")) {
+    stop("PSM/Custom PSM models don't support state_group, share_state_time, state_cycle_limit, state_cycle_limit_unit, or initial_prob parameters.",
+         call. = FALSE)
+  }
+
+  if (!missing(state_group)) {
+    model$states$state_group[match_idx] <- state_group
+  }
+  if (!missing(share_state_time)) {
+    model$states$share_state_time[match_idx] <- share_state_time
+  }
+  if (!missing(state_cycle_limit)) {
+    model$states$state_cycle_limit[match_idx] <- state_cycle_limit
+  }
+  if (!missing(state_cycle_limit_unit)) {
+    model$states$state_cycle_limit_unit[match_idx] <- state_cycle_limit_unit
+  }
+  if (!missing(initial_prob)) {
+    model$states$initial_probability[match_idx] <- as.character(initial_prob)
+  }
+
+  # Cascade rename
+  if (!missing(new_name)) {
+    if (new_name %in% c("All", "All Other")) {
+      stop(sprintf('"%s" is a reserved state name and cannot be used.', new_name), call. = FALSE)
+    }
+
+    model$states$name[match_idx] <- new_name
+
+    # Transitions — model-type-dependent
+    if (is.data.frame(model$transitions) && nrow(model$transitions) > 0) {
+      if (model_type == "markov") {
+        model$transitions$from_state[model$transitions$from_state %in% name] <- new_name
+        model$transitions$to_state[model$transitions$to_state %in% name] <- new_name
+      } else if (model_type == "custom_psm") {
+        model$transitions$state[model$transitions$state %in% name] <- new_name
+      }
+      # PSM transitions use endpoint, not state — no rename needed
+    }
+
+    # Values
+    if (is.data.frame(model$values) && nrow(model$values) > 0) {
+      model$values$state[model$values$state %in% name] <- new_name
+      model$values$destination[model$values$destination %in% name] <- new_name
+    }
+
+    # Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      for (i in seq_along(model$threshold_analyses)) {
+        if (!is.null(model$threshold_analyses[[i]]$condition) &&
+            identical(model$threshold_analyses[[i]]$condition$state, name)) {
+          model$threshold_analyses[[i]]$condition$state <- new_name
+        }
+      }
+    }
+  }
+
+  model
+}
+
+#' Remove a State from the Model
+#'
+#' Remove an existing state and optionally cascade-remove all downstream
+#' references (transitions, values, and threshold analyses).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the state to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the state has
+#'   downstream dependencies, an error of class \code{"state_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the state and all
+#'   downstream references.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_state <- function(model, name, error_on_dependencies = FALSE) {
+  model_type <- tolower(model$settings$model_type)
+
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support states.", call. = FALSE)
+  }
+  if (model_type == "psm") {
+    stop("Removing states from PSM models is not supported.", call. = FALSE)
+  }
+
+  match_idx <- which(model$states$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('State "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (error_on_dependencies) {
+    deps <- list()
+
+    # Transitions — model-type-dependent
+    if (is.data.frame(model$transitions) && nrow(model$transitions) > 0) {
+      if (model_type == "markov") {
+        dep_rows <- model$transitions$from_state %in% name | model$transitions$to_state %in% name
+        if (any(dep_rows)) {
+          deps$transitions <- paste(model$transitions$from_state[dep_rows], "->",
+                                    model$transitions$to_state[dep_rows])
+        }
+      } else if (model_type == "custom_psm") {
+        dep_rows <- model$transitions$state %in% name
+        if (any(dep_rows)) {
+          deps$transitions <- model$transitions$state[dep_rows]
+        }
+      }
+    }
+
+    # Values
+    if (is.data.frame(model$values) && nrow(model$values) > 0) {
+      dep_vals <- model$values$state %in% name | model$values$destination %in% name
+      if (any(dep_vals)) {
+        deps$values <- unique(model$values$name[dep_vals])
+      }
+    }
+
+    # Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      dep_thresh <- character(0)
+      for (i in seq_along(model$threshold_analyses)) {
+        if (!is.null(model$threshold_analyses[[i]]$condition) &&
+            identical(model$threshold_analyses[[i]]$condition$state, name)) {
+          dep_thresh <- c(dep_thresh, model$threshold_analyses[[i]]$name %||% paste0("threshold_", i))
+        }
+      }
+      if (length(dep_thresh) > 0) deps$threshold_analyses <- dep_thresh
+    }
+
+    deps <- Filter(function(x) length(x) > 0, deps)
+
+    if (length(deps) > 0) {
+      cond <- structure(
+        class = c("state_has_dependencies", "error", "condition"),
+        list(
+          message = sprintf('Cannot remove state "%s": it has downstream dependencies.', name),
+          dependencies = deps
+        )
+      )
+      stop(cond)
+    }
+  }
+
+  # Remove the state row
+  model$states <- model$states[-match_idx, , drop = FALSE]
+
+  # Cascade remove downstream references
+
+  # Transitions — model-type-dependent
+  if (is.data.frame(model$transitions) && nrow(model$transitions) > 0) {
+    if (model_type == "markov") {
+      keep <- !(model$transitions$from_state %in% name | model$transitions$to_state %in% name)
+      model$transitions <- model$transitions[keep, , drop = FALSE]
+    } else if (model_type == "custom_psm") {
+      keep <- !(model$transitions$state %in% name)
+      model$transitions <- model$transitions[keep, , drop = FALSE]
+    }
+  }
+
+  # Values
+  if (is.data.frame(model$values) && nrow(model$values) > 0) {
+    keep <- !(model$values$state %in% name | model$values$destination %in% name)
+    model$values <- model$values[keep, , drop = FALSE]
+  }
+
+  # Threshold analyses
+  if (length(model$threshold_analyses) > 0) {
+    keep <- vapply(model$threshold_analyses, function(a) {
+      !((!is.null(a$condition)) && identical(a$condition$state, name))
+    }, logical(1))
+    model$threshold_analyses <- model$threshold_analyses[keep]
+  }
+
+  model
+}
+
 #' Add Transitions to Model
 #'
 #' Add one or more transitions to the model. Uses NSE to capture formula expressions.
@@ -517,6 +965,19 @@ add_transition <- function(model, from_state, to_state, formula) {
   }
   if (model_type == "custom_psm") {
     stop("For Custom PSM models, use add_custom_psm_transition() instead")
+  }
+
+  # Validate from_state and to_state exist
+  if (!is.null(model$states) && is.data.frame(model$states) && nrow(model$states) > 0) {
+    available <- model$states$name
+    if (!from_state %in% available) {
+      stop(sprintf("Transition references undefined from_state '%s'. Available states: %s",
+                   from_state, paste(available, collapse = ", ")), call. = FALSE)
+    }
+    if (!to_state %in% available) {
+      stop(sprintf("Transition references undefined to_state '%s'. Available states: %s",
+                   to_state, paste(available, collapse = ", ")), call. = FALSE)
+    }
   }
 
   # Capture the formula expression using NSE
@@ -625,6 +1086,230 @@ add_custom_psm_transition <- function(model, state, formula) {
   return(model)
 }
 
+#' Edit a Markov Transition
+#'
+#' Edit the formula of an existing Markov transition.
+#'
+#' @param model An oq_model_builder object
+#' @param from_state Character string specifying the source state
+#' @param to_state Character string specifying the destination state
+#' @param formula An unquoted R expression for the new transition probability
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_transition <- function(model, from_state, to_state, formula) {
+  model_type <- tolower(model$settings$model_type %||% "markov")
+
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
+  if (model_type == "psm") {
+    stop("For PSM models, use edit_psm_transition() instead")
+  }
+  if (model_type == "custom_psm") {
+    stop("For Custom PSM models, use edit_custom_psm_transition() instead")
+  }
+
+  match_idx <- which(model$transitions$from_state == from_state &
+                       model$transitions$to_state == to_state)
+  if (length(match_idx) == 0) {
+    stop("No transition found from '", from_state, "' to '", to_state, "'", call. = FALSE)
+  }
+
+  formula_quo <- enquo(formula)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
+
+  model$transitions$formula[match_idx] <- formula_str
+
+  return(model)
+}
+
+#' Remove a Markov Transition
+#'
+#' Remove an existing Markov transition.
+#'
+#' @param model An oq_model_builder object
+#' @param from_state Character string specifying the source state
+#' @param to_state Character string specifying the destination state
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_transition <- function(model, from_state, to_state) {
+  model_type <- tolower(model$settings$model_type %||% "markov")
+
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
+  if (model_type == "psm") {
+    stop("For PSM models, use remove_psm_transition() instead")
+  }
+  if (model_type == "custom_psm") {
+    stop("For Custom PSM models, use remove_custom_psm_transition() instead")
+  }
+
+  match_idx <- which(model$transitions$from_state == from_state &
+                       model$transitions$to_state == to_state)
+  if (length(match_idx) == 0) {
+    stop("No transition found from '", from_state, "' to '", to_state, "'", call. = FALSE)
+  }
+
+  model$transitions <- model$transitions[-match_idx, , drop = FALSE]
+
+  return(model)
+}
+
+#' Edit a PSM Transition
+#'
+#' Edit an existing PSM transition's formula and/or time unit.
+#'
+#' @param model An oq_model_builder object
+#' @param endpoint Character string for the endpoint
+#' @param formula An unquoted R expression for the new transition
+#' @param time_unit Character string for the new time unit
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_psm_transition <- function(model, endpoint, formula, time_unit) {
+  model_type <- tolower(model$settings$model_type %||% "markov")
+
+  if (model_type == "markov") {
+    stop("For Markov models, use edit_transition() instead")
+  }
+  if (model_type == "custom_psm") {
+    stop("For Custom PSM models, use edit_custom_psm_transition() instead")
+  }
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
+
+  match_idx <- which(model$transitions$endpoint == endpoint)
+  if (length(match_idx) == 0) {
+    stop("No PSM transition found for endpoint '", endpoint, "'", call. = FALSE)
+  }
+
+  if (!missing(formula)) {
+    formula_quo <- enquo(formula)
+    formula_expr <- quo_get_expr(formula_quo)
+    formula_str <- expr_text(formula_expr)
+    if (is.character(formula_expr) && length(formula_expr) == 1) {
+      formula_str <- formula_expr
+    }
+    model$transitions$formula[match_idx] <- formula_str
+  }
+
+  if (!missing(time_unit)) {
+    model$transitions$time_unit[match_idx] <- time_unit
+  }
+
+  return(model)
+}
+
+#' Remove a PSM Transition
+#'
+#' Remove an existing PSM transition.
+#'
+#' @param model An oq_model_builder object
+#' @param endpoint Character string for the endpoint
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_psm_transition <- function(model, endpoint) {
+  model_type <- tolower(model$settings$model_type %||% "markov")
+
+  if (model_type == "markov") {
+    stop("For Markov models, use remove_transition() instead")
+  }
+  if (model_type == "custom_psm") {
+    stop("For Custom PSM models, use remove_custom_psm_transition() instead")
+  }
+  if (model_type == "decision_tree") {
+    stop("Decision tree models do not support transitions.", call. = FALSE)
+  }
+
+  match_idx <- which(model$transitions$endpoint == endpoint)
+  if (length(match_idx) == 0) {
+    stop("No PSM transition found for endpoint '", endpoint, "'", call. = FALSE)
+  }
+
+  model$transitions <- model$transitions[-match_idx, , drop = FALSE]
+
+  return(model)
+}
+
+#' Edit a Custom PSM Transition
+#'
+#' Edit the formula of an existing Custom PSM state probability.
+#'
+#' @param model An oq_model_builder object (must be type "custom_psm")
+#' @param state Character string for the state name
+#' @param formula An unquoted R expression for the new state probability
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_custom_psm_transition <- function(model, state, formula) {
+  is_custom_psm <- !is.null(model$settings$model_type) &&
+    tolower(model$settings$model_type) == "custom_psm"
+
+  if (!is_custom_psm) {
+    stop("edit_custom_psm_transition() is only for Custom PSM models. ",
+         "Use edit_transition() for Markov or edit_psm_transition() for standard PSM.")
+  }
+
+  match_idx <- which(model$transitions$state == state)
+  if (length(match_idx) == 0) {
+    stop("No Custom PSM transition found for state '", state, "'", call. = FALSE)
+  }
+
+  formula_quo <- enquo(formula)
+  formula_expr <- quo_get_expr(formula_quo)
+  formula_str <- expr_text(formula_expr)
+  if (is.character(formula_expr) && length(formula_expr) == 1) {
+    formula_str <- formula_expr
+  }
+
+  model$transitions$formula[match_idx] <- formula_str
+
+  return(model)
+}
+
+#' Remove a Custom PSM Transition
+#'
+#' Remove an existing Custom PSM state probability.
+#'
+#' @param model An oq_model_builder object (must be type "custom_psm")
+#' @param state Character string for the state name
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_custom_psm_transition <- function(model, state) {
+  is_custom_psm <- !is.null(model$settings$model_type) &&
+    tolower(model$settings$model_type) == "custom_psm"
+
+  if (!is_custom_psm) {
+    stop("remove_custom_psm_transition() is only for Custom PSM models. ",
+         "Use remove_transition() for Markov or remove_psm_transition() for standard PSM.")
+  }
+
+  match_idx <- which(model$transitions$state == state)
+  if (length(match_idx) == 0) {
+    stop("No Custom PSM transition found for state '", state, "'", call. = FALSE)
+  }
+
+  model$transitions <- model$transitions[-match_idx, , drop = FALSE]
+
+  return(model)
+}
+
 #' Add Values to Model
 #'
 #' Add one or more values to the model. Uses NSE to capture formula expressions.
@@ -653,6 +1338,16 @@ add_custom_psm_transition <- function(model, state, formula) {
 add_value <- function(model, name, formula, state = NA, destination = NA,
                      display_name = NULL, description = NULL,
                      type = "outcome", discounting_override = NA) {
+
+  # Validate value name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || trimws(name) == "") {
+    stop("Value name must be a non-empty string.", call. = FALSE)
+  }
+
+  # Validate value type
+  if (!type %in% c("outcome", "cost")) {
+    stop("Value type must be 'outcome' or 'cost'.", call. = FALSE)
+  }
 
   # Check for transitional values in custom_psm (not supported)
   model_type <- tolower(model$settings$model_type %||% "markov")
@@ -691,6 +1386,11 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
   # If formula was passed as a string, use it directly (expr_text adds extra quotes)
   if (is.character(formula_expr) && length(formula_expr) == 1) {
     formula_str <- formula_expr
+  }
+
+  # Validate formula is not empty
+  if (!nzchar(trimws(formula_str))) {
+    stop("Value formula must be a non-empty expression.", call. = FALSE)
   }
 
   # Validate "All" / "All Other" state targeting rules
@@ -749,6 +1449,21 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     ))
   }
 
+  # Check for duplicate value (name + state + destination)
+  if (!is.null(model$values) && is.data.frame(model$values) && nrow(model$values) > 0) {
+    name_match <- model$values$name == name & !is.na(model$values$name)
+    state_match <- model$values$state == state_str & !is.na(model$values$state)
+    # Handle NA/\"NA\" destination comparison
+    dest_is_na <- is.na(dest_str) | dest_str == "NA"
+    existing_dest_is_na <- is.na(model$values$destination) | model$values$destination == "NA"
+    dest_match <- if (dest_is_na) existing_dest_is_na else (model$values$destination == dest_str & !existing_dest_is_na)
+    dupes <- name_match & state_match & dest_match
+    if (any(dupes, na.rm = TRUE)) {
+      stop(sprintf("Duplicate value: name '%s', state '%s', destination '%s' already exists.",
+                   name, state_str, dest_str), call. = FALSE)
+    }
+  }
+
   new_value <- fast_tibble(
     name = name,
     formula = formula_str,
@@ -762,7 +1477,342 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
 
   model$values <- bind_rows(model$values, new_value)
 
+  # Validate display_name/description consistency across all definitions of this value
+  values_with_same_name <- model$values[model$values$name == name, ]
+  if (nrow(values_with_same_name) > 1) {
+    error_msg <- validate_value_display_names_for_builder(values_with_same_name, name)
+    if (error_msg != "") stop(error_msg, call. = FALSE)
+  }
+
   return(model)
+}
+
+#' Update Summary Value References
+#'
+#' Internal helper that updates value name references in summary CSV strings.
+#' Used by \code{edit_value} (rename) and \code{remove_value} (cascade removal).
+#'
+#' @param summaries The summaries tibble from a model
+#' @param old_name The value name to find
+#' @param new_name The replacement name (NULL to remove the reference)
+#'
+#' @return Updated summaries tibble
+#' @keywords internal
+update_summary_value_refs <- function(summaries, old_name, new_name = NULL) {
+  if (is.null(summaries) || !is.data.frame(summaries) || nrow(summaries) == 0) {
+    return(summaries)
+  }
+  for (i in seq_len(nrow(summaries))) {
+    tokens <- trimws(strsplit(summaries$values[i], ",")[[1]])
+    if (old_name %in% tokens) {
+      if (is.null(new_name)) {
+        tokens <- tokens[tokens != old_name]
+      } else {
+        if (new_name %in% tokens) {
+          # new_name already present, just remove old
+          tokens <- tokens[tokens != old_name]
+        } else {
+          tokens[tokens == old_name] <- new_name
+        }
+      }
+      summaries$values[i] <- paste(tokens, collapse = ", ")
+    }
+  }
+  summaries
+}
+
+#' Edit a Value in the Model
+#'
+#' Modify an existing value's properties. The value is identified by its
+#' \code{name}, \code{state}, and \code{destination} combination. Only the
+#' fields that are explicitly provided will be updated.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the value to edit
+#' @param state State used for lookup (default NA)
+#' @param destination Destination used for lookup (default NA)
+#' @param formula An unquoted R expression for the value calculation
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param type Optional new type ("outcome" or "cost")
+#' @param discounting_override Optional discounting override formula
+#' @param new_name Optional new name for the value row(s)
+#' @param rename_all Logical. When TRUE and \code{new_name} is provided, renames
+#'   ALL rows with the old name and cascades to summaries. Default FALSE.
+#' @param error_on_field_changes Logical. When TRUE and merging into an existing
+#'   name, throws error class \code{"value_field_changes"} if display_name or
+#'   description would change. Default FALSE.
+#' @param error_on_name_sharing Logical. When TRUE and \code{new_name} is provided,
+#'   throws error class \code{"value_name_shared"} if the old name has multiple
+#'   rows. Default FALSE.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_value <- function(model, name, state = NA, destination = NA,
+                       formula, display_name, description, type,
+                       discounting_override, new_name,
+                       rename_all = FALSE,
+                       error_on_field_changes = FALSE,
+                       error_on_name_sharing = FALSE) {
+
+  # NA-safe comparison
+  safe_eq <- function(a, b) (is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & as.character(a) == as.character(b))
+
+  match_idx <- which(
+    model$values$name == name &
+    safe_eq(model$values$state, as.character(state)) &
+    safe_eq(model$values$destination, as.character(destination))
+  )
+
+  if (length(match_idx) == 0) {
+    target_desc <- name
+    if (!is.na(state) && as.character(state) != "NA") target_desc <- paste0(target_desc, ", state='", state, "'")
+    if (!is.na(destination) && as.character(destination) != "NA") target_desc <- paste0(target_desc, ", destination='", destination, "'")
+    stop(sprintf("No value found matching: %s", target_desc), call. = FALSE)
+  }
+
+  # --- Simple field updates (when new_name NOT provided) ---
+
+  if (!missing(formula)) {
+    formula_quo <- enquo(formula)
+    formula_expr <- quo_get_expr(formula_quo)
+    formula_str <- expr_text(formula_expr)
+    if (is.character(formula_expr) && length(formula_expr) == 1) {
+      formula_str <- formula_expr
+    }
+    model$values$formula[match_idx] <- formula_str
+  }
+
+  if (!missing(discounting_override)) {
+    disc_quo <- enquo(discounting_override)
+    disc_expr <- quo_get_expr(disc_quo)
+    if (is.character(disc_expr)) {
+      disc_str <- disc_expr
+    } else {
+      disc_str <- expr_text(disc_expr)
+    }
+    model$values$discounting_override[match_idx] <- disc_str
+  }
+
+  if (!missing(type)) {
+    if (!type %in% c("outcome", "cost")) {
+      stop("Value type must be 'outcome' or 'cost'.", call. = FALSE)
+    }
+    model$values$type[match_idx] <- type
+  }
+
+  # --- Rename logic ---
+  if (!missing(new_name)) {
+
+    # Step 0: Name sharing check
+    old_name_rows <- which(model$values$name == name)
+    if (error_on_name_sharing && length(old_name_rows) > 1) {
+      states_data <- fast_tibble(
+        state = model$values$state[old_name_rows],
+        destination = model$values$destination[old_name_rows]
+      )
+      cond <- structure(
+        class = c("value_name_shared", "error", "condition"),
+        list(
+          message = sprintf('Value "%s" is shared across %d rows.', name, length(old_name_rows)),
+          shared_count = length(old_name_rows),
+          states = states_data
+        )
+      )
+      stop(cond)
+    }
+
+    # Step 1: Name collision checks
+    if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+      if (new_name %in% unique(model$trees$name)) {
+        stop(sprintf(
+          'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+          new_name
+        ), call. = FALSE)
+      }
+    }
+    if (length(model$tables) > 0 && new_name %in% names(model$tables)) {
+      stop(sprintf(
+        "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+        new_name
+      ), call. = FALSE)
+    }
+
+    # Step 2: Check if merging into existing name
+    target_rows <- which(model$values$name == new_name)
+    merging_into_existing <- length(target_rows) > 0
+
+    # Step 3: Handle merge — auto-adopt with optional error
+    if (merging_into_existing) {
+      target_display <- model$values$display_name[target_rows[1]]
+      target_desc <- model$values$description[target_rows[1]]
+      current_display <- model$values$display_name[match_idx]
+      current_desc <- model$values$description[match_idx]
+
+      fields_differ <- !identical(current_display, target_display) ||
+                       !identical(current_desc, target_desc)
+
+      if (fields_differ && error_on_field_changes) {
+        field_changes <- list(
+          display_name = list(old = current_display, new = target_display),
+          description = list(old = current_desc, new = target_desc)
+        )
+        cond <- structure(
+          class = c("value_field_changes", "error", "condition"),
+          list(
+            message = sprintf('Moving value to "%s" would change display_name and/or description.', new_name),
+            field_changes = field_changes
+          )
+        )
+        stop(cond)
+      }
+
+      # Auto-adopt target's display_name/description
+      if (!missing(display_name)) {
+        model$values$display_name[match_idx] <- display_name
+      } else {
+        model$values$display_name[match_idx] <- target_display
+      }
+      if (!missing(description)) {
+        model$values$description[match_idx] <- description
+      } else {
+        model$values$description[match_idx] <- target_desc
+      }
+    } else {
+      # Not merging — apply explicit display_name/description if provided
+      if (!missing(display_name)) {
+        model$values$display_name[match_idx] <- display_name
+      }
+      if (!missing(description)) {
+        model$values$description[match_idx] <- description
+      }
+    }
+
+    # Step 4: Apply the name change
+    if (rename_all) {
+      model$values$name[model$values$name == name] <- new_name
+      model$summaries <- update_summary_value_refs(model$summaries, name, new_name)
+    } else {
+      model$values$name[match_idx] <- new_name
+      # Step 5: Handle orphaned old name
+      old_name_remaining <- any(model$values$name == name)
+      if (!old_name_remaining) {
+        model$summaries <- update_summary_value_refs(model$summaries, name, new_name)
+      }
+    }
+
+    # Step 6: Post-move validation
+    values_with_new_name <- model$values[model$values$name == new_name, ]
+    if (nrow(values_with_new_name) > 1) {
+      error_msg <- validate_value_display_names_for_builder(values_with_new_name, new_name)
+      if (error_msg != "") stop(error_msg, call. = FALSE)
+    }
+
+  } else {
+    # No rename — apply display_name/description and validate
+    if (!missing(display_name)) {
+      model$values$display_name[match_idx] <- display_name
+    }
+    if (!missing(description)) {
+      model$values$description[match_idx] <- description
+    }
+
+    if (!missing(display_name) || !missing(description)) {
+      values_with_same_name <- model$values[model$values$name == name, ]
+      if (nrow(values_with_same_name) > 1) {
+        error_msg <- validate_value_display_names_for_builder(values_with_same_name, name)
+        if (error_msg != "") stop(error_msg, call. = FALSE)
+      }
+    }
+  }
+
+  model
+}
+
+#' Remove a Value from the Model
+#'
+#' Remove one or more value rows from the model. If only \code{name} is given,
+#' all rows with that value name are removed. If \code{state} and/or
+#' \code{destination} are specified, only matching rows are removed.
+#'
+#' When the last row for a given value name is removed, references to that
+#' value are also removed from summary CSV strings. If \code{error_on_dependencies}
+#' is TRUE and the value name would be fully removed, an error of class
+#' \code{"value_has_dependencies"} is thrown instead.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the value to remove
+#' @param state Optional state to narrow removal. If NULL, all states are matched.
+#' @param destination Optional destination to narrow removal. If NULL, all
+#'   destinations are matched.
+#' @param error_on_dependencies Logical. If TRUE and the value name would be
+#'   fully removed while referenced in summaries, an error of class
+#'   \code{"value_has_dependencies"} is thrown. Default FALSE.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_value <- function(model, name, state = NULL, destination = NULL,
+                         error_on_dependencies = FALSE) {
+
+  safe_eq <- function(a, b) (is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & as.character(a) == as.character(b))
+
+  # Build match mask
+
+  match_mask <- model$values$name == name
+
+  if (!is.null(state)) {
+    match_mask <- match_mask & safe_eq(model$values$state, as.character(state))
+  }
+
+  if (!is.null(destination)) {
+    match_mask <- match_mask & safe_eq(model$values$destination, as.character(destination))
+  }
+
+  if (!any(match_mask)) {
+    target_desc <- name
+    if (!is.null(state)) target_desc <- paste0(target_desc, ", state='", state, "'")
+    if (!is.null(destination)) target_desc <- paste0(target_desc, ", destination='", destination, "'")
+    stop(sprintf("No value found matching: %s", target_desc), call. = FALSE)
+  }
+
+  # Determine if name would be fully removed
+  remaining <- model$values$name[!match_mask]
+  name_fully_removed <- !(name %in% remaining)
+
+  # Dependency detection
+  if (name_fully_removed && error_on_dependencies) {
+    if (!is.null(model$summaries) && is.data.frame(model$summaries) && nrow(model$summaries) > 0) {
+      dep_summaries <- character(0)
+      for (i in seq_len(nrow(model$summaries))) {
+        tokens <- trimws(strsplit(model$summaries$values[i], ",")[[1]])
+        if (name %in% tokens) {
+          dep_summaries <- c(dep_summaries, model$summaries$name[i])
+        }
+      }
+      if (length(dep_summaries) > 0) {
+        cond <- structure(
+          class = c("value_has_dependencies", "error", "condition"),
+          list(
+            message = sprintf('Cannot remove value "%s": it has downstream dependencies.', name),
+            dependencies = list(summaries = dep_summaries)
+          )
+        )
+        stop(cond)
+      }
+    }
+  }
+
+  # Remove matched rows
+  model$values <- model$values[!match_mask, , drop = FALSE]
+
+  # Cascade: strip from summaries if name fully removed
+  if (name_fully_removed) {
+    model$summaries <- update_summary_value_refs(model$summaries, name, NULL)
+  }
+
+  model
 }
 
 #' Add Variables to Model
@@ -820,6 +1870,11 @@ add_variable <- function(model, name, formula, display_name = NULL,
                         description = NULL, strategy = "", group = "",
                         source = "", sampling) {
 
+  # Validate variable name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || trimws(name) == "") {
+    stop("Variable name must be a non-empty string.", call. = FALSE)
+  }
+
   # Capture the formula expression using NSE
   formula_quo <- enquo(formula)
   # Remove the ~ if it exists (enquo adds it)
@@ -828,6 +1883,11 @@ add_variable <- function(model, name, formula, display_name = NULL,
   # If formula was passed as a string, use it directly (expr_text adds extra quotes)
   if (is.character(formula_expr) && length(formula_expr) == 1) {
     formula_str <- formula_expr
+  }
+
+  # Validate formula is not empty
+  if (!nzchar(trimws(formula_str))) {
+    stop("Variable formula must be a non-empty expression.", call. = FALSE)
   }
 
   # Capture the sampling expression using NSE
@@ -928,6 +1988,155 @@ add_variable <- function(model, name, formula, display_name = NULL,
   model
 }
 
+#' Edit a Variable in the Model
+#'
+#' Modify an existing variable's properties. The variable is identified by its
+#' name, strategy, and group combination. Only the fields that are explicitly
+#' provided will be updated.
+#'
+#' Note: You cannot change a variable's strategy or group targeting. To change
+#' targeting, remove the variable and add it again with the new targeting.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the variable to edit
+#' @param formula An unquoted R expression for the variable calculation
+#' @param display_name Optional display name
+#' @param description Optional description
+#' @param strategy Strategy association used for lookup (default: "")
+#' @param group Group association used for lookup (default: "")
+#' @param source Optional source information
+#' @param sampling Optional sampling information
+#' @param new_name Optional new name for the variable. If provided, the
+#'   variable will be renamed. Must not collide with existing decision tree
+#'   names.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_variable <- function(model, name, formula, display_name,
+                          description, strategy = "", group = "",
+                          source, sampling, new_name) {
+
+  # Find the matching variable row (NA-safe comparison)
+  safe_eq <- function(a, b) (is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & a == b)
+  match_idx <- which(
+    model$variables$name == name &
+    safe_eq(model$variables$strategy, strategy) &
+    safe_eq(model$variables$group, group)
+  )
+
+  if (length(match_idx) == 0) {
+    target_desc <- name
+    if (!is.na(strategy) && strategy != "") target_desc <- paste0(target_desc, ", strategy='", strategy, "'")
+    if (!is.na(group) && group != "") target_desc <- paste0(target_desc, ", group='", group, "'")
+    stop(sprintf("No variable found matching: %s", target_desc), call. = FALSE)
+  }
+
+  # Update formula if provided
+  if (!missing(formula)) {
+    formula_quo <- enquo(formula)
+    formula_expr <- quo_get_expr(formula_quo)
+    formula_str <- expr_text(formula_expr)
+    if (is.character(formula_expr) && length(formula_expr) == 1) {
+      formula_str <- formula_expr
+    }
+    model$variables$formula[match_idx] <- formula_str
+  }
+
+  # Update sampling if provided
+  if (!missing(sampling)) {
+    sampling_quo <- enquo(sampling)
+    sampling_expr <- quo_get_expr(sampling_quo)
+    if (is.character(sampling_expr)) {
+      sampling_str <- sampling_expr
+    } else {
+      sampling_str <- expr_text(sampling_expr)
+    }
+    model$variables$sampling[match_idx] <- sampling_str
+  }
+
+  # Update simple string fields if provided
+  if (!missing(display_name)) {
+    if (is.null(display_name)) display_name <- ""
+    model$variables$display_name[match_idx] <- display_name
+  }
+
+  if (!missing(description)) {
+    model$variables$description[match_idx] <- description %||% ""
+  }
+
+  if (!missing(source)) {
+    model$variables$source[match_idx] <- source
+  }
+
+  # Rename variable if new_name provided
+  if (!missing(new_name)) {
+    if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+      if (new_name %in% unique(model$trees$name)) {
+        stop(sprintf(
+          'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+          new_name
+        ), call. = FALSE)
+      }
+    }
+    model$variables$name[match_idx] <- new_name
+  }
+
+  # Validate display name consistency for all variables with this name
+  lookup_name <- if (!missing(new_name)) new_name else name
+  vars_with_same_name <- model$variables[model$variables$name == lookup_name, ]
+  if (nrow(vars_with_same_name) > 1) {
+    error_msg <- validate_variable_display_names_for_builder(vars_with_same_name, lookup_name)
+    if (error_msg != "") {
+      stop(error_msg, call. = FALSE)
+    }
+  }
+
+  model
+}
+
+#' Remove a Variable from the Model
+#'
+#' Remove one or more variable definitions from the model. If only `name` is
+#' given, all rows with that variable name are removed (all strategy/group
+#' combinations). If `strategy` and/or `group` are specified, only matching
+#' rows are removed.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the variable to remove
+#' @param strategy Optional strategy to narrow removal. If NULL, all strategies
+#'   are matched.
+#' @param group Optional group to narrow removal. If NULL, all groups are
+#'   matched.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_variable <- function(model, name, strategy = NULL, group = NULL) {
+
+  # Build the match condition
+  match_mask <- model$variables$name == name
+
+  if (!is.null(strategy)) {
+    match_mask <- match_mask & model$variables$strategy == strategy
+  }
+
+  if (!is.null(group)) {
+    match_mask <- match_mask & model$variables$group == group
+  }
+
+  if (!any(match_mask)) {
+    target_desc <- name
+    if (!is.null(strategy)) target_desc <- paste0(target_desc, ", strategy='", strategy, "'")
+    if (!is.null(group)) target_desc <- paste0(target_desc, ", group='", group, "'")
+    stop(sprintf("No variable found matching: %s", target_desc), call. = FALSE)
+  }
+
+  model$variables <- model$variables[!match_mask, ]
+
+  model
+}
+
 #' Add Strategies to Model
 #'
 #' Add one or more strategies to the model.
@@ -947,6 +2156,13 @@ add_variable <- function(model, name, formula, display_name = NULL,
 add_strategy <- function(model, name, display_name = NULL,
                         description = NULL, enabled = 1) {
 
+  # Check for duplicate strategy name
+  if (!is.null(model$strategies) && is.data.frame(model$strategies) && nrow(model$strategies) > 0) {
+    if (name %in% model$strategies$name) {
+      stop(sprintf('Duplicate strategy name "%s". Each strategy must have a unique name.', name), call. = FALSE)
+    }
+  }
+
   new_strat <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
@@ -955,6 +2171,351 @@ add_strategy <- function(model, name, display_name = NULL,
   )
 
   model$strategies <- bind_rows(model$strategies, new_strat)
+  model
+}
+
+#' Edit a Strategy in the Model
+#'
+#' Modify an existing strategy's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the strategy are updated (variables, DSA parameters,
+#' scenarios, TWSA analyses, override categories, threshold analyses, and
+#' multivariate sampling specifications).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the strategy to edit
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param enabled Optional new enabled flag (will be coerced to numeric)
+#' @param new_name Optional new name for the strategy. If provided, the strategy
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_strategy <- function(model, name, display_name, description, enabled, new_name) {
+  match_idx <- which(model$strategies$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Strategy "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (!missing(display_name)) {
+    model$strategies$display_name[match_idx] <- display_name
+  }
+
+  if (!missing(description)) {
+    model$strategies$description[match_idx] <- description
+  }
+
+  if (!missing(enabled)) {
+    model$strategies$enabled[match_idx] <- as.numeric(enabled)
+  }
+
+  if (!missing(new_name)) {
+    # Update the strategy name itself
+    model$strategies$name[match_idx] <- new_name
+
+    # Cascade rename through all downstream references
+
+    # 1. Variables
+    if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+      model$variables$strategy[model$variables$strategy %in% name] <- new_name
+    }
+
+    # 2. DSA parameters
+    if (length(model$dsa_parameters) > 0) {
+      for (i in seq_along(model$dsa_parameters)) {
+        if (identical(model$dsa_parameters[[i]]$strategy, name)) {
+          model$dsa_parameters[[i]]$strategy <- new_name
+        }
+      }
+    }
+
+    # 3. Scenarios -> variable_overrides
+    if (length(model$scenarios) > 0) {
+      for (i in seq_along(model$scenarios)) {
+        if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+          for (j in seq_along(model$scenarios[[i]]$variable_overrides)) {
+            if (identical(model$scenarios[[i]]$variable_overrides[[j]]$strategy, name)) {
+              model$scenarios[[i]]$variable_overrides[[j]]$strategy <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 4. TWSA analyses -> parameters
+    if (length(model$twsa_analyses) > 0) {
+      for (i in seq_along(model$twsa_analyses)) {
+        if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+          for (j in seq_along(model$twsa_analyses[[i]]$parameters)) {
+            if (identical(model$twsa_analyses[[i]]$parameters[[j]]$strategy, name)) {
+              model$twsa_analyses[[i]]$parameters[[j]]$strategy <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 5. Override categories -> overrides
+    if (length(model$override_categories) > 0) {
+      for (i in seq_along(model$override_categories)) {
+        if (length(model$override_categories[[i]]$overrides) > 0) {
+          for (j in seq_along(model$override_categories[[i]]$overrides)) {
+            if (identical(model$override_categories[[i]]$overrides[[j]]$strategy, name)) {
+              model$override_categories[[i]]$overrides[[j]]$strategy <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 6. Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      for (i in seq_along(model$threshold_analyses)) {
+        if (identical(model$threshold_analyses[[i]]$variable_strategy, name)) {
+          model$threshold_analyses[[i]]$variable_strategy <- new_name
+        }
+        if (!is.null(model$threshold_analyses[[i]]$condition) &&
+            identical(model$threshold_analyses[[i]]$condition$strategy, name)) {
+          model$threshold_analyses[[i]]$condition$strategy <- new_name
+        }
+      }
+    }
+
+    # 7. Multivariate sampling -> variables tibble
+    if (length(model$multivariate_sampling) > 0) {
+      for (i in seq_along(model$multivariate_sampling)) {
+        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+            nrow(model$multivariate_sampling[[i]]$variables) > 0) {
+          model$multivariate_sampling[[i]]$variables$strategy[
+            model$multivariate_sampling[[i]]$variables$strategy %in% name
+          ] <- new_name
+        }
+      }
+    }
+  }
+
+  model
+}
+
+#' Remove a Strategy from the Model
+#'
+#' Remove an existing strategy and optionally cascade-remove all downstream
+#' references (variables, DSA parameters, scenario overrides, TWSA analyses,
+#' override categories, threshold analyses, and multivariate sampling specs).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the strategy to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the strategy has
+#'   downstream dependencies, an error of class \code{"strategy_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the strategy and all
+#'   downstream references.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_strategy <- function(model, name, error_on_dependencies = FALSE) {
+  match_idx <- which(model$strategies$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Strategy "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (error_on_dependencies) {
+    deps <- list()
+
+    # Variables
+    if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+      dep_vars <- model$variables$name[model$variables$strategy %in% name]
+      if (length(dep_vars) > 0) deps$variables <- dep_vars
+    }
+
+    # DSA parameters
+    if (length(model$dsa_parameters) > 0) {
+      dep_dsa <- character(0)
+      for (i in seq_along(model$dsa_parameters)) {
+        if (identical(model$dsa_parameters[[i]]$strategy, name)) {
+          dep_dsa <- c(dep_dsa, model$dsa_parameters[[i]]$name %||% paste0("param_", i))
+        }
+      }
+      if (length(dep_dsa) > 0) deps$dsa_parameters <- dep_dsa
+    }
+
+    # Scenarios
+    if (length(model$scenarios) > 0) {
+      dep_scenarios <- list()
+      for (i in seq_along(model$scenarios)) {
+        if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+          ovr_names <- character(0)
+          for (j in seq_along(model$scenarios[[i]]$variable_overrides)) {
+            if (identical(model$scenarios[[i]]$variable_overrides[[j]]$strategy, name)) {
+              ovr_names <- c(ovr_names, model$scenarios[[i]]$variable_overrides[[j]]$name %||% paste0("override_", j))
+            }
+          }
+          if (length(ovr_names) > 0) {
+            dep_scenarios[[model$scenarios[[i]]$name]] <- ovr_names
+          }
+        }
+      }
+      if (length(dep_scenarios) > 0) deps$scenarios <- dep_scenarios
+    }
+
+    # TWSA analyses
+    if (length(model$twsa_analyses) > 0) {
+      dep_twsa <- character(0)
+      for (i in seq_along(model$twsa_analyses)) {
+        if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+          for (j in seq_along(model$twsa_analyses[[i]]$parameters)) {
+            if (identical(model$twsa_analyses[[i]]$parameters[[j]]$strategy, name)) {
+              dep_twsa <- c(dep_twsa, model$twsa_analyses[[i]]$name)
+              break
+            }
+          }
+        }
+      }
+      if (length(dep_twsa) > 0) deps$twsa_analyses <- dep_twsa
+    }
+
+    # Override categories
+    if (length(model$override_categories) > 0) {
+      dep_overrides <- list()
+      for (i in seq_along(model$override_categories)) {
+        if (length(model$override_categories[[i]]$overrides) > 0) {
+          ovr_titles <- character(0)
+          for (j in seq_along(model$override_categories[[i]]$overrides)) {
+            if (identical(model$override_categories[[i]]$overrides[[j]]$strategy, name)) {
+              ovr_titles <- c(ovr_titles, model$override_categories[[i]]$overrides[[j]]$title %||%
+                model$override_categories[[i]]$overrides[[j]]$name %||% paste0("override_", j))
+            }
+          }
+          if (length(ovr_titles) > 0) {
+            dep_overrides[[model$override_categories[[i]]$name]] <- ovr_titles
+          }
+        }
+      }
+      if (length(dep_overrides) > 0) deps$override_categories <- dep_overrides
+    }
+
+    # Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      dep_thresh <- character(0)
+      for (i in seq_along(model$threshold_analyses)) {
+        if (identical(model$threshold_analyses[[i]]$variable_strategy, name) ||
+            (!is.null(model$threshold_analyses[[i]]$condition) &&
+             identical(model$threshold_analyses[[i]]$condition$strategy, name))) {
+          dep_thresh <- c(dep_thresh, model$threshold_analyses[[i]]$name %||% paste0("threshold_", i))
+        }
+      }
+      if (length(dep_thresh) > 0) deps$threshold_analyses <- dep_thresh
+    }
+
+    # Multivariate sampling
+    if (length(model$multivariate_sampling) > 0) {
+      dep_mvs <- character(0)
+      for (i in seq_along(model$multivariate_sampling)) {
+        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+            nrow(model$multivariate_sampling[[i]]$variables) > 0 &&
+            any(model$multivariate_sampling[[i]]$variables$strategy %in% name)) {
+          dep_mvs <- c(dep_mvs, model$multivariate_sampling[[i]]$name %||% paste0("mvs_", i))
+        }
+      }
+      if (length(dep_mvs) > 0) deps$multivariate_sampling <- dep_mvs
+    }
+
+    deps <- Filter(function(x) length(x) > 0, deps)
+
+    if (length(deps) > 0) {
+      cond <- structure(
+        class = c("strategy_has_dependencies", "error", "condition"),
+        list(
+          message = sprintf('Cannot remove strategy "%s": it has downstream dependencies.', name),
+          dependencies = deps
+        )
+      )
+      stop(cond)
+    }
+  }
+
+  # Remove the strategy row
+  model$strategies <- model$strategies[-match_idx, , drop = FALSE]
+
+  # Cascade remove downstream references
+
+  # 1. Variables
+  if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+    model$variables <- model$variables[!model$variables$strategy %in% name, , drop = FALSE]
+  }
+
+  # 2. DSA parameters
+  if (length(model$dsa_parameters) > 0) {
+    keep <- vapply(model$dsa_parameters, function(p) !identical(p$strategy, name), logical(1))
+    model$dsa_parameters <- model$dsa_parameters[keep]
+  }
+
+  # 3. Scenarios -> variable_overrides
+  if (length(model$scenarios) > 0) {
+    for (i in seq_along(model$scenarios)) {
+      if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+        keep <- vapply(model$scenarios[[i]]$variable_overrides,
+                       function(o) !identical(o$strategy, name), logical(1))
+        model$scenarios[[i]]$variable_overrides <- model$scenarios[[i]]$variable_overrides[keep]
+      }
+    }
+  }
+
+  # 4. TWSA analyses -> parameters (remove entire analysis if < 2 params remain)
+  if (length(model$twsa_analyses) > 0) {
+    for (i in seq_along(model$twsa_analyses)) {
+      if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+        keep <- vapply(model$twsa_analyses[[i]]$parameters,
+                       function(p) !identical(p$strategy, name), logical(1))
+        model$twsa_analyses[[i]]$parameters <- model$twsa_analyses[[i]]$parameters[keep]
+      }
+    }
+    keep_analyses <- vapply(model$twsa_analyses,
+                            function(a) length(a$parameters) >= 2, logical(1))
+    model$twsa_analyses <- model$twsa_analyses[keep_analyses]
+  }
+
+  # 5. Override categories -> overrides
+  if (length(model$override_categories) > 0) {
+    for (i in seq_along(model$override_categories)) {
+      if (length(model$override_categories[[i]]$overrides) > 0) {
+        keep <- vapply(model$override_categories[[i]]$overrides,
+                       function(o) !identical(o$strategy, name), logical(1))
+        model$override_categories[[i]]$overrides <- model$override_categories[[i]]$overrides[keep]
+      }
+    }
+  }
+
+  # 6. Threshold analyses
+  if (length(model$threshold_analyses) > 0) {
+    keep <- vapply(model$threshold_analyses, function(a) {
+      !identical(a$variable_strategy, name) &&
+        !((!is.null(a$condition)) && identical(a$condition$strategy, name))
+    }, logical(1))
+    model$threshold_analyses <- model$threshold_analyses[keep]
+  }
+
+  # 7. Multivariate sampling
+  if (length(model$multivariate_sampling) > 0) {
+    for (i in seq_along(model$multivariate_sampling)) {
+      if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+          nrow(model$multivariate_sampling[[i]]$variables) > 0) {
+        model$multivariate_sampling[[i]]$variables <-
+          model$multivariate_sampling[[i]]$variables[
+            !model$multivariate_sampling[[i]]$variables$strategy %in% name, , drop = FALSE
+          ]
+      }
+    }
+    keep_specs <- vapply(model$multivariate_sampling, function(s) {
+      is.data.frame(s$variables) && nrow(s$variables) > 0
+    }, logical(1))
+    model$multivariate_sampling <- model$multivariate_sampling[keep_specs]
+  }
+
   model
 }
 
@@ -978,6 +2539,13 @@ add_strategy <- function(model, name, display_name = NULL,
 add_group <- function(model, name, display_name = NULL,
                      description = NULL, weight = "1", enabled = 1) {
 
+  # Check for duplicate group name
+  if (!is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
+    if (name %in% model$groups$name) {
+      stop(sprintf('Duplicate group name "%s". Each group must have a unique name.', name), call. = FALSE)
+    }
+  }
+
   new_group <- fast_tibble(
     name = name,
     display_name = display_name %||% name,
@@ -987,6 +2555,356 @@ add_group <- function(model, name, display_name = NULL,
   )
 
   model$groups <- bind_rows(model$groups, new_group)
+  model
+}
+
+#' Edit a Group in the Model
+#'
+#' Modify an existing group's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the group are updated (variables, DSA parameters,
+#' scenarios, TWSA analyses, override categories, threshold analyses, and
+#' multivariate sampling specifications).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the group to edit
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param weight Optional new weight expression (will be coerced to character)
+#' @param enabled Optional new enabled flag (will be coerced to numeric)
+#' @param new_name Optional new name for the group. If provided, the group
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_group <- function(model, name, display_name, description, weight, enabled, new_name) {
+  match_idx <- which(model$groups$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Group "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (!missing(display_name)) {
+    model$groups$display_name[match_idx] <- display_name
+  }
+
+  if (!missing(description)) {
+    model$groups$description[match_idx] <- description
+  }
+
+  if (!missing(weight)) {
+    model$groups$weight[match_idx] <- as.character(weight)
+  }
+
+  if (!missing(enabled)) {
+    model$groups$enabled[match_idx] <- as.numeric(enabled)
+  }
+
+  if (!missing(new_name)) {
+    # Update the group name itself
+    model$groups$name[match_idx] <- new_name
+
+    # Cascade rename through all downstream references
+
+    # 1. Variables
+    if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+      model$variables$group[model$variables$group %in% name] <- new_name
+    }
+
+    # 2. DSA parameters
+    if (length(model$dsa_parameters) > 0) {
+      for (i in seq_along(model$dsa_parameters)) {
+        if (identical(model$dsa_parameters[[i]]$group, name)) {
+          model$dsa_parameters[[i]]$group <- new_name
+        }
+      }
+    }
+
+    # 3. Scenarios -> variable_overrides
+    if (length(model$scenarios) > 0) {
+      for (i in seq_along(model$scenarios)) {
+        if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+          for (j in seq_along(model$scenarios[[i]]$variable_overrides)) {
+            if (identical(model$scenarios[[i]]$variable_overrides[[j]]$group, name)) {
+              model$scenarios[[i]]$variable_overrides[[j]]$group <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 4. TWSA analyses -> parameters
+    if (length(model$twsa_analyses) > 0) {
+      for (i in seq_along(model$twsa_analyses)) {
+        if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+          for (j in seq_along(model$twsa_analyses[[i]]$parameters)) {
+            if (identical(model$twsa_analyses[[i]]$parameters[[j]]$group, name)) {
+              model$twsa_analyses[[i]]$parameters[[j]]$group <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 5. Override categories -> overrides
+    if (length(model$override_categories) > 0) {
+      for (i in seq_along(model$override_categories)) {
+        if (length(model$override_categories[[i]]$overrides) > 0) {
+          for (j in seq_along(model$override_categories[[i]]$overrides)) {
+            if (identical(model$override_categories[[i]]$overrides[[j]]$group, name)) {
+              model$override_categories[[i]]$overrides[[j]]$group <- new_name
+            }
+          }
+        }
+      }
+    }
+
+    # 6. Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      for (i in seq_along(model$threshold_analyses)) {
+        if (identical(model$threshold_analyses[[i]]$variable_group, name)) {
+          model$threshold_analyses[[i]]$variable_group <- new_name
+        }
+        if (!is.null(model$threshold_analyses[[i]]$condition) &&
+            identical(model$threshold_analyses[[i]]$condition$group, name)) {
+          model$threshold_analyses[[i]]$condition$group <- new_name
+        }
+      }
+    }
+
+    # 7. Multivariate sampling -> variables tibble
+    if (length(model$multivariate_sampling) > 0) {
+      for (i in seq_along(model$multivariate_sampling)) {
+        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+            nrow(model$multivariate_sampling[[i]]$variables) > 0) {
+          model$multivariate_sampling[[i]]$variables$group[
+            model$multivariate_sampling[[i]]$variables$group %in% name
+          ] <- new_name
+        }
+      }
+    }
+  }
+
+  model
+}
+
+#' Remove a Group from the Model
+#'
+#' Remove an existing group and optionally cascade-remove all downstream
+#' references (variables, DSA parameters, scenario overrides, TWSA analyses,
+#' override categories, threshold analyses, and multivariate sampling specs).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the group to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the group has
+#'   downstream dependencies, an error of class \code{"group_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the group and all
+#'   downstream references.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_group <- function(model, name, error_on_dependencies = FALSE) {
+  match_idx <- which(model$groups$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Group "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (error_on_dependencies) {
+    deps <- list()
+
+    # Variables
+    if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+      dep_vars <- model$variables$name[model$variables$group %in% name]
+      if (length(dep_vars) > 0) deps$variables <- dep_vars
+    }
+
+    # DSA parameters
+    if (length(model$dsa_parameters) > 0) {
+      dep_dsa <- character(0)
+      for (i in seq_along(model$dsa_parameters)) {
+        if (identical(model$dsa_parameters[[i]]$group, name)) {
+          dep_dsa <- c(dep_dsa, model$dsa_parameters[[i]]$name %||% paste0("param_", i))
+        }
+      }
+      if (length(dep_dsa) > 0) deps$dsa_parameters <- dep_dsa
+    }
+
+    # Scenarios
+    if (length(model$scenarios) > 0) {
+      dep_scenarios <- list()
+      for (i in seq_along(model$scenarios)) {
+        if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+          ovr_names <- character(0)
+          for (j in seq_along(model$scenarios[[i]]$variable_overrides)) {
+            if (identical(model$scenarios[[i]]$variable_overrides[[j]]$group, name)) {
+              ovr_names <- c(ovr_names, model$scenarios[[i]]$variable_overrides[[j]]$name %||% paste0("override_", j))
+            }
+          }
+          if (length(ovr_names) > 0) {
+            dep_scenarios[[model$scenarios[[i]]$name]] <- ovr_names
+          }
+        }
+      }
+      if (length(dep_scenarios) > 0) deps$scenarios <- dep_scenarios
+    }
+
+    # TWSA analyses
+    if (length(model$twsa_analyses) > 0) {
+      dep_twsa <- character(0)
+      for (i in seq_along(model$twsa_analyses)) {
+        if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+          for (j in seq_along(model$twsa_analyses[[i]]$parameters)) {
+            if (identical(model$twsa_analyses[[i]]$parameters[[j]]$group, name)) {
+              dep_twsa <- c(dep_twsa, model$twsa_analyses[[i]]$name)
+              break
+            }
+          }
+        }
+      }
+      if (length(dep_twsa) > 0) deps$twsa_analyses <- dep_twsa
+    }
+
+    # Override categories
+    if (length(model$override_categories) > 0) {
+      dep_overrides <- list()
+      for (i in seq_along(model$override_categories)) {
+        if (length(model$override_categories[[i]]$overrides) > 0) {
+          ovr_titles <- character(0)
+          for (j in seq_along(model$override_categories[[i]]$overrides)) {
+            if (identical(model$override_categories[[i]]$overrides[[j]]$group, name)) {
+              ovr_titles <- c(ovr_titles, model$override_categories[[i]]$overrides[[j]]$title %||%
+                model$override_categories[[i]]$overrides[[j]]$name %||% paste0("override_", j))
+            }
+          }
+          if (length(ovr_titles) > 0) {
+            dep_overrides[[model$override_categories[[i]]$name]] <- ovr_titles
+          }
+        }
+      }
+      if (length(dep_overrides) > 0) deps$override_categories <- dep_overrides
+    }
+
+    # Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      dep_thresh <- character(0)
+      for (i in seq_along(model$threshold_analyses)) {
+        if (identical(model$threshold_analyses[[i]]$variable_group, name) ||
+            (!is.null(model$threshold_analyses[[i]]$condition) &&
+             identical(model$threshold_analyses[[i]]$condition$group, name))) {
+          dep_thresh <- c(dep_thresh, model$threshold_analyses[[i]]$name %||% paste0("threshold_", i))
+        }
+      }
+      if (length(dep_thresh) > 0) deps$threshold_analyses <- dep_thresh
+    }
+
+    # Multivariate sampling
+    if (length(model$multivariate_sampling) > 0) {
+      dep_mvs <- character(0)
+      for (i in seq_along(model$multivariate_sampling)) {
+        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+            nrow(model$multivariate_sampling[[i]]$variables) > 0 &&
+            any(model$multivariate_sampling[[i]]$variables$group %in% name)) {
+          dep_mvs <- c(dep_mvs, model$multivariate_sampling[[i]]$name %||% paste0("mvs_", i))
+        }
+      }
+      if (length(dep_mvs) > 0) deps$multivariate_sampling <- dep_mvs
+    }
+
+    deps <- Filter(function(x) length(x) > 0, deps)
+
+    if (length(deps) > 0) {
+      cond <- structure(
+        class = c("group_has_dependencies", "error", "condition"),
+        list(
+          message = sprintf('Cannot remove group "%s": it has downstream dependencies.', name),
+          dependencies = deps
+        )
+      )
+      stop(cond)
+    }
+  }
+
+  # Remove the group row
+  model$groups <- model$groups[-match_idx, , drop = FALSE]
+
+  # Cascade remove downstream references
+
+  # 1. Variables
+  if (is.data.frame(model$variables) && nrow(model$variables) > 0) {
+    model$variables <- model$variables[!model$variables$group %in% name, , drop = FALSE]
+  }
+
+  # 2. DSA parameters
+  if (length(model$dsa_parameters) > 0) {
+    keep <- vapply(model$dsa_parameters, function(p) !identical(p$group, name), logical(1))
+    model$dsa_parameters <- model$dsa_parameters[keep]
+  }
+
+  # 3. Scenarios -> variable_overrides
+  if (length(model$scenarios) > 0) {
+    for (i in seq_along(model$scenarios)) {
+      if (length(model$scenarios[[i]]$variable_overrides) > 0) {
+        keep <- vapply(model$scenarios[[i]]$variable_overrides,
+                       function(o) !identical(o$group, name), logical(1))
+        model$scenarios[[i]]$variable_overrides <- model$scenarios[[i]]$variable_overrides[keep]
+      }
+    }
+  }
+
+  # 4. TWSA analyses -> parameters (remove entire analysis if < 2 params remain)
+  if (length(model$twsa_analyses) > 0) {
+    for (i in seq_along(model$twsa_analyses)) {
+      if (length(model$twsa_analyses[[i]]$parameters) > 0) {
+        keep <- vapply(model$twsa_analyses[[i]]$parameters,
+                       function(p) !identical(p$group, name), logical(1))
+        model$twsa_analyses[[i]]$parameters <- model$twsa_analyses[[i]]$parameters[keep]
+      }
+    }
+    keep_analyses <- vapply(model$twsa_analyses,
+                            function(a) length(a$parameters) >= 2, logical(1))
+    model$twsa_analyses <- model$twsa_analyses[keep_analyses]
+  }
+
+  # 5. Override categories -> overrides
+  if (length(model$override_categories) > 0) {
+    for (i in seq_along(model$override_categories)) {
+      if (length(model$override_categories[[i]]$overrides) > 0) {
+        keep <- vapply(model$override_categories[[i]]$overrides,
+                       function(o) !identical(o$group, name), logical(1))
+        model$override_categories[[i]]$overrides <- model$override_categories[[i]]$overrides[keep]
+      }
+    }
+  }
+
+  # 6. Threshold analyses
+  if (length(model$threshold_analyses) > 0) {
+    keep <- vapply(model$threshold_analyses, function(a) {
+      !identical(a$variable_group, name) &&
+        !((!is.null(a$condition)) && identical(a$condition$group, name))
+    }, logical(1))
+    model$threshold_analyses <- model$threshold_analyses[keep]
+  }
+
+  # 7. Multivariate sampling
+  if (length(model$multivariate_sampling) > 0) {
+    for (i in seq_along(model$multivariate_sampling)) {
+      if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
+          nrow(model$multivariate_sampling[[i]]$variables) > 0) {
+        model$multivariate_sampling[[i]]$variables <-
+          model$multivariate_sampling[[i]]$variables[
+            !model$multivariate_sampling[[i]]$variables$group %in% name, , drop = FALSE
+          ]
+      }
+    }
+    keep_specs <- vapply(model$multivariate_sampling, function(s) {
+      is.data.frame(s$variables) && nrow(s$variables) > 0
+    }, logical(1))
+    model$multivariate_sampling <- model$multivariate_sampling[keep_specs]
+  }
+
   model
 }
 
@@ -1014,9 +2932,26 @@ add_group <- function(model, name, display_name = NULL,
 add_summary <- function(model, name, values, display_name = NULL,
                        description = NULL, type = "outcome", wtp = NULL) {
 
+  # Validate summary name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || trimws(name) == "") {
+    stop("Summary name must be a non-empty character string.", call. = FALSE)
+  }
+
+  # Validate values string
+  if (missing(values) || !is.character(values) || length(values) != 1 || is.na(values) || trimws(values) == "") {
+    stop("Summary values must be a non-empty character string.", call. = FALSE)
+  }
+
   # Validate type
- if (!type %in% c("outcome", "cost")) {
+  if (!type %in% c("outcome", "cost")) {
     stop("Summary type must be 'outcome' or 'cost'")
+  }
+
+  # Check for duplicate summary name
+  if (!is.null(model$summaries) && is.data.frame(model$summaries) && nrow(model$summaries) > 0) {
+    if (name %in% model$summaries$name) {
+      stop(sprintf("Summary '%s' already exists. Use a unique name.", name), call. = FALSE)
+    }
   }
 
   # Check for name collision with trees
@@ -1047,6 +2982,200 @@ add_summary <- function(model, name, values, display_name = NULL,
   model
 }
 
+#' Edit a Summary in the Model
+#'
+#' Modify an existing summary's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the summary are updated (threshold analyses
+#' and VBP config).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the summary to edit
+#' @param values Optional new comma-separated string of value names
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param type Optional new type: "outcome" or "cost". Changing to "cost" will
+#'   clear the WTP field.
+#' @param wtp Optional new willingness-to-pay value. Cannot be set on cost summaries.
+#' @param new_name Optional new name for the summary. If provided, the summary
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_summary <- function(model, name, values, display_name, description,
+                         type, wtp, new_name) {
+  match_idx <- which(model$summaries$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Summary "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (!missing(values)) {
+    model$summaries$values[match_idx] <- values
+  }
+
+  if (!missing(display_name)) {
+    model$summaries$display_name[match_idx] <- display_name
+  }
+
+  if (!missing(description)) {
+    model$summaries$description[match_idx] <- description
+  }
+
+  if (!missing(type)) {
+    if (!type %in% c("outcome", "cost")) {
+      stop("Summary type must be 'outcome' or 'cost'", call. = FALSE)
+    }
+    model$summaries$type[match_idx] <- type
+    # Changing to cost clears WTP
+    if (type == "cost") {
+      model$summaries$wtp[match_idx] <- NA_real_
+    }
+  }
+
+  if (!missing(wtp)) {
+    # Determine current type (possibly just changed above)
+    current_type <- model$summaries$type[match_idx]
+    if (current_type == "cost") {
+      stop(sprintf(
+        "WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.",
+        name
+      ), call. = FALSE)
+    }
+    model$summaries$wtp[match_idx] <- wtp %||% NA_real_
+  }
+
+  if (!missing(new_name)) {
+    # Name collision check with trees
+    if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+      if (new_name %in% unique(model$trees$name)) {
+        stop(sprintf(
+          'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+          new_name
+        ), call. = FALSE)
+      }
+    }
+
+    # Update the name
+    model$summaries$name[match_idx] <- new_name
+
+    # Cascade rename to threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      for (i in seq_along(model$threshold_analyses)) {
+        cond <- model$threshold_analyses[[i]]$condition
+        if (!is.null(cond)) {
+          if (identical(cond$summary, name))
+            model$threshold_analyses[[i]]$condition$summary <- new_name
+          if (identical(cond$health_summary, name))
+            model$threshold_analyses[[i]]$condition$health_summary <- new_name
+          if (identical(cond$cost_summary, name))
+            model$threshold_analyses[[i]]$condition$cost_summary <- new_name
+        }
+      }
+    }
+
+    # Cascade rename to VBP config
+    if (!is.null(model$vbp)) {
+      if (identical(model$vbp$outcome_summary, name))
+        model$vbp$outcome_summary <- new_name
+      if (identical(model$vbp$cost_summary, name))
+        model$vbp$cost_summary <- new_name
+    }
+  }
+
+  model
+}
+
+#' Remove a Summary from the Model
+#'
+#' Remove an existing summary and optionally cascade-remove all downstream
+#' references (threshold analyses and VBP config).
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the summary to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the summary has
+#'   downstream dependencies, an error of class \code{"summary_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the summary and all
+#'   downstream references.
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_summary <- function(model, name, error_on_dependencies = FALSE) {
+  match_idx <- which(model$summaries$name == name)
+  if (length(match_idx) == 0) {
+    stop(sprintf('Summary "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (error_on_dependencies) {
+    deps <- list()
+
+    # Threshold analyses
+    if (length(model$threshold_analyses) > 0) {
+      dep_thresh <- character(0)
+      for (i in seq_along(model$threshold_analyses)) {
+        cond <- model$threshold_analyses[[i]]$condition
+        if (!is.null(cond)) {
+          if (identical(cond$summary, name) ||
+              identical(cond$health_summary, name) ||
+              identical(cond$cost_summary, name)) {
+            dep_thresh <- c(dep_thresh, model$threshold_analyses[[i]]$name %||% paste0("threshold_", i))
+          }
+        }
+      }
+      if (length(dep_thresh) > 0) deps$threshold_analyses <- dep_thresh
+    }
+
+    # VBP config
+    if (!is.null(model$vbp)) {
+      vbp_refs <- character(0)
+      if (identical(model$vbp$outcome_summary, name)) vbp_refs <- c(vbp_refs, "outcome_summary")
+      if (identical(model$vbp$cost_summary, name)) vbp_refs <- c(vbp_refs, "cost_summary")
+      if (length(vbp_refs) > 0) deps$vbp <- vbp_refs
+    }
+
+    deps <- Filter(function(x) length(x) > 0, deps)
+
+    if (length(deps) > 0) {
+      cond <- structure(
+        class = c("summary_has_dependencies", "error", "condition"),
+        list(
+          message = sprintf('Cannot remove summary "%s": it has downstream dependencies.', name),
+          dependencies = deps
+        )
+      )
+      stop(cond)
+    }
+  }
+
+  # Remove the summary row
+  model$summaries <- model$summaries[-match_idx, , drop = FALSE]
+
+  # Cascade remove threshold analyses that reference this summary
+  if (length(model$threshold_analyses) > 0) {
+    keep <- vapply(model$threshold_analyses, function(a) {
+      cond <- a$condition
+      if (is.null(cond)) return(TRUE)
+      !(identical(cond$summary, name) ||
+        identical(cond$health_summary, name) ||
+        identical(cond$cost_summary, name))
+    }, logical(1))
+    model$threshold_analyses <- model$threshold_analyses[keep]
+  }
+
+  # Clear VBP config references
+  if (!is.null(model$vbp)) {
+    if (identical(model$vbp$outcome_summary, name))
+      model$vbp$outcome_summary <- ""
+    if (identical(model$vbp$cost_summary, name))
+      model$vbp$cost_summary <- ""
+  }
+
+  model
+}
+
 #' Add Table to Model
 #'
 #' Add a data table to the model.
@@ -1063,6 +3192,11 @@ add_summary <- function(model, name, values, display_name = NULL,
 #' model <- define_model("markov") |>
 #'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 add_table <- function(model, name, data, description = NULL) {
+  # Validate table name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || trimws(name) == "") {
+    stop("Table name must be a non-empty character string.", call. = FALSE)
+  }
+
   # Check for name collision with trees
   if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
     if (name %in% unique(model$trees$name)) {
@@ -1087,6 +3221,77 @@ add_table <- function(model, name, data, description = NULL) {
   model
 }
 
+#' Edit a Table in the Model
+#'
+#' Modify an existing table's data, description, or name. Only the fields that
+#' are explicitly provided will be updated.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the table to edit
+#' @param data A data frame to replace the table data with
+#' @param description Optional new description
+#' @param new_name Optional new name for the table. If provided, the table
+#'   will be renamed. Must not collide with existing decision tree or value
+#'   names.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_table <- function(model, name, data, description, new_name) {
+  if (is.null(model$tables[[name]])) {
+    stop(sprintf('Table "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (!missing(data)) {
+    model$tables[[name]]$data <- data
+  }
+
+  if (!missing(description)) {
+    model$tables[[name]]$description <- description
+  }
+
+  if (!missing(new_name)) {
+    # Check for name collision with trees
+    if (!is.null(model$trees) && is.data.frame(model$trees) && nrow(model$trees) > 0) {
+      if (new_name %in% unique(model$trees$name)) {
+        stop(sprintf(
+          'Name collision detected: "%s" is already used as a decision tree name. Please use a different name.',
+          new_name
+        ), call. = FALSE)
+      }
+    }
+    # Check for name collision with values
+    if (is.data.frame(model$values) && nrow(model$values) > 0 && new_name %in% model$values$name) {
+      stop(sprintf(
+        "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
+        new_name
+      ))
+    }
+    idx <- which(names(model$tables) == name)
+    names(model$tables)[idx] <- new_name
+  }
+
+  model
+}
+
+#' Remove a Table from the Model
+#'
+#' Remove an existing table from the model by name.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the table to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_table <- function(model, name) {
+  if (is.null(model$tables[[name]])) {
+    stop(sprintf('Table "%s" not found in model.', name), call. = FALSE)
+  }
+  model$tables[[name]] <- NULL
+  model
+}
+
 #' Add Script to Model
 #'
 #' Add an R script to the model.
@@ -1108,6 +3313,60 @@ add_script <- function(model, name, code, description = NULL) {
     code = code,
     description = description
   )
+  model
+}
+
+#' Edit a Script in the Model
+#'
+#' Modify an existing script's code, description, or name. Only the fields that
+#' are explicitly provided will be updated.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the script to edit
+#' @param code Character string containing the new R code
+#' @param description Optional new description
+#' @param new_name Optional new name for the script. If provided, the script
+#'   will be renamed.
+#'
+#' @return The modified model object
+#'
+#' @export
+edit_script <- function(model, name, code, description, new_name) {
+  if (is.null(model$scripts[[name]])) {
+    stop(sprintf('Script "%s" not found in model.', name), call. = FALSE)
+  }
+
+  if (!missing(code)) {
+    model$scripts[[name]]$code <- code
+  }
+
+  if (!missing(description)) {
+    model$scripts[[name]]$description <- description
+  }
+
+  if (!missing(new_name)) {
+    idx <- which(names(model$scripts) == name)
+    names(model$scripts)[idx] <- new_name
+  }
+
+  model
+}
+
+#' Remove a Script from the Model
+#'
+#' Remove an existing script from the model by name.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the script to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_script <- function(model, name) {
+  if (is.null(model$scripts[[name]])) {
+    stop(sprintf('Script "%s" not found in model.', name), call. = FALSE)
+  }
+  model$scripts[[name]] <- NULL
   model
 }
 
@@ -1390,8 +3649,8 @@ add_dsa_variable <- function(model, variable, low, high,
                              range_label = NULL) {
 
   # Validate variable name
-  if (!is.character(variable) || length(variable) != 1) {
-    stop("variable must be a single character string")
+  if (!is.character(variable) || length(variable) != 1 || is.na(variable) || nchar(trimws(variable)) == 0) {
+    stop("variable must be a non-empty character string", call. = FALSE)
   }
 
   # Validate strategy/group targeting for strategy/group-specific variables
@@ -2436,6 +4695,327 @@ print_override_categories <- function(model) {
     }
   }
   invisible(model)
+}
+
+#' Edit an Override Category
+#'
+#' Modify the name or general flag of an existing override category.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string identifying the category to edit
+#' @param new_name Optional new name for the category
+#' @param general Optional logical for the general flag
+#'
+#' @return The modified model object
+#' @export
+edit_override_category <- function(model, name, new_name, general) {
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == name)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found.", name), call. = FALSE)
+  }
+
+  if (!missing(general)) {
+    model$override_categories[[cat_idx]]$general <- as.logical(general)
+  }
+
+  if (!missing(new_name)) {
+    if (!is.character(new_name) || length(new_name) != 1 || nchar(trimws(new_name)) == 0) {
+      stop("Override category name must be a non-empty character string", call. = FALSE)
+    }
+    # Case-insensitive duplicate check excluding self
+    if (length(model$override_categories) > 1) {
+      other_names <- tolower(sapply(model$override_categories[-cat_idx], function(c) c$name))
+      if (tolower(new_name) %in% other_names) {
+        stop(sprintf("Override category '%s' already exists", new_name), call. = FALSE)
+      }
+    }
+    model$override_categories[[cat_idx]]$name <- new_name
+  }
+
+  model
+}
+
+#' Remove an Override Category
+#'
+#' Remove an existing override category and all its overrides.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string identifying the category to remove
+#'
+#' @return The modified model object
+#' @export
+remove_override_category <- function(model, name) {
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == name)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found.", name), call. = FALSE)
+  }
+  model$override_categories <- model$override_categories[-cat_idx]
+  model
+}
+
+#' Edit an Override Control
+#'
+#' Modify an existing override control within a category. The override is
+#' identified by its composite key of category, type, name, strategy, and group.
+#'
+#' @param model An oq_model_builder object
+#' @param category Character string naming the category containing the override
+#' @param type Character string: "variable" or "setting" (current type)
+#' @param name Character string for the variable or setting name (current name)
+#' @param strategy Current strategy targeting (default: "")
+#' @param group Current group targeting (default: "")
+#' @param new_type Optional new type
+#' @param new_name Optional new name
+#' @param new_strategy Optional new strategy
+#' @param new_group Optional new group
+#' @param title Optional new title
+#' @param description Optional new description
+#' @param expression Optional new expression (supports NSE)
+#' @param input_type Optional new input type
+#' @param min Optional new minimum value
+#' @param max Optional new maximum value
+#' @param step_size Optional new step size
+#' @param options Optional new dropdown options
+#' @param general Optional new general flag
+#'
+#' @return The modified model object
+#' @export
+edit_override <- function(model, category, type, name, strategy = "", group = "",
+                          new_type, new_name, new_strategy, new_group,
+                          title, description, expression,
+                          input_type, min, max, step_size, options, general) {
+
+  # Find category
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == category)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found.", category), call. = FALSE)
+  }
+
+  # Find override by composite key
+  existing_overrides <- model$override_categories[[cat_idx]]$overrides
+  ovr_idx <- 0L
+  if (length(existing_overrides) > 0) {
+    for (i in seq_along(existing_overrides)) {
+      ovr <- existing_overrides[[i]]
+      if (ovr$type == type && ovr$name == name &&
+          ovr$strategy == as.character(strategy) &&
+          ovr$group == as.character(group)) {
+        ovr_idx <- i
+        break
+      }
+    }
+  }
+  if (ovr_idx == 0L) {
+    stop(sprintf(
+      "Override for %s '%s'%s%s not found in category '%s'.",
+      type, name,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      category
+    ), call. = FALSE)
+  }
+
+  ovr <- existing_overrides[[ovr_idx]]
+
+  # Simple field updates
+  if (!missing(title)) {
+    if (!is.character(title) || length(title) != 1 || nchar(trimws(title)) == 0) {
+      stop("Override title must be a non-empty character string", call. = FALSE)
+    }
+    ovr$title <- title
+  }
+
+  if (!missing(description)) {
+    ovr$description <- description %||% ""
+  }
+
+  if (!missing(general)) {
+    ovr$general <- as.logical(general)
+  }
+
+  # Expression update (NSE)
+  if (!missing(expression)) {
+    expr_quo <- enquo(expression)
+    expr_val <- quo_get_expr(expr_quo)
+
+    if (is.numeric(expr_val)) {
+      expression_str <- as.character(expr_val)
+    } else if (is.character(expr_val) && length(expr_val) == 1) {
+      expression_str <- expr_val
+    } else {
+      expression_str <- expr_text(expr_val)
+    }
+
+    if (nchar(trimws(expression_str)) == 0) {
+      stop("Override expression must be non-empty", call. = FALSE)
+    }
+    ovr$overridden_expression <- expression_str
+  }
+
+  # Re-keying
+  if (!missing(new_type) || !missing(new_name) || !missing(new_strategy) || !missing(new_group)) {
+    eff_type <- if (!missing(new_type)) new_type else ovr$type
+    eff_name <- if (!missing(new_name)) new_name else ovr$name
+    eff_strategy <- if (!missing(new_strategy)) as.character(new_strategy) else ovr$strategy
+    eff_group <- if (!missing(new_group)) as.character(new_group) else ovr$group
+
+    # Duplicate check excluding self
+    if (length(existing_overrides) > 1) {
+      for (i in seq_along(existing_overrides)) {
+        if (i == ovr_idx) next
+        other <- existing_overrides[[i]]
+        if (other$type == eff_type && other$name == eff_name &&
+            other$strategy == eff_strategy && other$group == eff_group) {
+          stop(sprintf(
+            "An override for %s '%s'%s%s already exists in category '%s'",
+            eff_type, eff_name,
+            if (eff_strategy != "") paste0(" (strategy: ", eff_strategy, ")") else "",
+            if (eff_group != "") paste0(" (group: ", eff_group, ")") else "",
+            category
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    # Type validation
+    if (eff_type == "setting") {
+      if (eff_strategy != "" || eff_group != "") {
+        stop("Strategy and group cannot be specified for setting overrides", call. = FALSE)
+      }
+      valid_settings <- c(
+        "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+        "discount_cost", "discount_outcomes", "half_cycle_method",
+        "reduce_state_cycle", "days_per_year"
+      )
+      if (!(eff_name %in% valid_settings)) {
+        stop(sprintf(
+          "Invalid override setting name: '%s'. Valid settings: %s",
+          eff_name, paste(valid_settings, collapse = ", ")
+        ), call. = FALSE)
+      }
+    }
+
+    if (eff_type == "variable") {
+      validate_variable_targeting(model, eff_name, eff_strategy, eff_group,
+                                  "Override", "edit_override")
+    }
+
+    ovr$type <- eff_type
+    ovr$name <- eff_name
+    ovr$strategy <- eff_strategy
+    ovr$group <- eff_group
+  }
+
+  # input_type change
+  if (!missing(input_type)) {
+    valid_input_types <- c("numeric", "slider", "dropdown", "formula", "timeframe")
+    if (!input_type %in% valid_input_types) {
+      stop(paste0("Override input_type must be one of: ", paste(valid_input_types, collapse = ", ")),
+           call. = FALSE)
+    }
+
+    if (input_type != ovr$input_type) {
+      # Rebuild input_config entirely
+      ovr$input_config <- switch(input_type,
+        "numeric" = list(
+          min = if (!missing(min)) min else 0,
+          max = if (!missing(max)) max else 100
+        ),
+        "slider" = list(
+          min = if (!missing(min)) min else 0,
+          max = if (!missing(max)) max else 1,
+          step_size = if (!missing(step_size)) step_size else 0.05
+        ),
+        "dropdown" = list(
+          options = if (!missing(options)) options else list()
+        ),
+        "formula" = list(),
+        "timeframe" = list()
+      )
+      ovr$input_type <- input_type
+    } else {
+      # Same input_type, update config fields in-place
+      if (!missing(min)) ovr$input_config$min <- min
+      if (!missing(max)) ovr$input_config$max <- max
+      if (!missing(step_size)) ovr$input_config$step_size <- step_size
+      if (!missing(options)) ovr$input_config$options <- options
+    }
+  } else {
+    # No input_type change, but config fields may be updated
+    if (!missing(min)) ovr$input_config$min <- min
+    if (!missing(max)) ovr$input_config$max <- max
+    if (!missing(step_size)) ovr$input_config$step_size <- step_size
+    if (!missing(options)) ovr$input_config$options <- options
+  }
+
+  # Validate min < max using effective values
+  eff_min <- if (!missing(min)) min else ovr$input_config$min
+  eff_max <- if (!missing(max)) max else ovr$input_config$max
+  if (!is.null(eff_min) && !is.null(eff_max)) {
+    if (eff_min >= eff_max) {
+      stop(sprintf("Override min (%s) must be less than max (%s)", eff_min, eff_max), call. = FALSE)
+    }
+  }
+
+  # Validate step_size > 0
+  eff_step <- if (!missing(step_size)) step_size else ovr$input_config$step_size
+  if (!is.null(eff_step) && eff_step <= 0) {
+    stop("Override step_size must be greater than 0", call. = FALSE)
+  }
+
+  # Write back
+  model$override_categories[[cat_idx]]$overrides[[ovr_idx]] <- ovr
+
+  model
+}
+
+#' Remove an Override Control
+#'
+#' Remove an existing override control from a category.
+#'
+#' @param model An oq_model_builder object
+#' @param category Character string naming the category containing the override
+#' @param type Character string: "variable" or "setting"
+#' @param name Character string for the variable or setting name
+#' @param strategy Strategy targeting (default: "")
+#' @param group Group targeting (default: "")
+#'
+#' @return The modified model object
+#' @export
+remove_override <- function(model, category, type, name, strategy = "", group = "") {
+  # Find category
+  cat_idx <- which(sapply(model$override_categories, function(c) c$name) == category)
+  if (length(cat_idx) == 0) {
+    stop(sprintf("Override category '%s' not found.", category), call. = FALSE)
+  }
+
+  # Find override by composite key
+  existing_overrides <- model$override_categories[[cat_idx]]$overrides
+  ovr_idx <- 0L
+  if (length(existing_overrides) > 0) {
+    for (i in seq_along(existing_overrides)) {
+      ovr <- existing_overrides[[i]]
+      if (ovr$type == type && ovr$name == name &&
+          ovr$strategy == as.character(strategy) &&
+          ovr$group == as.character(group)) {
+        ovr_idx <- i
+        break
+      }
+    }
+  }
+  if (ovr_idx == 0L) {
+    stop(sprintf(
+      "Override for %s '%s'%s%s not found in category '%s'.",
+      type, name,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      category
+    ), call. = FALSE)
+  }
+
+  model$override_categories[[cat_idx]]$overrides <- model$override_categories[[cat_idx]]$overrides[-ovr_idx]
+
+  model
 }
 
 # ============================================================================

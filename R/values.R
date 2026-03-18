@@ -105,6 +105,10 @@ check_values_df <- function(x) {
          call. = FALSE)
   }
 
+  # Validate display_name/description consistency
+  error_msg <- validate_value_display_names(x)
+  if (error_msg != "") stop(error_msg, call. = FALSE)
+
   # Validate "All" / "All Other" rules
   validate_all_other_rules(x)
 }

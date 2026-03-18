@@ -206,6 +206,14 @@ read_model <- function(path) {
     model$psa <- NULL
   }
 
+  # Read documentation sheet
+  if ("documentation" %in% names(model) && is.data.frame(model$documentation) &&
+      nrow(model$documentation) > 0 && "text" %in% names(model$documentation)) {
+    model$documentation <- as.character(model$documentation$text[1])
+  } else {
+    model$documentation <- NULL
+  }
+
   # Read decision_tree configuration sheet
   if ("decision_tree" %in% names(model) && is.data.frame(model$decision_tree) && nrow(model$decision_tree) > 0) {
     model$decision_tree <- as.list(model$decision_tree[1, ])
@@ -982,6 +990,36 @@ format_missing_display_names_table <- function(vars_df, missing_indices) {
   format_dataframe_as_markdown_table(table_data)
 }
 
+#' Format Conflicting Value Fields as Table
+#'
+#' Helper function to format conflicting value field information as a markdown-style table.
+#' Used in validation error messages for value display_name/description consistency.
+#'
+#' @param values_df Dataframe of values with the same name
+#' @param field_name The field that has conflicting values (e.g., "display_name" or "description")
+#'
+#' @return Formatted table string
+#' @keywords internal
+format_conflicting_value_fields_table <- function(values_df, field_name) {
+  table_data <- data.frame(
+    State = character(nrow(values_df)),
+    Destination = character(nrow(values_df)),
+    stringsAsFactors = FALSE
+  )
+  table_data[[field_name]] <- character(nrow(values_df))
+
+  for (i in seq_len(nrow(values_df))) {
+    state_val <- values_df$state[i]
+    dest_val <- values_df$destination[i]
+
+    table_data$State[i] <- if (!is.na(state_val) && state_val != "") state_val else "NA"
+    table_data$Destination[i] <- if (!is.na(dest_val) && dest_val != "") dest_val else "NA"
+    table_data[[field_name]][i] <- as.character(values_df[[field_name]][i])
+  }
+
+  format_dataframe_as_markdown_table(table_data)
+}
+
 #' Validate Display Names for Variables (Builder Context)
 #'
 #' Validates display name consistency for variables being added via the R model builder.
@@ -1022,6 +1060,90 @@ validate_variable_display_names_for_builder <- function(vars_df, var_name) {
   )
 
   return(error_msg)
+}
+
+#' Validate Value Display Names and Descriptions
+#'
+#' Ensures that for values with multiple rows (different state/destination),
+#' display_name and description are consistent across all rows with the same name.
+#'
+#' @param df Data frame containing values with columns: name, display_name, description, state, destination
+#'
+#' @return Empty string if valid, error message if invalid
+#' @keywords internal
+validate_value_display_names <- function(df) {
+  value_names <- unique(df$name)
+
+  for (val_name in value_names) {
+    if (is.na(val_name)) next
+    val_rows <- df[!is.na(df$name) & df$name == val_name, ]
+
+    if (nrow(val_rows) <= 1) next
+
+    # Check display_name consistency
+    display_names <- val_rows$display_name
+    display_names <- display_names[!is.na(display_names)]
+    if (length(unique(display_names)) > 1) {
+      table_string <- format_conflicting_value_fields_table(val_rows, "display_name")
+      return(sprintf(
+        "Value '%s': display_name must be consistent across all definitions.\n\nConflicting values found:\n\n%s",
+        val_name, table_string
+      ))
+    }
+
+    # Check description consistency
+    descriptions <- val_rows$description
+    descriptions <- descriptions[!is.na(descriptions)]
+    if (length(unique(descriptions)) > 1) {
+      table_string <- format_conflicting_value_fields_table(val_rows, "description")
+      return(sprintf(
+        "Value '%s': description must be consistent across all definitions.\n\nConflicting values found:\n\n%s",
+        val_name, table_string
+      ))
+    }
+  }
+
+  return("")
+}
+
+#' Validate Value Display Names for Builder Context
+#'
+#' Validates display_name and description consistency for values being added via
+#' the R model builder. Called after each add_value() to catch conflicts early.
+#'
+#' @param values_df Dataframe of values with the same name
+#' @param value_name The value name being validated
+#'
+#' @return Empty string if valid, error message if invalid
+#' @keywords internal
+validate_value_display_names_for_builder <- function(values_df, value_name) {
+  if (nrow(values_df) <= 1) {
+    return("")
+  }
+
+  # Check display_name consistency
+  display_names <- values_df$display_name
+  display_names <- display_names[!is.na(display_names)]
+  if (length(unique(display_names)) > 1) {
+    table_string <- format_conflicting_value_fields_table(values_df, "display_name")
+    return(sprintf(
+      "Value '%s': display_name must be consistent across all definitions.\n\nConflicting values found:\n\n%s",
+      value_name, table_string
+    ))
+  }
+
+  # Check description consistency
+  descriptions <- values_df$description
+  descriptions <- descriptions[!is.na(descriptions)]
+  if (length(unique(descriptions)) > 1) {
+    table_string <- format_conflicting_value_fields_table(values_df, "description")
+    return(sprintf(
+      "Value '%s': description must be consistent across all definitions.\n\nConflicting values found:\n\n%s",
+      value_name, table_string
+    ))
+  }
+
+  return("")
 }
 
 check_tbl <- function(df, spec, context) {
@@ -1097,6 +1219,14 @@ check_tbl <- function(df, spec, context) {
     }
     # Then auto-generate for missing display names
     df <- auto_generate_display_name_variables(df)
+  }
+
+  # Validate value display_name/description consistency (values have state/destination but not strategy/group)
+  if ("display_name" %in% spec_cn &&
+      all(c("state", "destination") %in% colnames(df)) &&
+      !all(c("strategy", "group") %in% colnames(df))) {
+    error_msg <- validate_value_display_names(df)
+    if (error_msg != "") stop(error_msg, call. = FALSE)
   }
 
   # Use only the columns defined in the spec
@@ -1175,6 +1305,79 @@ normalize_model_nulls <- function(model) {
 
 #' Normalize and Validate Model Structure
 #'
+#' Validate model settings
+#'
+#' @param settings A list of model settings
+#' @param model_type The canonical model type string
+#' @keywords internal
+validate_settings <- function(settings, model_type) {
+  valid_units <- c("days", "weeks", "months", "years")
+  valid_cycle_units <- c(valid_units, "cycles")
+
+  # Non-decision-tree models require timeframe and cycle settings
+  if (model_type != "decision_tree") {
+    if (is.null(settings[["timeframe"]])) {
+      stop("Model settings must include 'timeframe'.", call. = FALSE)
+    }
+    if (is.null(settings[["timeframe_unit"]])) {
+      stop("Model settings must include 'timeframe_unit'.", call. = FALSE)
+    }
+    if (is.null(settings[["cycle_length"]])) {
+      stop("Model settings must include 'cycle_length'.", call. = FALSE)
+    }
+    if (is.null(settings[["cycle_length_unit"]])) {
+      stop("Model settings must include 'cycle_length_unit'.", call. = FALSE)
+    }
+
+    tf <- suppressWarnings(as.numeric(settings[["timeframe"]]))
+    if (is.na(tf)) {
+      stop(sprintf("Setting 'timeframe' must be numeric, got '%s'.", settings[["timeframe"]]), call. = FALSE)
+    }
+    if (tf <= 0) {
+      stop(sprintf("Setting 'timeframe' must be positive, got %s.", tf), call. = FALSE)
+    }
+
+    cl <- suppressWarnings(as.numeric(settings[["cycle_length"]]))
+    if (is.na(cl)) {
+      stop(sprintf("Setting 'cycle_length' must be numeric, got '%s'.", settings[["cycle_length"]]), call. = FALSE)
+    }
+    if (cl <= 0) {
+      stop(sprintf("Setting 'cycle_length' must be positive, got %s.", cl), call. = FALSE)
+    }
+
+    tu <- tolower(as.character(settings[["timeframe_unit"]]))
+    if (!tu %in% valid_cycle_units) {
+      stop(sprintf("Invalid timeframe_unit '%s'. Valid options: %s",
+                   settings[["timeframe_unit"]], paste(valid_cycle_units, collapse = ", ")), call. = FALSE)
+    }
+
+    cu <- tolower(as.character(settings[["cycle_length_unit"]]))
+    if (!cu %in% valid_cycle_units) {
+      stop(sprintf("Invalid cycle_length_unit '%s'. Valid options: %s",
+                   settings[["cycle_length_unit"]], paste(valid_cycle_units, collapse = ", ")), call. = FALSE)
+    }
+  }
+
+  # Validate discount rates (all model types)
+  for (field in c("discount_cost", "discount_outcomes")) {
+    val <- settings[[field]]
+    if (!is.null(val)) {
+      num_val <- suppressWarnings(as.numeric(val))
+      if (!is.na(num_val)) {
+        if (num_val < 0) {
+          stop(sprintf("Setting '%s' must be non-negative, got %s.", field, num_val), call. = FALSE)
+        }
+        if (num_val > 100) {
+          stop(sprintf("Setting '%s' is %s, which exceeds 100. Discount rates are specified as percentages (e.g., 3 for 3%%).",
+                       field, num_val), call. = FALSE)
+        }
+      } else {
+        stop(sprintf("Setting '%s' must be numeric, got '%s'.", field, val), call. = FALSE)
+      }
+    }
+  }
+}
+
 #' Applies type-specific CSV specs to enforce correct model structure.
 #' Used by all three input paths (Excel, JSON, R Builder) to ensure consistency.
 #'
@@ -1347,6 +1550,13 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
   # Ensure psa is valid if present
   if (!is.null(model$psa) && !is.list(model$psa)) {
     model$psa <- NULL
+  }
+
+  # Ensure documentation is valid if present
+  if (!is.null(model$documentation)) {
+    if (!is.character(model$documentation) || length(model$documentation) != 1) {
+      model$documentation <- NULL
+    }
   }
 
   # Ensure override_categories exists and is valid
@@ -1821,6 +2031,15 @@ read_model_json <- function(json_string) {
       }
     } else {
       model$psa <- NULL
+    }
+  }
+
+  # Parse documentation from JSON
+  if (!is.null(model$documentation)) {
+    if (is.character(model$documentation) && length(model$documentation) == 1) {
+      # Already valid
+    } else {
+      model$documentation <- NULL
     }
   }
 
@@ -2473,6 +2692,11 @@ write_model_json <- function(model) {
   # Decision tree configuration
   if (!is.null(model$decision_tree)) {
     json_model$decision_tree <- model$decision_tree
+  }
+
+  # Documentation
+  if (!is.null(model$documentation)) {
+    json_model$documentation <- model$documentation
   }
 
   # Convert override_categories to array format

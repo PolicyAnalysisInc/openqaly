@@ -114,6 +114,45 @@ run_model <- function(model, progress = NULL, ...) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
 
+  # Validate settings and structural requirements before running
+  model_type <- tolower(model$settings$model_type %||% "markov")
+  validate_settings(model$settings, model_type)
+
+  if (model_type %in% c("markov", "psm", "custom_psm")) {
+    if (is.null(model$states) || !is.data.frame(model$states) || nrow(model$states) == 0) {
+      stop(sprintf("Model type '%s' requires at least one state.", model_type), call. = FALSE)
+    }
+  }
+  if (model_type != "decision_tree") {
+    if (is.null(model$strategies) || !is.data.frame(model$strategies) || nrow(model$strategies) == 0) {
+      stop("Model must have at least one strategy defined.", call. = FALSE)
+    }
+  }
+
+  # Validate variable strategy/group cross-references
+  if (!is.null(model$variables) && is.data.frame(model$variables) && nrow(model$variables) > 0) {
+    if ("strategy" %in% names(model$variables) &&
+        !is.null(model$strategies) && is.data.frame(model$strategies) && nrow(model$strategies) > 0) {
+      var_strategies <- unique(model$variables$strategy[model$variables$strategy != "" & !is.na(model$variables$strategy)])
+      invalid_strats <- setdiff(var_strategies, model$strategies$name)
+      if (length(invalid_strats) > 0) {
+        stop(sprintf('Variable(s) reference undefined strategy(ies): "%s". Defined strategies are: "%s".',
+                     paste(invalid_strats, collapse = '", "'),
+                     paste(model$strategies$name, collapse = '", "')), call. = FALSE)
+      }
+    }
+    if ("group" %in% names(model$variables) &&
+        !is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
+      var_groups <- unique(model$variables$group[model$variables$group != "" & !is.na(model$variables$group)])
+      invalid_groups <- setdiff(var_groups, model$groups$name)
+      if (length(invalid_groups) > 0) {
+        stop(sprintf('Variable(s) reference undefined group(s): "%s". Defined groups are: "%s".',
+                     paste(invalid_groups, collapse = '", "'),
+                     paste(model$groups$name, collapse = '", "')), call. = FALSE)
+      }
+    }
+  }
+
   # Capture the extra arguments
   dots <- list(...)
 

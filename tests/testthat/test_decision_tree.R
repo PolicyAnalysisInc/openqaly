@@ -1057,3 +1057,393 @@ test_that("non-colliding tree names work fine", {
   expect_false(is.null(model$trees))
   expect_equal(nrow(model$trees), 3)
 })
+
+# ==============================================================================
+# edit_tree_node Tests
+# ==============================================================================
+
+test_that("edit_tree_node edits formula with unquoted expression", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    edit_tree_node("t", "left", formula = 0.7)
+
+  expect_equal(model$trees$formula[model$trees$node == "left"], "0.7")
+})
+
+test_that("edit_tree_node edits formula with quoted string", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    edit_tree_node("t", "left", formula = "C")
+
+  expect_equal(model$trees$formula[model$trees$node == "left"], "C")
+})
+
+test_that("edit_tree_node edits tags", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    edit_tree_node("t", "root", tags = "my_tag")
+
+  expect_equal(model$trees$tags[model$trees$node == "root"], "my_tag")
+
+  # Update tag to new value
+  model <- edit_tree_node(model, "t", "root", tags = "new_tag")
+  expect_equal(model$trees$tags[model$trees$node == "root"], "new_tag")
+
+  # Set tag to NA
+  model <- edit_tree_node(model, "t", "root", tags = NA)
+  expect_true(is.na(model$trees$tags[model$trees$node == "root"]))
+})
+
+test_that("edit_tree_node edits parent", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    add_tree_node("t", "right", parent = "root", formula = "C") |>
+    edit_tree_node("t", "left", parent = "right")
+
+  expect_equal(model$trees$parent[model$trees$node == "left"], "right")
+})
+
+test_that("edit_tree_node renames node and cascades to children", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    add_tree_node("t", "right", parent = "root", formula = "C") |>
+    edit_tree_node("t", "root", new_node_name = "top")
+
+  expect_equal(model$trees$node[1], "top")
+  expect_equal(model$trees$parent[model$trees$node == "left"], "top")
+  expect_equal(model$trees$parent[model$trees$node == "right"], "top")
+})
+
+test_that("edit_tree_node renames node cascades in 3-level tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "mid", parent = "root", formula = 0.5) |>
+    add_tree_node("t", "leaf", parent = "mid", formula = 0.3) |>
+    edit_tree_node("t", "mid", new_node_name = "middle")
+
+  expect_equal(model$trees$parent[model$trees$node == "leaf"], "middle")
+  expect_equal(model$trees$parent[model$trees$node == "middle"], "root")
+})
+
+test_that("edit_tree_node renames tree and cascades to decision_tree config", {
+  model <- define_model("markov") |>
+    add_tree_node("old_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("old_tree", "left", parent = "root", formula = 0.5) |>
+    set_decision_tree("old_tree", duration = 30, duration_unit = "days") |>
+    edit_tree_node("old_tree", "root", new_tree_name = "new_tree")
+
+  expect_true(all(model$trees$name == "new_tree"))
+  expect_equal(model$decision_tree$tree_name, "new_tree")
+})
+
+test_that("edit_tree_node renames both node and tree simultaneously", {
+  model <- define_model("markov") |>
+    add_tree_node("old_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("old_tree", "left", parent = "root", formula = 0.5) |>
+    set_decision_tree("old_tree", duration = 30, duration_unit = "days") |>
+    edit_tree_node("old_tree", "root", new_node_name = "top", new_tree_name = "new_tree")
+
+  expect_equal(model$trees$node[1], "top")
+  expect_equal(model$trees$parent[model$trees$node == "left"], "top")
+  expect_true(all(model$trees$name == "new_tree"))
+  expect_equal(model$decision_tree$tree_name, "new_tree")
+})
+
+test_that("edit_tree_node no-op call works", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1)
+
+  model2 <- edit_tree_node(model, "t", "root")
+  expect_equal(model$trees, model2$trees)
+})
+
+test_that("edit_tree_node errors on node not found", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1)
+
+  expect_error(
+    edit_tree_node(model, "t", "nonexistent"),
+    'not found'
+  )
+})
+
+test_that("edit_tree_node errors on new_node_name conflict in same tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.5)
+
+  expect_error(
+    edit_tree_node(model, "t", "left", new_node_name = "root"),
+    'already exists'
+  )
+})
+
+test_that("edit_tree_node allows node name that exists in different tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t1", "root", parent = NA, formula = 1) |>
+    add_tree_node("t1", "left", parent = "root", formula = 0.5) |>
+    add_tree_node("t2", "root", parent = NA, formula = 1) |>
+    add_tree_node("t2", "node_a", parent = "root", formula = 0.5)
+
+  # Renaming "left" in t1 to "node_a" should work since "node_a" is in t2, not t1
+  model2 <- edit_tree_node(model, "t1", "left", new_node_name = "node_a")
+  expect_equal(model2$trees$node[model2$trees$name == "t1" & model2$trees$node == "node_a"], "node_a")
+})
+
+test_that("edit_tree_node on non-config tree leaves decision_tree intact", {
+  model <- define_model("markov") |>
+    add_tree_node("config_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("other_tree", "root", parent = NA, formula = 1) |>
+    set_decision_tree("config_tree", duration = 30, duration_unit = "days") |>
+    edit_tree_node("other_tree", "root", formula = 0.5)
+
+  expect_equal(model$decision_tree$tree_name, "config_tree")
+})
+
+test_that("edit_tree_node does not affect nodes in other trees", {
+  model <- define_model("markov") |>
+    add_tree_node("t1", "root", parent = NA, formula = 1) |>
+    add_tree_node("t1", "left", parent = "root", formula = 0.5) |>
+    add_tree_node("t2", "root", parent = NA, formula = 1) |>
+    add_tree_node("t2", "left", parent = "root", formula = 0.8)
+
+  model2 <- edit_tree_node(model, "t1", "left", formula = 0.9)
+  expect_equal(model2$trees$formula[model2$trees$name == "t2" & model2$trees$node == "left"], "0.8")
+})
+
+# ==============================================================================
+# remove_tree_node Tests
+# ==============================================================================
+
+test_that("remove_tree_node removes leaf node", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    add_tree_node("t", "right", parent = "root", formula = "C") |>
+    remove_tree_node("t", "left")
+
+  expect_equal(nrow(model$trees), 2)
+  expect_false("left" %in% model$trees$node)
+})
+
+test_that("remove_tree_node recursively removes descendants in 3-level tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "mid", parent = "root", formula = 0.5) |>
+    add_tree_node("t", "leaf1", parent = "mid", formula = 0.3) |>
+    add_tree_node("t", "leaf2", parent = "mid", formula = "C") |>
+    add_tree_node("t", "other", parent = "root", formula = "C") |>
+    remove_tree_node("t", "mid")
+
+  expect_equal(nrow(model$trees), 2)
+  expect_equal(sort(model$trees$node), c("other", "root"))
+})
+
+test_that("remove_tree_node removing root clears entire tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.6) |>
+    add_tree_node("t", "right", parent = "root", formula = "C") |>
+    remove_tree_node("t", "root")
+
+  expect_null(model$trees)
+})
+
+test_that("remove_tree_node removing root with multiple trees preserves other tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t1", "root", parent = NA, formula = 1) |>
+    add_tree_node("t1", "left", parent = "root", formula = 0.5) |>
+    add_tree_node("t2", "root", parent = NA, formula = 1) |>
+    add_tree_node("t2", "child", parent = "root", formula = 0.5) |>
+    remove_tree_node("t1", "root")
+
+  expect_equal(nrow(model$trees), 2)
+  expect_true(all(model$trees$name == "t2"))
+})
+
+test_that("remove_tree_node from non-config tree leaves decision_tree intact", {
+  model <- define_model("markov") |>
+    add_tree_node("config_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("other_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("other_tree", "left", parent = "root", formula = 0.5) |>
+    set_decision_tree("config_tree", duration = 30, duration_unit = "days") |>
+    remove_tree_node("other_tree", "left")
+
+  expect_equal(model$decision_tree$tree_name, "config_tree")
+})
+
+test_that("remove_tree_node removing all nodes of non-config tree preserves other tree rows", {
+  model <- define_model("markov") |>
+    add_tree_node("config_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("other_tree", "root", parent = NA, formula = 1) |>
+    set_decision_tree("config_tree", duration = 30, duration_unit = "days") |>
+    remove_tree_node("other_tree", "root")
+
+  expect_equal(nrow(model$trees), 1)
+  expect_equal(model$trees$name[1], "config_tree")
+  expect_equal(model$decision_tree$tree_name, "config_tree")
+})
+
+test_that("remove_tree_node clears decision_tree when last node of config tree removed", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    remove_tree_node("t", "root")
+
+  expect_null(model$decision_tree)
+  expect_null(model$trees)
+})
+
+test_that("remove_tree_node sets trees to NULL when all trees emptied", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    remove_tree_node("t", "root")
+
+  expect_null(model$trees)
+})
+
+test_that("remove_tree_node errors on node not found", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1)
+
+  expect_error(
+    remove_tree_node(model, "t", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_tree_node errors on tree not found", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1)
+
+  expect_error(
+    remove_tree_node(model, "nonexistent", "root"),
+    "not found"
+  )
+})
+
+# ==============================================================================
+# remove_tree Tests
+# ==============================================================================
+
+test_that("remove_tree removes tree with multiple trees remaining", {
+  model <- define_model("markov") |>
+    add_tree_node("t1", "root", parent = NA, formula = 1) |>
+    add_tree_node("t1", "left", parent = "root", formula = 0.5) |>
+    add_tree_node("t2", "root", parent = NA, formula = 1) |>
+    remove_tree("t1")
+
+  expect_equal(nrow(model$trees), 1)
+  expect_equal(model$trees$name[1], "t2")
+})
+
+test_that("remove_tree for non-config tree leaves decision_tree config intact", {
+  model <- define_model("markov") |>
+    add_tree_node("config_tree", "root", parent = NA, formula = 1) |>
+    add_tree_node("other_tree", "root", parent = NA, formula = 1) |>
+    set_decision_tree("config_tree", duration = 30, duration_unit = "days") |>
+    remove_tree("other_tree")
+
+  expect_equal(model$decision_tree$tree_name, "config_tree")
+})
+
+test_that("remove_tree for config tree clears decision_tree", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    add_tree_node("t", "left", parent = "root", formula = 0.5) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    remove_tree("t")
+
+  expect_null(model$decision_tree)
+})
+
+test_that("remove_tree sets trees to NULL when only tree removed", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    remove_tree("t")
+
+  expect_null(model$trees)
+})
+
+test_that("remove_tree errors on tree not found", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1)
+
+  expect_error(
+    remove_tree(model, "nonexistent"),
+    "not found"
+  )
+})
+
+# ==============================================================================
+# edit_decision_tree Tests
+# ==============================================================================
+
+test_that("edit_decision_tree edits tree_name", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    edit_decision_tree(tree_name = "new_tree")
+
+  expect_equal(model$decision_tree$tree_name, "new_tree")
+})
+
+test_that("edit_decision_tree edits duration with unquoted expression", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    edit_decision_tree(duration = 60)
+
+  expect_equal(model$decision_tree$duration, "60")
+})
+
+test_that("edit_decision_tree edits duration with quoted string", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    edit_decision_tree(duration = "some_var")
+
+  expect_equal(model$decision_tree$duration, "some_var")
+})
+
+test_that("edit_decision_tree edits duration_unit", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days") |>
+    edit_decision_tree(duration_unit = "weeks")
+
+  expect_equal(model$decision_tree$duration_unit, "weeks")
+})
+
+test_that("edit_decision_tree no-op call works", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days")
+
+  model2 <- edit_decision_tree(model)
+  expect_equal(model$decision_tree, model2$decision_tree)
+})
+
+test_that("edit_decision_tree errors when no config exists", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_decision_tree(model, tree_name = "t"),
+    "No decision tree configuration exists"
+  )
+})
+
+test_that("edit_decision_tree errors on invalid duration_unit", {
+  model <- define_model("markov") |>
+    add_tree_node("t", "root", parent = NA, formula = 1) |>
+    set_decision_tree("t", duration = 30, duration_unit = "days")
+
+  expect_error(
+    edit_decision_tree(model, duration_unit = "invalid"),
+    "arg"
+  )
+})

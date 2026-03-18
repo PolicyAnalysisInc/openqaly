@@ -181,6 +181,14 @@ model_to_r_code <- function(model, file = NULL) {
     }
   }
 
+  # Add documentation (if any)
+  if (!is.null(model$documentation)) {
+    doc_code <- generate_documentation_code(model$documentation)
+    if (length(doc_code) > 0) {
+      code <- c(code, "", doc_code)
+    }
+  }
+
   # Write to file if specified
   if (!is.null(file)) {
     writeLines(code, file)
@@ -1018,6 +1026,17 @@ generate_psa_code <- function(psa) {
     "model <- set_psa(model,",
     args,
     ")"
+  )
+}
+
+#' Generate Documentation Code
+#' @keywords internal
+generate_documentation_code <- function(documentation) {
+  if (is.null(documentation)) return(character(0))
+
+  c(
+    "# Set documentation",
+    paste0("model <- set_documentation(model, ", deparse(documentation), ")")
   )
 }
 

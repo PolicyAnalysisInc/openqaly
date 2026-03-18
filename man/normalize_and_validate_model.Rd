@@ -2,7 +2,8 @@
 % Please edit documentation in R/misc.R
 \name{normalize_and_validate_model}
 \alias{normalize_and_validate_model}
-\title{Normalize and Validate Model Structure}
+\title{Applies type-specific CSV specs to enforce correct model structure.
+Used by all three input paths (Excel, JSON, R Builder) to ensure consistency.}
 \usage{
 normalize_and_validate_model(model, preserve_builder = FALSE)
 }

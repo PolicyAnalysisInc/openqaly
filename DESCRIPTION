@@ -50,7 +50,8 @@ Suggests:
     officer,
     GGally,
     kableExtra,
-    MASS
+    MASS,
+    patchwork
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 LinkingTo: 
