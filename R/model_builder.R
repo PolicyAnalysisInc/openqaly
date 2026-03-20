@@ -3785,6 +3785,344 @@ add_dsa_setting <- function(model, setting, low, high,
   model
 }
 
+#' Edit a DSA Variable Specification
+#'
+#' Modify an existing DSA variable specification. Any parameter not provided
+#' will retain its current value. Use \code{new_variable}, \code{new_strategy},
+#' and \code{new_group} to re-key the specification.
+#'
+#' @param model A oq_model_builder object
+#' @param variable Character string naming the variable to edit
+#' @param strategy Strategy targeting used to identify the specification (default: "")
+#' @param group Group targeting used to identify the specification (default: "")
+#' @param new_variable Optional new variable name
+#' @param new_strategy Optional new strategy targeting
+#' @param new_group Optional new group targeting
+#' @param low Optional new low bound expression or numeric value
+#' @param high Optional new high bound expression or numeric value
+#' @param display_name Optional new display name
+#' @param range_label Optional new range label
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05) |>
+#'   edit_dsa_variable("p_disease", low = bc * 0.5, high = bc * 1.5)
+#' }
+edit_dsa_variable <- function(model, variable, strategy = "", group = "",
+                              new_variable, new_strategy, new_group,
+                              low, high, display_name, range_label) {
+
+  # Validate variable name
+  if (!is.character(variable) || length(variable) != 1 || is.na(variable) || nchar(trimws(variable)) == 0) {
+    stop("variable must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find matching DSA parameter
+  param_idx <- 0L
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "variable" &&
+          existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf(
+      "DSA variable '%s'%s%s not found.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else ""
+    ), call. = FALSE)
+  }
+
+  param <- model$dsa_parameters[[param_idx]]
+
+  # Update low if provided
+  if (!missing(low)) {
+    low_quo <- enquo(low)
+    low_expr <- quo_get_expr(low_quo)
+    if (is.numeric(low_expr)) {
+      param$low <- as.oq_formula(as.character(low_expr))
+    } else if (is.character(low_expr) && length(low_expr) == 1) {
+      param$low <- as.oq_formula(low_expr)
+    } else {
+      param$low <- as.oq_formula(expr_text(low_expr))
+    }
+  }
+
+  # Update high if provided
+  if (!missing(high)) {
+    high_quo <- enquo(high)
+    high_expr <- quo_get_expr(high_quo)
+    if (is.numeric(high_expr)) {
+      param$high <- as.oq_formula(as.character(high_expr))
+    } else if (is.character(high_expr) && length(high_expr) == 1) {
+      param$high <- as.oq_formula(high_expr)
+    } else {
+      param$high <- as.oq_formula(expr_text(high_expr))
+    }
+  }
+
+  # Update simple fields
+  if (!missing(display_name)) param$display_name <- display_name
+  if (!missing(range_label)) param$range_label <- range_label
+
+  # Re-keying
+  if (!missing(new_variable) || !missing(new_strategy) || !missing(new_group)) {
+    eff_variable <- if (!missing(new_variable)) new_variable else param$name
+    eff_strategy <- if (!missing(new_strategy)) as.character(new_strategy) else param$strategy
+    eff_group <- if (!missing(new_group)) as.character(new_group) else param$group
+
+    # Validate new variable name
+    if (!missing(new_variable)) {
+      if (!is.character(new_variable) || length(new_variable) != 1 || is.na(new_variable) || nchar(trimws(new_variable)) == 0) {
+        stop("new_variable must be a non-empty character string", call. = FALSE)
+      }
+    }
+
+    # Validate targeting
+    validate_variable_targeting(model, eff_variable, eff_strategy, eff_group,
+                                "DSA", "edit_dsa_variable")
+
+    # Duplicate check excluding self
+    if (length(model$dsa_parameters) > 1) {
+      for (i in seq_along(model$dsa_parameters)) {
+        if (i == param_idx) next
+        other <- model$dsa_parameters[[i]]
+        if (other$type == "variable" && other$name == eff_variable &&
+            other$strategy == eff_strategy && other$group == eff_group) {
+          stop(sprintf(
+            "A DSA specification for variable '%s'%s%s already exists",
+            eff_variable,
+            if (eff_strategy != "") paste0(" (strategy: ", eff_strategy, ")") else "",
+            if (eff_group != "") paste0(" (group: ", eff_group, ")") else ""
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    param$name <- eff_variable
+    param$strategy <- eff_strategy
+    param$group <- eff_group
+  }
+
+  model$dsa_parameters[[param_idx]] <- param
+
+  model
+}
+
+#' Remove a DSA Variable Specification
+#'
+#' Remove an existing DSA variable specification from the model.
+#'
+#' @param model A oq_model_builder object
+#' @param variable Character string naming the variable to remove
+#' @param strategy Strategy targeting used to identify the specification (default: "")
+#' @param group Group targeting used to identify the specification (default: "")
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05) |>
+#'   remove_dsa_variable("p_disease")
+#' }
+remove_dsa_variable <- function(model, variable, strategy = "", group = "") {
+
+  # Validate variable name
+  if (!is.character(variable) || length(variable) != 1 || is.na(variable) || nchar(trimws(variable)) == 0) {
+    stop("variable must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find matching DSA parameter
+  param_idx <- 0L
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "variable" &&
+          existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf(
+      "DSA variable '%s'%s%s not found.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else ""
+    ), call. = FALSE)
+  }
+
+  model$dsa_parameters <- model$dsa_parameters[-param_idx]
+  class(model$dsa_parameters) <- "dsa_parameters"
+
+  model
+}
+
+#' Edit a DSA Setting Specification
+#'
+#' Modify an existing DSA setting specification. Any parameter not provided
+#' will retain its current value. Use \code{new_setting} to rename the setting.
+#'
+#' @param model A oq_model_builder object
+#' @param setting Character string naming the setting to edit
+#' @param new_setting Optional new setting name (must be a valid setting)
+#' @param low Optional new low bound value
+#' @param high Optional new high bound value
+#' @param display_name Optional new display name
+#' @param range_label Optional new range label
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   edit_dsa_setting("discount_cost", low = 1, high = 4)
+#' }
+edit_dsa_setting <- function(model, setting, new_setting,
+                             low, high, display_name, range_label) {
+
+  # Validate inputs
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find matching DSA parameter
+  param_idx <- 0L
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "setting" && existing$name == setting) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf("DSA setting '%s' not found.", setting), call. = FALSE)
+  }
+
+  param <- model$dsa_parameters[[param_idx]]
+
+  # Update simple fields
+  if (!missing(low)) param$low <- low
+  if (!missing(high)) param$high <- high
+  if (!missing(display_name)) param$display_name <- display_name
+  if (!missing(range_label)) param$range_label <- range_label
+
+  # Re-keying
+  if (!missing(new_setting)) {
+    if (!is.character(new_setting) || length(new_setting) != 1) {
+      stop("new_setting must be a single character string", call. = FALSE)
+    }
+
+    valid_settings <- c(
+      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+      "discount_cost", "discount_outcomes", "half_cycle_method",
+      "discount_timing", "discount_method",
+      "reduce_state_cycle", "days_per_year"
+    )
+    if (!(new_setting %in% valid_settings)) {
+      stop(sprintf(
+        "Invalid DSA setting name: '%s'. Valid settings: %s",
+        new_setting, paste(valid_settings, collapse = ", ")
+      ), call. = FALSE)
+    }
+
+    # Duplicate check excluding self
+    if (length(model$dsa_parameters) > 1) {
+      for (i in seq_along(model$dsa_parameters)) {
+        if (i == param_idx) next
+        other <- model$dsa_parameters[[i]]
+        if (other$type == "setting" && other$name == new_setting) {
+          stop(sprintf(
+            "A DSA specification for setting '%s' already exists",
+            new_setting
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    # Auto-update display_name if it matched old setting name
+    if (!missing(display_name)) {
+      # User explicitly set display_name, don't auto-update
+    } else if (param$display_name == setting) {
+      param$display_name <- new_setting
+    }
+
+    param$name <- new_setting
+  }
+
+  model$dsa_parameters[[param_idx]] <- param
+
+  model
+}
+
+#' Remove a DSA Setting Specification
+#'
+#' Remove an existing DSA setting specification from the model.
+#'
+#' @param model A oq_model_builder object
+#' @param setting Character string naming the setting to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   remove_dsa_setting("discount_cost")
+#' }
+remove_dsa_setting <- function(model, setting) {
+
+  # Validate inputs
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find matching DSA parameter
+  param_idx <- 0L
+  if (length(model$dsa_parameters) > 0) {
+    for (i in seq_along(model$dsa_parameters)) {
+      existing <- model$dsa_parameters[[i]]
+      if (existing$type == "setting" && existing$name == setting) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf("DSA setting '%s' not found.", setting), call. = FALSE)
+  }
+
+  model$dsa_parameters <- model$dsa_parameters[-param_idx]
+  class(model$dsa_parameters) <- "dsa_parameters"
+
+  model
+}
+
 #' Print DSA Parameters
 #'
 #' Print method for dsa_parameters objects
@@ -3929,6 +4267,28 @@ add_scenario_variable <- function(model, scenario, variable, value,
          call. = FALSE)
   }
 
+  # Check for existing override with same name/strategy/group and replace if found
+  overrides <- model$scenarios[[scenario_idx]]$variable_overrides
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      existing <- overrides[[i]]
+      if (existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        warning(sprintf(
+          "Replacing existing scenario variable override for '%s'%s%s in scenario '%s'",
+          variable,
+          if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+          if (group != "") paste0(" (group: ", group, ")") else "",
+          scenario
+        ), call. = FALSE)
+        model$scenarios[[scenario_idx]]$variable_overrides <-
+          model$scenarios[[scenario_idx]]$variable_overrides[-i]
+        break
+      }
+    }
+  }
+
   # Capture value with NSE
   value_quo <- enquo(value)
   value_expr <- quo_get_expr(value_quo)
@@ -4003,6 +4363,22 @@ add_scenario_setting <- function(model, scenario, setting, value) {
          call. = FALSE)
   }
 
+  # Check for existing override with same setting name and replace if found
+  overrides <- model$scenarios[[scenario_idx]]$setting_overrides
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      if (overrides[[i]]$name == setting) {
+        warning(sprintf(
+          "Replacing existing scenario setting override for '%s' in scenario '%s'",
+          setting, scenario
+        ), call. = FALSE)
+        model$scenarios[[scenario_idx]]$setting_overrides <-
+          model$scenarios[[scenario_idx]]$setting_overrides[-i]
+        break
+      }
+    }
+  }
+
   # Create override entry
   override <- list(
     name = setting,
@@ -4015,6 +4391,461 @@ add_scenario_setting <- function(model, scenario, setting, value) {
     list(override)
   )
 
+  model
+}
+
+#' Edit a Scenario
+#'
+#' Modify an existing scenario's name and/or description. Use \code{new_name}
+#' to rename the scenario.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string naming the scenario to edit
+#' @param new_name Optional new name for the scenario
+#' @param description Optional new description
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic") |>
+#'   edit_scenario("Optimistic", new_name = "Best Case")
+#' }
+edit_scenario <- function(model, name, new_name, description) {
+
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- 0L
+  if (length(model$scenarios) > 0) {
+    for (i in seq_along(model$scenarios)) {
+      if (model$scenarios[[i]]$name == name) {
+        scenario_idx <- i
+        break
+      }
+    }
+  }
+  if (scenario_idx == 0L) {
+    stop(sprintf("Scenario '%s' not found.", name), call. = FALSE)
+  }
+
+  scenario <- model$scenarios[[scenario_idx]]
+
+  # Rename
+  if (!missing(new_name)) {
+    if (!is.character(new_name) || length(new_name) != 1 || new_name == "") {
+      stop("new_name must be a non-empty character string", call. = FALSE)
+    }
+    if (tolower(new_name) == "base case") {
+      stop("'Base Case' is a reserved scenario name that cannot be used",
+           call. = FALSE)
+    }
+    # Duplicate check excluding self
+    if (length(model$scenarios) > 1) {
+      for (i in seq_along(model$scenarios)) {
+        if (i == scenario_idx) next
+        if (model$scenarios[[i]]$name == new_name) {
+          stop(sprintf("Scenario '%s' already exists.", new_name), call. = FALSE)
+        }
+      }
+    }
+    # Auto-update description if it matched old name
+    if (!missing(description)) {
+      # User explicitly set description, don't auto-update
+    } else if (scenario$description == name) {
+      scenario$description <- new_name
+    }
+    scenario$name <- new_name
+  }
+
+  if (!missing(description)) {
+    scenario$description <- description
+  }
+
+  model$scenarios[[scenario_idx]] <- scenario
+  model
+}
+
+#' Edit a Scenario Variable Override
+#'
+#' Modify an existing variable override within a scenario. Any parameter not
+#' provided will retain its current value.
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario containing the override
+#' @param variable Name of the variable to edit
+#' @param strategy Strategy targeting used to identify the override (default: "")
+#' @param group Group targeting used to identify the override (default: "")
+#' @param new_variable Optional new variable name
+#' @param new_strategy Optional new strategy targeting
+#' @param new_group Optional new group targeting
+#' @param value Optional new value expression (uses NSE)
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   edit_scenario_variable("Optimistic", "efficacy", value = 0.99)
+#' }
+edit_scenario_variable <- function(model, scenario, variable,
+                                    strategy = "", group = "",
+                                    new_variable, new_strategy, new_group,
+                                    value) {
+
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found.", scenario), call. = FALSE)
+  }
+
+  # Find override index
+  overrides <- model$scenarios[[scenario_idx]]$variable_overrides
+  override_idx <- 0L
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      existing <- overrides[[i]]
+      if (existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        override_idx <- i
+        break
+      }
+    }
+  }
+  if (override_idx == 0L) {
+    stop(sprintf(
+      "Scenario variable '%s'%s%s not found in scenario '%s'.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      scenario
+    ), call. = FALSE)
+  }
+
+  ovr <- overrides[[override_idx]]
+
+  # Update value if provided
+  if (!missing(value)) {
+    value_quo <- enquo(value)
+    value_expr <- quo_get_expr(value_quo)
+    if (is.numeric(value_expr)) {
+      ovr$value <- value_expr
+    } else {
+      ovr$value <- as.oq_formula(expr_text(value_expr))
+    }
+  }
+
+  # Re-keying
+  if (!missing(new_variable) || !missing(new_strategy) || !missing(new_group)) {
+    eff_variable <- if (!missing(new_variable)) new_variable else ovr$name
+    eff_strategy <- if (!missing(new_strategy)) as.character(new_strategy) else ovr$strategy
+    eff_group <- if (!missing(new_group)) as.character(new_group) else ovr$group
+
+    if (!missing(new_variable)) {
+      if (!is.character(new_variable) || length(new_variable) != 1 || nchar(trimws(new_variable)) == 0) {
+        stop("new_variable must be a non-empty character string", call. = FALSE)
+      }
+    }
+
+    validate_variable_targeting(model, eff_variable, eff_strategy, eff_group,
+                                "Scenario", "edit_scenario_variable")
+
+    # Duplicate check excluding self
+    if (length(overrides) > 1) {
+      for (i in seq_along(overrides)) {
+        if (i == override_idx) next
+        other <- overrides[[i]]
+        if (other$name == eff_variable &&
+            other$strategy == eff_strategy &&
+            other$group == eff_group) {
+          stop(sprintf(
+            "A scenario variable override for '%s'%s%s already exists in scenario '%s'",
+            eff_variable,
+            if (eff_strategy != "") paste0(" (strategy: ", eff_strategy, ")") else "",
+            if (eff_group != "") paste0(" (group: ", eff_group, ")") else "",
+            scenario
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    ovr$name <- eff_variable
+    ovr$strategy <- eff_strategy
+    ovr$group <- eff_group
+  }
+
+  model$scenarios[[scenario_idx]]$variable_overrides[[override_idx]] <- ovr
+  model
+}
+
+#' Edit a Scenario Setting Override
+#'
+#' Modify an existing setting override within a scenario.
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario containing the override
+#' @param setting Name of the setting to edit
+#' @param new_setting Optional new setting name (must be a valid setting)
+#' @param value Optional new value
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20) |>
+#'   add_scenario("Extended") |>
+#'   add_scenario_setting("Extended", "timeframe", 30) |>
+#'   edit_scenario_setting("Extended", "timeframe", value = 40)
+#' }
+edit_scenario_setting <- function(model, scenario, setting, new_setting, value) {
+
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found.", scenario), call. = FALSE)
+  }
+
+  # Find setting override index
+  overrides <- model$scenarios[[scenario_idx]]$setting_overrides
+  override_idx <- 0L
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      if (overrides[[i]]$name == setting) {
+        override_idx <- i
+        break
+      }
+    }
+  }
+  if (override_idx == 0L) {
+    stop(sprintf("Scenario setting '%s' not found in scenario '%s'.",
+                 setting, scenario), call. = FALSE)
+  }
+
+  ovr <- overrides[[override_idx]]
+
+  if (!missing(value)) {
+    ovr$value <- value
+  }
+
+  if (!missing(new_setting)) {
+    if (!is.character(new_setting) || length(new_setting) != 1) {
+      stop("new_setting must be a single character string", call. = FALSE)
+    }
+
+    valid_settings <- c(
+      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+      "discount_cost", "discount_outcomes", "half_cycle_method",
+      "reduce_state_cycle", "days_per_year"
+    )
+    if (!(new_setting %in% valid_settings)) {
+      stop(sprintf(
+        "Invalid scenario setting name: '%s'. Valid settings: %s",
+        new_setting, paste(valid_settings, collapse = ", ")
+      ), call. = FALSE)
+    }
+
+    # Duplicate check excluding self
+    if (length(overrides) > 1) {
+      for (i in seq_along(overrides)) {
+        if (i == override_idx) next
+        if (overrides[[i]]$name == new_setting) {
+          stop(sprintf(
+            "A scenario setting override for '%s' already exists in scenario '%s'",
+            new_setting, scenario
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    ovr$name <- new_setting
+  }
+
+  model$scenarios[[scenario_idx]]$setting_overrides[[override_idx]] <- ovr
+  model
+}
+
+#' Remove a Scenario
+#'
+#' Remove an existing scenario from the model.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string naming the scenario to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic") |>
+#'   remove_scenario("Optimistic")
+#' }
+remove_scenario <- function(model, name) {
+
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  scenario_idx <- 0L
+  if (length(model$scenarios) > 0) {
+    for (i in seq_along(model$scenarios)) {
+      if (model$scenarios[[i]]$name == name) {
+        scenario_idx <- i
+        break
+      }
+    }
+  }
+  if (scenario_idx == 0L) {
+    stop(sprintf("Scenario '%s' not found.", name), call. = FALSE)
+  }
+
+  model$scenarios <- model$scenarios[-scenario_idx]
+  model
+}
+
+#' Remove a Scenario Variable Override
+#'
+#' Remove an existing variable override from a scenario.
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario containing the override
+#' @param variable Name of the variable to remove
+#' @param strategy Strategy targeting used to identify the override (default: "")
+#' @param group Group targeting used to identify the override (default: "")
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   remove_scenario_variable("Optimistic", "efficacy")
+#' }
+remove_scenario_variable <- function(model, scenario, variable,
+                                      strategy = "", group = "") {
+
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found.", scenario), call. = FALSE)
+  }
+
+  # Find override index
+  overrides <- model$scenarios[[scenario_idx]]$variable_overrides
+  override_idx <- 0L
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      existing <- overrides[[i]]
+      if (existing$name == variable &&
+          existing$strategy == as.character(strategy) &&
+          existing$group == as.character(group)) {
+        override_idx <- i
+        break
+      }
+    }
+  }
+  if (override_idx == 0L) {
+    stop(sprintf(
+      "Scenario variable '%s'%s%s not found in scenario '%s'.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      scenario
+    ), call. = FALSE)
+  }
+
+  model$scenarios[[scenario_idx]]$variable_overrides <-
+    model$scenarios[[scenario_idx]]$variable_overrides[-override_idx]
+  model
+}
+
+#' Remove a Scenario Setting Override
+#'
+#' Remove an existing setting override from a scenario.
+#'
+#' @param model An oq_model_builder object
+#' @param scenario Name of the scenario containing the override
+#' @param setting Name of the setting to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20) |>
+#'   add_scenario("Extended") |>
+#'   add_scenario_setting("Extended", "timeframe", 30) |>
+#'   remove_scenario_setting("Extended", "timeframe")
+#' }
+remove_scenario_setting <- function(model, scenario, setting) {
+
+  if (!is.character(scenario) || length(scenario) != 1) {
+    stop("scenario must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find scenario index
+  scenario_idx <- which(sapply(model$scenarios, function(s) s$name) == scenario)
+  if (length(scenario_idx) == 0) {
+    stop(sprintf("Scenario '%s' not found.", scenario), call. = FALSE)
+  }
+
+  # Find setting override index
+  overrides <- model$scenarios[[scenario_idx]]$setting_overrides
+  override_idx <- 0L
+  if (length(overrides) > 0) {
+    for (i in seq_along(overrides)) {
+      if (overrides[[i]]$name == setting) {
+        override_idx <- i
+        break
+      }
+    }
+  }
+  if (override_idx == 0L) {
+    stop(sprintf("Scenario setting '%s' not found in scenario '%s'.",
+                 setting, scenario), call. = FALSE)
+  }
+
+  model$scenarios[[scenario_idx]]$setting_overrides <-
+    model$scenarios[[scenario_idx]]$setting_overrides[-override_idx]
   model
 }
 
@@ -4377,6 +5208,580 @@ add_twsa_setting <- function(model, twsa_name, setting, type,
     list(param_spec)
   )
 
+  model
+}
+
+#' Edit a TWSA Analysis
+#'
+#' Modify an existing TWSA analysis name and/or description.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string naming the TWSA to edit
+#' @param new_name Optional new name
+#' @param description Optional new description
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   edit_twsa("Cost vs Efficacy", new_name = "Price vs Effect")
+#' }
+edit_twsa <- function(model, name, new_name, description) {
+
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- 0L
+  if (length(model$twsa_analyses) > 0) {
+    for (i in seq_along(model$twsa_analyses)) {
+      if (model$twsa_analyses[[i]]$name == name) {
+        twsa_idx <- i
+        break
+      }
+    }
+  }
+  if (twsa_idx == 0L) {
+    stop(sprintf("TWSA analysis '%s' not found.", name), call. = FALSE)
+  }
+
+  twsa <- model$twsa_analyses[[twsa_idx]]
+
+  if (!missing(new_name)) {
+    if (!is.character(new_name) || length(new_name) != 1 || new_name == "") {
+      stop("new_name must be a non-empty character string", call. = FALSE)
+    }
+    if (tolower(new_name) == "base case") {
+      stop("'Base Case' is a reserved name that cannot be used for TWSA analyses",
+           call. = FALSE)
+    }
+    # Duplicate check excluding self
+    if (length(model$twsa_analyses) > 1) {
+      for (i in seq_along(model$twsa_analyses)) {
+        if (i == twsa_idx) next
+        if (model$twsa_analyses[[i]]$name == new_name) {
+          stop(sprintf("TWSA analysis '%s' already exists.", new_name), call. = FALSE)
+        }
+      }
+    }
+    # Auto-update description if it matched old name
+    if (!missing(description)) {
+      # User explicitly set description, don't auto-update
+    } else if (twsa$description == name) {
+      twsa$description <- new_name
+    }
+    twsa$name <- new_name
+  }
+
+  if (!missing(description)) {
+    twsa$description <- description
+  }
+
+  model$twsa_analyses[[twsa_idx]] <- twsa
+  model
+}
+
+#' Edit a TWSA Variable Parameter
+#'
+#' Modify an existing variable parameter within a TWSA analysis.
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis
+#' @param variable Name of the variable to edit
+#' @param strategy Strategy targeting used to identify the parameter (default: "")
+#' @param group Group targeting used to identify the parameter (default: "")
+#' @param new_variable Optional new variable name
+#' @param new_strategy Optional new strategy targeting
+#' @param new_group Optional new group targeting
+#' @param type Optional new range type ("range", "radius", or "custom")
+#' @param min Optional new minimum (for range type, uses NSE)
+#' @param max Optional new maximum (for range type, uses NSE)
+#' @param radius Optional new radius (for radius type, uses NSE)
+#' @param steps Optional new number of steps
+#' @param values Optional new custom values (uses NSE)
+#' @param display_name Optional new display name
+#' @param include_base_case Optional logical for including base case in grid
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Test") |>
+#'   add_twsa_variable("Test", "cost", type = "range",
+#'     min = 500, max = 1500, steps = 5) |>
+#'   edit_twsa_variable("Test", "cost", steps = 10)
+#' }
+edit_twsa_variable <- function(model, twsa_name, variable,
+                                strategy = "", group = "",
+                                new_variable, new_strategy, new_group,
+                                type, min, max, radius, steps,
+                                values, display_name, include_base_case) {
+
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found.", twsa_name), call. = FALSE)
+  }
+
+  # Find parameter index
+  params <- model$twsa_analyses[[twsa_idx]]$parameters
+  param_idx <- 0L
+  if (length(params) > 0) {
+    for (i in seq_along(params)) {
+      p <- params[[i]]
+      if (p$param_type == "variable" &&
+          p$name == variable &&
+          p$strategy == as.character(strategy) &&
+          p$group == as.character(group)) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf(
+      "TWSA variable '%s'%s%s not found in TWSA '%s'.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      twsa_name
+    ), call. = FALSE)
+  }
+
+  param <- params[[param_idx]]
+
+  # Type change handling
+  if (!missing(type)) {
+    type <- match.arg(type, c("range", "radius", "custom"))
+    if (type != param$type) {
+      # Type is changing - require all new-type params
+      if (type == "range") {
+        if (missing(min) || missing(max) || missing(steps)) {
+          stop("When changing to type='range', min, max, and steps are required",
+               call. = FALSE)
+        }
+      } else if (type == "radius") {
+        if (missing(radius) || missing(steps)) {
+          stop("When changing to type='radius', radius and steps are required",
+               call. = FALSE)
+        }
+      } else if (type == "custom") {
+        if (missing(values)) {
+          stop("When changing to type='custom', values is required",
+               call. = FALSE)
+        }
+      }
+      # NULL out fields not relevant to new type
+      param$min <- NULL
+      param$max <- NULL
+      param$radius <- NULL
+      param$steps <- NULL
+      param$values <- NULL
+      param$type <- type
+    }
+  }
+
+  # Update NSE fields
+  if (!missing(min)) {
+    min_quo <- enquo(min)
+    min_expr <- quo_get_expr(min_quo)
+    if (is.numeric(min_expr)) {
+      param$min <- as.oq_formula(as.character(min_expr))
+    } else {
+      param$min <- as.oq_formula(expr_text(min_expr))
+    }
+  }
+  if (!missing(max)) {
+    max_quo <- enquo(max)
+    max_expr <- quo_get_expr(max_quo)
+    if (is.numeric(max_expr)) {
+      param$max <- as.oq_formula(as.character(max_expr))
+    } else {
+      param$max <- as.oq_formula(expr_text(max_expr))
+    }
+  }
+  if (!missing(radius)) {
+    radius_quo <- enquo(radius)
+    radius_expr <- quo_get_expr(radius_quo)
+    if (is.numeric(radius_expr)) {
+      param$radius <- as.oq_formula(as.character(radius_expr))
+    } else {
+      param$radius <- as.oq_formula(expr_text(radius_expr))
+    }
+  }
+  if (!missing(values)) {
+    values_quo <- enquo(values)
+    values_expr <- quo_get_expr(values_quo)
+    param$values <- as.oq_formula(expr_text(values_expr))
+  }
+
+  # Update simple fields
+  if (!missing(steps)) param$steps <- steps
+  if (!missing(display_name)) param$display_name <- display_name
+  if (!missing(include_base_case)) param$include_base_case <- include_base_case
+
+  # Re-keying
+  if (!missing(new_variable) || !missing(new_strategy) || !missing(new_group)) {
+    eff_variable <- if (!missing(new_variable)) new_variable else param$name
+    eff_strategy <- if (!missing(new_strategy)) as.character(new_strategy) else param$strategy
+    eff_group <- if (!missing(new_group)) as.character(new_group) else param$group
+
+    if (!missing(new_variable)) {
+      if (!is.character(new_variable) || length(new_variable) != 1 || nchar(trimws(new_variable)) == 0) {
+        stop("new_variable must be a non-empty character string", call. = FALSE)
+      }
+    }
+
+    validate_variable_targeting(model, eff_variable, eff_strategy, eff_group,
+                                "TWSA", "edit_twsa_variable")
+
+    # Duplicate check excluding self
+    if (length(params) > 1) {
+      for (i in seq_along(params)) {
+        if (i == param_idx) next
+        other <- params[[i]]
+        if (other$param_type == "variable" && other$name == eff_variable &&
+            other$strategy == eff_strategy && other$group == eff_group) {
+          stop(sprintf(
+            "A TWSA variable parameter for '%s'%s%s already exists in TWSA '%s'",
+            eff_variable,
+            if (eff_strategy != "") paste0(" (strategy: ", eff_strategy, ")") else "",
+            if (eff_group != "") paste0(" (group: ", eff_group, ")") else "",
+            twsa_name
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    param$name <- eff_variable
+    param$strategy <- eff_strategy
+    param$group <- eff_group
+  }
+
+  model$twsa_analyses[[twsa_idx]]$parameters[[param_idx]] <- param
+  model
+}
+
+#' Edit a TWSA Setting Parameter
+#'
+#' Modify an existing setting parameter within a TWSA analysis.
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis
+#' @param setting Name of the setting to edit
+#' @param new_setting Optional new setting name (must be valid)
+#' @param type Optional new range type ("range", "radius", or "custom")
+#' @param min Optional new minimum (for range type)
+#' @param max Optional new maximum (for range type)
+#' @param radius Optional new radius (for radius type)
+#' @param steps Optional new number of steps
+#' @param values Optional new custom values
+#' @param display_name Optional new display name
+#' @param include_base_case Optional logical for including base case in grid
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Test") |>
+#'   add_twsa_setting("Test", "discount_cost", type = "range",
+#'     min = 0, max = 5, steps = 3) |>
+#'   edit_twsa_setting("Test", "discount_cost", steps = 10)
+#' }
+edit_twsa_setting <- function(model, twsa_name, setting,
+                               new_setting, type, min, max, radius,
+                               steps, values, display_name,
+                               include_base_case) {
+
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found.", twsa_name), call. = FALSE)
+  }
+
+  # Find parameter index
+  params <- model$twsa_analyses[[twsa_idx]]$parameters
+  param_idx <- 0L
+  if (length(params) > 0) {
+    for (i in seq_along(params)) {
+      p <- params[[i]]
+      if (p$param_type == "setting" && p$name == setting) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf("TWSA setting '%s' not found in TWSA '%s'.",
+                 setting, twsa_name), call. = FALSE)
+  }
+
+  param <- params[[param_idx]]
+
+  # Type change handling
+  if (!missing(type)) {
+    type <- match.arg(type, c("range", "radius", "custom"))
+    if (type != param$type) {
+      if (type == "range") {
+        if (missing(min) || missing(max) || missing(steps)) {
+          stop("When changing to type='range', min, max, and steps are required",
+               call. = FALSE)
+        }
+      } else if (type == "radius") {
+        if (missing(radius) || missing(steps)) {
+          stop("When changing to type='radius', radius and steps are required",
+               call. = FALSE)
+        }
+      } else if (type == "custom") {
+        if (missing(values)) {
+          stop("When changing to type='custom', values is required",
+               call. = FALSE)
+        }
+      }
+      param$min <- NULL
+      param$max <- NULL
+      param$radius <- NULL
+      param$steps <- NULL
+      param$values <- NULL
+      param$type <- type
+    }
+  }
+
+  # Update value fields (literal for settings, no NSE)
+  if (!missing(min)) param$min <- min
+  if (!missing(max)) param$max <- max
+  if (!missing(radius)) param$radius <- radius
+  if (!missing(steps)) param$steps <- steps
+  if (!missing(values)) param$values <- values
+  if (!missing(display_name)) param$display_name <- display_name
+  if (!missing(include_base_case)) param$include_base_case <- include_base_case
+
+  # Re-keying
+  if (!missing(new_setting)) {
+    if (!is.character(new_setting) || length(new_setting) != 1) {
+      stop("new_setting must be a single character string", call. = FALSE)
+    }
+
+    valid_settings <- c(
+      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
+      "discount_cost", "discount_outcomes", "half_cycle_method",
+      "reduce_state_cycle", "days_per_year"
+    )
+    if (!(new_setting %in% valid_settings)) {
+      stop(sprintf(
+        "Invalid TWSA setting name: '%s'. Valid settings: %s",
+        new_setting, paste(valid_settings, collapse = ", ")
+      ), call. = FALSE)
+    }
+
+    # Duplicate check excluding self
+    if (length(params) > 1) {
+      for (i in seq_along(params)) {
+        if (i == param_idx) next
+        other <- params[[i]]
+        if (other$param_type == "setting" && other$name == new_setting) {
+          stop(sprintf(
+            "A TWSA setting parameter for '%s' already exists in TWSA '%s'",
+            new_setting, twsa_name
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    # Auto-update display_name if it matched old setting name
+    if (!missing(display_name)) {
+      # User explicitly set display_name, don't auto-update
+    } else if (!is.null(param$display_name) && param$display_name == setting) {
+      param$display_name <- new_setting
+    }
+
+    param$name <- new_setting
+  }
+
+  model$twsa_analyses[[twsa_idx]]$parameters[[param_idx]] <- param
+  model
+}
+
+#' Remove a TWSA Analysis
+#'
+#' Remove an existing TWSA analysis from the model.
+#'
+#' @param model An oq_model_builder object
+#' @param name Character string naming the TWSA to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   remove_twsa("Cost vs Efficacy")
+#' }
+remove_twsa <- function(model, name) {
+
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  twsa_idx <- 0L
+  if (length(model$twsa_analyses) > 0) {
+    for (i in seq_along(model$twsa_analyses)) {
+      if (model$twsa_analyses[[i]]$name == name) {
+        twsa_idx <- i
+        break
+      }
+    }
+  }
+  if (twsa_idx == 0L) {
+    stop(sprintf("TWSA analysis '%s' not found.", name), call. = FALSE)
+  }
+
+  model$twsa_analyses <- model$twsa_analyses[-twsa_idx]
+  model
+}
+
+#' Remove a TWSA Variable Parameter
+#'
+#' Remove an existing variable parameter from a TWSA analysis.
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis
+#' @param variable Name of the variable to remove
+#' @param strategy Strategy targeting used to identify the parameter (default: "")
+#' @param group Group targeting used to identify the parameter (default: "")
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Test") |>
+#'   add_twsa_variable("Test", "cost", type = "range",
+#'     min = 500, max = 1500, steps = 5) |>
+#'   remove_twsa_variable("Test", "cost")
+#' }
+remove_twsa_variable <- function(model, twsa_name, variable,
+                                  strategy = "", group = "") {
+
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(variable) || length(variable) != 1) {
+    stop("variable must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found.", twsa_name), call. = FALSE)
+  }
+
+  # Find parameter index
+  params <- model$twsa_analyses[[twsa_idx]]$parameters
+  param_idx <- 0L
+  if (length(params) > 0) {
+    for (i in seq_along(params)) {
+      p <- params[[i]]
+      if (p$param_type == "variable" &&
+          p$name == variable &&
+          p$strategy == as.character(strategy) &&
+          p$group == as.character(group)) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf(
+      "TWSA variable '%s'%s%s not found in TWSA '%s'.",
+      variable,
+      if (strategy != "") paste0(" (strategy: ", strategy, ")") else "",
+      if (group != "") paste0(" (group: ", group, ")") else "",
+      twsa_name
+    ), call. = FALSE)
+  }
+
+  model$twsa_analyses[[twsa_idx]]$parameters <-
+    model$twsa_analyses[[twsa_idx]]$parameters[-param_idx]
+  model
+}
+
+#' Remove a TWSA Setting Parameter
+#'
+#' Remove an existing setting parameter from a TWSA analysis.
+#'
+#' @param model An oq_model_builder object
+#' @param twsa_name Name of the TWSA analysis
+#' @param setting Name of the setting to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Test") |>
+#'   add_twsa_setting("Test", "discount_cost", type = "range",
+#'     min = 0, max = 5, steps = 3) |>
+#'   remove_twsa_setting("Test", "discount_cost")
+#' }
+remove_twsa_setting <- function(model, twsa_name, setting) {
+
+  if (!is.character(twsa_name) || length(twsa_name) != 1) {
+    stop("twsa_name must be a single character string", call. = FALSE)
+  }
+  if (!is.character(setting) || length(setting) != 1) {
+    stop("setting must be a single character string", call. = FALSE)
+  }
+
+  # Find TWSA index
+  twsa_idx <- which(sapply(model$twsa_analyses, function(s) s$name) == twsa_name)
+  if (length(twsa_idx) == 0) {
+    stop(sprintf("TWSA analysis '%s' not found.", twsa_name), call. = FALSE)
+  }
+
+  # Find parameter index
+  params <- model$twsa_analyses[[twsa_idx]]$parameters
+  param_idx <- 0L
+  if (length(params) > 0) {
+    for (i in seq_along(params)) {
+      if (params[[i]]$param_type == "setting" && params[[i]]$name == setting) {
+        param_idx <- i
+        break
+      }
+    }
+  }
+  if (param_idx == 0L) {
+    stop(sprintf("TWSA setting '%s' not found in TWSA '%s'.",
+                 setting, twsa_name), call. = FALSE)
+  }
+
+  model$twsa_analyses[[twsa_idx]]$parameters <-
+    model$twsa_analyses[[twsa_idx]]$parameters[-param_idx]
   model
 }
 

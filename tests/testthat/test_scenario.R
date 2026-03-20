@@ -116,6 +116,299 @@ test_that("multiple scenarios can be defined", {
 })
 
 # ============================================================================
+# Duplicate Handling Tests (add functions)
+# ============================================================================
+
+test_that("add_scenario_variable warns and replaces duplicate", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95)
+
+  expect_warning(
+    model2 <- add_scenario_variable(model, "Test", "efficacy", 0.99),
+    "Replacing existing"
+  )
+
+  expect_equal(length(model2$scenarios[[1]]$variable_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$value, 0.99)
+})
+
+test_that("add_scenario_setting warns and replaces duplicate", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  expect_warning(
+    model2 <- add_scenario_setting(model, "Test", "timeframe", 40),
+    "Replacing existing"
+  )
+
+  expect_equal(length(model2$scenarios[[1]]$setting_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$value, 40)
+})
+
+# ============================================================================
+# Edit/Remove Scenario Tests
+# ============================================================================
+
+test_that("edit_scenario renames scenario", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case Scenario")
+
+  expect_equal(model2$scenarios[[1]]$name, "Best Case Scenario")
+})
+
+test_that("edit_scenario auto-updates description when it matched old name", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  # description defaults to name
+  expect_equal(model$scenarios[[1]]$description, "Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case")
+  expect_equal(model2$scenarios[[1]]$description, "Best Case")
+})
+
+test_that("edit_scenario does not auto-update description when explicitly set", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case",
+                          description = "Custom desc")
+  expect_equal(model2$scenarios[[1]]$description, "Custom desc")
+})
+
+test_that("edit_scenario errors on Base Case name", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario(model, "Test", new_name = "Base Case"),
+    "reserved"
+  )
+})
+
+test_that("edit_scenario errors on duplicate name", {
+  model <- define_model("markov") %>%
+    add_scenario("A") %>%
+    add_scenario("B")
+
+  expect_error(
+    edit_scenario(model, "A", new_name = "B"),
+    "already exists"
+  )
+})
+
+test_that("edit_scenario errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_scenario(model, "NonExistent", new_name = "X"),
+    "not found"
+  )
+})
+
+test_that("edit_scenario updates description only", {
+  model <- define_model("markov") %>%
+    add_scenario("Test", description = "Old desc")
+
+  model2 <- edit_scenario(model, "Test", description = "New desc")
+  expect_equal(model2$scenarios[[1]]$description, "New desc")
+  expect_equal(model2$scenarios[[1]]$name, "Test")
+})
+
+test_that("edit_scenario_variable updates value", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95)
+
+  model2 <- edit_scenario_variable(model, "Test", "efficacy", value = 0.99)
+
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$value, 0.99)
+})
+
+test_that("edit_scenario_variable supports NSE", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "cost", 5000)
+
+  model2 <- edit_scenario_variable(model, "Test", "cost", value = base_cost * 0.8)
+
+  expect_s3_class(model2$scenarios[[1]]$variable_overrides[[1]]$value, "oq_formula")
+})
+
+test_that("edit_scenario_variable re-keys variable", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_variable("price", 2000) %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "cost", 1500)
+
+  model2 <- edit_scenario_variable(model, "Test", "cost", new_variable = "price")
+
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$name, "price")
+})
+
+test_that("edit_scenario_variable errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario_variable(model, "Test", "nonexistent", value = 1),
+    "not found"
+  )
+})
+
+test_that("edit_scenario_variable errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_scenario_variable(model, "NonExistent", "var", value = 1),
+    "not found"
+  )
+})
+
+test_that("edit_scenario_setting updates value", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  model2 <- edit_scenario_setting(model, "Test", "timeframe", value = 40)
+
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$value, 40)
+})
+
+test_that("edit_scenario_setting re-keys setting", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  model2 <- edit_scenario_setting(model, "Test", "timeframe",
+                                   new_setting = "discount_cost")
+
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$name, "discount_cost")
+})
+
+test_that("edit_scenario_setting errors on invalid setting name", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "timeframe",
+                          new_setting = "invalid_setting"),
+    "Invalid scenario setting"
+  )
+})
+
+test_that("edit_scenario_setting errors on duplicate setting", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30) %>%
+    add_scenario_setting("Test", "discount_cost", 5)
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "timeframe",
+                          new_setting = "discount_cost"),
+    "already exists"
+  )
+})
+
+test_that("edit_scenario_setting errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "nonexistent", value = 1),
+    "not found"
+  )
+})
+
+test_that("remove_scenario removes scenario", {
+  model <- define_model("markov") %>%
+    add_scenario("A") %>%
+    add_scenario("B")
+
+  model2 <- remove_scenario(model, "A")
+
+  expect_equal(length(model2$scenarios), 1)
+  expect_equal(model2$scenarios[[1]]$name, "B")
+})
+
+test_that("remove_scenario errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario(model, "NonExistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_variable removes override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95) %>%
+    add_scenario_variable("Test", "cost", 5000)
+
+  model2 <- remove_scenario_variable(model, "Test", "efficacy")
+
+  expect_equal(length(model2$scenarios[[1]]$variable_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$name, "cost")
+})
+
+test_that("remove_scenario_variable errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    remove_scenario_variable(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_variable errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario_variable(model, "NonExistent", "var"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_setting removes override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30) %>%
+    add_scenario_setting("Test", "discount_cost", 5)
+
+  model2 <- remove_scenario_setting(model, "Test", "timeframe")
+
+  expect_equal(length(model2$scenarios[[1]]$setting_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$name, "discount_cost")
+})
+
+test_that("remove_scenario_setting errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    remove_scenario_setting(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_setting errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario_setting(model, "NonExistent", "timeframe"),
+    "not found"
+  )
+})
+
+# ============================================================================
 # Strategy/Group Targeting Validation Tests
 # ============================================================================
 

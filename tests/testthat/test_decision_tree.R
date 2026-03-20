@@ -1447,3 +1447,47 @@ test_that("edit_decision_tree errors on invalid duration_unit", {
     "arg"
   )
 })
+
+# ==============================================================================
+# YAML Round-Trip Tests
+# ==============================================================================
+
+test_that("trees survive YAML round-trip", {
+  model <- create_standalone_dt_model()
+
+  # Write to YAML and read back
+  tmp <- tempfile(fileext = ".yaml")
+  on.exit(unlink(tmp))
+  write_model_yaml(model, tmp)
+  model_back <- read_model_yaml(tmp)
+
+  # Verify trees tibble has correct columns and values
+  expect_false(is.null(model_back$trees))
+  expect_equal(sort(names(model_back$trees)), sort(c("name", "node", "parent", "formula", "tags")))
+  expect_equal(nrow(model_back$trees), nrow(model$trees))
+  expect_equal(model_back$trees$name, model$trees$name)
+  expect_equal(model_back$trees$node, model$trees$node)
+  expect_equal(model_back$trees$parent, model$trees$parent)
+  expect_equal(model_back$trees$formula, model$trees$formula)
+})
+
+test_that("multiple trees survive YAML round-trip", {
+  model <- define_model("markov") |>
+    add_tree_node("tree_a", "root", parent = NA, formula = 1) |>
+    add_tree_node("tree_a", "left", parent = "root", formula = 0.6) |>
+    add_tree_node("tree_a", "right", parent = "root", formula = "C") |>
+    add_tree_node("tree_b", "root", parent = NA, formula = 1) |>
+    add_tree_node("tree_b", "child", parent = "root", formula = 0.5, tags = "my_tag")
+
+  tmp <- tempfile(fileext = ".yaml")
+  on.exit(unlink(tmp))
+  write_model_yaml(model, tmp)
+  model_back <- read_model_yaml(tmp)
+
+  expect_equal(nrow(model_back$trees), 5)
+  expect_equal(sort(unique(model_back$trees$name)), c("tree_a", "tree_b"))
+
+  # Verify tagged node preserved
+  tagged <- model_back$trees[model_back$trees$node == "child" & model_back$trees$name == "tree_b", ]
+  expect_equal(tagged$tags, "my_tag")
+})

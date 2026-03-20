@@ -858,31 +858,17 @@ flatten_trees <- function(trees_list) {
   }
 
   rows <- list()
-  node_id <- 1
-
-  flatten_node <- function(node, parent_id) {
-    current_id <- node_id
-    node_id <<- node_id + 1
-
-    row <- list(
-      node_id = current_id,
-      parent_id = parent_id,
-      name = node$name,
-      type = node$type,
-      probability = node$probability,
-      payoff = node$payoff
-    )
-    rows <<- c(rows, list(row))
-
-    if (!is.null(node$children)) {
-      for (child in node$children) {
-        flatten_node(child, current_id)
-      }
+  for (tree_name in names(trees_list)) {
+    nodes <- trees_list[[tree_name]]
+    for (node_def in nodes) {
+      rows <- c(rows, list(list(
+        name = tree_name,
+        node = node_def$node,
+        parent = if (is.null(node_def$parent)) NA_character_ else node_def$parent,
+        formula = node_def$formula,
+        tags = if (is.null(node_def$tags)) NA_character_ else node_def$tags
+      )))
     }
-  }
-
-  for (tree in trees_list) {
-    flatten_node(tree, NA)
   }
 
   as_tibble(do.call(rbind, lapply(rows, function(r) {
@@ -1247,38 +1233,19 @@ nest_trees <- function(trees_tbl) {
     return(list())
   }
 
-  # Find root nodes (no parent)
-  roots <- trees_tbl[is.na(trees_tbl$parent_id), ]
-
-  build_node <- function(row) {
-    node <- list(
-      name = row$name,
-      type = row$type
-    )
-    if (!is.na(row$probability)) {
-      node$probability <- as.character(row$probability)
-    }
-    if (!is.na(row$payoff)) {
-      node$payoff <- as.character(row$payoff)
-    }
-
-    # Find children
-    children_rows <- trees_tbl[
-      !is.na(trees_tbl$parent_id) & trees_tbl$parent_id == row$node_id,
-    ]
-
-    if (nrow(children_rows) > 0) {
-      node$children <- lapply(seq_len(nrow(children_rows)), function(i) {
-        build_node(children_rows[i, ])
-      })
-    }
-
-    node
+  tree_names <- unique(trees_tbl$name)
+  result <- list()
+  for (tn in tree_names) {
+    tree_rows <- trees_tbl[trees_tbl$name == tn, ]
+    result[[tn]] <- lapply(seq_len(nrow(tree_rows)), function(i) {
+      row <- tree_rows[i, ]
+      node_list <- list(node = row$node, formula = row$formula)
+      if (!is.na(row$parent)) node_list$parent <- row$parent
+      if (!is.na(row$tags)) node_list$tags <- row$tags
+      node_list
+    })
   }
-
-  lapply(seq_len(nrow(roots)), function(i) {
-    build_node(roots[i, ])
-  })
+  result
 }
 
 #' Format Multivariate Sampling for YAML
