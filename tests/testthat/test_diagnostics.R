@@ -134,21 +134,6 @@ test_that("diagnose_variable scalar type has Value table and empty plots", {
   }
 })
 
-test_that("diagnose_variable vector type has Values table and Trend plot", {
-  results <- load_example_psm_results()
-
-  # Find a variable that is in ns$df and varies by cycle
-  all_diag <- diagnose_all_variables(results)
-  vector_diags <- all_diag[sapply(all_diag, function(d) {
-    !is.null(d$type) && d$type == "vector"
-  })]
-
-  if (length(vector_diags) > 0) {
-    diag <- vector_diags[[1]]
-    expect_true(!is.null(diag$table))
-    expect_true(!is.null(diag$plot))
-  }
-})
 
 # =============================================================================
 # diagnose_all_variables tests

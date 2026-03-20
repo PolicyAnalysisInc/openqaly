@@ -506,6 +506,88 @@ test_that("validate_scenario_spec catches invalid setting names", {
 })
 
 # ============================================================================
+# NSE and bc keyword tests
+# ============================================================================
+
+test_that("add_scenario_variable accepts expressions with bc keyword via NSE", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_scenario("Optimistic") %>%
+    add_scenario_variable("Optimistic", "cost", bc * 0.8)
+
+  expect_s3_class(model$scenarios[[1]]$variable_overrides[[1]]$value, "oq_formula")
+  expect_match(as.character(model$scenarios[[1]]$variable_overrides[[1]]$value), "bc")
+})
+
+test_that("run_scenario evaluates bc correctly in formula overrides", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "dead", 0.05) %>%
+    add_transition("healthy", "healthy", 0.95) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("control") %>%
+    add_value("total_cost", cost, type = "cost") %>%
+    add_value("qalys", 0, type = "outcome") %>%
+    add_summary("total_cost", "total_cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome") %>%
+    add_scenario("Optimistic") %>%
+    add_scenario_variable("Optimistic", "cost", bc * 0.8)
+
+  # Should run without error (bc resolves to 1000, override = 800)
+  results <- run_scenario(model)
+
+  # Extract summary amounts from aggregated results
+  agg <- results$aggregated
+  base_cost <- agg %>% filter(scenario_id == 1) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+  scenario_cost <- agg %>% filter(scenario_id == 2) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+
+  # Scenario cost should be 80% of base case cost (bc * 0.8)
+  expect_equal(scenario_cost / base_cost, 0.8)
+})
+
+test_that("run_scenario evaluates bc combined with other variables", {
+  model <- define_model("markov") %>%
+    add_variable("cost_tx", 1000) %>%
+    add_variable("cost_se", 100) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "dead", 0.05) %>%
+    add_transition("healthy", "healthy", 0.95) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("control") %>%
+    add_value("total_cost", cost_tx, type = "cost") %>%
+    add_value("qalys", 0, type = "outcome") %>%
+    add_summary("total_cost", "total_cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome") %>%
+    add_scenario("Adjusted") %>%
+    add_scenario_variable("Adjusted", "cost_tx", bc - 2 * cost_se)
+
+  # bc = 1000, cost_se = 100, so override = 1000 - 200 = 800
+  results <- run_scenario(model)
+
+  agg <- results$aggregated
+  base_cost <- agg %>% filter(scenario_id == 1) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+  scenario_cost <- agg %>% filter(scenario_id == 2) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+
+  # Scenario cost should be 80% of base case (800/1000)
+  expect_equal(scenario_cost / base_cost, 0.8)
+})
+
+# ============================================================================
 # Segment Building Tests
 # ============================================================================
 

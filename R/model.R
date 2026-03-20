@@ -222,6 +222,16 @@ parse_model <- function(model, ...) {
   # to store model variables.
   model$env <- new.env(parent = parent.frame())
 
+  # DEBUG: trace parent chain
+  cat("=== DEBUG parse_model: model$env parent chain ===\n")
+  .dbg_e <- model$env
+  for (.dbg_i in 1:8) {
+    cat("  ", .dbg_i, ": ", environmentName(.dbg_e), " (", format(.dbg_e), ")\n")
+    .dbg_p <- parent.env(.dbg_e)
+    if (identical(.dbg_p, emptyenv())) break
+    .dbg_e <- .dbg_p
+  }
+
   # Load tables & trees into the environment
   load_tables(model$tables, model$env)
   load_trees(model$trees, model$env)

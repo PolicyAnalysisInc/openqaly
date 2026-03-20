@@ -149,6 +149,7 @@ build_scenario_segments <- function(model) {
           # Evaluate value if it's an oq_formula
           if (inherits(override$value, "oq_formula")) {
             seg_ns <- clone_namespace(segment$eval_vars[[1]])
+            seg_ns$env$bc <- seg_ns[override$name]
             eval_value <- eval_formula(override$value, seg_ns)
 
             if (is_oq_error(eval_value)) {
