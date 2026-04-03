@@ -175,9 +175,12 @@ test_that("run_twsa reports exact progress (markov, no VBP)", {
   result <- run_twsa(model, progress = rec$fn)
   calls <- rec$get_calls()
   expect_exact_progress(calls)
+  # build_steps: 1 parse + 2 enrich + 1*2 value_gen + 1 grid_expand = 6
+  # build_ticks: 6 * 8 = 48 (weighted same as segments)
   # steps=2 per dim + bc insertion => 3 values each => 3*3=9 grid + 1 base = 10 runs
-  # 10 runs * 2 strategies * 1 group * 8 checkpoints + 4 overhead = 164
-  expect_equal(calls[[1]]$total, 164L)
+  # 10 runs * 2 strategies * 1 group = 20 segments * 8 checkpoints = 160
+  # total = 48 + 160 + 2 = 210
+  expect_equal(calls[[1]]$total, 210L)
 })
 
 # ============================================================================

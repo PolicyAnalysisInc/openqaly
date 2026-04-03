@@ -55,9 +55,11 @@ validate_twsa_vbp_spec <- function(model,
 #' @param vbp_spec VBP specification list
 #' @return Tibble with segments including vbp_price_level column
 #' @keywords internal
-build_twsa_vbp_segments <- function(model, vbp_spec) {
+build_twsa_vbp_segments <- function(model, vbp_spec, progress = NULL) {
   # Build base TWSA segments
-  twsa_segments <- build_twsa_segments(model)
+  twsa_segments <- build_twsa_segments(
+    model, progress = progress
+  )
   price_target <- resolve_vbp_price_target(
     model,
     vbp_spec$price_variable,

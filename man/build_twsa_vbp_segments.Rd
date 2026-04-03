@@ -4,7 +4,7 @@
 \alias{build_twsa_vbp_segments}
 \title{Build TWSA VBP Segments}
 \usage{
-build_twsa_vbp_segments(model, vbp_spec)
+build_twsa_vbp_segments(model, vbp_spec, progress = NULL)
 }
 \arguments{
 \item{model}{Parsed model object}
