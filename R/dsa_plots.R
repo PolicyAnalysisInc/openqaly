@@ -2995,11 +2995,18 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
         # Combine all footnotes into single string
         combined_footnotes <- paste(fn_texts, collapse = "\n")
 
+        footnote_line_count <- stringr::str_count(combined_footnotes, "\n") + 1
+        footnote_lane_top <- facet_max_y + 0.7
+        footnote_lane_height <- 0.7 + 0.75 * footnote_line_count
+        footnote_lane_bottom <- footnote_lane_top + footnote_lane_height
+        footnote_x <- x_limits[1] + 0.02 * diff(x_limits)
+
         footnote_data_list[[length(footnote_data_list) + 1]] <- tibble(
           strategy = strat,
           group = grp,
-          x = 0,
-          y = facet_max_y + 0.8,  # Position below lowest bar
+          x = footnote_x,
+          y = footnote_lane_top + footnote_lane_height / 2,
+          footnote_lane_bottom = footnote_lane_bottom,
           footnote_text = combined_footnotes
         )
       }
@@ -3008,11 +3015,16 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
 
   if (length(footnote_data_list) > 0) {
     footnote_data <- bind_rows(footnote_data_list)
+    p <- p + geom_blank(
+      data = footnote_data,
+      aes(x = .data$x, y = .data$footnote_lane_bottom)
+    )
+
     p <- p + geom_label(
       data = footnote_data,
       aes(x = .data$x, y = .data$y, label = .data$footnote_text),
       hjust = 0,
-      vjust = 0,
+      vjust = 0.5,
       size = 2.2,
       fontface = "italic",
       fill = "white",
