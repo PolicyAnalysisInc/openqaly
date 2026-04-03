@@ -28,17 +28,7 @@ validate_scenario_vbp_spec <- function(model,
                                         vbp_intervention,
                                         vbp_outcome_summary,
                                         vbp_cost_summary) {
-  # Check intervention strategy exists
-  if (!vbp_intervention %in% model$strategies$name) {
-    stop(sprintf("VBP intervention strategy '%s' not found in model strategies",
-                vbp_intervention), call. = FALSE)
-  }
-
-  # Check price variable exists
-  if (!vbp_price_variable %in% model$variables$name) {
-    stop(sprintf("VBP price variable '%s' not found in model variables",
-                vbp_price_variable), call. = FALSE)
-  }
+  resolve_vbp_price_target(model, vbp_price_variable, vbp_intervention)
 
   # Check summaries exist using validation helper
   metadata_for_check <- list(summaries = model$summaries)
@@ -61,6 +51,11 @@ validate_scenario_vbp_spec <- function(model,
 build_scenario_vbp_segments <- function(model, vbp_spec) {
   # Get base scenario segments (includes scenario_id for base case + user scenarios)
   scenario_segments <- build_scenario_segments(model)
+  price_target <- resolve_vbp_price_target(
+    model,
+    vbp_spec$price_variable,
+    vbp_spec$intervention_strategy
+  )
 
   # Get unique scenario_ids
   scenario_ids <- unique(scenario_segments$scenario_id)
@@ -84,8 +79,7 @@ build_scenario_vbp_segments <- function(model, vbp_spec) {
             .data$parameter_overrides,
             .data$strategy,
             function(existing_overrides, strat) {
-              # Only apply price override to intervention strategy
-              if (strat == vbp_spec$intervention_strategy) {
+              if (segment_matches_vbp_price_target(strat, price_target)) {
                 # Add VBP price override to existing scenario overrides
                 combined <- existing_overrides
                 combined[[vbp_spec$price_variable]] <- price_val
