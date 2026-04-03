@@ -64,7 +64,7 @@ test_that("Round-trip conversion preserves model", {
 
   # Test JSON round-trip
   json_str <- as_json(original)
-  from_json <- read_model_json(json_str)
+  from_json <- read_model_json(text = json_str)
 
   expect_equal(original$settings$n_cycles, from_json$settings$n_cycles)
   expect_equal(nrow(original$states), nrow(from_json$states))
@@ -651,4 +651,63 @@ test_that("No collision when table and value names differ", {
   expect_no_error(
     normalize_and_validate_model(model)
   )
+})
+
+test_that("Complement (C) keyword works for group weights", {
+  build_model_with_weights <- function(w1, w2) {
+    define_model("markov") |>
+      set_settings(
+        n_cycles = 10,
+        cycle_length = 1,
+        cycle_length_unit = "years"
+      ) |>
+      add_strategy("default") |>
+      add_group("young", weight = w1) |>
+      add_group("old", weight = w2) |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("sick", initial_prob = 0) |>
+      add_state("dead", initial_prob = 0) |>
+      add_transition("healthy", "sick", 0.1) |>
+      add_transition("healthy", "dead", 0.02) |>
+      add_transition("healthy", "healthy", "1 - 0.1 - 0.02") |>
+      add_transition("sick", "dead", 0.15) |>
+      add_transition("sick", "sick", "1 - 0.15") |>
+      add_transition("dead", "dead", 1) |>
+      add_value("cost", 1000, state = "healthy", type = "cost") |>
+      add_value("qalys", 0.9, state = "healthy", type = "outcome") |>
+      add_summary("total_cost", "cost", type = "cost") |>
+      add_summary("total_qalys", "qalys", type = "outcome")
+  }
+
+  # Run with C and with explicit weights — results should match
+  result_c <- run_model(build_model_with_weights("0.6", "C"))
+  result_explicit <- run_model(build_model_with_weights("0.6", "0.4"))
+
+  expect_equal(
+    result_c$aggregated$summaries,
+    result_explicit$aggregated$summaries
+  )
+})
+
+test_that("Multiple complement (C) group weights produces error", {
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 10,
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("default") |>
+    add_group("young", weight = "C") |>
+    add_group("old", weight = "C") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("healthy", "dead", 0.1) |>
+    add_transition("healthy", "healthy", 0.9) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 1000, state = "healthy", type = "cost") |>
+    add_value("qalys", 0.9, state = "healthy", type = "outcome") |>
+    add_summary("total_cost", "cost", type = "cost") |>
+    add_summary("total_qalys", "qalys", type = "outcome")
+
+  expect_error(run_model(model), "Only one group may use complement")
 })

@@ -18,10 +18,6 @@ prepare_incremental_ceac_table_data(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
-
-\item{cost_summary}{Name of the cost summary}
-
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as columns}
 
 \item{groups}{Group selection:
@@ -39,6 +35,10 @@ prepare_incremental_ceac_table_data(
 \item{decimals}{Number of decimal places for percentages}
 
 \item{font_size}{Font size for rendering}
+
+\item{health_outcome}{Name of the health outcome}
+
+\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

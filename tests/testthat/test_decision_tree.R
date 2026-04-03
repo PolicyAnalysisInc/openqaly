@@ -285,7 +285,7 @@ test_that("decision_tree config survives JSON round-trip", {
   model <- create_standalone_dt_model()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_false(is.null(model_back$decision_tree))
   expect_equal(model_back$decision_tree$tree_name, model$decision_tree$tree_name)
@@ -297,7 +297,7 @@ test_that("decision_tree values survive JSON round-trip", {
   model <- create_standalone_dt_model()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   dt_values_orig <- model$values[model$values$state == "decision_tree", ]
   dt_values_back <- model_back$values[model_back$values$state == "decision_tree", ]

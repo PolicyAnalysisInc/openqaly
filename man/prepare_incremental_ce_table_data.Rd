@@ -20,11 +20,8 @@ prepare_incremental_ce_table_data(
 \arguments{
 \item{results}{A openqaly model results object}
 
-\item{outcome_summary}{Name of the outcome summary}
-
-\item{cost_summary}{Name of the cost summary}
-
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -37,6 +34,10 @@ prepare_incremental_ce_table_data(
 \item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for rendering}
+
+\item{health_outcome}{Name of the health outcome}
+
+\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

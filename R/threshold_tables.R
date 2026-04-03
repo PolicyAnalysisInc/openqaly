@@ -21,12 +21,15 @@ NULL
 #' @param decimals Number of decimal places for formatting (default: NULL for auto)
 #' @param abbreviate Whether to abbreviate large numbers (default: FALSE)
 #' @param font_size Font size in points (default: 11)
+#' @param use_display_names Logical. If TRUE (default), use display names for
+#'   threshold input variables where available.
 #' @param table_format Output format: "flextable" or "kable" (default: "flextable")
 #' @return A flextable or kable object
 #' @export
 threshold_table <- function(results, analyses = NULL, decimals = NULL,
                             abbreviate = FALSE,
                             font_size = 11,
+                            use_display_names = TRUE,
                             table_format = c("flextable", "kable")) {
   table_format <- match.arg(table_format)
   data <- prepare_threshold_history_data(results, analyses)
@@ -41,12 +44,13 @@ threshold_table <- function(results, analyses = NULL, decimals = NULL,
   multi_analysis <- length(analysis_names) > 1
 
   # Build labels
+  name_field <- field_from_display_names(use_display_names)
   if (!multi_analysis && length(specs) == 1) {
-    input_label <- get_threshold_input_label(specs[[1]], results$metadata)
+    input_label <- get_threshold_input_label(specs[[1]], results$metadata, field = name_field)
     output_label <- as.character(get_threshold_output_label(specs[[1]], results$metadata))
   } else {
-    input_label <- "Variable"
-    output_label <- "Output"
+    input_label <- get_multi_threshold_input_label(specs, results$metadata, field = name_field)
+    output_label <- get_multi_threshold_output_label(specs, results$metadata)
   }
 
   locale <- get_results_locale(results)
@@ -174,12 +178,15 @@ threshold_table <- function(results, analyses = NULL, decimals = NULL,
 #' @param decimals Number of decimal places for formatting (default: NULL for auto)
 #' @param abbreviate Whether to abbreviate large numbers (default: FALSE)
 #' @param font_size Font size in points (default: 11)
+#' @param use_display_names Logical. If TRUE (default), use display names for
+#'   threshold input variables where available.
 #' @param table_format Output format: "flextable" or "kable" (default: "flextable")
 #' @return A flextable or kable object
 #' @export
 threshold_convergence_table <- function(results, analyses = NULL, decimals = NULL,
                                         abbreviate = FALSE,
                                         font_size = 11,
+                                        use_display_names = TRUE,
                                         table_format = c("flextable", "kable")) {
   table_format <- match.arg(table_format)
   data <- prepare_threshold_history_data(results, analyses)
@@ -194,12 +201,13 @@ threshold_convergence_table <- function(results, analyses = NULL, decimals = NUL
   multi_analysis <- length(analysis_names) > 1
 
   # Build labels
+  name_field <- field_from_display_names(use_display_names)
   if (!multi_analysis && length(specs) == 1) {
-    input_label <- get_threshold_input_label(specs[[1]], results$metadata)
+    input_label <- get_threshold_input_label(specs[[1]], results$metadata, field = name_field)
     output_label <- as.character(get_threshold_output_label(specs[[1]], results$metadata))
   } else {
-    input_label <- "Variable"
-    output_label <- "Output"
+    input_label <- get_multi_threshold_input_label(specs, results$metadata, field = name_field)
+    output_label <- get_multi_threshold_output_label(specs, results$metadata)
   }
 
   locale <- get_results_locale(results)

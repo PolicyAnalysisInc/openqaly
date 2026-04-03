@@ -1135,9 +1135,25 @@ get_sampled_parameters <- function(results,
   metadata <- results$metadata
 
   # Create name mapping functions
-  map_var_name <- function(var_name) {
+  map_var_name <- function(var_name, strat = NA, grp = NA) {
     if (!is.null(metadata$variables)) {
       var_meta <- metadata$variables %>% filter(.data$name == var_name)
+      # Narrow by strategy if multiple rows match and strategy info is available
+      if ("strategy" %in% colnames(var_meta) && !is.na(strat) && nrow(var_meta) > 1) {
+        strat_match <- var_meta %>% filter(
+          (!is.na(.data$strategy) & .data$strategy == strat) |
+          (is.na(.data$strategy) | .data$strategy == "")
+        )
+        if (nrow(strat_match) > 0) var_meta <- strat_match
+      }
+      # Narrow by group if multiple rows match and group info is available
+      if ("group" %in% colnames(var_meta) && !is.na(grp) && nrow(var_meta) > 1) {
+        grp_match <- var_meta %>% filter(
+          (!is.na(.data$group) & .data$group == grp) |
+          (is.na(.data$group) | .data$group == "")
+        )
+        if (nrow(grp_match) > 0) var_meta <- grp_match
+      }
       if (nrow(var_meta) > 0 && !is.na(var_meta$display_name[1])) {
         return(var_meta$display_name[1])
       }
@@ -1201,7 +1217,7 @@ get_sampled_parameters <- function(results,
       var_value <- override_vals[[var_name]]
 
       # Get variable display name (no automatic suffix addition)
-      col_label <- map_var_name(var_name)
+      col_label <- map_var_name(var_name, strat, grp)
 
       # Create internal technical name for uniqueness
       col_key <- paste(var_name, strat, grp, sep = "__")

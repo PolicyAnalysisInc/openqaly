@@ -30,7 +30,7 @@ scenario_vbp_table(
 \item{font_size}{Font size for rendering (default: 11)}
 }
 \value{
-A gt table object
+A flextable object
 }
 \description{
 Creates a table showing value-based prices for each scenario at a given

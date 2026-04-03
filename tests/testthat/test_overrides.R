@@ -557,7 +557,7 @@ test_that("JSON serialization round-trip preserves overrides", {
   json_str <- write_model_json(model)
 
   # Read back
-  model2 <- read_model_json(json_str)
+  model2 <- read_model_json(text = json_str)
 
   # Verify structure
   expect_equal(length(model2$override_categories), 2)
@@ -597,7 +597,7 @@ test_that("JSON serialization round-trip preserves dropdown overrides", {
   model <- normalize_and_validate_model(model, preserve_builder = FALSE)
 
   json_str <- write_model_json(model)
-  model2 <- read_model_json(json_str)
+  model2 <- read_model_json(text = json_str)
 
   ovr <- model2$override_categories[[1]]$overrides[[1]]
   expect_equal(ovr$input_type, "dropdown")

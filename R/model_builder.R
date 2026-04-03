@@ -264,6 +264,20 @@ set_vbp <- function(model, price_variable, intervention_strategy,
   model
 }
 
+#' Remove VBP Configuration
+#'
+#' Remove the value-based pricing (VBP) configuration from the model.
+#'
+#' @param model An oq_model_builder object
+#'
+#' @return The modified model object
+#'
+#' @export
+remove_vbp <- function(model) {
+  model$vbp <- NULL
+  model
+}
+
 #' Set PSA Configuration
 #'
 #' Configure probabilistic sensitivity analysis (PSA) parameters on the model
@@ -321,6 +335,56 @@ set_documentation <- function(model, text) {
   }
   model$documentation <- text
   model
+}
+
+#' Get Documentation
+#'
+#' Retrieve the markdown documentation string from the model.
+#'
+#' @param model An oq_model_builder object
+#' @return The documentation string, or NULL if not set
+#' @export
+get_documentation <- function(model) {
+  model$documentation
+}
+
+#' Preview Documentation
+#'
+#' Render model documentation as HTML with math support and open in browser.
+#' Uses KaTeX for rendering \\(...\\) and \\[...\\] math delimiters.
+#'
+#' @param model An oq_model_builder object
+#' @return Invisibly returns the path to the generated HTML file
+#' @export
+preview_documentation <- function(model) {
+  if (!requireNamespace("commonmark", quietly = TRUE)) {
+    stop("Package 'commonmark' is required. Install with: install.packages('commonmark')",
+         call. = FALSE)
+  }
+  doc <- get_documentation(model)
+  if (is.null(doc) || !nzchar(doc)) {
+    stop("Model has no documentation set.", call. = FALSE)
+  }
+  body_html <- commonmark::markdown_html(doc)
+  html <- paste0(
+    '<!DOCTYPE html><html><head><meta charset="utf-8">',
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.38/dist/katex.min.css">',
+    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.38/dist/katex.min.js"></script>',
+    '<script src="https://cdn.jsdelivr.net/npm/katex@0.16.38/dist/contrib/auto-render.min.js"></script>',
+    '<style>body { max-width: 800px; margin: 40px auto; padding: 0 20px; ',
+    'font-family: sans-serif; line-height: 1.6; }</style>',
+    '</head><body>', body_html,
+    '<script>renderMathInElement(document.body, {',
+    '  delimiters: [',
+    '    {left: "\\\\[", right: "\\\\]", display: true},',
+    '    {left: "\\\\(", right: "\\\\)", display: false}',
+    '  ]',
+    '});</script></body></html>'
+  )
+  tmp <- tempfile(fileext = ".html")
+  writeLines(html, tmp)
+  utils::browseURL(tmp)
+  invisible(tmp)
 }
 
 #' Add a Tree Node
@@ -2283,14 +2347,11 @@ edit_strategy <- function(model, name, display_name, description, enabled, new_n
       }
     }
 
-    # 7. Multivariate sampling -> variables tibble
+    # 7. Multivariate sampling -> spec-level strategy
     if (length(model$multivariate_sampling) > 0) {
       for (i in seq_along(model$multivariate_sampling)) {
-        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-            nrow(model$multivariate_sampling[[i]]$variables) > 0) {
-          model$multivariate_sampling[[i]]$variables$strategy[
-            model$multivariate_sampling[[i]]$variables$strategy %in% name
-          ] <- new_name
+        if (identical(model$multivariate_sampling[[i]]$strategy, name)) {
+          model$multivariate_sampling[[i]]$strategy <- new_name
         }
       }
     }
@@ -2415,9 +2476,7 @@ remove_strategy <- function(model, name, error_on_dependencies = FALSE) {
     if (length(model$multivariate_sampling) > 0) {
       dep_mvs <- character(0)
       for (i in seq_along(model$multivariate_sampling)) {
-        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-            nrow(model$multivariate_sampling[[i]]$variables) > 0 &&
-            any(model$multivariate_sampling[[i]]$variables$strategy %in% name)) {
+        if (identical(model$multivariate_sampling[[i]]$strategy, name)) {
           dep_mvs <- c(dep_mvs, model$multivariate_sampling[[i]]$name %||% paste0("mvs_", i))
         }
       }
@@ -2501,17 +2560,8 @@ remove_strategy <- function(model, name, error_on_dependencies = FALSE) {
 
   # 7. Multivariate sampling
   if (length(model$multivariate_sampling) > 0) {
-    for (i in seq_along(model$multivariate_sampling)) {
-      if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-          nrow(model$multivariate_sampling[[i]]$variables) > 0) {
-        model$multivariate_sampling[[i]]$variables <-
-          model$multivariate_sampling[[i]]$variables[
-            !model$multivariate_sampling[[i]]$variables$strategy %in% name, , drop = FALSE
-          ]
-      }
-    }
     keep_specs <- vapply(model$multivariate_sampling, function(s) {
-      is.data.frame(s$variables) && nrow(s$variables) > 0
+      !identical(s$strategy, name)
     }, logical(1))
     model$multivariate_sampling <- model$multivariate_sampling[keep_specs]
   }
@@ -2672,14 +2722,11 @@ edit_group <- function(model, name, display_name, description, weight, enabled, 
       }
     }
 
-    # 7. Multivariate sampling -> variables tibble
+    # 7. Multivariate sampling -> spec-level group
     if (length(model$multivariate_sampling) > 0) {
       for (i in seq_along(model$multivariate_sampling)) {
-        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-            nrow(model$multivariate_sampling[[i]]$variables) > 0) {
-          model$multivariate_sampling[[i]]$variables$group[
-            model$multivariate_sampling[[i]]$variables$group %in% name
-          ] <- new_name
+        if (identical(model$multivariate_sampling[[i]]$group, name)) {
+          model$multivariate_sampling[[i]]$group <- new_name
         }
       }
     }
@@ -2804,9 +2851,7 @@ remove_group <- function(model, name, error_on_dependencies = FALSE) {
     if (length(model$multivariate_sampling) > 0) {
       dep_mvs <- character(0)
       for (i in seq_along(model$multivariate_sampling)) {
-        if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-            nrow(model$multivariate_sampling[[i]]$variables) > 0 &&
-            any(model$multivariate_sampling[[i]]$variables$group %in% name)) {
+        if (identical(model$multivariate_sampling[[i]]$group, name)) {
           dep_mvs <- c(dep_mvs, model$multivariate_sampling[[i]]$name %||% paste0("mvs_", i))
         }
       }
@@ -2890,17 +2935,8 @@ remove_group <- function(model, name, error_on_dependencies = FALSE) {
 
   # 7. Multivariate sampling
   if (length(model$multivariate_sampling) > 0) {
-    for (i in seq_along(model$multivariate_sampling)) {
-      if (is.data.frame(model$multivariate_sampling[[i]]$variables) &&
-          nrow(model$multivariate_sampling[[i]]$variables) > 0) {
-        model$multivariate_sampling[[i]]$variables <-
-          model$multivariate_sampling[[i]]$variables[
-            !model$multivariate_sampling[[i]]$variables$group %in% name, , drop = FALSE
-          ]
-      }
-    }
     keep_specs <- vapply(model$multivariate_sampling, function(s) {
-      is.data.frame(s$variables) && nrow(s$variables) > 0
+      !identical(s$group, name)
     }, logical(1))
     model$multivariate_sampling <- model$multivariate_sampling[keep_specs]
   }
@@ -3421,73 +3457,79 @@ as_r_code <- function(model) {
 #' \dontrun{
 #' # Dirichlet distribution for transition probabilities
 #' model <- define_model("markov") |>
+#'   add_variable("p_stable", 0.7) |>
+#'   add_variable("p_progression", 0.2) |>
+#'   add_variable("p_death", 0.1) |>
 #'   add_multivariate_sampling(
 #'     name = "transition_probs",
-#'     distribution = dirichlet(c(alpha_stable, alpha_progression, alpha_death)),
+#'     type = "dirichlet",
 #'     variables = c("p_stable", "p_progression", "p_death"),
-#'     description = "Transition probabilities from sick state"
+#'     n = 100
 #'   )
 #'
-#' # Multivariate normal for correlated cost and effectiveness
+#' # Multivariate normal with covariance from a model table
 #' model <- model |>
+#'   add_variable("shape", 1.5) |>
+#'   add_variable("scale", 0.02) |>
+#'   add_table("surv_vcov", as.data.frame(vcov(fit))) |>
 #'   add_multivariate_sampling(
-#'     name = "cost_qaly_correlation",
-#'     distribution = mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6),
-#'     variables = c("cost_treatment", "qaly_treatment")
+#'     name = "survival_params",
+#'     type = "mvnormal",
+#'     variables = c("shape", "scale"),
+#'     covariance = "surv_vcov"
 #'   )
 #'
-#' # Segment-specific sampling with tibble specification
+#' # Strategy-specific sampling
 #' model <- model |>
 #'   add_multivariate_sampling(
 #'     name = "strategy_specific",
-#'     distribution = mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5),
-#'     variables = tibble(
-#'       variable = c("treatment_cost", "treatment_qaly"),
-#'       strategy = c("intervention", "intervention"),
-#'       group = c(NA, NA)
-#'     )
+#'     type = "mvnormal",
+#'     variables = c("treatment_cost", "treatment_qaly"),
+#'     strategy = "intervention",
+#'     covariance = "cost_qaly_cov"
 #'   )
 #' }
-add_multivariate_sampling <- function(model, name, distribution, variables, description = NULL) {
+add_multivariate_sampling <- function(model, name, type, variables,
+                                       strategy = "", group = "",
+                                       covariance = NULL,
+                                       n = NULL,
+                                       description = NULL) {
 
-  # Capture the distribution expression using NSE
-  distribution_quo <- enquo(distribution)
-  distribution_expr <- quo_get_expr(distribution_quo)
-
-  # Handle distribution: if already a string, use as-is (backward compatibility)
-  # If an expression/call, convert to string using NSE
-  if (is.character(distribution_expr)) {
-    distribution_str <- distribution_expr
-  } else {
-    distribution_str <- expr_text(distribution_expr)
+  # Validate name
+  if (missing(name) || !is.character(name) || length(name) != 1 || is.na(name) || nchar(trimws(name)) == 0) {
+    stop("name must be a non-empty character string", call. = FALSE)
   }
 
-  # Convert variables to tibble format
-  if (is.character(variables)) {
-    # Simple character vector -> tibble with just variable names
-    variables_df <- fast_tibble(
-      variable = variables,
-      strategy = NA_character_,
-      group = NA_character_
-    )
-  } else if (is.data.frame(variables)) {
-    # Already a dataframe/tibble
-    variables_df <- as_tibble(variables)
-    # Ensure required columns exist
-    if (!"variable" %in% names(variables_df)) {
-      stop("variables tibble must have a 'variable' column")
+  # Validate type
+  valid_types <- c("dirichlet", "mvnormal", "multinomial")
+  if (missing(type) || !is.character(type) || length(type) != 1 || !type %in% valid_types) {
+    stop(sprintf("type must be one of: %s", paste(valid_types, collapse = ", ")), call. = FALSE)
+  }
+
+  # Validate variables
+  if (!is.character(variables) || length(variables) == 0) {
+    stop("variables must be a non-empty character vector of variable names", call. = FALSE)
+  }
+
+  # Validate strategy/group
+  if (!is.character(strategy) || length(strategy) != 1) {
+    stop("strategy must be a single character string", call. = FALSE)
+  }
+  if (!is.character(group) || length(group) != 1) {
+    stop("group must be a single character string", call. = FALSE)
+  }
+
+  # Type-specific validation
+  if (type == "mvnormal") {
+    if (is.null(covariance) || !is.character(covariance) || length(covariance) != 1) {
+      stop("For mvnormal, 'covariance' must be a character string containing an R expression.",
+           call. = FALSE)
     }
-    # Add missing columns with NA
-    if (!"strategy" %in% names(variables_df)) {
-      variables_df$strategy <- NA_character_
+    covariance <- as.oq_formula(covariance)
+  } else if (type == "dirichlet") {
+    if (is.null(n) || !is.numeric(n) || length(n) != 1 || n <= 0) {
+      stop("For dirichlet, 'n' (effective sample size) must be a positive number.", call. = FALSE)
     }
-    if (!"group" %in% names(variables_df)) {
-      variables_df$group <- NA_character_
-    }
-    # Select only the required columns in the correct order
-    variables_df <- variables_df %>% select("variable", "strategy", "group")
-  } else {
-    stop("variables must be either a character vector or a tibble/data.frame")
   }
 
   # Initialize multivariate_sampling if it doesn't exist
@@ -3498,13 +3540,187 @@ add_multivariate_sampling <- function(model, name, distribution, variables, desc
   # Create the sampling specification
   new_spec <- list(
     name = name,
-    distribution = distribution_str,
+    type = type,
+    strategy = strategy,
+    group = group,
     description = description %||% "",
-    variables = variables_df
+    variables = variables
   )
+
+  # Add type-specific fields
+  if (type == "mvnormal") {
+    new_spec$covariance <- covariance
+  } else if (type == "dirichlet") {
+    new_spec$n <- n
+  }
 
   # Add to model
   model$multivariate_sampling <- c(model$multivariate_sampling, list(new_spec))
+
+  model
+}
+
+#' Edit a Multivariate Sampling Specification
+#'
+#' Modify an existing multivariate sampling specification. Any parameter not
+#' provided will retain its current value. Use \code{new_name} to rename.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the specification to edit
+#' @param new_name Optional new name for renaming
+#' @param type Optional new type ("dirichlet", "mvnormal", "multinomial")
+#' @param variables Optional new variables (character vector)
+#' @param strategy Optional new strategy targeting
+#' @param group Optional new group targeting
+#' @param covariance Optional new covariance table name (for mvnormal)
+#' @param alpha Optional new alpha vector (for dirichlet)
+#' @param n Optional new effective sample size (for dirichlet)
+#' @param size Optional new size (for multinomial)
+#' @param description Optional new description
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- model |>
+#'   edit_multivariate_sampling(
+#'     name = "transition_probs",
+#'     n = 200
+#'   )
+#' }
+edit_multivariate_sampling <- function(model, name, new_name, type, variables,
+                                       strategy, group, covariance,
+                                       n, description) {
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || is.na(name) || nchar(trimws(name)) == 0) {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find matching specification
+  spec_idx <- 0L
+  if (length(model$multivariate_sampling) > 0) {
+    for (i in seq_along(model$multivariate_sampling)) {
+      if (model$multivariate_sampling[[i]]$name == name) {
+        spec_idx <- i
+        break
+      }
+    }
+  }
+  if (spec_idx == 0L) {
+    stop(sprintf("Multivariate sampling specification '%s' not found.", name),
+         call. = FALSE)
+  }
+
+  spec <- model$multivariate_sampling[[spec_idx]]
+
+  if (!missing(type)) {
+    valid_types <- c("dirichlet", "mvnormal", "multinomial")
+    if (!is.character(type) || length(type) != 1 || !type %in% valid_types) {
+      stop(sprintf("type must be one of: %s", paste(valid_types, collapse = ", ")), call. = FALSE)
+    }
+    spec$type <- type
+  }
+
+  if (!missing(variables)) {
+    if (!is.character(variables) || length(variables) == 0) {
+      stop("variables must be a non-empty character vector", call. = FALSE)
+    }
+    spec$variables <- variables
+  }
+
+  if (!missing(strategy)) {
+    if (!is.character(strategy) || length(strategy) != 1) {
+      stop("strategy must be a single character string", call. = FALSE)
+    }
+    spec$strategy <- strategy
+  }
+
+  if (!missing(group)) {
+    if (!is.character(group) || length(group) != 1) {
+      stop("group must be a single character string", call. = FALSE)
+    }
+    spec$group <- group
+  }
+
+  if (!missing(covariance)) {
+    if (!is.character(covariance) || length(covariance) != 1) {
+      stop("covariance must be a single character string containing an R expression.", call. = FALSE)
+    }
+    spec$covariance <- as.oq_formula(covariance)
+  }
+  if (!missing(n)) spec$n <- n
+
+  if (!missing(description)) {
+    spec$description <- description %||% ""
+  }
+
+  # Handle renaming
+  if (!missing(new_name)) {
+    if (!is.character(new_name) || length(new_name) != 1 || is.na(new_name) || nchar(trimws(new_name)) == 0) {
+      stop("new_name must be a non-empty character string", call. = FALSE)
+    }
+
+    # Duplicate check excluding self
+    if (length(model$multivariate_sampling) > 1) {
+      for (i in seq_along(model$multivariate_sampling)) {
+        if (i == spec_idx) next
+        if (model$multivariate_sampling[[i]]$name == new_name) {
+          stop(sprintf(
+            "A multivariate sampling specification named '%s' already exists.",
+            new_name
+          ), call. = FALSE)
+        }
+      }
+    }
+
+    spec$name <- new_name
+  }
+
+  model$multivariate_sampling[[spec_idx]] <- spec
+
+  model
+}
+
+#' Remove a Multivariate Sampling Specification
+#'
+#' Remove an existing multivariate sampling specification from the model.
+#'
+#' @param model A oq_model_builder object
+#' @param name Character string identifying the specification to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- model |>
+#'   remove_multivariate_sampling("transition_probs")
+#' }
+remove_multivariate_sampling <- function(model, name) {
+
+  # Validate name
+  if (!is.character(name) || length(name) != 1 || is.na(name) || nchar(trimws(name)) == 0) {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find matching specification
+  spec_idx <- 0L
+  if (length(model$multivariate_sampling) > 0) {
+    for (i in seq_along(model$multivariate_sampling)) {
+      if (model$multivariate_sampling[[i]]$name == name) {
+        spec_idx <- i
+        break
+      }
+    }
+  }
+  if (spec_idx == 0L) {
+    stop(sprintf("Multivariate sampling specification '%s' not found.", name),
+         call. = FALSE)
+  }
+
+  model$multivariate_sampling <- model$multivariate_sampling[-spec_idx]
 
   model
 }
@@ -4040,7 +4256,8 @@ edit_dsa_setting <- function(model, setting, new_setting,
       "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
       "discount_cost", "discount_outcomes", "half_cycle_method",
       "discount_timing", "discount_method",
-      "reduce_state_cycle", "days_per_year"
+      "reduce_state_cycle", "days_per_year",
+      "discount_rate"
     )
     if (!(new_setting %in% valid_settings)) {
       stop(sprintf(
@@ -4660,7 +4877,8 @@ edit_scenario_setting <- function(model, scenario, setting, new_setting, value) 
     valid_settings <- c(
       "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
       "discount_cost", "discount_outcomes", "half_cycle_method",
-      "reduce_state_cycle", "days_per_year"
+      "reduce_state_cycle", "days_per_year",
+      "discount_rate"
     )
     if (!(new_setting %in% valid_settings)) {
       stop(sprintf(
@@ -5587,7 +5805,8 @@ edit_twsa_setting <- function(model, twsa_name, setting,
     valid_settings <- c(
       "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
       "discount_cost", "discount_outcomes", "half_cycle_method",
-      "reduce_state_cycle", "days_per_year"
+      "reduce_state_cycle", "days_per_year",
+      "discount_rate"
     )
     if (!(new_setting %in% valid_settings)) {
       stop(sprintf(
@@ -5970,7 +6189,8 @@ add_override <- function(model, category, title, name, type = "variable",
     valid_settings <- c(
       "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
       "discount_cost", "discount_outcomes", "half_cycle_method",
-      "reduce_state_cycle", "days_per_year"
+      "reduce_state_cycle", "days_per_year",
+      "discount_rate"
     )
     if (!(name %in% valid_settings)) {
       stop(sprintf(
@@ -6290,7 +6510,8 @@ edit_override <- function(model, category, type, name, strategy = "", group = ""
       valid_settings <- c(
         "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
         "discount_cost", "discount_outcomes", "half_cycle_method",
-        "reduce_state_cycle", "days_per_year"
+        "reduce_state_cycle", "days_per_year",
+        "discount_rate"
       )
       if (!(eff_name %in% valid_settings)) {
         stop(sprintf(
@@ -6735,4 +6956,189 @@ validate_threshold_condition <- function(condition) {
       stop("Threshold condition 'group' must be a single character string", call. = FALSE)
     }
   }
+}
+
+#' Edit a Threshold Analysis
+#'
+#' Modify an existing threshold analysis. Only specified parameters are updated;
+#' all others remain unchanged.
+#'
+#' @param model An oq_model_builder or oq_model object
+#' @param name Character string naming the threshold analysis to edit
+#' @param new_name Optional new name for the analysis
+#' @param variable Optional new variable to solve for
+#' @param lower Optional new lower bound for search range
+#' @param upper Optional new upper bound for search range
+#' @param condition Optional new condition list created by \code{threshold_condition_*} functions
+#' @param variable_strategy Optional new strategy targeting for the variable
+#' @param variable_group Optional new group targeting for the variable
+#' @param active Optional new active flag
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost", 100) |>
+#'   add_threshold_analysis("ta1", "cost", 0, 200,
+#'     condition = threshold_condition_outcomes(
+#'       summary = "total_qalys", type = "absolute", strategy = "A")) |>
+#'   edit_threshold_analysis("ta1", new_name = "ta1_renamed", lower = 10)
+#' }
+edit_threshold_analysis <- function(
+  model, name,
+  new_name, variable, lower, upper,
+  condition,
+  variable_strategy, variable_group,
+  active
+) {
+  if (!inherits(model, "oq_model_builder") && !inherits(model, "oq_model")) {
+    stop("model must be an oq_model_builder or oq_model object", call. = FALSE)
+  }
+
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  # Find analysis index
+  analysis_idx <- 0L
+  if (length(model$threshold_analyses) > 0) {
+    for (i in seq_along(model$threshold_analyses)) {
+      if (model$threshold_analyses[[i]]$name == name) {
+        analysis_idx <- i
+        break
+      }
+    }
+  }
+  if (analysis_idx == 0L) {
+    stop(sprintf("Threshold analysis '%s' not found.", name), call. = FALSE)
+  }
+
+  analysis <- model$threshold_analyses[[analysis_idx]]
+
+  # Handle rename
+  if (!missing(new_name)) {
+    if (!is.character(new_name) || length(new_name) != 1 || new_name == "") {
+      stop("new_name must be a non-empty character string", call. = FALSE)
+    }
+    # Duplicate check excluding self
+    if (length(model$threshold_analyses) > 1) {
+      for (i in seq_along(model$threshold_analyses)) {
+        if (i == analysis_idx) next
+        if (model$threshold_analyses[[i]]$name == new_name) {
+          stop(sprintf("Threshold analysis '%s' already exists.", new_name), call. = FALSE)
+        }
+      }
+    }
+    analysis$name <- new_name
+  }
+
+  # Handle variable
+  if (!missing(variable)) {
+    if (!is.character(variable) || length(variable) != 1 || variable == "") {
+      stop("variable must be a non-empty character string", call. = FALSE)
+    }
+    analysis$variable <- variable
+  }
+
+  # Handle bounds
+  if (!missing(lower)) {
+    if (!is.numeric(lower) || length(lower) != 1) {
+      stop("lower must be a single numeric value", call. = FALSE)
+    }
+    analysis$lower <- lower
+  }
+  if (!missing(upper)) {
+    if (!is.numeric(upper) || length(upper) != 1) {
+      stop("upper must be a single numeric value", call. = FALSE)
+    }
+    analysis$upper <- upper
+  }
+  # Validate effective bounds
+  if (analysis$lower >= analysis$upper) {
+    stop("lower must be less than upper", call. = FALSE)
+  }
+
+  # Handle condition
+  if (!missing(condition)) {
+    if (!is.list(condition) || is.null(condition$output)) {
+      stop("condition must be a list with an 'output' field (use threshold_condition_* functions)", call. = FALSE)
+    }
+    valid_outputs <- c("outcomes", "costs", "nmb", "ce", "vbp", "trace")
+    if (!condition$output %in% valid_outputs) {
+      stop(sprintf("Invalid output type '%s'. Must be one of: %s",
+                   condition$output, paste(valid_outputs, collapse = ", ")), call. = FALSE)
+    }
+    if (condition$output == "vbp") {
+      stop("VBP output type is not yet supported for threshold analysis", call. = FALSE)
+    }
+    validate_threshold_condition(condition)
+    analysis$condition <- condition
+  }
+
+  # Handle variable_strategy
+  if (!missing(variable_strategy)) {
+    analysis$variable_strategy <- variable_strategy
+  }
+
+  # Handle variable_group
+  if (!missing(variable_group)) {
+    analysis$variable_group <- variable_group
+  }
+
+  # Handle active
+  if (!missing(active)) {
+    analysis$active <- active
+  }
+
+  # Re-validate variable targeting if any targeting fields changed
+  if (!missing(variable) || !missing(variable_strategy) || !missing(variable_group)) {
+    validate_variable_targeting(model, analysis$variable, analysis$variable_strategy,
+                                 analysis$variable_group, "threshold", "edit_threshold_analysis")
+  }
+
+  model$threshold_analyses[[analysis_idx]] <- analysis
+  model
+}
+
+#' Remove a Threshold Analysis
+#'
+#' Remove an existing threshold analysis from the model.
+#'
+#' @param model An oq_model_builder or oq_model object
+#' @param name Character string naming the threshold analysis to remove
+#'
+#' @return The modified model object
+#'
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost", 100) |>
+#'   add_threshold_analysis("ta1", "cost", 0, 200,
+#'     condition = threshold_condition_outcomes(
+#'       summary = "total_qalys", type = "absolute", strategy = "A")) |>
+#'   remove_threshold_analysis("ta1")
+#' }
+remove_threshold_analysis <- function(model, name) {
+  if (!is.character(name) || length(name) != 1 || name == "") {
+    stop("name must be a non-empty character string", call. = FALSE)
+  }
+
+  analysis_idx <- 0L
+  if (length(model$threshold_analyses) > 0) {
+    for (i in seq_along(model$threshold_analyses)) {
+      if (model$threshold_analyses[[i]]$name == name) {
+        analysis_idx <- i
+        break
+      }
+    }
+  }
+  if (analysis_idx == 0L) {
+    stop(sprintf("Threshold analysis '%s' not found.", name), call. = FALSE)
+  }
+
+  model$threshold_analyses <- model$threshold_analyses[-analysis_idx]
+  model
 }

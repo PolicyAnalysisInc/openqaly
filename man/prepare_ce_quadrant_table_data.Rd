@@ -18,10 +18,6 @@ prepare_ce_quadrant_table_data(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
-
-\item{cost_summary}{Name of the cost summary}
-
 \item{comparator}{Name of the comparator strategy}
 
 \item{groups}{Group selection}
@@ -31,6 +27,10 @@ prepare_ce_quadrant_table_data(
 \item{decimals}{Number of decimal places for percentages}
 
 \item{font_size}{Font size for rendering}
+
+\item{health_outcome}{Name of the health outcome}
+
+\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

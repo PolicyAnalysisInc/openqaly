@@ -6,7 +6,7 @@
 \usage{
 dsa_outcomes_plot(
   results,
-  summary_name,
+  outcome,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
@@ -23,10 +23,10 @@ dsa_outcomes_plot(
 \arguments{
 \item{results}{A openqaly DSA results object (output from run_dsa)}
 
-\item{summary_name}{Name of the summary to plot (e.g., "total_qalys", "total_cost")}
+\item{outcome}{Name of the outcome to plot (e.g., "total_qalys")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL
-(all groups plus aggregated)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all).
 Mutually exclusive with interventions/comparators.}
@@ -37,7 +37,7 @@ Can be a single value or vector. Can be combined with comparators for N×M compa
 \item{comparators}{Character vector of comparator strategy name(s) (e.g., "control").
 Can be a single value or vector. Can be combined with interventions for N×M comparisons.}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{show_parameter_values}{Logical. Include parameter values in Y-axis labels? (default: TRUE)
 When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.}
@@ -99,9 +99,6 @@ dsa_outcomes_plot(dsa_results, "total_qalys")
 
 # Show differences vs control
 dsa_outcomes_plot(dsa_results, "total_qalys", comparators = "control")
-
-# Cost summary tornado plot
-dsa_outcomes_plot(dsa_results, "total_cost", value_type = "cost")
 
 # Tornado plot without parameter values in labels
 dsa_outcomes_plot(dsa_results, "total_qalys", show_parameter_values = FALSE)

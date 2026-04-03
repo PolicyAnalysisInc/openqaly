@@ -21,32 +21,38 @@ read_model <- function(path) {
     mv_sampling <- model$multivariate_sampling
     mv_variables <- model$multivariate_sampling_variables
 
-    # Join and convert to list structure
-    # Preserve original order from mv_sampling sheet
+    # Build list structure from sheets
     sampling_order <- mv_sampling$name
 
-    model$multivariate_sampling <- mv_variables %>%
-      left_join(mv_sampling, by = c("sampling_name" = "name")) %>%
-      split(.$sampling_name) %>%
-      .[sampling_order] %>%  # Reorder to match original order
-      lapply(function(vars) {
-        list(
-          name = vars$sampling_name[1],
-          distribution = vars$distribution[1],
-          description = if ("description" %in% names(vars) && !is.na(vars$description[1])) {
-            vars$description[1]
-          } else {
-            ""
-          },
-          variables = vars %>%
-            select("variable", "strategy", "group") %>%
-            as_tibble()
-        )
-      }) %>%
-      unname()
+    model$multivariate_sampling <- lapply(sampling_order, function(spec_name) {
+      spec_row <- mv_sampling[mv_sampling$name == spec_name, ]
+      spec_vars <- mv_variables[mv_variables$sampling_name == spec_name, ]
 
-    # Remove the raw tables
+      result <- list(
+        name = spec_name,
+        type = spec_row[["type"]],
+        strategy = if ("strategy" %in% names(spec_row) && !is.na(spec_row[["strategy"]])) spec_row[["strategy"]] else "",
+        group = if ("group" %in% names(spec_row) && !is.na(spec_row[["group"]])) spec_row[["group"]] else "",
+        description = if ("description" %in% names(spec_row) && !is.na(spec_row[["description"]])) {
+          spec_row[["description"]]
+        } else {
+          ""
+        },
+        variables = spec_vars[["variable"]]
+      )
+
+      # Type-specific fields (use [[ to avoid partial matching)
+      if ("covariance" %in% names(spec_row) && !is.na(spec_row[["covariance"]])) result$covariance <- as.oq_formula(spec_row[["covariance"]])
+      if ("n" %in% names(spec_row) && !is.na(spec_row[["n"]])) result$n <- spec_row[["n"]]
+
+      result
+    })
+
+    # Remove raw tables
     model$multivariate_sampling_variables <- NULL
+    if ("multivariate_sampling_alpha" %in% names(model)) {
+      model$multivariate_sampling_alpha <- NULL
+    }
   }
 
   # Read metadata sheet for table/script descriptions
@@ -1630,14 +1636,28 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
 }
 
 #'
-#' Takes a JSON string and parses it into a oq_model object.
+#' Read a model from JSON.
 #'
-#' @param json_string A string containing the model in JSON format.
+#' Supply exactly one of \code{file} or \code{text}.
 #'
-#' @return A oq_model object
+#' @param file Path to a JSON file containing the model.
+#' @param text A string containing the model in JSON format.
+#'
+#' @return An oq_model object
 #'
 #' @export
-read_model_json <- function(json_string) {
+read_model_json <- function(file = NULL, text = NULL) {
+  if (!is.null(file) && !is.null(text)) {
+    stop("Provide either 'file' or 'text', not both.")
+  }
+  if (is.null(file) && is.null(text)) {
+    stop("One of 'file' or 'text' must be provided.")
+  }
+  json_string <- if (!is.null(file)) {
+    paste(readLines(file, warn = FALSE), collapse = "\n")
+  } else {
+    text
+  }
   # Parse JSON to list
   model <- fromJSON(json_string, simplifyVector = TRUE)
 
@@ -1695,51 +1715,37 @@ read_model_json <- function(json_string) {
   }
 
   # Convert multivariate_sampling from JSON nested structure to internal list structure
-  # JSON format is an array of objects with: name, distribution, description, variables
-  # where variables is itself an array of objects with: variable, strategy, group
   if (!is.null(model$multivariate_sampling)) {
+    parse_mv_spec <- function(mv) {
+      # Extract variables — may be a list column from fromJSON
+      vars <- mv[["variables"]]
+      if (is.list(vars) && !is.character(vars)) vars <- unlist(vars)
+      vars <- as.character(vars)
+
+      result <- list(
+        name = mv[["name"]],
+        type = mv[["type"]],
+        strategy = mv[["strategy"]] %||% "",
+        group = mv[["group"]] %||% "",
+        description = mv[["description"]] %||% "",
+        variables = vars
+      )
+      # Use [[ to avoid R partial matching (e.g., $n matching $name)
+      cov_val <- mv[["covariance"]]
+      n_val <- mv[["n"]]
+      if (!is.null(cov_val) && !all(is.na(cov_val))) result$covariance <- as.oq_formula(cov_val)
+      if (!is.null(n_val) && !all(is.na(n_val))) result$n <- as.numeric(n_val)
+      result
+    }
+
     if (is.data.frame(model$multivariate_sampling)) {
-      # Convert from dataframe format
       mv_list <- list()
       for (i in 1:nrow(model$multivariate_sampling)) {
-        mv_spec <- model$multivariate_sampling[i, ]
-
-        # Extract variables (could be a nested dataframe or list)
-        variables_df <- if ("variables" %in% names(mv_spec)) {
-          vars_data <- mv_spec$variables[[1]]
-          if (is.data.frame(vars_data)) {
-            as_tibble(vars_data)
-          } else if (is.list(vars_data)) {
-            as_tibble(do.call(rbind, lapply(vars_data, as.data.frame, stringsAsFactors = FALSE)))
-          } else {
-            tibble(variable = character(0), strategy = character(0), group = character(0))
-          }
-        } else {
-          tibble(variable = character(0), strategy = character(0), group = character(0))
-        }
-
-        mv_list[[i]] <- list(
-          name = mv_spec$name,
-          distribution = mv_spec$distribution,
-          description = if ("description" %in% names(mv_spec) && !is.na(mv_spec$description)) {
-            mv_spec$description
-          } else {
-            ""
-          },
-          variables = variables_df
-        )
+        mv_list[[i]] <- suppressWarnings(parse_mv_spec(as.list(model$multivariate_sampling[i, ])))
       }
       model$multivariate_sampling <- mv_list
     } else if (is.list(model$multivariate_sampling) && !is.data.frame(model$multivariate_sampling)) {
-      # Already in list format, just ensure variables are tibbles
-      for (i in seq_along(model$multivariate_sampling)) {
-        if ("variables" %in% names(model$multivariate_sampling[[i]])) {
-          vars_data <- model$multivariate_sampling[[i]]$variables
-          if (!is.data.frame(vars_data)) {
-            model$multivariate_sampling[[i]]$variables <- as_tibble(vars_data)
-          }
-        }
-      }
+      model$multivariate_sampling <- lapply(model$multivariate_sampling, parse_mv_spec)
     }
   }
 
@@ -2563,19 +2569,19 @@ write_model_json <- function(model) {
       for (i in seq_along(model$multivariate_sampling)) {
         mv_spec <- model$multivariate_sampling[[i]]
 
-        # Ensure variables dataframe exists
-        vars_df <- if ("variables" %in% names(mv_spec) && is.data.frame(mv_spec$variables)) {
-          mv_spec$variables
-        } else {
-          tibble(variable = character(0), strategy = character(0), group = character(0))
-        }
-
-        mv_array[[i]] <- list(
-          name = mv_spec$name,
-          distribution = mv_spec$distribution,
-          description = if ("description" %in% names(mv_spec)) mv_spec$description else "",
-          variables = vars_df
+        mv_obj <- list(
+          name = mv_spec[["name"]],
+          type = mv_spec[["type"]],
+          strategy = mv_spec[["strategy"]] %||% "",
+          group = mv_spec[["group"]] %||% "",
+          description = mv_spec[["description"]] %||% "",
+          variables = as.list(mv_spec[["variables"]])
         )
+
+        if (!is.null(mv_spec[["covariance"]])) mv_obj$covariance <- as.character(mv_spec[["covariance"]])
+        if (!is.null(mv_spec[["n"]])) mv_obj$n <- mv_spec[["n"]]
+
+        mv_array[[i]] <- mv_obj
       }
       json_model$multivariate_sampling <- mv_array
     } else {
@@ -2943,8 +2949,13 @@ apply_setting_overrides <- function(segment, model) {
   for (setting_name in names(overrides)) {
     override_value <- overrides[[setting_name]]
 
-    # Apply to model settings
-    modified_model$settings[[setting_name]] <- override_value
+    # Apply to model settings (discount_rate is an alias for both discount fields)
+    if (setting_name == "discount_rate") {
+      modified_model$settings$discount_cost <- override_value
+      modified_model$settings$discount_outcomes <- override_value
+    } else {
+      modified_model$settings[[setting_name]] <- override_value
+    }
 
     # Note: cycle_length_days and n_cycles are recalculated in run_segment
     # after this function returns, ensuring correct values with overrides

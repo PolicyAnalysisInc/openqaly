@@ -87,6 +87,13 @@ diagnose_variable <- function(results, name) {
     )
   })
 
+  # Filter out segments where the variable doesn't exist
+  seg_data <- seg_data[!sapply(seg_data, function(sd) is.null(sd$value))]
+
+  if (length(seg_data) == 0) {
+    stop(sprintf("Variable '%s' not found in any segment.", name), call. = FALSE)
+  }
+
   # Get formula text (should be same across segments)
   formula_text <- NULL
   for (sd in seg_data) {
@@ -226,8 +233,28 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
   segs <- disp$segments
   labels <- disp$labels
 
-  # Detect type from first segment
-  var_type <- .detect_var_type(segs[[1]]$value, segs[[1]]$is_df_var)
+  # Detect type — must be consistent across all displayed segments
+  var_types <- vapply(segs, function(s) {
+    .detect_var_type(s$value, s$is_df_var)
+  }, character(1))
+  unique_types <- unique(var_types)
+  if (length(unique_types) == 1) {
+    var_type <- unique_types
+  } else if (setequal(unique_types, c("scalar", "vector"))) {
+    # Mixed scalar/vector: promote scalars by recycling into vector structure
+    ref_df <- segs[var_types == "vector"][[1]]$var_df
+    for (i in which(var_types == "scalar")) {
+      segs[[i]]$var_df <- data.frame(
+        cycle = ref_df$cycle,
+        state_cycle = ref_df$state_cycle,
+        value = rep(segs[[i]]$value, length.out = nrow(ref_df))
+      )
+      segs[[i]]$is_df_var <- TRUE
+    }
+    var_type <- "vector"
+  } else {
+    var_type <- "object"
+  }
 
   rich <- switch(var_type,
     scalar = .build_scalar_output(segs, labels, name,
@@ -362,16 +389,20 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
 # --- Vector (df-based, varies by time) ---
 
 .build_vector_output <- function(segs, labels, name) {
-  var_df <- segs[[1]]$var_df
-
-  # Detect which time dimensions matter
-  values_by_cycle <- tapply(var_df$value, var_df$state_cycle,
-                            function(v) length(unique(v)) > 1)
-  varies_by_cycle <- any(values_by_cycle, na.rm = TRUE)
-
-  values_by_sc <- tapply(var_df$value, var_df$cycle,
-                         function(v) length(unique(v)) > 1)
-  varies_by_state_cycle <- any(values_by_sc, na.rm = TRUE)
+  # Detect which time dimensions matter across ALL segments, not just the first
+  varies_by_cycle <- FALSE
+  varies_by_state_cycle <- FALSE
+  for (seg in segs) {
+    var_df <- seg$var_df
+    if (is.null(var_df)) next
+    values_by_cycle <- tapply(var_df$value, var_df$state_cycle,
+                              function(v) length(unique(v)) > 1)
+    if (any(values_by_cycle, na.rm = TRUE)) varies_by_cycle <- TRUE
+    values_by_sc <- tapply(var_df$value, var_df$cycle,
+                           function(v) length(unique(v)) > 1)
+    if (any(values_by_sc, na.rm = TRUE)) varies_by_state_cycle <- TRUE
+    if (varies_by_cycle && varies_by_state_cycle) break
+  }
 
   if (varies_by_cycle && varies_by_state_cycle) {
     .build_vector_heatmap_output(segs, labels, name)
@@ -427,10 +458,13 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
       paste0(labels[i], ": ", paste(vals, collapse = ", "))
     }), collapse = "\n")
 
-    # Table
-    table_data <- combined[, c("segment", x_col, "value")]
-    colnames(table_data) <- c("Segment", x_label, name)
-    table <- flextable::autofit(flextable::flextable(table_data))
+    # Table (wide format: one column per segment)
+    wide_df <- data.frame(x = .filter_var_df(segs[[1]]$var_df)[[x_col]])
+    colnames(wide_df) <- x_label
+    for (i in seq_along(segs)) {
+      wide_df[[labels[i]]] <- .filter_var_df(segs[[i]]$var_df)$value
+    }
+    table <- flextable::autofit(flextable::flextable(wide_df))
 
     # Plot
     plot <- ggplot(combined, aes(x = .data[[x_col]], y = .data$value,
@@ -478,9 +512,16 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
       paste0(labels[i], ": ", paste(vals, collapse = ", "))
     }), collapse = "\n")
 
-    table_data <- combined[, c("segment", "cycle", "state_cycle", "value")]
-    colnames(table_data) <- c("Segment", "Cycle", "State Cycle", name)
-    table <- flextable::autofit(flextable::flextable(table_data))
+    # Table (wide format: one column per segment)
+    wide_df <- data.frame(
+      cycle = segs[[1]]$var_df$cycle,
+      state_cycle = segs[[1]]$var_df$state_cycle
+    )
+    colnames(wide_df) <- c("Cycle", "State Cycle")
+    for (i in seq_along(segs)) {
+      wide_df[[labels[i]]] <- segs[[i]]$var_df$value
+    }
+    table <- flextable::autofit(flextable::flextable(wide_df))
 
     plot <- ggplot(combined, aes(x = .data$cycle, y = .data$state_cycle,
                                fill = .data$value)) +
@@ -868,13 +909,17 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
 
 # --- med_regimen ---
 
+.has_openqalyregimen <- function() {
+  requireNamespace("openqalyregimen", quietly = TRUE)
+}
+
 .build_med_regimen_output <- function(segs, labels, name) {
   varies <- !is.null(labels)
 
   .regimen_text <- function(x) {
-    if (exists("summarise_regimen", mode = "function")) {
+    if (.has_openqalyregimen()) {
       tryCatch(
-        paste(capture.output(summarise_regimen(x)), collapse = "\n"),
+        paste(capture.output(openqalyregimen::summarise_regimen(x)), collapse = "\n"),
         error = function(e) paste(capture.output(x), collapse = "\n")
       )
     } else {
@@ -883,16 +928,14 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
   }
 
   .regimen_table <- function(x) {
-    if (exists("detail_schedule", mode = "function") &&
-        exists("as_flextable", mode = "function")) {
-      ft <- tryCatch(as_flextable(detail_schedule(x)),
+    if (.has_openqalyregimen()) {
+      ft <- tryCatch(flextable::as_flextable(openqalyregimen::detail_schedule(x)),
                      error = function(e) NULL)
       if (!is.null(ft)) return(ft)
     }
     if (!is.null(x$route) && x$route %in% c("iv", "sc", "im") &&
-        exists("diagnose_dosing", mode = "function") &&
-        exists("as_flextable", mode = "function")) {
-      ft <- tryCatch(as_flextable(diagnose_dosing(x)),
+        .has_openqalyregimen()) {
+      ft <- tryCatch(flextable::as_flextable(openqalyregimen::diagnose_dosing(x)),
                      error = function(e) NULL)
       if (!is.null(ft)) return(ft)
     }
@@ -935,12 +978,12 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
 
   .combo_text <- function(x) {
     parts <- paste(capture.output(x), collapse = "\n")
-    if (exists("summarise_regimen", mode = "function") &&
+    if (.has_openqalyregimen() &&
         !is.null(x$regimens)) {
       for (reg in x$regimens) {
         parts <- paste0(parts, "\n\n",
           tryCatch(
-            paste(capture.output(summarise_regimen(reg)), collapse = "\n"),
+            paste(capture.output(openqalyregimen::summarise_regimen(reg)), collapse = "\n"),
             error = function(e) ""
           )
         )
@@ -951,18 +994,17 @@ build_diagnostic_results <- function(seg_data, varies_by_strategy,
 
   .combo_table <- function(x) {
     if (is.null(x$regimens) ||
-        !exists("detail_schedule", mode = "function") ||
-        !exists("as_flextable", mode = "function")) {
+        !.has_openqalyregimen()) {
       return(NULL)
     }
     for (reg in x$regimens) {
-      ft <- tryCatch(as_flextable(detail_schedule(reg)),
+      ft <- tryCatch(flextable::as_flextable(openqalyregimen::detail_schedule(reg)),
                      error = function(e) NULL)
       if (!is.null(ft)) return(ft)
 
       if (!is.null(reg$route) && reg$route %in% c("iv", "sc", "im") &&
-          exists("diagnose_dosing", mode = "function")) {
-        ft <- tryCatch(as_flextable(diagnose_dosing(reg)),
+          .has_openqalyregimen()) {
+        ft <- tryCatch(flextable::as_flextable(openqalyregimen::diagnose_dosing(reg)),
                        error = function(e) NULL)
         if (!is.null(ft)) return(ft)
       }

@@ -34,7 +34,8 @@ Imports:
     methods,
     flextable,
     tools,
-    yaml
+    yaml,
+    ggridges
 Depends:
     R (>= 4.1.0),
     openqalysurv
@@ -42,8 +43,10 @@ License: AGPL-3
 Encoding: UTF-8
 LazyData: true
 Suggests:
+    openqalyregimen,
     testthat,
     withr,
+    commonmark,
     covr,
     knitr,
     rmarkdown,

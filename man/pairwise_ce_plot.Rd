@@ -6,8 +6,8 @@
 \usage{
 pairwise_ce_plot(
   res,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   groups = "overall",
   interventions = NULL,
   comparators = NULL,
@@ -20,20 +20,23 @@ pairwise_ce_plot(
 \arguments{
 \item{res}{A openqaly model results object (output from run_model)}
 
-\item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome to use (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost outcome to use (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{interventions}{Character vector of intervention strategies (e.g., "new_treatment").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.}
+\item{interventions}{Character vector of intervention strategies
+(e.g., "new_treatment"). If provided, shows intervention - comparator
+comparisons. At least one of interventions or comparators must be provided.}
 
 \item{comparators}{Character vector of comparator strategies (e.g., "control").
-If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+If provided, shows intervention - comparator comparisons. At least one of
+interventions or comparators must be provided.}
 
 \item{wtp}{Willingness-to-pay threshold for the WTP line. If NULL (default), uses
-the WTP from the outcome summary metadata if available. If neither is available,
+the WTP from the health outcome metadata if available. If neither is available,
 no WTP line is drawn.}
 
 \item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}
@@ -58,13 +61,14 @@ through the origin if a WTP value is available (from metadata or explicit argume
 When comparators is specified:
 - All other strategies are plotted as points showing their incremental values vs. comparator
 - Lines connect origin to each point, with slope representing ICER
-- Single plot (or faceted by group if group=NULL)
+- Single plot (or faceted by group if \code{groups = NULL} or \code{groups = "all"})
 
 When interventions is specified:
 - Each comparison gets its own facet panel showing intervention vs. one other strategy
 - One point per panel at the intervention's incremental position
 - Line shows ICER slope from origin
-- If group=NULL: uses facet_grid with group on rows, comparison on columns
+- If \code{groups = NULL} or \code{groups = "all"}: uses facet_grid with group
+  on rows, comparison on columns
 
 CE calculations always use discounted values as this is a cost-effectiveness measure.
 }
@@ -80,7 +84,7 @@ pairwise_ce_plot(results, "total_qalys", "total_cost", comparators = "control")
 pairwise_ce_plot(results, "total_qalys", "total_cost", interventions = "new_treatment")
 
 # For all groups
-pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,
+pairwise_ce_plot(results, "total_qalys", "total_cost", groups = "all",
                  comparators = "control")
 
 # With explicit WTP threshold line

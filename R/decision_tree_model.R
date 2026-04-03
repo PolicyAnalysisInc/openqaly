@@ -23,6 +23,7 @@ parse_decision_tree_model <- function(model) {
 run_segment.decision_tree <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
+  diagnostics_policy <- get_diagnostics_policy(...)
 
   # Segments in analysis modes (DSA, scenarios) can override model settings
   # like discount rates. Apply those before computing anything.
@@ -91,7 +92,11 @@ run_segment.decision_tree <- function(segment, model, env, ...) {
   # --- Storage phase ---
   # Store diagnostic data (variables, values) on the segment for debugging.
   # eval_states is NULL because DT has no health states or initial distribution.
-  segment <- store_segment_diagnostics(segment, calculated, uneval_vars, eval_vars, NULL)
+  segment <- clear_segment_diagnostics(segment)
+  segment <- store_segment_diagnostics(
+    segment, calculated, uneval_vars, eval_vars, NULL,
+    policy = diagnostics_policy
+  )
   # DT has no real trace — insert a placeholder single-row data.frame(cycle=0)
   # so the segment structure stays compatible with downstream aggregation code
   # that expects collapsed_trace and expanded_trace list columns.

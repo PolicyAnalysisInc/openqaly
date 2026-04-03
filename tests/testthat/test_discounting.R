@@ -337,7 +337,7 @@ test_that("Discounting produces mathematically exact results", {
   # Write JSON to temp file and read
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
-  model <- read_model_json(readLines(temp_file))
+  model <- read_model_json(file = temp_file)
   unlink(temp_file)
 
   results <- run_model(model)
@@ -415,7 +415,7 @@ test_that("Zero discount rate produces identical values", {
 
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
-  model <- read_model_json(readLines(temp_file))
+  model <- read_model_json(file = temp_file)
   unlink(temp_file)
 
   results <- run_model(model)
@@ -466,7 +466,7 @@ test_that("Different discount rates for costs vs outcomes work correctly", {
 
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
-  model <- read_model_json(readLines(temp_file))
+  model <- read_model_json(file = temp_file)
   unlink(temp_file)
 
   results <- run_model(model)
@@ -534,7 +534,7 @@ test_that("High discount rate (50%) works correctly", {
 
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
-  model <- read_model_json(readLines(temp_file))
+  model <- read_model_json(file = temp_file)
   unlink(temp_file)
 
   results <- run_model(model)
@@ -686,7 +686,7 @@ test_that("discount_timing = 'end' produces correct discounted values via run_mo
 
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
-  model <- read_model_json(readLines(temp_file))
+  model <- read_model_json(file = temp_file)
   unlink(temp_file)
 
   results <- run_model(model)
@@ -809,12 +809,12 @@ test_that("model without new settings defaults correctly and matches explicit st
 
   temp_old <- tempfile(fileext = ".json")
   writeLines(json_old, temp_old)
-  model_old <- read_model_json(readLines(temp_old))
+  model_old <- read_model_json(file = temp_old)
   unlink(temp_old)
 
   temp_new <- tempfile(fileext = ".json")
   writeLines(json_new, temp_new)
-  model_new <- read_model_json(readLines(temp_new))
+  model_new <- read_model_json(file = temp_new)
   unlink(temp_new)
 
   # Settings should default correctly

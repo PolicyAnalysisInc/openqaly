@@ -4,9 +4,10 @@
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly model results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
 #' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
@@ -26,6 +27,9 @@ prepare_incremental_ce_table_data <- function(results,
                                               icer_decimals = NULL,
                                               abbreviate = FALSE,
                                               font_size = 11) {
+  if (is.null(outcome_decimals)) {
+    outcome_decimals <- 2
+  }
 
   # Calculate incremental CE (always uses discounted values)
   ce_data <- calculate_incremental_ce(
@@ -210,16 +214,17 @@ prepare_incremental_ce_table_data <- function(results,
 #' sorted by cost, including incremental costs, outcomes, and ICERs.
 #'
 #' @param results A openqaly model results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
 #' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
 #' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
 #' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -237,12 +242,12 @@ prepare_incremental_ce_table_data <- function(results,
 #'
 #' @export
 incremental_ce_table <- function(results,
-                                outcome_summary,
-                                cost_summary,
+                                health_outcome,
+                                cost_outcome,
                                 groups = "overall",
                                 strategies = NULL,
                                 cost_decimals = NULL,
-                                outcome_decimals = NULL,
+                                outcome_decimals = 2,
                                 icer_decimals = NULL,
                                 abbreviate = FALSE,
                                 font_size = 11,
@@ -253,8 +258,8 @@ incremental_ce_table <- function(results,
   # Prepare data
   prepared <- prepare_incremental_ce_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     strategies = strategies,
     cost_decimals = cost_decimals,
@@ -275,11 +280,14 @@ incremental_ce_table <- function(results,
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly model results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. At least one of interventions or comparators must be provided.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. At least one of interventions or comparators must be provided.
 #' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
 #' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
 #' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
@@ -299,6 +307,9 @@ prepare_pairwise_ce_table_data <- function(results,
                                           icer_decimals = NULL,
                                           abbreviate = FALSE,
                                           font_size = 11) {
+  if (is.null(outcome_decimals)) {
+    outcome_decimals <- 2
+  }
 
   # Calculate pairwise CE (always uses discounted values)
   ce_data <- calculate_pairwise_ce(
@@ -537,17 +548,20 @@ prepare_pairwise_ce_table_data <- function(results,
 #' comparisons.
 #'
 #' @param results A openqaly model results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. At least one of interventions or comparators must be provided.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. At least one of interventions or comparators must be provided.
 #' @param cost_decimals Number of decimal places for cost columns (NULL for auto)
 #' @param outcome_decimals Number of decimal places for outcome columns (NULL for auto)
 #' @param icer_decimals Number of decimal places for ICER column (NULL for auto)
 #' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -566,13 +580,13 @@ prepare_pairwise_ce_table_data <- function(results,
 #'
 #' @export
 pairwise_ce_table <- function(results,
-                             outcome_summary,
-                             cost_summary,
+                             health_outcome,
+                             cost_outcome,
                              groups = "overall",
                              interventions = NULL,
                              comparators = NULL,
                              cost_decimals = NULL,
-                             outcome_decimals = NULL,
+                             outcome_decimals = 2,
                              icer_decimals = NULL,
                              abbreviate = FALSE,
                              font_size = 11,
@@ -583,8 +597,8 @@ pairwise_ce_table <- function(results,
   # Prepare data
   prepared <- prepare_pairwise_ce_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     interventions = interventions,
     comparators = comparators,

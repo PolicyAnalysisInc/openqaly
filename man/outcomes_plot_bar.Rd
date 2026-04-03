@@ -28,7 +28,7 @@ outcomes_plot_bar(
 
 \item{interventions}{Strategies used as interventions (when plotting differences)}
 
-\item{comparators}{Strategies used as commparators (when plotting differences)}
+\item{comparators}{Strategies used as comparators (when plotting differences).}
 
 \item{value_labels}{Logical. If TRUE (default), display numeric value labels at bar edges.}
 
@@ -46,12 +46,16 @@ Creates a bar chart showing outcome values by value component and strategy.
 Can display absolute values or differences between strategies.
 }
 \details{
-Whether absolute values or differences are shown, which strategies are included, and the direction of comparisons depends on which of the `strategies`, `interventions`, or `comparators` arguments are provided:
-1. (Default) Absolute values for specified strategies. Use `strategies` argument to specify which strategies to include.
-2. When passing a single strategy to `interventions`, shows different between that strategy and other comparators. Use `comparators` argument to specify which strategies to compare against.
-3. When passing a single strategy to `comparators`, shows difference other strategies and the comparator. Use `interventions` argument to specify which strategies will be compared against comparator.
+The plotting mode depends on which strategy-selection arguments are provided:
+1. With no comparison arguments, or when only `strategies` is supplied, the
+   plot shows absolute outcome values.
+2. When `interventions` is supplied, the plot shows intervention minus
+   comparator differences.
+3. When `comparators` is supplied, the plot shows strategy minus comparator
+   differences.
 
-Models containing multiple groups
+Use `groups = "all"` to show both the overall population and each modelled
+group. Use `groups = "all_groups"` to show only modelled groups.
 }
 \examples{
 \dontrun{

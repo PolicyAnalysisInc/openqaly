@@ -486,18 +486,18 @@ twsa_summary_plot_impl <- function(results,
 #' values.
 #'
 #' @param results TWSA results object from run_twsa()
-#' @param summary_name Name of the summary to display (e.g., "total_qalys")
+#' @param outcome Name of the outcome to display (e.g., "total_qalys")
 #' @param twsa_name Name of specific TWSA analysis to plot (NULL for first/only)
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Intervention strategy name(s) for incremental calculation
 #' @param comparators Comparator strategy name(s) for incremental calculation
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param title Optional plot title
 #' @param xlab Optional x-axis label (defaults to X parameter name)
 #' @param ylab Optional y-axis label (defaults to Y parameter name)
-#' @param legend_title Legend title (default: summary_name)
+#' @param legend_title Legend title (default: outcome)
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
@@ -520,13 +520,13 @@ twsa_summary_plot_impl <- function(results,
 #'   comparators = "standard_care")
 #'
 #' # With custom styling
-#' twsa_outcomes_plot(results, "total_cost",
-#'   title = "Cost Sensitivity",
+#' twsa_outcomes_plot(results, "total_qalys",
+#'   title = "Outcome Sensitivity",
 #'   viridis_option = "magma",
 #'   discounted = TRUE)
 #' }
 twsa_outcomes_plot <- function(results,
-                               summary_name,
+                               outcome,
                                twsa_name = NULL,
                                groups = "overall",
                                strategies = NULL,
@@ -545,7 +545,7 @@ twsa_outcomes_plot <- function(results,
 
   twsa_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     twsa_name = twsa_name,
     groups = groups,
     strategies = strategies,
@@ -572,7 +572,7 @@ twsa_outcomes_plot <- function(results,
 #' The heatmap shows how model costs vary across a grid of two parameter values.
 #'
 #' @param results TWSA results object from run_twsa()
-#' @param summary_name Name of the cost summary to display (e.g., "total_cost")
+#' @param outcome Name of the cost outcome to display (e.g., "total_cost")
 #' @param twsa_name Name of specific TWSA analysis to plot (NULL for first/only)
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
@@ -583,7 +583,7 @@ twsa_outcomes_plot <- function(results,
 #' @param title Optional plot title
 #' @param xlab Optional x-axis label (defaults to X parameter name)
 #' @param ylab Optional y-axis label (defaults to Y parameter name)
-#' @param legend_title Legend title (default: summary_name)
+#' @param legend_title Legend title (default: outcome)
 #' @param viridis_option Viridis color palette: "viridis" (default), "magma",
 #'   "plasma", "inferno", or "cividis"
 #' @param show_base_case Logical. Show base case point marker? (default: TRUE)
@@ -606,7 +606,7 @@ twsa_outcomes_plot <- function(results,
 #'   comparators = "standard_care")
 #' }
 twsa_costs_plot <- function(results,
-                             summary_name,
+                             outcome,
                              twsa_name = NULL,
                              groups = "overall",
                              strategies = NULL,
@@ -625,7 +625,7 @@ twsa_costs_plot <- function(results,
 
   twsa_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     twsa_name = twsa_name,
     groups = groups,
     strategies = strategies,

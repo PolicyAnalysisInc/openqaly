@@ -23,8 +23,8 @@ outcomes_plot_line(
 
 \item{outcome}{Name of the outcome summary to plot (e.g., "total_qalys")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL
-(all groups plus aggregated)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
@@ -76,10 +76,10 @@ outcomes_plot_line(results, outcome = "total_qalys")
 outcomes_plot_line(results, outcome = "total_qalys", cumulative = FALSE)
 
 # Differences vs control (comparator perspective)
-outcomes_plot_line(results, outcome = "total_qalys", comparator = "control")
+outcomes_plot_line(results, outcome = "total_qalys", comparators = "control")
 
 # New treatment vs others (intervention perspective)
-outcomes_plot_line(results, outcome = "total_qalys", intervention = "new_treatment")
+outcomes_plot_line(results, outcome = "total_qalys", interventions = "new_treatment")
 }
 
 }

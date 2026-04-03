@@ -11,6 +11,7 @@ run_twsa(
   vbp_outcome_summary = NULL,
   vbp_cost_summary = NULL,
   progress = NULL,
+  keep_diagnostics = FALSE,
   ...
 )
 }

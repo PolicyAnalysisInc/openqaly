@@ -363,7 +363,9 @@ create_threshold_solver <- function(parsed_model, analysis, progress = NULL, ...
       results <- segments %>%
         dplyr::rowwise() %>%
         dplyr::group_split() %>%
-        lapply(function(segment) run_segment(segment, parsed_model, ...)) %>%
+        lapply(function(segment) {
+          run_segment(segment, parsed_model, ..., .diagnostics_policy = "none")
+        }) %>%
         bind_rows()
 
       # Aggregate results
@@ -682,4 +684,46 @@ threshold_optimizer <- function(solver_callback, analysis) {
   }
 
   res$minimum
+}
+
+# ============================================================================
+# Result Accessor Functions
+# ============================================================================
+
+#' Get Threshold Values
+#'
+#' Returns the threshold values tibble from threshold analysis results,
+#' optionally mapping variable names to display names.
+#'
+#' @param results Threshold results from \code{run_threshold()}.
+#' @param use_display_names Logical. If TRUE (default), use display names for variables.
+#' @return A tibble with columns: name, variable, value, converged.
+#' @export
+get_threshold_values <- function(results, use_display_names = TRUE) {
+  tv <- results$threshold_values
+  if (use_display_names && !is.null(results$metadata$variables) &&
+      nrow(results$metadata$variables) > 0) {
+    field <- field_from_display_names(use_display_names)
+    tv$variable <- map_names(tv$variable, results$metadata$variables, field)
+  }
+  tv
+}
+
+#' Get Threshold History
+#'
+#' Returns the root finder history tibble from threshold analysis results,
+#' optionally mapping variable names to display names.
+#'
+#' @param results Threshold results from \code{run_threshold()}.
+#' @param use_display_names Logical. If TRUE (default), use display names for variables.
+#' @return A tibble with columns: name, variable, iteration, input, output, goal, diff.
+#' @export
+get_threshold_history <- function(results, use_display_names = TRUE) {
+  history <- results$root_finder_history
+  if (use_display_names && !is.null(results$metadata$variables) &&
+      nrow(results$metadata$variables) > 0) {
+    field <- field_from_display_names(use_display_names)
+    history$variable <- map_names(history$variable, results$metadata$variables, field)
+  }
+  history
 }

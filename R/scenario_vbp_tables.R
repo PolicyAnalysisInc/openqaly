@@ -176,7 +176,7 @@ prepare_scenario_vbp_table_data <- function(results,
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #'
-#' @return A gt table object
+#' @return A flextable object
 #'
 #' @examples
 #' \dontrun{

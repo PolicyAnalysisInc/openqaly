@@ -37,8 +37,8 @@ The `incremental_ce_plot()` function creates a cost-effectiveness plane showing 
 ```{r, fig.width=9, fig.height=6}
 incremental_ce_plot(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -49,8 +49,8 @@ Use `groups = "all"` to display results for each population subgroup separately.
 ```{r, fig.width=9, fig.height=6}
 incremental_ce_plot(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all"
 )
 ```
@@ -64,8 +64,8 @@ The `incremental_ce_table()` function presents strategies sorted by cost, showin
 ```{r}
 incremental_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -74,8 +74,8 @@ incremental_ce_table(
 ```{r}
 incremental_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all"
 )
 ```
@@ -87,8 +87,8 @@ Use the `strategies` argument to include only selected strategies.
 ```{r}
 incremental_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   strategies = c("chemo", "check")
 )
 ```
@@ -108,8 +108,8 @@ Use `comparators` to compare all other strategies against a reference.
 ```{r, fig.width=9, fig.height=6}
 pairwise_ce_plot(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "chemo"
 )
 ```
@@ -121,8 +121,8 @@ Use `interventions` to compare a single intervention against each other strategy
 ```{r, fig.width=9, fig.height=6}
 pairwise_ce_plot(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = "check"
 )
 ```
@@ -132,8 +132,8 @@ pairwise_ce_plot(
 ```{r, fig.width=9, fig.height=6}
 pairwise_ce_plot(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "chemo",
   groups = "all"
 )
@@ -148,8 +148,8 @@ The `pairwise_ce_table()` function presents both absolute values and incremental
 ```{r}
 pairwise_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "chemo"
 )
 ```
@@ -159,8 +159,8 @@ pairwise_ce_table(
 ```{r}
 pairwise_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = "check"
 )
 ```
@@ -170,8 +170,8 @@ pairwise_ce_table(
 ```{r}
 pairwise_ce_table(
   results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "chemo",
   groups = "all"
 )

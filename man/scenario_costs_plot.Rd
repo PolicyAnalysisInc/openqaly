@@ -6,7 +6,7 @@
 \usage{
 scenario_costs_plot(
   results,
-  summary_name,
+  outcome,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
@@ -20,10 +20,10 @@ scenario_costs_plot(
 \arguments{
 \item{results}{A openqaly scenario results object (output from run_scenario)}
 
-\item{summary_name}{Name of the summary to plot (e.g., "total_cost")}
+\item{outcome}{Name of the cost outcome to plot (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups,
-or NULL (all groups plus aggregated)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all).
 Mutually exclusive with interventions/comparators.}
@@ -35,7 +35,7 @@ differences (intervention - comparator).}
 \item{comparators}{Character vector of comparator strategy name(s).
 Can be combined with interventions for N×M comparisons.}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
 

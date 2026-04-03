@@ -59,6 +59,14 @@ build_test_model <- function() {
       input_type = "numeric",
       expression = 5000,
       min = 0, max = 20000
+    ) %>%
+    add_script("preprocess", "x <- 1", description = "A test script") %>%
+    add_scenario("Optimistic", description = "Best case") %>%
+    set_vbp(
+      price_variable = "cost",
+      intervention_strategy = "intervention",
+      outcome_summary = "qalys_sum",
+      cost_summary = "costs"
     )
 }
 
@@ -211,6 +219,73 @@ test_that("get_tree_names returns empty character when no trees", {
   expect_equal(get_tree_names(model), character(0))
 })
 
+test_that("get_vbp returns VBP config", {
+  model <- build_test_model()
+  vbp <- get_vbp(model)
+  expect_true(is.list(vbp))
+  expect_equal(vbp$price_variable, "cost")
+  expect_equal(vbp$intervention_strategy, "intervention")
+  expect_equal(vbp$outcome_summary, "qalys_sum")
+  expect_equal(vbp$cost_summary, "costs")
+})
+
+test_that("get_scenarios returns scenarios list", {
+  model <- build_test_model()
+  scenarios <- get_scenarios(model)
+  expect_true(is.list(scenarios))
+  expect_equal(length(scenarios), 1)
+  expect_equal(scenarios[[1]]$name, "Optimistic")
+  expect_equal(scenarios[[1]]$description, "Best case")
+})
+
+test_that("get_scenario_names returns scenario names", {
+  model <- build_test_model()
+  expect_equal(get_scenario_names(model), "Optimistic")
+})
+
+test_that("get_model_summaries returns summaries tibble", {
+  model <- build_test_model()
+  summaries <- get_model_summaries(model)
+  expect_true(is.data.frame(summaries))
+  expect_true(nrow(summaries) > 0)
+  expect_true("costs" %in% summaries$name)
+  expect_true("qalys_sum" %in% summaries$name)
+})
+
+test_that("get_states returns states tibble", {
+  model <- build_test_model()
+  states <- get_states(model)
+  expect_true(is.data.frame(states))
+  expect_equal(nrow(states), 3)
+  expect_true(all(c("healthy", "sick", "dead") %in% states$name))
+})
+
+test_that("get_model_transitions returns transitions tibble", {
+  model <- build_test_model()
+  trans <- get_model_transitions(model)
+  expect_true(is.data.frame(trans))
+  expect_true(nrow(trans) > 0)
+  expect_true(all(c("from_state", "to_state", "formula") %in% names(trans)))
+})
+
+test_that("get_decision_tree returns NULL for non-decision-tree model", {
+  model <- build_test_model()
+  expect_null(get_decision_tree(model))
+})
+
+test_that("get_scripts returns scripts list", {
+  model <- build_test_model()
+  scripts <- get_scripts(model)
+  expect_true(is.list(scripts))
+  expect_true("preprocess" %in% names(scripts))
+  expect_equal(scripts$preprocess$code, "x <- 1")
+})
+
+test_that("get_script_names returns script names", {
+  model <- build_test_model()
+  expect_equal(get_script_names(model), "preprocess")
+})
+
 # ============================================================================
 # Getter Tests - Empty Model
 # ============================================================================
@@ -233,6 +308,15 @@ test_that("getters return appropriate empty values for empty model", {
   expect_equal(get_model_value_names(model), character(0))
   expect_null(get_trees(model))
   expect_equal(get_tree_names(model), character(0))
+  expect_null(get_vbp(model))
+  expect_equal(get_scenarios(model), list())
+  expect_equal(get_scenario_names(model), character(0))
+  expect_equal(nrow(get_model_summaries(model)), 0)
+  expect_equal(nrow(get_states(model)), 0)
+  expect_equal(nrow(get_model_transitions(model)), 0)
+  expect_null(get_decision_tree(model))
+  expect_equal(get_scripts(model), list())
+  expect_equal(get_script_names(model), character(0))
 })
 
 # ============================================================================
@@ -382,4 +466,47 @@ test_that("set_override_expressions validates model", {
     set_override_expressions(list(), list()),
     "must be an oq_model"
   )
+})
+
+# ============================================================================
+# remove_vbp Tests
+# ============================================================================
+
+test_that("remove_vbp clears VBP config", {
+  model <- build_test_model()
+  expect_false(is.null(get_vbp(model)))
+  updated <- remove_vbp(model)
+  expect_null(get_vbp(updated))
+})
+
+test_that("remove_vbp on model without VBP returns model unchanged", {
+  model <- define_model("markov")
+  updated <- remove_vbp(model)
+  expect_null(get_vbp(updated))
+})
+
+# ============================================================================
+# Model-type-specific Tests
+# ============================================================================
+
+test_that("get_states returns correct empty columns for PSM model", {
+  model <- define_model("psm")
+  states <- get_states(model)
+  expect_equal(nrow(states), 0)
+  expect_true(all(c("name", "display_name", "description") %in% names(states)))
+  expect_false("initial_probability" %in% names(states))
+})
+
+test_that("get_model_transitions returns correct empty columns for PSM model", {
+  model <- define_model("psm")
+  trans <- get_model_transitions(model)
+  expect_equal(nrow(trans), 0)
+  expect_true("endpoint" %in% names(trans))
+})
+
+test_that("get_model_transitions returns correct empty columns for custom_psm model", {
+  model <- define_model("custom_psm")
+  trans <- get_model_transitions(model)
+  expect_equal(nrow(trans), 0)
+  expect_true("state" %in% names(trans))
 })

@@ -69,17 +69,27 @@ create_test_model_with_all_sampling <- function() {
     add_summary("total_cost", "cost") |>
     add_summary("total_qaly", "qaly") |>
 
+    # Covariance table for mvnormal
+    # sd = c(200, 0.5), cor = 0.6 → cov matrix:
+    # c(200^2, 0.6*200*0.5, 0.6*200*0.5, 0.5^2)
+    add_table("cost_qaly_cov", data.frame(
+      treatment_cost = c(200^2, 0.6 * 200 * 0.5),
+      treatment_qaly = c(0.6 * 200 * 0.5, 0.5^2)
+    )) |>
+
     # Multivariate sampling
     add_multivariate_sampling(
       name = "transition_probs",
-      distribution = dirichlet(c(alpha_h, alpha_s, alpha_d)),
+      type = "dirichlet",
       variables = c("p_stay_healthy", "p_become_sick", "p_become_dead"),
+      n = 100,
       description = "Transition probabilities from healthy state"
     ) |>
     add_multivariate_sampling(
       name = "cost_qaly_corr",
-      distribution = mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = correlation),
+      type = "mvnormal",
       variables = c("treatment_cost", "treatment_qaly"),
+      covariance = "cost_qaly_cov",
       description = "Correlated cost and QALY"
     )
 }
@@ -90,7 +100,7 @@ test_that("R to JSON to R preserves all sampling specifications", {
 
   # Convert to JSON and back
   json_string <- write_model_json(original_model)
-  restored_model <- read_model_json(json_string)
+  restored_model <- read_model_json(text = json_string)
 
   # Check univariate sampling preserved
   orig_univ <- original_model$variables %>%
@@ -113,9 +123,9 @@ test_that("R to JSON to R preserves all sampling specifications", {
     rest_mv <- restored_model$multivariate_sampling[[i]]
 
     expect_equal(orig_mv$name, rest_mv$name)
-    expect_equal(orig_mv$distribution, rest_mv$distribution)
+    expect_equal(orig_mv$type, rest_mv$type)
     expect_equal(orig_mv$description, rest_mv$description)
-    expect_equal(orig_mv$variables$variable, rest_mv$variables$variable)
+    expect_equal(orig_mv$variables, rest_mv$variables)
   }
 
   # Test that both models produce same sampling results
@@ -177,9 +187,9 @@ test_that("R to Excel to R preserves all sampling specifications", {
     rest_mv <- restored_model$multivariate_sampling[[i]]
 
     expect_equal(orig_mv$name, rest_mv$name)
-    expect_equal(orig_mv$distribution, rest_mv$distribution)
+    expect_equal(orig_mv$type, rest_mv$type)
     expect_equal(orig_mv$description, rest_mv$description)
-    expect_equal(orig_mv$variables$variable, rest_mv$variables$variable)
+    expect_equal(orig_mv$variables, rest_mv$variables)
   }
 
   # Clean up
@@ -217,15 +227,17 @@ test_that("Excel to JSON to Excel preserves all sampling specifications", {
 
   multivariate_sampling <- tibble(
     name = c("trans_probs"),
-    distribution = c("dirichlet(c(alpha1, alpha2, alpha3))"),
-    description = c("Transition probabilities")
+    type = c("dirichlet"),
+    strategy = c(""),
+    group = c(""),
+    description = c("Transition probabilities"),
+    covariance = c(NA_character_),
+    n = c("100")
   )
 
   multivariate_sampling_variables <- tibble(
     sampling_name = rep("trans_probs", 3),
-    variable = c("p1", "p2", "p3"),
-    strategy = rep("", 3),
-    group = rep("", 3)
+    variable = c("p1", "p2", "p3")
   )
 
   strategies <- tibble(
@@ -259,7 +271,7 @@ test_that("Excel to JSON to Excel preserves all sampling specifications", {
 
   # Convert to JSON
   json_string <- write_model_json(excel_model)
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
 
   # Write back to Excel
   temp_excel_path2 <- tempfile(pattern = "test_excel_restored_", fileext = "")
@@ -284,8 +296,8 @@ test_that("Excel to JSON to Excel preserves all sampling specifications", {
       restored_model$multivariate_sampling[[1]]$name
     )
     expect_equal(
-      excel_model$multivariate_sampling[[1]]$distribution,
-      restored_model$multivariate_sampling[[1]]$distribution
+      excel_model$multivariate_sampling[[1]]$type,
+      restored_model$multivariate_sampling[[1]]$type
     )
   }
 
@@ -298,7 +310,7 @@ test_that("JSON to R code to JSON preserves all sampling specifications", {
   # Start with JSON
   original_model <- create_test_model_with_all_sampling()
   original_json <- write_model_json(original_model)
-  json_model <- read_model_json(original_json)
+  json_model <- read_model_json(text = original_json)
 
   # Generate R code
   r_code <- model_to_r_code(json_model)
@@ -313,7 +325,7 @@ test_that("JSON to R code to JSON preserves all sampling specifications", {
 
   # Convert back to JSON
   restored_json <- write_model_json(r_model)
-  restored_model <- read_model_json(restored_json)
+  restored_model <- read_model_json(text = restored_json)
 
   # Check univariate sampling preserved
   json_univ <- json_model$variables %>%
@@ -336,9 +348,9 @@ test_that("JSON to R code to JSON preserves all sampling specifications", {
     rest_mv <- restored_model$multivariate_sampling[[i]]
 
     expect_equal(json_mv$name, rest_mv$name)
-    expect_equal(json_mv$distribution, rest_mv$distribution)
+    expect_equal(json_mv$type, rest_mv$type)
     expect_equal(json_mv$description, rest_mv$description)
-    expect_equal(json_mv$variables$variable, rest_mv$variables$variable)
+    expect_equal(json_mv$variables, rest_mv$variables)
   }
 
   # Clean up
@@ -351,7 +363,7 @@ test_that("PSA runs correctly after format conversions", {
 
   # Test after JSON round-trip
   json_string <- write_model_json(original_model)
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
 
   set.seed(789)
   json_result <- run_model(json_model)
@@ -405,42 +417,51 @@ test_that("Complex multivariate sampling with segment specificity converts corre
     add_variable("param1", 100) |>
     add_variable("param2", 200) |>
     add_transition("healthy", "healthy", "1") |>
+    # Covariance tables for mvnormal
+    # sd = c(10, 20), cor = 0.5 → cov: c(100, 100, 100, 400)
+    add_table("cov_A_young", data.frame(
+      param1 = c(10^2, 0.5 * 10 * 20),
+      param2 = c(0.5 * 10 * 20, 20^2)
+    )) |>
+    # sd = c(15, 25), cor = 0.3 → cov: c(225, 112.5, 112.5, 625)
+    add_table("cov_B_old", data.frame(
+      param1 = c(15^2, 0.3 * 15 * 25),
+      param2 = c(0.3 * 15 * 25, 25^2)
+    )) |>
     add_multivariate_sampling(
       name = "strategy_A_young",
-      distribution = mvnormal(mean = c(100, 200), sd = c(10, 20), cor = 0.5),
-      variables = tibble(
-        variable = c("param1", "param2"),
-        strategy = c("A", "A"),
-        group = c("young", "young")
-      ),
+      type = "mvnormal",
+      variables = c("param1", "param2"),
+      strategy = "A",
+      group = "young",
+      covariance = "cov_A_young",
       description = "Sampling for strategy A, young group"
     ) |>
     add_multivariate_sampling(
       name = "strategy_B_old",
-      distribution = mvnormal(mean = c(150, 250), sd = c(15, 25), cor = 0.3),
-      variables = tibble(
-        variable = c("param1", "param2"),
-        strategy = c("B", "B"),
-        group = c("old", "old")
-      ),
+      type = "mvnormal",
+      variables = c("param1", "param2"),
+      strategy = "B",
+      group = "old",
+      covariance = "cov_B_old",
       description = "Sampling for strategy B, old group"
     )
 
   # Test JSON conversion
   json_string <- write_model_json(model)
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
 
   expect_equal(length(model$multivariate_sampling),
                length(json_model$multivariate_sampling))
 
-  # Check segment-specific variables preserved
+  # Check variables and strategy/group preserved
   for (i in seq_along(model$multivariate_sampling)) {
-    orig_vars <- model$multivariate_sampling[[i]]$variables
-    json_vars <- json_model$multivariate_sampling[[i]]$variables
+    orig_mv <- model$multivariate_sampling[[i]]
+    json_mv <- json_model$multivariate_sampling[[i]]
 
-    expect_equal(orig_vars$variable, json_vars$variable)
-    expect_equal(orig_vars$strategy, json_vars$strategy)
-    expect_equal(orig_vars$group, json_vars$group)
+    expect_equal(orig_mv$variables, json_mv$variables)
+    expect_equal(orig_mv$strategy, json_mv$strategy)
+    expect_equal(orig_mv$group, json_mv$group)
   }
 
   # Test Excel conversion
@@ -451,14 +472,14 @@ test_that("Complex multivariate sampling with segment specificity converts corre
   expect_equal(length(model$multivariate_sampling),
                length(excel_model$multivariate_sampling))
 
-  # Check segment-specific variables preserved
+  # Check variables and strategy/group preserved
   for (i in seq_along(model$multivariate_sampling)) {
-    orig_vars <- model$multivariate_sampling[[i]]$variables
-    excel_vars <- excel_model$multivariate_sampling[[i]]$variables
+    orig_mv <- model$multivariate_sampling[[i]]
+    excel_mv <- excel_model$multivariate_sampling[[i]]
 
-    expect_equal(orig_vars$variable, excel_vars$variable)
-    expect_equal(orig_vars$strategy, excel_vars$strategy)
-    expect_equal(orig_vars$group, excel_vars$group)
+    expect_equal(orig_mv$variables, excel_mv$variables)
+    expect_equal(orig_mv$strategy, excel_mv$strategy)
+    expect_equal(orig_mv$group, excel_mv$group)
   }
 
   # Clean up

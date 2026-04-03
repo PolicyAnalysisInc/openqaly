@@ -44,6 +44,7 @@ parse_psm <- function(model) {
 run_segment.psm <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
+  diagnostics_policy <- get_diagnostics_policy(...)
 
   # Segments in analysis modes (DSA, scenarios) can override model settings
   # like timeframe or discount rates. Apply those before computing anything.
@@ -116,7 +117,11 @@ run_segment.psm <- function(segment, model, env, ...) {
   tick()
 
   # Attach all results to the segment row for downstream aggregation.
-  segment <- store_segment_diagnostics(segment, calculated, uneval_vars, eval_vars, eval_states)
+  segment <- clear_segment_diagnostics(segment)
+  segment <- store_segment_diagnostics(
+    segment, calculated, uneval_vars, eval_vars, eval_states,
+    policy = diagnostics_policy
+  )
   # PSMs have no tunnel states, so the same trace is passed for both the
   # "collapsed" and "expanded" slots (both are identical).
   segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace, calculated$corrected_trace, calculated$corrected_trace)

@@ -12,7 +12,7 @@ scenario_ce_table(
   interventions = NULL,
   comparators = NULL,
   cost_decimals = NULL,
-  outcome_decimals = NULL,
+  outcome_decimals = 2,
   icer_decimals = NULL,
   abbreviate = FALSE,
   font_size = 11,

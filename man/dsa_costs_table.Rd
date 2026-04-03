@@ -25,24 +25,27 @@ dsa_costs_table(
 
 \item{outcome}{Name of cost outcome to display (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group, or NULL
-(all groups)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{strategies}{Character vector of strategies to include (NULL for all)}
+\item{strategies}{Character vector of strategies to include when showing
+absolute values (NULL for all)}
 
-\item{interventions}{Single reference strategy for intervention perspective.
-If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.}
+\item{interventions}{Character vector of intervention strategy name(s). If
+provided, shows interventions - comparators comparisons. Mutually exclusive
+with comparators.}
 
-\item{comparators}{Single reference strategy for comparator perspective.
-If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.}
+\item{comparators}{Character vector of comparator strategy name(s). If
+provided, shows interventions - comparators comparisons. Mutually exclusive
+with interventions.}
 
 \item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
-\item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 
 \item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
 
@@ -62,8 +65,9 @@ for each parameter across strategies. Values are formatted as currency.
 The table shows each DSA parameter as a row with three columns per strategy:
 Low, Base, and High values. Values are formatted as currency.
 
-When multiple groups need to be displayed (groups = NULL), uses group label rows
-(in bold) followed by indented parameter rows for each group.
+When multiple groups need to be displayed (\code{groups = NULL} or
+\code{groups = "all"}), uses group label rows (in bold) followed by indented
+parameter rows for each group.
 
 When interventions or comparators is specified, shows differences between strategies
 instead of absolute values.

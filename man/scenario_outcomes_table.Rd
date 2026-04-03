@@ -11,7 +11,7 @@ scenario_outcomes_table(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = NULL,
+  decimals = 2,
   abbreviate = FALSE,
   discounted = TRUE,
   font_size = 11
@@ -20,11 +20,13 @@ scenario_outcomes_table(
 \arguments{
 \item{results}{A openqaly scenario results object (output from run_scenario)}
 
-\item{outcome}{Name of outcome to display (e.g., "total_qalys", "total_cost")}
+\item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
+\item{strategies}{Character vector of strategy names to include when showing
+absolute values (NULL for all)}
 
 \item{interventions}{Character vector of intervention strategy name(s).
 When specified, shows differences (intervention - comparator).}
@@ -35,12 +37,12 @@ When specified, shows differences (intervention - comparator).}
 
 \item{abbreviate}{Logical. Use K/M/B/T suffixes? (default: FALSE)}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 }
 \value{
-A gt table object
+A flextable object
 }
 \description{
 Creates a table showing scenario outcome values. Each row represents a scenario,

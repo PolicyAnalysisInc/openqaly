@@ -86,14 +86,6 @@ model_to_r_code <- function(model, file = NULL) {
     code <- c(code, generate_summaries_code(model$summaries))
   }
 
-  # Add multivariate sampling (before removing trailing pipe)
-  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
-    mv_code <- generate_multivariate_sampling_code(model$multivariate_sampling)
-    if (length(mv_code) > 0) {
-      code <- c(code, mv_code)
-    }
-  }
-
   # Remove trailing pipe from last line
   last_line <- length(code)
   if (grepl("\\|>$", code[last_line])) {
@@ -103,6 +95,14 @@ model_to_r_code <- function(model, file = NULL) {
   # Add tables and scripts (separate from pipe chain)
   if (!is.null(model$tables) && length(model$tables) > 0) {
     code <- c(code, "", generate_tables_code(model, model$tables))
+  }
+
+  # Add multivariate sampling (after tables, since mvnormal references table names)
+  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
+    mv_code <- generate_multivariate_sampling_code(model$multivariate_sampling)
+    if (length(mv_code) > 0) {
+      code <- c(code, "", mv_code)
+    }
   }
 
   if (!is.null(model$scripts) && length(model$scripts) > 0) {
@@ -521,58 +521,47 @@ generate_multivariate_sampling_code <- function(multivariate_sampling) {
   code <- character()
 
   for (mv_spec in multivariate_sampling) {
-    # Build the function call arguments
     args <- character()
-    args <- c(args, glue('name = "{mv_spec$name}"'))
-    args <- c(args, glue('distribution = {mv_spec$distribution}'))
+    args <- c(args, glue('name = "{mv_spec[["name"]]}"'))
+    args <- c(args, glue('type = "{mv_spec[["type"]]}"'))
 
-    # Handle variables - can be a character vector or a tibble
-    if ("variables" %in% names(mv_spec) && !is.null(mv_spec$variables)) {
-      vars_df <- mv_spec$variables
-
-      if (is.data.frame(vars_df)) {
-        # Check if it's a simple case (just variable names, no strategy/group)
-        if (all(is.na(vars_df$strategy) | vars_df$strategy == "") &&
-            all(is.na(vars_df$group) | vars_df$group == "")) {
-          # Simple case - just variable names
-          var_names <- paste0('"', vars_df$variable, '"', collapse = ", ")
-          args <- c(args, glue('variables = c({var_names})'))
-        } else {
-          # Complex case - need to generate tibble
-          tibble_lines <- format_tribble(vars_df)
-          if (length(tibble_lines) == 1) {
-            # Single line tibble
-            args <- c(args, paste0('variables = ', tibble_lines[1]))
-          } else {
-            # Multi-line tibble - need special handling
-            # We'll use a simplified approach for now
-            tibble_str <- paste(tibble_lines, collapse = "\n    ")
-            args <- c(args, paste0('variables = ', tibble_str))
-          }
-        }
-      } else if (is.character(vars_df)) {
-        # Character vector case
-        var_names <- paste0('"', vars_df, '"', collapse = ", ")
-        args <- c(args, glue('variables = c({var_names})'))
-      }
+    # Variables as character vector
+    if (!is.null(mv_spec[["variables"]])) {
+      var_names <- paste0('"', mv_spec[["variables"]], '"', collapse = ", ")
+      args <- c(args, glue('variables = c({var_names})'))
     }
 
-    # Add description if present
-    if ("description" %in% names(mv_spec) && !is.na(mv_spec$description) &&
-        mv_spec$description != "") {
-      # Escape quotes in description
-      desc_escaped <- gsub('"', '\\"', mv_spec$description)
+    # Strategy/group if non-empty
+    if (!is.null(mv_spec[["strategy"]]) && mv_spec[["strategy"]] != "") {
+      args <- c(args, glue('strategy = "{mv_spec[["strategy"]]}"'))
+    }
+    if (!is.null(mv_spec[["group"]]) && mv_spec[["group"]] != "") {
+      args <- c(args, glue('group = "{mv_spec[["group"]]}"'))
+    }
+
+    # Type-specific parameters
+    if (!is.null(mv_spec[["covariance"]])) {
+      args <- c(args, glue('covariance = "{as.character(mv_spec[["covariance"]])}"'))
+    }
+    if (!is.null(mv_spec[["n"]])) {
+      args <- c(args, glue('n = {mv_spec[["n"]]}'))
+    }
+
+    # Description
+    desc <- mv_spec[["description"]]
+    if (!is.null(desc) && !is.na(desc) && desc != "") {
+      desc_escaped <- gsub('"', '\\"', desc)
       args <- c(args, glue('description = "{desc_escaped}"'))
     }
 
-    # Build the function call
+    # Build the function call (standalone, not in pipe chain)
     if (length(args) == 1) {
-      code <- c(code, glue('  add_multivariate_sampling({args}) |>'))
+      code <- c(code, glue('model <- add_multivariate_sampling(model, {args})'))
     } else {
       code <- c(code,
-        '  add_multivariate_sampling(',
-        paste0('    ', args, collapse = ',\n'),
-        '  ) |>'
+        'model <- add_multivariate_sampling(model,',
+        paste0('  ', args, collapse = ',\n'),
+        ')'
       )
     }
   }

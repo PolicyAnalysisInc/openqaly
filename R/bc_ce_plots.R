@@ -4,9 +4,10 @@
 #' segments connecting strategies on the efficiency frontier.
 #'
 #' @param res A openqaly model results object (output from run_model)
-#' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
-#' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param health_outcome Name of the health outcome to use (e.g., "total_qalys")
+#' @param cost_outcome Name of the cost outcome to use (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
 #' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
@@ -19,7 +20,8 @@
 #' Strategies on the efficiency frontier are connected with line segments.
 #' Dominated and extended dominated strategies are shown with different styling.
 #'
-#' When \code{group = NULL}, creates faceted plots for each group and aggregated results.
+#' When \code{groups = NULL} or \code{groups = "all"}, creates faceted plots for
+#' each group and aggregated results.
 #'
 #' CE calculations always use discounted values as this is a cost-effectiveness measure.
 #'
@@ -32,13 +34,13 @@
 #' incremental_ce_plot(results, "total_qalys", "total_cost")
 #'
 #' # For all groups with faceting
-#' incremental_ce_plot(results, "total_qalys", "total_cost", group = NULL)
+#' incremental_ce_plot(results, "total_qalys", "total_cost", groups = "all")
 #' }
 #'
 #' @export
 incremental_ce_plot <- function(res,
-                                outcome_summary,
-                                cost_summary,
+                                health_outcome,
+                                cost_outcome,
                                 groups = "overall",
                                 strategies = NULL,
                                 cost_axis_decimals = NULL,
@@ -51,8 +53,8 @@ incremental_ce_plot <- function(res,
   # Calculate incremental CE (always uses discounted values)
   ce_data <- calculate_incremental_ce(
     res,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     strategies = strategies
   )
@@ -75,11 +77,11 @@ incremental_ce_plot <- function(res,
     arrange(.data$group, .data$cost)
 
   # Map summary names for axis labels
-  outcome_label <- outcome_summary
-  cost_label <- cost_summary
+  outcome_label <- health_outcome
+  cost_label <- cost_outcome
   if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
-    outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
-    cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
+    outcome_label <- map_names(health_outcome, res$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_outcome, res$metadata$summaries, "display_name")
   }
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -145,15 +147,18 @@ incremental_ce_plot <- function(res,
 #' with the reference strategy at the origin.
 #'
 #' @param res A openqaly model results object (output from run_model)
-#' @param outcome_summary Name of the outcome summary to use (e.g., "total_qalys")
-#' @param cost_summary Name of the cost summary to use (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL (all groups + aggregated)
-#' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
+#' @param health_outcome Name of the health outcome to use (e.g., "total_qalys")
+#' @param cost_outcome Name of the cost outcome to use (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param interventions Character vector of intervention strategies
+#'   (e.g., "new_treatment"). If provided, shows intervention - comparator
+#'   comparisons. At least one of interventions or comparators must be provided.
 #' @param comparators Character vector of comparator strategies (e.g., "control").
-#'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
+#'   If provided, shows intervention - comparator comparisons. At least one of
+#'   interventions or comparators must be provided.
 #' @param wtp Willingness-to-pay threshold for the WTP line. If NULL (default), uses
-#'   the WTP from the outcome summary metadata if available. If neither is available,
+#'   the WTP from the health outcome metadata if available. If neither is available,
 #'   no WTP line is drawn.
 #' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
 #' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
@@ -169,13 +174,14 @@ incremental_ce_plot <- function(res,
 #' When comparators is specified:
 #' - All other strategies are plotted as points showing their incremental values vs. comparator
 #' - Lines connect origin to each point, with slope representing ICER
-#' - Single plot (or faceted by group if group=NULL)
+#' - Single plot (or faceted by group if \code{groups = NULL} or \code{groups = "all"})
 #'
 #' When interventions is specified:
 #' - Each comparison gets its own facet panel showing intervention vs. one other strategy
 #' - One point per panel at the intervention's incremental position
 #' - Line shows ICER slope from origin
-#' - If group=NULL: uses facet_grid with group on rows, comparison on columns
+#' - If \code{groups = NULL} or \code{groups = "all"}: uses facet_grid with group
+#'   on rows, comparison on columns
 #'
 #' CE calculations always use discounted values as this is a cost-effectiveness measure.
 #'
@@ -191,7 +197,7 @@ incremental_ce_plot <- function(res,
 #' pairwise_ce_plot(results, "total_qalys", "total_cost", interventions = "new_treatment")
 #'
 #' # For all groups
-#' pairwise_ce_plot(results, "total_qalys", "total_cost", group = NULL,
+#' pairwise_ce_plot(results, "total_qalys", "total_cost", groups = "all",
 #'                  comparators = "control")
 #'
 #' # With explicit WTP threshold line
@@ -201,8 +207,8 @@ incremental_ce_plot <- function(res,
 #'
 #' @export
 pairwise_ce_plot <- function(res,
-                             outcome_summary,
-                             cost_summary,
+                             health_outcome,
+                             cost_outcome,
                              groups = "overall",
                              interventions = NULL,
                              comparators = NULL,
@@ -222,8 +228,8 @@ pairwise_ce_plot <- function(res,
   # Calculate pairwise CE (always uses discounted values)
   ce_data <- calculate_pairwise_ce(
     res,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     interventions = interventions,
     comparators = comparators
@@ -234,7 +240,7 @@ pairwise_ce_plot <- function(res,
   if (is.null(effective_wtp)) {
     if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
       outcome_meta <- res$metadata$summaries %>%
-        filter(.data$name == outcome_summary)
+        filter(.data$name == health_outcome)
       if (nrow(outcome_meta) > 0 && !is.na(outcome_meta$wtp[1])) {
         effective_wtp <- outcome_meta$wtp[1]
       }
@@ -242,11 +248,11 @@ pairwise_ce_plot <- function(res,
   }
 
   # Map summary names for axis labels
-  outcome_label <- outcome_summary
-  cost_label <- cost_summary
+  outcome_label <- health_outcome
+  cost_label <- cost_outcome
   if (!is.null(res$metadata) && !is.null(res$metadata$summaries)) {
-    outcome_label <- map_names(outcome_summary, res$metadata$summaries, "display_name")
-    cost_label <- map_names(cost_summary, res$metadata$summaries, "display_name")
+    outcome_label <- map_names(health_outcome, res$metadata$summaries, "display_name")
+    cost_label <- map_names(cost_outcome, res$metadata$summaries, "display_name")
   }
 
   # Apply consistent group ordering (Overall first, then model order)

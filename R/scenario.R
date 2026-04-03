@@ -19,7 +19,8 @@ validate_scenario_spec <- function(model) {
   valid_settings <- c(
     "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
     "discount_cost", "discount_outcomes", "half_cycle_method",
-    "reduce_state_cycle", "days_per_year"
+    "reduce_state_cycle", "days_per_year",
+    "discount_rate"
   )
 
   all_var_names <- model$variables$name
@@ -75,18 +76,15 @@ build_scenario_segments <- function(model) {
 
   # Get base segments (strategy x group combinations)
   base_segments <- get_segments(model)
+  base_segments <- apply_override_categories(model, base_segments)
 
   # Enrich with evaluated variables for potential expressions in overrides
   enriched_segments <- base_segments %>%
     rowwise() %>%
     do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(model, as_tibble(seg))
+      prepare_segment_for_sampling(model, .)
     }) %>%
     ungroup()
-
-  # Apply override categories as baseline overrides
-  enriched_segments <- apply_override_categories(model, enriched_segments)
 
   n_segments <- nrow(enriched_segments)
   all_segments <- list()
@@ -309,12 +307,12 @@ run_scenario <- function(model,
                          vbp_outcome_summary = NULL,
                          vbp_cost_summary = NULL,
                          progress = NULL,
+                         keep_diagnostics = FALSE,
                          ...) {
   # Finalize builders (convert to openqaly model)
   if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
   }
-
   # Parse model
   parsed_model <- parse_model(model, ...)
 
@@ -324,7 +322,9 @@ run_scenario <- function(model,
   # Fall back to model$vbp for VBP parameters if not provided
   if (is.null(vbp_price_variable) && !is.null(model$vbp)) {
     vbp_price_variable <- model$vbp$price_variable
-    if (is.null(vbp_intervention)) vbp_intervention <- model$vbp$intervention_strategy
+    if (is.null(vbp_intervention)) {
+      vbp_intervention <- model$vbp$intervention_strategy
+    }
     if (is.null(vbp_outcome_summary)) vbp_outcome_summary <- model$vbp$outcome_summary
     if (is.null(vbp_cost_summary)) vbp_cost_summary <- model$vbp$cost_summary
   }
@@ -356,7 +356,7 @@ run_scenario <- function(model,
         vbp_cost_summary <- "total_cost"
       }
     }
-
+    
     # Validate VBP spec (reuse from VBP module)
     validate_scenario_vbp_spec(
       parsed_model,
@@ -399,9 +399,13 @@ run_scenario <- function(model,
 
   results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = if (isTRUE(keep_diagnostics)) "all" else "base_case"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Generate scenario metadata

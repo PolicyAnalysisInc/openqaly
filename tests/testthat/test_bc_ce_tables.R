@@ -119,8 +119,8 @@ test_that("pairwise_ce_table() handles special ICER cases", {
 
   ce <- calculate_pairwise_ce(
     results,
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost",
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
     comparators = "standard"
   )
 
@@ -137,8 +137,8 @@ test_that("pairwise_ce_table() returns table object", {
 
   tbl <- pairwise_ce_table(
     results,
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost",
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
     comparators = "standard"
   )
 
@@ -231,8 +231,8 @@ test_that("pairwise_ce_table() renders correctly with multiple groups", {
 
   tbl <- pairwise_ce_table(
     results,
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost",
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
     groups = "all",
     comparators = "standard"
   )
@@ -246,8 +246,8 @@ test_that("pairwise_ce_table() with flextable renders correctly with multiple gr
 
   tbl <- pairwise_ce_table(
     results,
-    outcome_summary = "total_qalys",
-    cost_summary = "total_cost",
+    health_outcome = "total_qalys",
+    cost_outcome = "total_cost",
     groups = "all",
     comparators = "standard",
     table_format = "flextable"

@@ -304,7 +304,7 @@ test_that("PSM model can be converted to JSON and back", {
   json_string <- write_model_json(original_model)
 
   # Convert back
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
 
   # Verify model type preserved
   expect_equal(tolower(original_model$settings$model_type),
@@ -335,7 +335,7 @@ test_that("PSM JSON conversion produces identical results", {
 
   # Convert to JSON and back
   json_string <- write_model_json(original_model)
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
 
   # Run converted model
   set.seed(123)

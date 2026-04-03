@@ -33,7 +33,7 @@ test_that("Excel to JSON conversion preserves model structure and results", {
   expect_true(nchar(json_string) > 0)
   
   # Test 2: JSON can be parsed back
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
   expect_s3_class(json_model, "oq_model")
   
   # Test 3: Compare model components structure
@@ -176,7 +176,7 @@ test_that("Excel to JSON conversion handles special cases", {
   test_model$scripts <- list()
   
   json_string <- write_model_json(test_model)
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
   
   expect_equal(length(json_model$tables), 0)
   expect_equal(length(json_model$scripts), 0)
@@ -188,7 +188,7 @@ test_that("Excel to JSON conversion handles special cases", {
   }
   
   json_string2 <- write_model_json(test_model2)
-  json_model2 <- read_model_json(json_string2)
+  json_model2 <- read_model_json(text = json_string2)
   
   # Should convert factors to characters
   expect_type(json_model2$strategies$name, "character")
@@ -239,7 +239,7 @@ test_that("example_psm Excel to JSON conversion preserves model structure and re
   expect_true(nchar(json_string) > 0)
 
   # Test 2: JSON can be parsed back
-  json_model <- read_model_json(json_string)
+  json_model <- read_model_json(text = json_string)
   expect_s3_class(json_model, "oq_model")
 
   # Test 3: Model type is preserved

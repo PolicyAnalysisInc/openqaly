@@ -5,14 +5,19 @@
 #'
 #' @param results A openqaly model results object
 #' @param outcome Name of cost summary to display (e.g., "total_costs")
-#' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
-#' @param strategies Character vector of strategies to include (NULL for all)
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategies to include when showing
+#'   absolute values (NULL for all). Cannot be combined with interventions or
+#'   comparators.
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. Use for differences; cannot be combined with strategies.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. Use for differences; cannot be combined with strategies.
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
-#' @param discounted Logical. Use discounted values?
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -27,7 +32,7 @@
 #' ft <- costs_table(results, "total_costs")
 #'
 #' # Compare across groups
-#' ft <- costs_table(results, "total_costs", groups = NULL)
+#' ft <- costs_table(results, "total_costs", groups = "all")
 #' }
 #'
 #' @export

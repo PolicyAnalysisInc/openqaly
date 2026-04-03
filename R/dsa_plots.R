@@ -42,6 +42,7 @@ get_setting_unit_suffix <- function(param_name, settings) {
   switch(param_name,
     "discount_cost" = "%",
     "discount_outcomes" = "%",
+    "discount_rate" = "%",
     "timeframe" = abbreviate_time_unit(settings$timeframe_unit),
     "cycle_length" = abbreviate_time_unit(settings$cycle_length_unit),
     ""  # No suffix for: timeframe_unit, cycle_length_unit, half_cycle_method,
@@ -269,7 +270,7 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
       size = 2.5,
       inherit.aes = FALSE
     ) +
-    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)) +
+    scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = TRUE, currency = currency)) +
     scale_y_reverse(
       breaks = seq_len(ceiling(max_y / y_spacing)) * y_spacing,
       labels = function(y) {
@@ -696,19 +697,25 @@ prepare_dsa_tornado_data <- function(results,
                 ""
               }
 
+              # Compute joint precision for low/high pair
+              d <- auto_precision(
+                c(.data$param_low_value, .data$param_high_value),
+                exact = TRUE, require_unique = TRUE, base_precision = 3
+              )
+
               # Format values with unit suffix
               if (unit_suffix != "") {
                 sprintf("%s (%s%s - %s%s)",
                         .data$parameter_display_name,
-                        oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                        oq_format(.data$param_low_value, decimals = d, locale = locale),
                         unit_suffix,
-                        oq_format(.data$param_high_value, exact = TRUE, locale = locale),
+                        oq_format(.data$param_high_value, decimals = d, locale = locale),
                         unit_suffix)
               } else {
                 sprintf("%s (%s - %s)",
                         .data$parameter_display_name,
-                        oq_format(.data$param_low_value, exact = TRUE, locale = locale),
-                        oq_format(.data$param_high_value, exact = TRUE, locale = locale))
+                        oq_format(.data$param_low_value, decimals = d, locale = locale),
+                        oq_format(.data$param_high_value, decimals = d, locale = locale))
               }
             },
             .data$parameter_display_name
@@ -743,16 +750,16 @@ prepare_dsa_tornado_data <- function(results,
 #' bars representing the range of variation with a vertical line at the base case.
 #'
 #' @param results A openqaly DSA results object (output from run_dsa)
-#' @param summary_name Name of the summary to plot (e.g., "total_qalys", "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#'   (all groups plus aggregated)
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s) (e.g., "new_treatment").
 #'   Can be a single value or vector. Can be combined with comparators for N×M comparisons.
 #' @param comparators Character vector of comparator strategy name(s) (e.g., "control").
 #'   Can be a single value or vector. Can be combined with interventions for N×M comparisons.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param show_parameter_values Logical. Include parameter values in Y-axis labels? (default: TRUE)
 #'   When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on results? (default: TRUE)
@@ -803,16 +810,13 @@ prepare_dsa_tornado_data <- function(results,
 #' # Show differences vs control
 #' dsa_outcomes_plot(dsa_results, "total_qalys", comparators = "control")
 #'
-#' # Cost summary tornado plot
-#' dsa_outcomes_plot(dsa_results, "total_cost", value_type = "cost")
-#'
 #' # Tornado plot without parameter values in labels
 #' dsa_outcomes_plot(dsa_results, "total_qalys", show_parameter_values = FALSE)
 #' }
 #'
 #' @export
 dsa_outcomes_plot <- function(results,
-                              summary_name,
+                              outcome,
                               groups = "overall",
                               strategies = NULL,
                               interventions = NULL,
@@ -827,7 +831,7 @@ dsa_outcomes_plot <- function(results,
 
   dsa_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -976,16 +980,16 @@ dsa_summary_plot_impl <- function(results,
 #' Values are formatted as currency.
 #'
 #' @param results A openqaly DSA results object (output from run_dsa)
-#' @param summary_name Name of the cost summary to plot (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#'   (all groups plus aggregated)
+#' @param outcome Name of the cost outcome to plot (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s) (e.g., "new_treatment").
 #'   Can be a single value or vector. Can be combined with comparators for N x M comparisons.
 #' @param comparators Character vector of comparator strategy name(s) (e.g., "control").
 #'   Can be a single value or vector. Can be combined with interventions for N x M comparisons.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param show_parameter_values Logical. Include parameter values in Y-axis labels? (default: TRUE)
 #'   When TRUE, labels show "Parameter Name (low - high)" format with evaluated parameter values.
 #' @param drop_zero_impact Logical. Remove parameters with zero impact on results? (default: TRUE)
@@ -1021,7 +1025,7 @@ dsa_summary_plot_impl <- function(results,
 #'
 #' @export
 dsa_costs_plot <- function(results,
-                            summary_name,
+                            outcome,
                             groups = "overall",
                             strategies = NULL,
                             interventions = NULL,
@@ -1036,7 +1040,7 @@ dsa_costs_plot <- function(results,
 
   dsa_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -1281,19 +1285,25 @@ dsa_nmb_plot <- function(results,
                 ""
               }
 
+              # Compute joint precision for low/high pair
+              d <- auto_precision(
+                c(.data$param_low_value, .data$param_high_value),
+                exact = TRUE, require_unique = TRUE, base_precision = 3
+              )
+
               # Format values with unit suffix
               if (unit_suffix != "") {
                 sprintf("%s (%s%s - %s%s)",
                         .data$parameter_display_name,
-                        oq_format(.data$param_low_value, exact = TRUE),
+                        oq_format(.data$param_low_value, decimals = d),
                         unit_suffix,
-                        oq_format(.data$param_high_value, exact = TRUE),
+                        oq_format(.data$param_high_value, decimals = d),
                         unit_suffix)
               } else {
                 sprintf("%s (%s - %s)",
                         .data$parameter_display_name,
-                        oq_format(.data$param_low_value, exact = TRUE),
-                        oq_format(.data$param_high_value, exact = TRUE))
+                        oq_format(.data$param_low_value, decimals = d),
+                        oq_format(.data$param_high_value, decimals = d))
               }
             },
             .data$parameter_display_name
@@ -2203,18 +2213,24 @@ prepare_dsa_ce_tornado_data <- function(results,
                   ""
                 }
 
+                # Compute joint precision for low/high pair
+                d <- auto_precision(
+                  c(.data$param_low_value, .data$param_high_value),
+                  exact = TRUE, require_unique = TRUE, base_precision = 3
+                )
+
                 if (unit_suffix != "") {
                   sprintf("%s (%s%s - %s%s)",
                           .data$parameter_display_name,
-                          oq_format(.data$param_low_value, exact = TRUE, locale = locale),
+                          oq_format(.data$param_low_value, decimals = d, locale = locale),
                           unit_suffix,
-                          oq_format(.data$param_high_value, exact = TRUE, locale = locale),
+                          oq_format(.data$param_high_value, decimals = d, locale = locale),
                           unit_suffix)
                 } else {
                   sprintf("%s (%s - %s)",
                           .data$parameter_display_name,
-                          oq_format(.data$param_low_value, exact = TRUE, locale = locale),
-                          oq_format(.data$param_high_value, exact = TRUE, locale = locale))
+                          oq_format(.data$param_low_value, decimals = d, locale = locale),
+                          oq_format(.data$param_high_value, decimals = d, locale = locale))
                 }
               },
               .data$parameter_display_name
@@ -2937,7 +2953,7 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     scale_x_continuous(
       breaks = x_breaks,
       limits = x_limits,
-      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate),
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = TRUE),
       expand = expansion(mult = c(0, 0), add = c(0, 0))
     ) +
     scale_y_reverse(

@@ -14,7 +14,7 @@
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
-run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
+run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, keep_diagnostics = FALSE, ...) {
   # Finalize builders (convert to oq_model)
   if ("oq_model_builder" %in% class(model)) {
     model <- normalize_and_validate_model(model, preserve_builder = FALSE)
@@ -51,8 +51,7 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
   enriched_segments <- segments %>%
     rowwise() %>%
     do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      prepare_segment_for_sampling(parsed_model, .)
     }) %>%
     ungroup()
 
@@ -76,9 +75,13 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
 
   res$segments <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = if (isTRUE(keep_diagnostics)) "all" else "none"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate by simulation + strategy
@@ -186,9 +189,13 @@ run_model <- function(model, progress = NULL, ...) {
 
   res$segments <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = "all"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate results by strategy
@@ -221,16 +228,6 @@ parse_model <- function(model, ...) {
   # Create a new environment from the calling environment which will be used
   # to store model variables.
   model$env <- new.env(parent = parent.frame())
-
-  # DEBUG: trace parent chain
-  cat("=== DEBUG parse_model: model$env parent chain ===\n")
-  .dbg_e <- model$env
-  for (.dbg_i in 1:8) {
-    cat("  ", .dbg_i, ": ", environmentName(.dbg_e), " (", format(.dbg_e), ")\n")
-    .dbg_p <- parent.env(.dbg_e)
-    if (identical(.dbg_p, emptyenv())) break
-    .dbg_e <- .dbg_p
-  }
 
   # Load tables & trees into the environment
   load_tables(model$tables, model$env)
@@ -503,6 +500,16 @@ aggregate_strategy_segments <- function(strat_segments, parsed_model) {
   if (!("weight" %in% colnames(strat_segments))) {
     warning("No weight column found in segments. Using equal weights.")
     strat_segments$weight <- 1
+  }
+
+  # Resolve complement (C) weights
+  complement_mask <- strat_segments$weight == -pi
+  if (any(complement_mask)) {
+    if (sum(complement_mask) > 1) {
+      stop(glue("Only one group may use complement (C) for weight in strategy '{strat}'."), call. = FALSE)
+    }
+    non_complement_sum <- sum(strat_segments$weight[!complement_mask])
+    strat_segments$weight[complement_mask] <- 1 - non_complement_sum
   }
 
   # Check for NA weights

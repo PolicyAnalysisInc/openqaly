@@ -90,42 +90,24 @@ This is useful for:
 }
 \examples{
 \dontrun{
-model <- read_model(system.file("models/example", package = "openqaly"))
+model <- read_model(system.file("models/example_markov", package = "openqaly"))
 psa_results <- run_psa(model, n_sim = 1000)
 
-# Visualize selected parameters (all strategies/groups)
+# Visualize sampled parameters for one strategy/group combination
 psa_parameter_scatter_matrix(
   psa_results,
-  variables = c("p_transition", "utility_well", "utility_sick", "cost_treatment")
+  variables = c("u_mild", "u_severe", "c_treatment"),
+  strategies = "seritinib",
+  group = "low_risk"
 )
 
-# Focus on specific strategy
+# Disable axis-label wrapping
 psa_parameter_scatter_matrix(
   psa_results,
-  variables = c("p_transition", "utility_well"),
-  strategies = "treatment_a"
-)
-
-# Visualize specific (variable, strategy, group) combinations
-psa_parameter_scatter_matrix(
-  psa_results,
-  variables = c("p_well_to_sick", "p_well_to_dead", "p_well_to_well"),
-  strategies = c("treatment_a", "treatment_a", "treatment_a"),
-  group = c("group_1", "group_1", "group_1")
-)
-
-# Control label wrapping for long variable names
-psa_parameter_scatter_matrix(
-  psa_results,
-  variables = c("very_long_parameter_name", "another_long_parameter"),
-  label_wrap_width = 15  # Wrap at 15 characters
-)
-
-# Disable wrapping for short variable names
-psa_parameter_scatter_matrix(
-  psa_results,
-  variables = c("param1", "param2", "param3"),
-  label_wrap_width = NULL  # No wrapping
+  variables = c("u_mild", "u_severe", "c_treatment"),
+  strategies = "seritinib",
+  group = "low_risk",
+  label_wrap_width = NULL
 )
 }
 

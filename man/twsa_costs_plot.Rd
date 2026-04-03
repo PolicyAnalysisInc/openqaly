@@ -6,7 +6,7 @@
 \usage{
 twsa_costs_plot(
   results,
-  summary_name,
+  outcome,
   twsa_name = NULL,
   groups = "overall",
   strategies = NULL,
@@ -27,7 +27,7 @@ twsa_costs_plot(
 \arguments{
 \item{results}{TWSA results object from run_twsa()}
 
-\item{summary_name}{Name of the cost summary to display (e.g., "total_cost")}
+\item{outcome}{Name of the cost outcome to display (e.g., "total_cost")}
 
 \item{twsa_name}{Name of specific TWSA analysis to plot (NULL for first/only)}
 
@@ -48,7 +48,7 @@ specific group name(s)}
 
 \item{ylab}{Optional y-axis label (defaults to Y parameter name)}
 
-\item{legend_title}{Legend title (default: summary_name)}
+\item{legend_title}{Legend title (default: outcome)}
 
 \item{viridis_option}{Viridis color palette: "viridis" (default), "magma",
 "plasma", "inferno", or "cividis"}

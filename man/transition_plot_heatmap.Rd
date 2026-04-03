@@ -40,7 +40,7 @@ base state. Non-tunnel states are always included. Ignored when
 
 \item{exclude_zero_residency}{Logical. Exclude expanded states with zero
 residency at the plotted cycle. Defaults to TRUE when \code{collapsed=FALSE},
-FALSE when \code{collapsed=TRUE}. Requires \code{cycles} to be specified.}
+FALSE when \code{collapsed=TRUE}. Requires \code{cycle} to be specified.}
 }
 \value{
 A ggplot2 object

@@ -454,6 +454,47 @@ test_that("name fields work with missing metadata", {
   expect_s3_class(ft, "flextable")
 })
 
+test_that("trace_table treats strategy display names as literal prefixes", {
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("officer")
+  skip_if_not_installed("kableExtra")
+  skip_if_not_installed("knitr")
+
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 5,
+      cycle_length = 1,
+      cycle_length_unit = "years",
+      timeframe = 5,
+      timeframe_unit = "years"
+    ) |>
+    add_state("stable", display_name = "Stable Disease", initial_prob = 1) |>
+    add_state("progressed", display_name = "Progressed Disease", initial_prob = 0) |>
+    add_state("dead", display_name = "Dead", initial_prob = 0) |>
+    add_transition("stable", "stable", 0.89) |>
+    add_transition("stable", "progressed", 0.1) |>
+    add_transition("stable", "dead", 0.01) |>
+    add_transition("progressed", "progressed", 0.9) |>
+    add_transition("progressed", "dead", 0.1) |>
+    add_transition("dead", "dead", 1) |>
+    add_strategy("standard", display_name = "Standard Chemotherapy") |>
+    add_strategy("combo", display_name = "Combination Chemo+Immuno") |>
+    add_strategy("targeted", display_name = "Targeted Therapy")
+
+  results <- run_model(model)
+  prepared <- prepare_trace_table_data(results, cycles = 0:3)
+
+  expect_equal(ncol(prepared$data), 13)
+  for (header in prepared$headers) {
+    spans <- vapply(header, function(cell) cell$span, numeric(1))
+    expect_equal(sum(spans), ncol(prepared$data))
+  }
+
+  expect_s3_class(trace_table(results, cycles = 0:3, table_format = "flextable"), "flextable")
+  expect_true(inherits(trace_table(results, cycles = 0:3, table_format = "kable"), "kableExtra") ||
+                is.character(trace_table(results, cycles = 0:3, table_format = "kable")))
+})
+
 # =============================================================================
 # Time Unit Tests
 # =============================================================================

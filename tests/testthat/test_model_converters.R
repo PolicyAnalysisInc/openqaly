@@ -15,7 +15,7 @@ test_that("convert_model detects oq_model object input", {
   expect_equal(result, json_path)
 
   # Verify round-trip
-  converted <- read_model_json(paste(readLines(json_path), collapse = "\n"))
+  converted <- read_model_json(file = json_path)
   expect_s3_class(converted, "oq_model")
   expect_equal(nrow(model$states), nrow(converted$states))
 
@@ -31,7 +31,7 @@ test_that("convert_model detects Excel folder input", {
 
   # Verify round-trip preserves structure
   original <- read_model(model_path)
-  converted <- read_model_json(paste(readLines(json_path), collapse = "\n"))
+  converted <- read_model_json(file = json_path)
   expect_equal(nrow(original$states), nrow(converted$states))
   expect_equal(nrow(original$variables), nrow(converted$variables))
 
@@ -70,7 +70,7 @@ test_that("convert_model detects R file input", {
   convert_model(r_in, json_out)
 
   # Verify round-trip
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
   expect_equal(model$variables$name, converted$variables$name)
 
@@ -139,7 +139,7 @@ test_that("convert_model respects explicit from='object' parameter", {
   json_out <- tempfile(fileext = ".json")
   convert_model(model, json_out, from = "object", to = "json")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_s3_class(converted, "oq_model")
 
   unlink(json_out)
@@ -157,7 +157,7 @@ test_that("convert_model respects explicit from='json' for non-.json file", {
   json_out <- tempfile(fileext = ".json")
   convert_model(txt_path, json_out, from = "json")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
 
   unlink(c(txt_path, json_out))
@@ -170,7 +170,7 @@ test_that("convert_model respects explicit from='excel'", {
   json_out <- tempfile(fileext = ".json")
   convert_model(model_path, json_out, from = "excel")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_s3_class(converted, "oq_model")
 
   unlink(json_out)
@@ -187,7 +187,7 @@ test_that("convert_model respects explicit from='r'", {
   json_out <- tempfile(fileext = ".json")
   convert_model(r_path, json_out, from = "r")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
 
   unlink(c(r_path, json_out))
@@ -214,7 +214,7 @@ test_that("convert_model warns when R file has multiple models", {
   )
 
   # Should still produce valid output (using first model)
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_s3_class(converted, "oq_model")
 
   unlink(c(r_path, json_out))

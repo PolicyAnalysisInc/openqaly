@@ -11,7 +11,7 @@ dsa_outcomes_table(
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
-  decimals = NULL,
+  decimals = 2,
   discounted = TRUE,
   font_size = 11,
   table_format = c("flextable", "kable"),
@@ -23,26 +23,29 @@ dsa_outcomes_table(
 \arguments{
 \item{results}{A openqaly DSA results object (output from run_dsa)}
 
-\item{outcome}{Name of outcome to display (e.g., "total_qalys", "total_cost")}
+\item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
-\item{groups}{Group selection: "overall" (default), specific group, or NULL
-(all groups)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{strategies}{Character vector of strategies to include (NULL for all)}
+\item{strategies}{Character vector of strategies to include when showing
+absolute values (NULL for all)}
 
-\item{interventions}{Single reference strategy for intervention perspective.
-If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.}
+\item{interventions}{Character vector of intervention strategy name(s). If
+provided, shows interventions - comparators comparisons. Mutually exclusive
+with comparators.}
 
-\item{comparators}{Single reference strategy for comparator perspective.
-If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.}
+\item{comparators}{Character vector of comparator strategy name(s). If
+provided, shows interventions - comparators comparisons. Mutually exclusive
+with interventions.}
 
 \item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
-\item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 
 \item{top_n}{Integer or NULL. If provided, show only the top N parameters by impact range.}
 
@@ -56,14 +59,15 @@ A table object (flextable or kable depending on table_format)
 }
 \description{
 Creates a table showing DSA outcomes with low, base case, and high values
-for each parameter across strategies. Supports both outcome and cost summaries.
+for each parameter across strategies.
 }
 \details{
 The table shows each DSA parameter as a row with three columns per strategy:
 Low, Base, and High values.
 
-When multiple groups need to be displayed (groups = NULL), uses group label rows
-(in bold) followed by indented parameter rows for each group.
+When multiple groups need to be displayed (\code{groups = NULL} or
+\code{groups = "all"}), uses group label rows (in bold) followed by indented
+parameter rows for each group.
 
 When interventions or comparators is specified, shows differences between strategies
 instead of absolute values.
@@ -81,11 +85,8 @@ dsa_outcomes_table(dsa_results, "total_qalys")
 # Show differences vs control
 dsa_outcomes_table(dsa_results, "total_qalys", comparators = "control")
 
-# Cost table
-dsa_outcomes_table(dsa_results, "total_cost")
-
 # All groups with flextable format
-dsa_outcomes_table(dsa_results, "total_qalys", groups = NULL,
+dsa_outcomes_table(dsa_results, "total_qalys", groups = "all",
                    table_format = "flextable")
 }
 

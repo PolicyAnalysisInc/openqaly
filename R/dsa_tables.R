@@ -56,18 +56,24 @@ enhance_table_parameter_labels <- function(data, results, locale = NULL) {
               ""
             }
 
+            # Compute joint precision for low/high pair
+            d <- auto_precision(
+              c(as.numeric(.data$param_low), as.numeric(.data$param_high)),
+              exact = TRUE, require_unique = TRUE, base_precision = 3
+            )
+
             if (unit_suffix != "") {
               sprintf("%s (%s%s - %s%s)",
                       .data$parameter_display_name,
-                      oq_format(as.numeric(.data$param_low), exact = TRUE, locale = locale),
+                      oq_format(as.numeric(.data$param_low), decimals = d, locale = locale),
                       unit_suffix,
-                      oq_format(as.numeric(.data$param_high), exact = TRUE, locale = locale),
+                      oq_format(as.numeric(.data$param_high), decimals = d, locale = locale),
                       unit_suffix)
             } else {
               sprintf("%s (%s - %s)",
                       .data$parameter_display_name,
-                      oq_format(as.numeric(.data$param_low), exact = TRUE, locale = locale),
-                      oq_format(as.numeric(.data$param_high), exact = TRUE, locale = locale))
+                      oq_format(as.numeric(.data$param_low), decimals = d, locale = locale),
+                      oq_format(as.numeric(.data$param_high), decimals = d, locale = locale))
             }
           },
           .data$parameter_display_name
@@ -119,6 +125,9 @@ prepare_dsa_summary_table_data <- function(results,
                                             abbreviate = FALSE,
                                             value_type = "all",
                                             currency = FALSE) {
+  if (is.null(decimals) && identical(value_type, "outcome")) {
+    decimals <- 2
+  }
 
   locale <- get_results_locale(results)
 
@@ -454,21 +463,24 @@ prepare_dsa_summary_table_data <- function(results,
 #' Format DSA Outcomes as Summary Table
 #'
 #' Creates a table showing DSA outcomes with low, base case, and high values
-#' for each parameter across strategies. Supports both outcome and cost summaries.
+#' for each parameter across strategies.
 #'
 #' @param results A openqaly DSA results object (output from run_dsa)
-#' @param outcome Name of outcome to display (e.g., "total_qalys", "total_cost")
-#' @param groups Group selection: "overall" (default), specific group, or NULL
-#'   (all groups)
-#' @param strategies Character vector of strategies to include (NULL for all)
-#' @param interventions Single reference strategy for intervention perspective.
-#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.
-#' @param comparators Single reference strategy for comparator perspective.
-#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.
+#' @param outcome Name of outcome to display (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategies to include when showing
+#'   absolute values (NULL for all)
+#' @param interventions Character vector of intervention strategy name(s). If
+#'   provided, shows interventions - comparators comparisons. Mutually exclusive
+#'   with comparators.
+#' @param comparators Character vector of comparator strategy name(s). If
+#'   provided, shows interventions - comparators comparisons. Mutually exclusive
+#'   with interventions.
 #' @param decimals Number of decimal places (default: NULL for auto-precision)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
 #' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
 #'   When TRUE, labels show "Parameter Name (low - high)" format.
@@ -480,8 +492,9 @@ prepare_dsa_summary_table_data <- function(results,
 #' The table shows each DSA parameter as a row with three columns per strategy:
 #' Low, Base, and High values.
 #'
-#' When multiple groups need to be displayed (groups = NULL), uses group label rows
-#' (in bold) followed by indented parameter rows for each group.
+#' When multiple groups need to be displayed (\code{groups = NULL} or
+#' \code{groups = "all"}), uses group label rows (in bold) followed by indented
+#' parameter rows for each group.
 #'
 #' When interventions or comparators is specified, shows differences between strategies
 #' instead of absolute values.
@@ -499,11 +512,8 @@ prepare_dsa_summary_table_data <- function(results,
 #' # Show differences vs control
 #' dsa_outcomes_table(dsa_results, "total_qalys", comparators = "control")
 #'
-#' # Cost table
-#' dsa_outcomes_table(dsa_results, "total_cost")
-#'
 #' # All groups with flextable format
-#' dsa_outcomes_table(dsa_results, "total_qalys", groups = NULL,
+#' dsa_outcomes_table(dsa_results, "total_qalys", groups = "all",
 #'                    table_format = "flextable")
 #' }
 #'
@@ -514,7 +524,7 @@ dsa_outcomes_table <- function(results,
                                strategies = NULL,
                                interventions = NULL,
                                comparators = NULL,
-                               decimals = NULL,
+                               decimals = 2,
                                discounted = TRUE,
                                font_size = 11,
                                table_format = c("flextable", "kable"),
@@ -559,17 +569,20 @@ dsa_outcomes_table <- function(results,
 #'
 #' @param results A openqaly DSA results object (output from run_dsa)
 #' @param outcome Name of cost outcome to display (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group, or NULL
-#'   (all groups)
-#' @param strategies Character vector of strategies to include (NULL for all)
-#' @param interventions Single reference strategy for intervention perspective.
-#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with comparators.
-#' @param comparators Single reference strategy for comparator perspective.
-#'   If provided, shows interventions - comparators comparisons. Mutually exclusive with interventions.
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategies to include when showing
+#'   absolute values (NULL for all)
+#' @param interventions Character vector of intervention strategy name(s). If
+#'   provided, shows interventions - comparators comparisons. Mutually exclusive
+#'   with comparators.
+#' @param comparators Character vector of comparator strategy name(s). If
+#'   provided, shows interventions - comparators comparisons. Mutually exclusive
+#'   with interventions.
 #' @param decimals Number of decimal places (default: NULL for auto-precision)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #' @param top_n Integer or NULL. If provided, show only the top N parameters by impact range.
 #' @param show_parameter_values Logical. Include input parameter values in row labels? (default: FALSE)
 #'   When TRUE, labels show "Parameter Name (low - high)" format.
@@ -581,8 +594,9 @@ dsa_outcomes_table <- function(results,
 #' The table shows each DSA parameter as a row with three columns per strategy:
 #' Low, Base, and High values. Values are formatted as currency.
 #'
-#' When multiple groups need to be displayed (groups = NULL), uses group label rows
-#' (in bold) followed by indented parameter rows for each group.
+#' When multiple groups need to be displayed (\code{groups = NULL} or
+#' \code{groups = "all"}), uses group label rows (in bold) followed by indented
+#' parameter rows for each group.
 #'
 #' When interventions or comparators is specified, shows differences between strategies
 #' instead of absolute values.

@@ -41,6 +41,9 @@ prepare_scenario_summary_table_data <- function(results,
                                                   font_size = 11,
                                                   value_type = "all",
                                                   currency = FALSE) {
+  if (is.null(decimals) && identical(value_type, "outcome")) {
+    decimals <- 2
+  }
 
   # Use prepare_scenario_bar_data which handles all the extraction and comparison logic
   scenario_data <- prepare_scenario_bar_data(
@@ -212,18 +215,20 @@ prepare_scenario_summary_table_data <- function(results,
 #' with columns for each strategy showing the outcome value.
 #'
 #' @param results A openqaly scenario results object (output from run_scenario)
-#' @param outcome Name of outcome to display (e.g., "total_qalys", "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, or NULL
-#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param outcome Name of outcome to display (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategy names to include when showing
+#'   absolute values (NULL for all)
 #' @param interventions Character vector of intervention strategy name(s).
 #'   When specified, shows differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
 #' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
 #'
-#' @return A gt table object
+#' @return A flextable object
 #'
 #' @examples
 #' \dontrun{
@@ -243,7 +248,7 @@ scenario_outcomes_table <- function(results,
                                      strategies = NULL,
                                      interventions = NULL,
                                      comparators = NULL,
-                                     decimals = NULL,
+                                     decimals = 2,
                                      abbreviate = FALSE,
                                      discounted = TRUE,
                                      font_size = 11) {
@@ -274,17 +279,19 @@ scenario_outcomes_table <- function(results,
 #'
 #' @param results A openqaly scenario results object (output from run_scenario)
 #' @param outcome Name of cost outcome to display (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, or NULL
-#' @param strategies Character vector of strategy names to include (NULL for all)
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategy names to include when showing
+#'   absolute values (NULL for all)
 #' @param interventions Character vector of intervention strategy name(s).
 #'   When specified, shows differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
 #' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
 #'
-#' @return A gt table object
+#' @return A flextable object
 #'
 #' @examples
 #' \dontrun{
@@ -357,6 +364,9 @@ prepare_scenario_ce_table_data <- function(results,
                                             icer_decimals = NULL,
                                             abbreviate = FALSE,
                                             font_size = 11) {
+  if (is.null(outcome_decimals)) {
+    outcome_decimals <- 2
+  }
 
   # Get outcome data (always discounted for CE)
   outcome_data <- prepare_scenario_bar_data(
@@ -724,7 +734,7 @@ scenario_ce_table <- function(results,
                                interventions = NULL,
                                comparators = NULL,
                                cost_decimals = NULL,
-                               outcome_decimals = NULL,
+                               outcome_decimals = 2,
                                icer_decimals = NULL,
                                abbreviate = FALSE,
                                font_size = 11,
@@ -961,15 +971,17 @@ prepare_scenario_nmb_table_data <- function(results,
 #' @param health_outcome Name of health outcome summary (e.g., "total_qalys")
 #' @param cost_outcome Name of cost summary (e.g., "total_cost")
 #' @param wtp Willingness to pay threshold. If NULL, extracted from outcome metadata.
-#' @param groups Group selection: "overall" (default), specific group name, or NULL
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param interventions Character vector of intervention strategy name(s).
 #'   At least one of interventions or comparators must be specified.
 #' @param comparators Character vector of comparator strategy name(s).
+#'   At least one of interventions or comparators must be specified.
 #' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param abbreviate Logical. Use K/M/B/T suffixes? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
 #'
-#' @return A gt table object
+#' @return A flextable object
 #'
 #' @examples
 #' \dontrun{

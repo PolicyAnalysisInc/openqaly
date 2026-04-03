@@ -909,3 +909,57 @@ test_that("remove_dsa_setting errors when setting not found", {
     "not found"
   )
 })
+
+# discount_rate alias tests
+test_that("add_dsa_setting accepts discount_rate alias", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_rate", low = 0, high = 5)
+
+  expect_equal(length(model$dsa_parameters), 1)
+  expect_equal(model$dsa_parameters[[1]]$name, "discount_rate")
+  expect_equal(model$dsa_parameters[[1]]$low, 0)
+  expect_equal(model$dsa_parameters[[1]]$high, 5)
+})
+
+test_that("run_dsa with discount_rate varies both discount settings", {
+  skip_if(Sys.getenv("QUICK_TEST") == "true")
+
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years",
+      discount_cost = 3, discount_outcomes = 3
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "sick", p_disease) %>%
+    add_transition("healthy", "dead", 0.01) %>%
+    add_transition("sick", "dead", 0.2) %>%
+    add_transition("healthy", "healthy", 1 - p_disease - 0.01) %>%
+    add_transition("sick", "sick", 1 - 0.2) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("standard") %>%
+    add_value("cost", 100, state = "healthy", type = "cost") %>%
+    add_value("cost", 500, state = "sick", type = "cost") %>%
+    add_value("cost", 0, state = "dead", type = "cost") %>%
+    add_value("qaly", 1, state = "healthy") %>%
+    add_value("qaly", 0.5, state = "sick") %>%
+    add_value("qaly", 0, state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qaly") %>%
+    add_dsa_setting("discount_rate", low = 0, high = 5)
+
+  results <- run_dsa(model)
+
+  # Should have 3 runs: base case + low + high
+  expect_equal(nrow(results$dsa_metadata), 3)
+
+  # Check metadata shows discount_rate as the parameter
+  setting_rows <- results$dsa_metadata %>%
+    dplyr::filter(parameter_type == "setting")
+  expect_equal(nrow(setting_rows), 2)
+  expect_true(all(setting_rows$parameter == "discount_rate"))
+})

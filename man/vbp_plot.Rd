@@ -25,9 +25,9 @@ for smooth curve (~40 points).}
 
 \item{comparators}{Comparator selection:
 \itemize{
-  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"all_comparators"} - Individual comparators only (default)
+  \item \code{"all"} - All comparators plus aggregate
   \item \code{"overall"} - Aggregate only ("vs. All Comparators")
-  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
   \item Character vector - Specific comparator name(s)
 }}
 
@@ -71,7 +71,7 @@ vbp_results <- run_vbp(
   intervention_strategy = "targeted"
 )
 
-# Basic VBP plot with auto-generated WTP range (individuals only by default)
+# Basic VBP plot with auto-generated WTP range (individual comparators only by default)
 vbp_plot(vbp_results)
 
 # Custom WTP range

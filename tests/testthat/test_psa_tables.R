@@ -4,6 +4,52 @@ context("PSA Tables")
 # - build_simple_psa_model() - builds the test model
 # - get_cached_psa_results() - returns cached PSA results (computed once)
 
+build_special_name_psa_results <- function() {
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 10,
+      timeframe = 10,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("standard", display_name = "Standard") |>
+    add_strategy("combo", display_name = "Combo+") |>
+    add_strategy("experimental", display_name = "Experimental") |>
+    add_group("adult", "Adults (50-64)", weight = "0.6") |>
+    add_group("senior", "Seniors 65+", weight = "0.4") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("sick", initial_prob = 0) |>
+    add_state("dead", initial_prob = 0) |>
+    add_variable("p_sick", 0.1, sampling = normal(0.1, 0.02)) |>
+    add_variable("p_death_healthy", 0.02, sampling = normal(0.02, 0.005)) |>
+    add_variable("p_death_sick", 0.15, sampling = normal(0.15, 0.03)) |>
+    add_variable("c_healthy", 1000, sampling = normal(1000, 100)) |>
+    add_variable("c_sick", 5000, sampling = normal(5000, 500)) |>
+    add_variable("c_treatment", 2000, strategy = "standard", sampling = normal(2000, 200)) |>
+    add_variable("c_treatment", 8000, strategy = "combo", sampling = normal(8000, 800)) |>
+    add_variable("c_treatment", 12000, strategy = "experimental", sampling = normal(12000, 1200)) |>
+    add_variable("u_healthy", 0.9, sampling = normal(0.9, 0.05)) |>
+    add_variable("u_sick", 0.5, sampling = normal(0.5, 0.1)) |>
+    add_transition("healthy", "sick", "p_sick") |>
+    add_transition("healthy", "dead", "p_death_healthy") |>
+    add_transition("healthy", "healthy", "1 - p_sick - p_death_healthy") |>
+    add_transition("sick", "dead", "p_death_sick") |>
+    add_transition("sick", "sick", "1 - p_death_sick") |>
+    add_transition("dead", "dead", "1") |>
+    add_value("cost", "c_healthy + c_treatment", state = "healthy") |>
+    add_value("cost", "c_sick + c_treatment", state = "sick") |>
+    add_value("cost", "0", state = "dead") |>
+    add_value("qalys", "u_healthy", state = "healthy") |>
+    add_value("qalys", "u_sick", state = "sick") |>
+    add_value("qalys", "0", state = "dead") |>
+    add_summary("total_cost", "cost") |>
+    add_summary("total_qalys", "qalys")
+
+  set.seed(42)
+  run_psa(model, n_sim = 50)
+}
+
 # ============================================================================
 # Tests for incremental_ceac_table()
 # ============================================================================
@@ -117,6 +163,21 @@ test_that("prepare_incremental_ceac_table_data() probabilities sum approximately
 
   # Probabilities should sum to approximately 100
   expect_true(abs(sum(probs) - 100) < 0.1)
+})
+
+test_that("prepare_incremental_ceac_table_data() treats group names as literal prefixes", {
+  results <- build_special_name_psa_results()
+
+  prepared <- prepare_incremental_ceac_table_data(
+    results, "total_qalys", "total_cost",
+    groups = c("adult", "senior")
+  )
+
+  expect_equal(ncol(prepared$data), 9)
+  for (header in prepared$headers) {
+    spans <- vapply(header, function(cell) cell$span, numeric(1))
+    expect_equal(sum(spans), ncol(prepared$data))
+  }
 })
 
 # ============================================================================
@@ -253,6 +314,47 @@ test_that("prepare_psa_summary_table_data() formats costs with commas", {
   expect_true(grepl(",", cost_mean_val) || grepl("^[0-9]{1,3}$", cost_mean_val))
 })
 
+test_that("prepare_psa_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_cached_psa_results()
+
+  prepared_default <- openqaly:::prepare_psa_summary_table_data(
+    results, "total_qalys", "total_cost"
+  )
+  prepared_explicit <- openqaly:::prepare_psa_summary_table_data(
+    results, "total_qalys", "total_cost", outcome_decimals = 2
+  )
+
+  expect_equal(prepared_default$data, prepared_explicit$data)
+})
+
+test_that("prepare_psa_value_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_cached_psa_results()
+
+  prepared_default <- openqaly:::prepare_psa_value_summary_table_data(
+    results, "total_qalys", groups = "overall", value_type = "outcome", currency = FALSE
+  )
+  prepared_explicit <- openqaly:::prepare_psa_value_summary_table_data(
+    results, "total_qalys", groups = "overall", value_type = "outcome",
+    currency = FALSE, outcome_decimals = 2
+  )
+
+  expect_equal(prepared_default$data, prepared_explicit$data)
+})
+
+test_that("prepare_psa_value_summary_table_data() uses cost decimals for cost tables", {
+  results <- get_cached_psa_results()
+
+  prepared <- openqaly:::prepare_psa_value_summary_table_data(
+    results, "total_cost", groups = "overall", value_type = "cost",
+    currency = TRUE, cost_decimals = 0, outcome_decimals = 4
+  )
+
+  strategy_cols <- setdiff(names(prepared$data), " ")
+  first_value <- prepared$data[[strategy_cols[1]]][1]
+
+  expect_false(grepl("\\.\\d", first_value))
+})
+
 # ============================================================================
 # Tests for pairwise_ceac_table()
 # ============================================================================
@@ -385,6 +487,33 @@ test_that("prepare_pairwise_ceac_table_data() respects custom wtp_thresholds", {
 
   # Should have 5 rows (one per WTP threshold)
   expect_equal(nrow(prepared$data), 5)
+})
+
+test_that("pairwise_ceac_table() treats group names as literal prefixes", {
+  skip_if_not_installed("flextable")
+  results <- build_special_name_psa_results()
+
+  prepared <- prepare_pairwise_ceac_table_data(
+    results, "total_qalys", "total_cost",
+    comparators = "Standard",
+    groups = c("adult", "senior")
+  )
+
+  expect_equal(ncol(prepared$data), 7)
+  for (header in prepared$headers) {
+    spans <- vapply(header, function(cell) cell$span, numeric(1))
+    expect_equal(sum(spans), ncol(prepared$data))
+  }
+
+  expect_s3_class(
+    pairwise_ceac_table(
+      results, "total_qalys", "total_cost",
+      comparators = "Standard",
+      groups = c("adult", "senior"),
+      table_format = "flextable"
+    ),
+    "flextable"
+  )
 })
 
 # ============================================================================

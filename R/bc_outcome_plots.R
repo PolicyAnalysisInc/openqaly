@@ -8,7 +8,7 @@
 #' @param groups Which groups to include in the plot. By default, the overall population (weighted average over all groups) is shown. Other options include 'all_groups' (displays results for each group separately), 'all' (displays results for each group and overall), or a character vector of specific group names
 #' @param strategies Strategies to include (when plotting absolute values).
 #' @param interventions Strategies used as interventions (when plotting differences)
-#' @param comparators Strategies used as commparators (when plotting differences)
+#' @param comparators Strategies used as comparators (when plotting differences).
 #' @param value_labels Logical. If TRUE (default), display numeric value labels at bar edges.
 #' @param label_decimals Numeric or NULL. Number of decimal places for value labels. NULL for auto.
 #' @param axis_decimals Numeric or NULL. Number of decimal places for axis labels. NULL for auto.
@@ -17,12 +17,16 @@
 #' @return A ggplot2 object
 #'
 #' @details
-#' Whether absolute values or differences are shown, which strategies are included, and the direction of comparisons depends on which of the `strategies`, `interventions`, or `comparators` arguments are provided:
-#' 1. (Default) Absolute values for specified strategies. Use `strategies` argument to specify which strategies to include.
-#' 2. When passing a single strategy to `interventions`, shows different between that strategy and other comparators. Use `comparators` argument to specify which strategies to compare against.
-#' 3. When passing a single strategy to `comparators`, shows difference other strategies and the comparator. Use `interventions` argument to specify which strategies will be compared against comparator.
+#' The plotting mode depends on which strategy-selection arguments are provided:
+#' 1. With no comparison arguments, or when only `strategies` is supplied, the
+#'    plot shows absolute outcome values.
+#' 2. When `interventions` is supplied, the plot shows intervention minus
+#'    comparator differences.
+#' 3. When `comparators` is supplied, the plot shows strategy minus comparator
+#'    differences.
 #'
-#' Models containing multiple groups
+#' Use `groups = "all"` to show both the overall population and each modelled
+#' group. Use `groups = "all_groups"` to show only modelled groups.
 #'
 #' @examples
 #' \dontrun{
@@ -218,8 +222,8 @@ summary_plot_bar_impl <- function(res, outcome,
 #'
 #' @param res A openqaly model results object (output from run_model)
 #' @param outcome Name of the outcome summary to plot (e.g., "total_qalys")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#'   (all groups plus aggregated)
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
@@ -257,10 +261,10 @@ summary_plot_bar_impl <- function(res, outcome,
 #' outcomes_plot_line(results, outcome = "total_qalys", cumulative = FALSE)
 #'
 #' # Differences vs control (comparator perspective)
-#' outcomes_plot_line(results, outcome = "total_qalys", comparator = "control")
+#' outcomes_plot_line(results, outcome = "total_qalys", comparators = "control")
 #'
 #' # New treatment vs others (intervention perspective)
-#' outcomes_plot_line(results, outcome = "total_qalys", intervention = "new_treatment")
+#' outcomes_plot_line(results, outcome = "total_qalys", interventions = "new_treatment")
 #' }
 #'
 #' @export

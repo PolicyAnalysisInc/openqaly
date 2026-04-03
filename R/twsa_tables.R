@@ -46,6 +46,9 @@ prepare_twsa_summary_table_data <- function(results,
                                      font_size = 11,
                                      value_type = "all",
                                      currency = FALSE) {
+  if (is.null(decimals) && identical(value_type, "outcome")) {
+    decimals <- 2
+  }
 
   # Extract TWSA summaries
   twsa_data <- extract_twsa_summaries(
@@ -231,14 +234,14 @@ prepare_twsa_summary_table_data <- function(results,
 #' columns and Y parameter values as rows.
 #'
 #' @param results TWSA results object from run_twsa()
-#' @param summary_name Name of the summary to display (e.g., "total_qalys")
+#' @param outcome Name of the outcome to display (e.g., "total_qalys")
 #' @param twsa_name Name of specific TWSA analysis to show (NULL for first/only)
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Intervention strategy name(s) for incremental calculation
 #' @param comparators Comparator strategy name(s) for incremental calculation
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param decimals Number of decimal places (default: NULL for auto)
 #' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
 #' @param font_size Font size for table (default: 11)
@@ -259,14 +262,14 @@ prepare_twsa_summary_table_data <- function(results,
 #'   comparators = "standard_care")
 #' }
 twsa_outcomes_table <- function(results,
-                        summary_name,
+                        outcome,
                         twsa_name = NULL,
                         groups = "overall",
                         strategies = NULL,
                         interventions = NULL,
                         comparators = NULL,
                         discounted = TRUE,
-                        decimals = NULL,
+                        decimals = 2,
                         abbreviate = FALSE,
                         font_size = 11,
                         backend = c("flextable", "kable")) {
@@ -276,7 +279,7 @@ twsa_outcomes_table <- function(results,
   # Prepare table data
   prepared <- prepare_twsa_summary_table_data(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     twsa_name = twsa_name,
     groups = groups,
     strategies = strategies,
@@ -301,7 +304,7 @@ twsa_outcomes_table <- function(results,
 #' columns and Y parameter values as rows.
 #'
 #' @param results TWSA results object from run_twsa()
-#' @param summary_name Name of the cost summary to display (e.g., "total_cost")
+#' @param outcome Name of the cost outcome to display (e.g., "total_cost")
 #' @param twsa_name Name of specific TWSA analysis to show (NULL for first/only)
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
@@ -329,7 +332,7 @@ twsa_outcomes_table <- function(results,
 #'   comparators = "standard_care")
 #' }
 twsa_costs_table <- function(results,
-                              summary_name,
+                              outcome,
                               twsa_name = NULL,
                               groups = "overall",
                               strategies = NULL,
@@ -346,7 +349,7 @@ twsa_costs_table <- function(results,
   # Prepare table data
   prepared <- prepare_twsa_summary_table_data(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     twsa_name = twsa_name,
     groups = groups,
     strategies = strategies,

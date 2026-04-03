@@ -64,8 +64,8 @@ test_that("pairwise_ce_plot() returns ggplot", {
   results <- get_test_results()
 
   p <- pairwise_ce_plot(results,
-                        outcome_summary = "total_qalys",
-                        cost_summary = "total_cost",
+                        health_outcome = "total_qalys",
+                        cost_outcome = "total_cost",
                         comparators = "standard")
 
   expect_s3_class(p, "ggplot")
@@ -75,8 +75,8 @@ test_that("pairwise_ce_plot() includes x=0 and y=0 reference lines", {
   results <- get_test_results()
 
   p <- pairwise_ce_plot(results,
-                        outcome_summary = "total_qalys",
-                        cost_summary = "total_cost",
+                        health_outcome = "total_qalys",
+                        cost_outcome = "total_cost",
                         comparators = "standard")
 
   # Check for hline and vline
@@ -91,8 +91,8 @@ test_that("pairwise_ce_plot() errors without interventions or comparators", {
 
   expect_error(
     pairwise_ce_plot(results,
-                     outcome_summary = "total_qalys",
-                     cost_summary = "total_cost"),
+                     health_outcome = "total_qalys",
+                     cost_outcome = "total_cost"),
     "must be provided"
   )
 })

@@ -6,7 +6,8 @@
 #' @param res A openqaly model results object (output from run_model)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
 #' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
@@ -32,10 +33,11 @@
 #' results <- run_model(model)
 #'
 #' # NMB with WTP from metadata (comparator perspective)
-#' nmb_plot_bar(results, "total_qalys", "total_cost", comparator = "control")
+#' nmb_plot_bar(results, "total_qalys", "total_cost", comparators = "control")
 #'
 #' # NMB with explicit WTP (intervention perspective)
-#' nmb_plot_bar(results, "total_qalys", "total_cost", intervention = "new_treatment", wtp = 50000)
+#' nmb_plot_bar(results, "total_qalys", "total_cost",
+#'              interventions = "new_treatment", wtp = 50000)
 #' }
 #'
 #' @export
@@ -212,7 +214,8 @@ nmb_plot_bar <- function(res,
 #' @param res A openqaly model results object (output from run_model)
 #' @param health_outcome Name of the health outcome summary to use (e.g., "total_qalys")
 #' @param cost_outcome Name of the cost summary to use (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param wtp Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.
 #' @param interventions Character vector of intervention strategies (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.

@@ -9,7 +9,8 @@ threshold_plot(
   analyses = NULL,
   axis_decimals = NULL,
   label_decimals = NULL,
-  abbreviate = FALSE
+  abbreviate = FALSE,
+  use_display_names = TRUE
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ threshold_plot(
 \item{label_decimals}{Number of decimal places for threshold value label, or NULL for auto}
 
 \item{abbreviate}{Logical. If TRUE, use K/M/B/T abbreviations. Default FALSE}
+
+\item{use_display_names}{Logical. If TRUE (default), use display names for
+threshold input variables where available.}
 }
 \value{
 A ggplot object

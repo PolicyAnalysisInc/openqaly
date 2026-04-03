@@ -129,41 +129,31 @@ write_model_excel <- function(model, path) {
 
   # Handle multivariate sampling if present
   if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
-    # Create multivariate_sampling sheet
     mv_sampling_df <- tibble()
     mv_variables_df <- tibble()
 
     for (mv_spec in model$multivariate_sampling) {
-      # Add to multivariate_sampling sheet
+      # Main spec sheet
       mv_sampling_df <- bind_rows(
         mv_sampling_df,
         fast_tibble(
-          name = mv_spec$name,
-          distribution = mv_spec$distribution,
-          description = mv_spec$description %||% ""
+          name = mv_spec[["name"]],
+          type = mv_spec[["type"]],
+          strategy = mv_spec[["strategy"]] %||% "",
+          group = mv_spec[["group"]] %||% "",
+          description = mv_spec[["description"]] %||% "",
+          covariance = if (!is.null(mv_spec[["covariance"]])) as.character(mv_spec[["covariance"]]) else NA_character_,
+          n = mv_spec[["n"]] %||% NA_real_
         )
       )
 
-      # Add to multivariate_sampling_variables sheet
+      # Variables sheet
       if (!is.null(mv_spec$variables)) {
-        vars_df <- mv_spec$variables
-        if (is.data.frame(vars_df)) {
-          vars_df$sampling_name <- mv_spec$name
-          # Ensure all columns exist
-          if (!"strategy" %in% names(vars_df)) vars_df$strategy <- ""
-          if (!"group" %in% names(vars_df)) vars_df$group <- ""
-          # Reorder columns
-          vars_df <- vars_df %>%
-            select("sampling_name", "variable", "strategy", "group")
-        } else if (is.character(vars_df)) {
-          # Convert character vector to dataframe
-          vars_df <- fast_tibble(
-            sampling_name = mv_spec$name,
-            variable = vars_df,
-            strategy = "",
-            group = ""
-          )
-        }
+        vars <- mv_spec$variables
+        vars_df <- fast_tibble(
+          sampling_name = mv_spec$name,
+          variable = vars
+        )
         mv_variables_df <- bind_rows(mv_variables_df, vars_df)
       }
     }
@@ -534,7 +524,7 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
       # Parse raw JSON strings before filesystem checks to avoid path warnings
       # when long JSON content is passed as input.
       if (validate(input)) {
-        model <- read_model_json(input)
+        model <- read_model_json(text = input)
       } else if (dir.exists(input)) {
         # Check if it's an Excel model folder
         excel_file <- file.path(input, "model.xlsx")
@@ -547,10 +537,9 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
         # It's a file - check extension
         ext <- file_ext(input)
         if (ext == "json") {
-          json_str <- paste(readLines(input), collapse = "\n")
-          model <- read_model_json(json_str)
+          model <- read_model_json(file = input)
         } else if (ext %in% c("yaml", "yml")) {
-          model <- read_model_yaml(input)
+          model <- read_model_yaml(file = input)
         } else if (ext == "R") {
           # Execute R file to get model
           env <- new.env()
@@ -580,12 +569,12 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
       excel = read_model(input),
       json = {
         if (file.exists(input)) {
-          read_model_json(paste(readLines(input), collapse = "\n"))
+          read_model_json(file = input)
         } else {
-          read_model_json(input)
+          read_model_json(text = input)
         }
       },
-      yaml = read_model_yaml(input),
+      yaml = read_model_yaml(file = input),
       r = {
         env <- new.env()
         source(input, local = env)
@@ -620,29 +609,39 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
   invisible(output)
 }
 
-#' Read Model from YAML File
+#' Read Model from YAML
 #'
-#' Reads a complete openqaly model from a single YAML file. Tables are embedded
+#' Reads a complete openqaly model from YAML. Tables are embedded
 #' as CSV strings, scripts as code blocks, and trees use nested structure.
 #'
-#' @param path Path to YAML file (.yaml or .yml)
+#' Supply exactly one of \code{file} or \code{text}.
+#'
+#' @param file Path to YAML file (.yaml or .yml)
+#' @param text A string containing the model in YAML format.
 #'
 #' @return A normalized and validated oq_model object
 #'
 #' @export
-read_model_yaml <- function(path) {
-  # Validate path
-  if (!file.exists(path)) {
-    stop("YAML file does not exist: ", path)
+read_model_yaml <- function(file = NULL, text = NULL) {
+  if (!is.null(file) && !is.null(text)) {
+    stop("Provide either 'file' or 'text', not both.")
+  }
+  if (is.null(file) && is.null(text)) {
+    stop("One of 'file' or 'text' must be provided.")
   }
 
-  ext <- file_ext(path)
-  if (!ext %in% c("yaml", "yml")) {
-    stop("File must have .yaml or .yml extension: ", path)
+  if (!is.null(file)) {
+    if (!file.exists(file)) {
+      stop("YAML file does not exist: ", file)
+    }
+    ext <- file_ext(file)
+    if (!ext %in% c("yaml", "yml")) {
+      stop("File must have .yaml or .yml extension: ", file)
+    }
+    yaml_data <- read_yaml(file)
+  } else {
+    yaml_data <- yaml::yaml.load(text)
   }
-
-  # Read YAML file
-  yaml_data <- read_yaml(path)
 
   # Initialize model structure
   model <- list()
@@ -847,7 +846,7 @@ yaml_list_to_tibble <- function(lst) {
     as.data.frame(item, stringsAsFactors = FALSE)
   })
 
-  as_tibble(do.call(rbind, rows))
+  as_tibble(dplyr::bind_rows(rows))
 }
 
 #' Flatten Nested Tree Structure to Flat Tibble
@@ -884,23 +883,27 @@ parse_yaml_multivariate_sampling <- function(mv_list) {
   }
 
   lapply(mv_list, function(mv) {
-    # Handle variables - can be array or tibble-like
-    vars_df <- if (!is.null(mv$variables)) {
-      if (is.data.frame(mv$variables)) {
-        mv$variables
-      } else {
-        yaml_list_to_tibble(mv$variables)
-      }
+    # Variables is a character vector
+    vars <- if (!is.null(mv$variables)) {
+      as.character(mv$variables)
     } else {
-      fast_tibble(variable = character(0), strategy = character(0), group = character(0))
+      character(0)
     }
 
-    list(
+    result <- list(
       name = mv$name,
-      distribution = mv$distribution,
+      type = mv$type,
+      strategy = mv$strategy %||% "",
+      group = mv$group %||% "",
       description = mv$description %||% "",
-      variables = vars_df
+      variables = vars
     )
+
+    if (!is.null(mv[["covariance"]]) && !all(is.na(mv[["covariance"]]))) result$covariance <- as.oq_formula(mv[["covariance"]])
+    if (!is.null(mv[["n"]]) && !all(is.na(mv[["n"]]))) result$n <- suppressWarnings(as.numeric(mv[["n"]]))
+    if (!is.null(mv[["size"]]) && !all(is.na(mv[["size"]]))) result$size <- suppressWarnings(as.integer(mv[["size"]]))
+
+    result
   })
 }
 
@@ -1254,18 +1257,16 @@ format_multivariate_sampling_yaml <- function(mv_list) {
   lapply(mv_list, function(mv) {
     result <- list(
       name = mv$name,
-      distribution = mv$distribution,
+      type = mv$type,
+      strategy = mv$strategy %||% "",
+      group = mv$group %||% "",
       description = mv$description
     )
 
-    # Handle variables
-    if (!is.null(mv$variables)) {
-      if (is.data.frame(mv$variables)) {
-        result$variables <- tibble_to_yaml_list(mv$variables)
-      } else {
-        result$variables <- mv$variables
-      }
-    }
+    if (!is.null(mv[["variables"]])) result$variables <- as.list(mv[["variables"]])
+    if (!is.null(mv[["covariance"]])) result$covariance <- as.character(mv[["covariance"]])
+    if (!is.null(mv[["n"]])) result$n <- mv[["n"]]
+    if (!is.null(mv[["size"]])) result$size <- mv[["size"]]
 
     result
   })

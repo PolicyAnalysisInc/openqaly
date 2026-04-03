@@ -6,8 +6,8 @@
 \usage{
 psa_nmb_table(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   wtp,
   groups = "overall",
   interventions = NULL,
@@ -22,9 +22,9 @@ psa_nmb_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (e.g., "qalys")}
+\item{health_outcome}{Name of the health outcome (e.g., "qalys")}
 
-\item{cost_summary}{Name of the cost summary (e.g., "costs")}
+\item{cost_outcome}{Name of the cost outcome (e.g., "costs")}
 
 \item{wtp}{Willingness-to-pay threshold for NMB calculation}
 

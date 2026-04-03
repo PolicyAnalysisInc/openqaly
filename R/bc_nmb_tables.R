@@ -6,10 +6,13 @@
 #' @param results A openqaly model results object
 #' @param outcome_summary Name of the outcome summary
 #' @param cost_summary Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param wtp Optional override for willingness-to-pay
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. At least one of interventions or comparators must be provided.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. At least one of interventions or comparators must be provided.
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: NULL, uses locale default)
 #' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
@@ -332,10 +335,13 @@ prepare_nmb_table_data <- function(results,
 #' @param results A openqaly model results object
 #' @param health_outcome Name of the health outcome summary
 #' @param cost_outcome Name of the cost summary
-#' @param groups Group selection: "overall" (default), specific group, vector of groups, or NULL
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param wtp Optional override for willingness-to-pay
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. At least one of interventions or comparators must be provided.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. At least one of interventions or comparators must be provided.
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
 #' @param decimals Number of decimal places (default: NULL, uses locale default)
 #' @param abbreviate Logical. Use abbreviated formatting? (default: FALSE)
@@ -351,11 +357,11 @@ prepare_nmb_table_data <- function(results,
 #'
 #' # Create table using flextable (default)
 #' ft <- nmb_table(results, "total_qalys", "total_cost",
-#'                 comparator = "control")
+#'                 comparators = "control")
 #'
 #' # Create table using kableExtra
 #' kt <- nmb_table(results, "total_qalys", "total_cost",
-#'                 comparator = "control", table_format = "kable")
+#'                 comparators = "control", table_format = "kable")
 #' }
 #'
 #' @export

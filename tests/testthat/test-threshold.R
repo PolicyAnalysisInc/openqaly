@@ -210,6 +210,178 @@ test_that("add_threshold_analysis validates variable targeting", {
 })
 
 # ============================================================================
+# Edit Threshold Analysis Tests
+# ============================================================================
+
+test_that("edit_threshold_analysis renames analysis", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1", new_name = "ta1_renamed")
+  expect_equal(model2$threshold_analyses[[1]]$name, "ta1_renamed")
+})
+
+test_that("edit_threshold_analysis updates variable", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1", variable = "cost_base", lower = 0, upper = 50000)
+  expect_equal(model2$threshold_analyses[[1]]$variable, "cost_base")
+  expect_equal(model2$threshold_analyses[[1]]$lower, 0)
+  expect_equal(model2$threshold_analyses[[1]]$upper, 50000)
+})
+
+test_that("edit_threshold_analysis updates lower bound", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1", lower = 0.1)
+  expect_equal(model2$threshold_analyses[[1]]$lower, 0.1)
+})
+
+test_that("edit_threshold_analysis updates upper bound", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1", upper = 0.5)
+  expect_equal(model2$threshold_analyses[[1]]$upper, 0.5)
+})
+
+test_that("edit_threshold_analysis updates condition", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  new_cond <- threshold_condition_costs(
+    summary = "total_cost", type = "absolute", strategy = "treatment")
+  model2 <- edit_threshold_analysis(model, "ta1", condition = new_cond)
+  expect_equal(model2$threshold_analyses[[1]]$condition$output, "costs")
+  expect_equal(model2$threshold_analyses[[1]]$condition$summary, "total_cost")
+})
+
+test_that("edit_threshold_analysis updates active flag", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1", active = FALSE)
+  expect_false(model2$threshold_analyses[[1]]$active)
+})
+
+test_that("edit_threshold_analysis updates multiple fields at once", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- edit_threshold_analysis(model, "ta1",
+    new_name = "updated", lower = 0.01, upper = 0.99, active = FALSE)
+  a <- model2$threshold_analyses[[1]]
+  expect_equal(a$name, "updated")
+  expect_equal(a$lower, 0.01)
+  expect_equal(a$upper, 0.99)
+  expect_false(a$active)
+})
+
+test_that("edit_threshold_analysis errors on non-existent name", {
+  model <- build_threshold_test_model()
+  expect_error(
+    edit_threshold_analysis(model, "nonexistent", lower = 0.1),
+    "not found"
+  )
+})
+
+test_that("edit_threshold_analysis errors on duplicate new_name", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base")) %>%
+    add_threshold_analysis("ta2", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  expect_error(
+    edit_threshold_analysis(model, "ta1", new_name = "ta2"),
+    "already exists"
+  )
+})
+
+test_that("edit_threshold_analysis errors on invalid bounds", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  expect_error(
+    edit_threshold_analysis(model, "ta1", lower = 2),
+    "lower must be less than upper"
+  )
+  expect_error(
+    edit_threshold_analysis(model, "ta1", upper = -1),
+    "lower must be less than upper"
+  )
+})
+
+test_that("edit_threshold_analysis validates new condition", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  expect_error(
+    edit_threshold_analysis(model, "ta1",
+      condition = threshold_condition_outcomes(type = "absolute", strategy = "base")),
+    "must specify either 'summary' or 'value'"
+  )
+})
+
+# ============================================================================
+# Remove Threshold Analysis Tests
+# ============================================================================
+
+test_that("remove_threshold_analysis removes existing analysis", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base"))
+
+  model2 <- remove_threshold_analysis(model, "ta1")
+  expect_equal(length(model2$threshold_analyses), 0)
+})
+
+test_that("remove_threshold_analysis errors on non-existent name", {
+  model <- build_threshold_test_model()
+  expect_error(
+    remove_threshold_analysis(model, "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_threshold_analysis preserves other analyses", {
+  model <- build_threshold_test_model() %>%
+    add_threshold_analysis("ta1", "p_disease", 0, 1,
+      condition = threshold_condition_outcomes(
+        summary = "total_qalys", type = "absolute", strategy = "base")) %>%
+    add_threshold_analysis("ta2", "cost_base", 0, 50000,
+      condition = threshold_condition_costs(
+        summary = "total_cost", type = "absolute", strategy = "treatment"))
+
+  model2 <- remove_threshold_analysis(model, "ta1")
+  expect_equal(length(model2$threshold_analyses), 1)
+  expect_equal(model2$threshold_analyses[[1]]$name, "ta2")
+})
+
+# ============================================================================
 # Format Conversion Tests
 # ============================================================================
 
@@ -314,7 +486,7 @@ test_that("JSON round-trip preserves threshold analyses", {
   json_string <- write_model_json(model_norm)
 
   # Read JSON
-  model_back <- read_model_json(json_string)
+  model_back <- read_model_json(text = json_string)
 
   expect_equal(length(model_back$threshold_analyses), 2)
   expect_equal(model_back$threshold_analyses[[1]]$name, "QALY Target")
@@ -876,7 +1048,7 @@ test_that("JSON round-trip preserves group field in threshold condition", {
 
   model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
   json_string <- write_model_json(model_norm)
-  model_back <- read_model_json(json_string)
+  model_back <- read_model_json(text = json_string)
 
   expect_equal(length(model_back$threshold_analyses), 1)
   expect_equal(model_back$threshold_analyses[[1]]$condition$group, "high_risk")
@@ -1325,7 +1497,7 @@ test_that("JSON round-trip preserves trace condition fields", {
 
   model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
   json_string <- write_model_json(model_norm)
-  model_back <- read_model_json(json_string)
+  model_back <- read_model_json(text = json_string)
 
   expect_equal(length(model_back$threshold_analyses), 1)
   a <- model_back$threshold_analyses[[1]]

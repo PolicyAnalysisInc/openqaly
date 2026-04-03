@@ -789,6 +789,20 @@ test_that("twsa_costs_table() returns a rendered table", {
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
 })
 
+test_that("prepare_twsa_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_cached_twsa_vbp_results()
+
+  prepared_default <- openqaly:::prepare_twsa_summary_table_data(
+    results, "qalys", groups = "overall", value_type = "outcome", currency = FALSE
+  )
+  prepared_explicit <- openqaly:::prepare_twsa_summary_table_data(
+    results, "qalys", groups = "overall", value_type = "outcome",
+    currency = FALSE, decimals = 2
+  )
+
+  expect_equal(prepared_default$tables[[1]]$data, prepared_explicit$tables[[1]]$data)
+})
+
 # ============================================================================
 # Tests for twsa_costs_plot()
 # ============================================================================

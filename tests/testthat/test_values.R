@@ -466,7 +466,7 @@ test_that("read_model_json enforces values type safety", {
   ), auto_unbox = TRUE, na = "null")
 
   # Read the JSON model
-  model <- read_model_json(as.character(test_json))
+  model <- read_model_json(text = as.character(test_json))
 
   # Check that all values columns are character type
   expect_true(is.character(model$values$name))

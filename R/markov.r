@@ -97,9 +97,48 @@ make_progress <- function(...) {
   function(amount = 1L) cb(amount = amount)
 }
 
-store_segment_diagnostics <- function(segment, trace_and_values, uneval_vars, eval_vars, eval_states) {
+get_diagnostics_policy <- function(...) {
+  list(...)$.diagnostics_policy %||% "none"
+}
+
+is_base_case_segment <- function(segment) {
+  if ("simulation" %in% names(segment)) {
+    return(FALSE)
+  }
+  if ("vbp_price_level" %in% names(segment) || "price_level" %in% names(segment)) {
+    return(FALSE)
+  }
+  if ("scenario_id" %in% names(segment)) {
+    return(identical(segment$scenario_id[[1]], 1L) || identical(segment$scenario_id[[1]], 1))
+  }
+  if ("run_id" %in% names(segment)) {
+    return(identical(segment$run_id[[1]], 1L) || identical(segment$run_id[[1]], 1))
+  }
+  TRUE
+}
+
+should_store_segment_diagnostics <- function(segment, policy) {
+  switch(
+    policy,
+    all = TRUE,
+    base_case = is_base_case_segment(segment),
+    none = FALSE,
+    FALSE
+  )
+}
+
+clear_segment_diagnostics <- function(segment) {
+  diag_cols <- c("uneval_vars", "eval_vars", "inital_state")
+  existing_cols <- intersect(diag_cols, names(segment))
+  if (length(existing_cols) > 0) {
+    segment[existing_cols] <- NULL
+  }
+  segment
+}
+
+store_segment_diagnostics <- function(segment, trace_and_values, uneval_vars, eval_vars, eval_states, policy = "none") {
   segment$trace_and_values <- list(trace_and_values)
-  if (!"parameter_overrides" %in% names(segment)) {
+  if (should_store_segment_diagnostics(segment, policy)) {
     segment$uneval_vars <- list(uneval_vars)
     segment$eval_vars <- list(eval_vars)
     segment$inital_state <- list(eval_states)
@@ -128,6 +167,7 @@ finalize_segment <- function(segment, model, eval_vars) {
 run_segment.markov <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
+  diagnostics_policy <- get_diagnostics_policy(...)
 
   # Segments in analysis modes (DSA, scenarios) can override model settings
   # like timeframe or discount rates. Apply those before computing anything.
@@ -224,7 +264,11 @@ run_segment.markov <- function(segment, model, env, ...) {
   )
 
   # Attach all results to the segment row for downstream aggregation
-  segment <- store_segment_diagnostics(segment, calculated, uneval_vars, eval_vars, eval_states)
+  segment <- clear_segment_diagnostics(segment)
+  segment <- store_segment_diagnostics(
+    segment, calculated, uneval_vars, eval_vars, eval_states,
+    policy = diagnostics_policy
+  )
   segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace, corrected_collapsed, calculated$correctedTrace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
@@ -554,23 +598,12 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       time_df$to_state_group <- row$to_state_group
       time_df$share_state_time <- row$share_state_time
       time_df$value <- NA
-      time_df$error <- NA
-      
-      # Evalulate transition formula
+
+      # Evaluate transition formula
       value <- eval_formula(row$formula[[1]], ns, max_st = row$max_st)
       is_error <- is_oq_error(value)
-      # Check if value was an error in evaluating the formula
       if (is_error) {
         accumulate_oq_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
-        # Construct the error message using the transition name
-        error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
-        # Check global option: stop or record error?
-        if (getOption("openqaly.stop_on_error", default = FALSE)) {
-          stop(error_msg, call. = FALSE)
-        } else {
-          # Original behavior: record the error message
-          time_df$error <- value$message
-        }
       }
 
       # Validate that the result is numeric and a valid probability
@@ -602,68 +635,6 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
       trans_list[[i]] <- time_df
   }
   res <- bind_rows(trans_list)
-  # res <- rowwise(df) %>%
-  #   group_split() %>%
-  #   map(function(row, ns, simplify) {
-  #       browser()
-  #     # Populate at dataframe with time, from_state, to_state
-  #     time_df <- ns$df[ ,c('cycle', 'state_cycle')]
-  #     time_df$from_state <- row$from_state
-  #     time_df$to_state <- row$to_state
-  #     time_df$from_state_group <- row$from_state_group
-  #     time_df$to_state_group <- row$to_state_group
-  #     time_df$share_state_time <- row$share_state_time
-  #     time_df$value <- NA
-  #     time_df$error <- NA
-      
-  #     # Evalulate transition formula
-  #     value <- eval_formula(row$formula[[1]], ns)
-  #     is_error <- is_oq_error(value)
-  #     # Check if value was an error in evaluating the formula
-  #     if (is_error) {
-  #       accumulate_oq_error(value, context_msg = glue("Evaluation of transition '{row$name}'"))
-  #       # Construct the error message using the transition name
-  #       error_msg <- glue("Error evaluating transition '{row$name}': {paste0(value)}")
-  #       # Check global option: stop or record error?
-  #       if (getOption("openqaly.stop_on_error", default = FALSE)) {
-  #         stop(error_msg, call. = FALSE)
-  #       } else {
-  #         # Original behavior: record the error message
-  #         time_df$error <- value$message
-  #       }
-  #     }
-
-  #     # Check if value is numeric
-  #     if (any(class(value) %in% c('numeric', 'integer'))) {
-  #       time_df$value <- as.numeric(value)
-  #     } else {
-  #       # If not numeric, check if it's already an error handled above
-  #       if (!is_oq_error(value)) {
-  #           # Handle non-numeric result
-  #           type <- class(value)[1]
-  #           error_msg <- glue("Error evaluating transition '{row$name}': Result was type '{type}', expected numeric.")
-  #           # Check global option: stop or record error?
-  #           if (getOption("openqaly.stop_on_error", default = FALSE)) {
-  #               stop(error_msg, call. = FALSE)
-  #           } else {
-  #               # Original behavior: record the error message
-  #               time_df$error <- error_msg
-  #           }
-  #       }
-  #       # If it IS an oq_error, it was handled by the previous if block
-  #     }
-  #     if (isTRUE(simplify) && !is_error) {
-  #       # Transform to matrix to check st-dependency
-  #       val_mat <- lf_to_arr(time_df, c('state_cycle', 'cycle'), 'value')
-  #       time_df$max_st <- min(row$max_st, arr_last_unique(val_mat, 1), na.rm = TRUE)
-  #     } else {
-  #       time_df$max_st <- row$max_st
-  #     }
-      
-  #     # Return
-  #     time_df
-  #   }, ns, simplify = isTRUE(simplify)) %>%
-  #   bind_rows()
 
   oq_error_checkpoint()
 

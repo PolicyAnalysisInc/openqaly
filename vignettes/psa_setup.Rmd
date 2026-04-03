@@ -1,0 +1,309 @@
+---
+title: "Setting Up Probabilistic Sensitivity Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Setting Up Probabilistic Sensitivity Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette covers how to configure sampling distributions for probabilistic sensitivity analysis (PSA) in openqaly. For visualizing and interpreting PSA results, see the companion vignette `vignette("psa_results")`.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup, include = FALSE}
+# Skip on CI and CRAN (R CMD check sets _R_CHECK_PACKAGE_NAME_)
+if (identical(Sys.getenv("CI"), "true") || nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_"))) {
+  message("Skipping vignette build on CI/CRAN")
+  knitr::knit_exit()
+}
+
+library(openqaly)
+```
+
+## Building a Model with PSA
+
+We'll build a Markov model that demonstrates every available sampling distribution type. The model represents a chronic disease with three health states (stable, progressed, dead) and two treatment strategies.
+
+```{r model}
+model <- define_model("markov") |>
+  set_settings(
+    n_cycles = 20,
+    cycle_length = 1,
+    cycle_length_unit = "years",
+    discount_cost = 3.5,
+    discount_outcomes = 3.5
+  ) |>
+  add_strategy("standard") |>
+  add_strategy("novel") |>
+  add_state("stable", initial_prob = 1) |>
+  add_state("progressed", initial_prob = 0) |>
+  add_state("dead", initial_prob = 0)
+```
+
+## Univariate Distributions
+
+Univariate sampling distributions are specified via the `sampling` argument in `add_variable()`. The special keyword `bc` references the variable's base case value, allowing relative specifications.
+
+### Beta distribution
+
+For probabilities bounded between 0 and 1. Can be specified with (mean, sd) or (shape1, shape2).
+
+```{r beta}
+model <- model |>
+  add_variable("p_progression_death", 0.15, sampling = beta(bc, bc * 0.25)) |>
+  add_variable("p_adverse_event", 0.08, sampling = beta(shape1 = 8, shape2 = 92))
+```
+
+### Normal distribution
+
+For continuous parameters without natural bounds.
+
+```{r normal}
+model <- model |>
+  add_variable("treatment_effect", 0.5, strategy = "novel",
+               sampling = normal(bc, 0.1))
+```
+
+### Lognormal distribution
+
+For parameters that must be positive (e.g., costs, hazard ratios). Can be parameterized on the natural or log scale.
+
+```{r lognormal}
+model <- model |>
+  add_variable("cost_progressed", 12000,
+               sampling = lognormal(mean = bc, sd = bc * 0.25))
+```
+
+### Gamma distribution
+
+For positive continuous parameters. Common for costs and resource use.
+
+```{r gamma}
+model <- model |>
+  add_variable("cost_stable", 3000, sampling = gamma(mean = bc, sd = bc * 0.2)) |>
+  add_variable("cost_treatment", 8000, strategy = "novel",
+               sampling = gamma(mean = bc, sd = bc * 0.15))
+```
+
+### Uniform distribution
+
+For parameters with known bounds but no other distributional information.
+
+```{r uniform}
+model <- model |>
+  add_variable("cost_treatment", 1000, strategy = "standard",
+               sampling = uniform(min = 500, max = 1500))
+```
+
+### Triangular distribution
+
+When only minimum, most likely (mode), and maximum values are available, typically from expert opinion.
+
+```{r triangular}
+model <- model |>
+  add_variable("u_progressed", 0.55,
+               sampling = triangular(min = 0.35, mode = 0.55, max = 0.75))
+```
+
+## Multivariate Distributions
+
+Use `add_multivariate_sampling()` when parameters need to be sampled jointly. This preserves correlations between parameters across PSA simulations.
+
+### Dirichlet distribution
+
+For transition probabilities that must sum to 1. Specify `n` (effective sample size) and alpha values are derived automatically as `n * base_case_value`. Higher `n` means less uncertainty.
+
+```{r dirichlet}
+model <- model |>
+  add_variable("p_stable_stable", 0.75) |>
+  add_variable("p_stable_progressed", 0.20) |>
+  add_variable("p_stable_dead_extra", 0.05) |>
+  add_multivariate_sampling(
+    name = "stable_transitions",
+    type = "dirichlet",
+    variables = c("p_stable_stable", "p_stable_progressed", "p_stable_dead_extra"),
+    n = 200
+  )
+```
+
+### Multivariate normal
+
+For correlated continuous parameters. The covariance matrix is stored as a model table via `add_table()` and referenced by name. Mean values are taken automatically from the variables' base case values.
+
+This is the standard approach when working with fitted model outputs (e.g., from flexsurv), where `vcov()` provides the variance-covariance matrix directly.
+
+```{r mvnormal}
+# Three correlated utility parameters
+# sd: stable=0.05, progressed=0.08, dead=0 (fixed)
+# cor(stable, progressed) = 0.6
+# Only stable and progressed are uncertain
+cov_matrix <- data.frame(
+  u_stable    = c(0.05^2,          0.6 * 0.05 * 0.08, 0.3 * 0.05 * 0.02),
+  u_treatment = c(0.6 * 0.05 * 0.08, 0.08^2,          0.4 * 0.08 * 0.02),
+  u_benefit   = c(0.3 * 0.05 * 0.02, 0.4 * 0.08 * 0.02, 0.02^2)
+)
+
+model <- model |>
+  add_variable("u_stable", 0.85) |>
+  add_variable("u_treatment", 0.10) |>
+  add_variable("u_benefit", 0.05) |>
+  add_table("utility_cov", cov_matrix) |>
+  add_multivariate_sampling(
+    name = "correlated_utilities",
+    type = "mvnormal",
+    variables = c("u_stable", "u_treatment", "u_benefit"),
+    covariance = "utility_cov"
+  )
+```
+
+In practice, the covariance matrix often comes directly from a fitted model:
+
+```{r flexsurv_example, eval = FALSE}
+# Example with flexsurv (not executed)
+# fit <- flexsurvreg(Surv(time, status) ~ 1, data = dat, dist = "gengamma")
+model |>
+  add_variable("mu", coef(fit)["mu"]) |>
+  add_variable("sigma", coef(fit)["sigma"]) |>
+  add_variable("Q", coef(fit)["Q"]) |>
+  add_table("surv_vcov", as.data.frame(vcov(fit))) |>
+  add_multivariate_sampling(
+    name = "survival_params",
+    type = "mvnormal",
+    variables = c("mu", "sigma", "Q"),
+    covariance = "surv_vcov"
+  )
+```
+
+### Multinomial distribution
+
+For categorical outcomes where exactly one category is selected per simulation (one-hot encoded). Probabilities are taken from the variables' base case values.
+
+```{r multinomial}
+model <- model |>
+  add_variable("start_early", 0.6) |>
+  add_variable("start_mid", 0.3) |>
+  add_variable("start_late", 0.1) |>
+  add_multivariate_sampling(
+    name = "disease_stage_at_entry",
+    type = "multinomial",
+    variables = c("start_early", "start_mid", "start_late"),
+    size = 1
+  )
+```
+
+## Strategy-Specific Sampling
+
+Multivariate sampling can be restricted to a specific strategy using the `strategy` parameter. The sampling only applies when running that strategy's segment; other strategies use the base case values.
+
+```{r strategy_specific}
+# Novel strategy has correlated efficacy parameters
+novel_cov <- data.frame(
+  efficacy_response = c(0.01,   0.003,  0.002),
+  efficacy_duration = c(0.003,  0.04,   0.005),
+  efficacy_qol      = c(0.002,  0.005,  0.0025)
+)
+
+model <- model |>
+  add_variable("efficacy_response", 0.6) |>
+  add_variable("efficacy_duration", 1.5) |>
+  add_variable("efficacy_qol", 0.08) |>
+  add_table("novel_efficacy_cov", novel_cov) |>
+  add_multivariate_sampling(
+    name = "novel_efficacy",
+    type = "mvnormal",
+    variables = c("efficacy_response", "efficacy_duration", "efficacy_qol"),
+    strategy = "novel",
+    covariance = "novel_efficacy_cov"
+  )
+```
+
+## Completing and Running the Model
+
+Now we add transitions, values, and summaries to complete the model, then run the PSA.
+
+```{r complete_model}
+model <- model |>
+  # Transitions
+  add_transition("stable", "stable", "p_stable_stable") |>
+  add_transition("stable", "progressed", "p_stable_progressed") |>
+  add_transition("stable", "dead", "p_stable_dead_extra") |>
+  add_transition("progressed", "progressed", "1 - p_progression_death") |>
+  add_transition("progressed", "dead", "p_progression_death") |>
+  add_transition("dead", "dead", "1") |>
+  # Values
+  add_value("cost", "cost_stable + cost_treatment", state = "stable", type = "cost") |>
+  add_value("cost", "cost_progressed", state = "progressed", type = "cost") |>
+  add_value("cost", "0", state = "dead", type = "cost") |>
+  add_value("qaly", "u_stable", state = "stable", type = "outcome") |>
+  add_value("qaly", "u_progressed", state = "progressed", type = "outcome") |>
+  add_value("qaly", "0", state = "dead", type = "outcome") |>
+  # Summaries
+  add_summary("total_cost", "cost", type = "cost") |>
+  add_summary("total_qaly", "qaly", type = "outcome")
+```
+
+```{r run_psa}
+psa_results <- run_psa(model, n_sim = 500, seed = 42)
+```
+
+The PSA samples all configured distributions simultaneously across `n_sim` iterations. Univariate distributions are sampled independently; multivariate distributions preserve the specified correlation structure.
+
+## Verifying Multivariate Correlation Structure
+
+Use `psa_parameter_scatter_matrix()` to verify that the sampled parameters exhibit the expected correlation structure. This is especially important for multivariate distributions.
+
+### Dirichlet: transition probabilities
+
+The Dirichlet distribution ensures the three transition probabilities from the stable state sum to 1. The scatter matrix shows the negative correlations induced by this constraint.
+
+```{r scatter_dirichlet, fig.width=9, fig.height=9}
+psa_parameter_scatter_matrix(
+  psa_results,
+  variables = c("p_stable_stable", "p_stable_progressed", "p_stable_dead_extra"),
+  strategies = "standard"
+)
+```
+
+### Multivariate normal: correlated utilities
+
+The scatter matrix confirms the correlation structure specified by the covariance table.
+
+```{r scatter_mvnormal, fig.width=9, fig.height=9}
+psa_parameter_scatter_matrix(
+  psa_results,
+  variables = c("u_stable", "u_treatment", "u_benefit"),
+  strategies = "standard"
+)
+```
+
+### Strategy-specific multivariate normal: novel efficacy
+
+Since `novel_efficacy` targets the "novel" strategy, these correlations only appear for that strategy.
+
+```{r scatter_strategy, fig.width=9, fig.height=9}
+psa_parameter_scatter_matrix(
+  psa_results,
+  variables = c("efficacy_response", "efficacy_duration", "efficacy_qol"),
+  strategies = "novel"
+)
+```
+
+### Multinomial: disease stage at entry
+
+Multinomial sampling produces discrete one-hot outcomes (0 or 1). Use `psa_parameter_pair_plot()` instead of the scatter matrix — it automatically detects discrete variables and uses bar charts and dot plots.
+
+```{r pair_multinomial, fig.width=9, fig.height=9}
+psa_parameter_pair_plot(
+  psa_results,
+  variables = c("start_early", "start_mid", "start_late"),
+  strategies = "standard"
+)
+```
+
+See `vignette("psa_results")` for the full range of PSA visualization options.

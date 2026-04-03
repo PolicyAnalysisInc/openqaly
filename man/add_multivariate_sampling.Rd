@@ -7,8 +7,12 @@
 add_multivariate_sampling(
   model,
   name,
-  distribution,
+  type,
   variables,
+  strategy = "",
+  group = "",
+  covariance = NULL,
+  n = NULL,
   description = NULL
 )
 }
@@ -17,15 +21,15 @@ add_multivariate_sampling(
 
 \item{name}{Character string naming this sampling specification}
 
-\item{distribution}{Expression defining the distribution function (uses NSE).
-The distribution should return a function(n) that generates n × k samples.
-Can reference any evaluated variables including base case values of sampled variables.
-For backward compatibility, can also be a character string.}
-
 \item{variables}{Character vector of variable names to be sampled together,
 or a tibble with columns: variable, strategy, group (for segment-specific sampling)}
 
 \item{description}{Optional description of this sampling specification}
+
+\item{distribution}{Expression defining the distribution function (uses NSE).
+The distribution should return a function(n) that generates n × k samples.
+Can reference any evaluated variables including base case values of sampled variables.
+For backward compatibility, can also be a character string.}
 }
 \value{
 The modified model object
@@ -39,31 +43,36 @@ parameters need to be sampled together with a specified correlation structure.
 \dontrun{
 # Dirichlet distribution for transition probabilities
 model <- define_model("markov") |>
+  add_variable("p_stable", 0.7) |>
+  add_variable("p_progression", 0.2) |>
+  add_variable("p_death", 0.1) |>
   add_multivariate_sampling(
     name = "transition_probs",
-    distribution = dirichlet(c(alpha_stable, alpha_progression, alpha_death)),
+    type = "dirichlet",
     variables = c("p_stable", "p_progression", "p_death"),
-    description = "Transition probabilities from sick state"
+    n = 100
   )
 
-# Multivariate normal for correlated cost and effectiveness
+# Multivariate normal with covariance from a model table
 model <- model |>
+  add_variable("shape", 1.5) |>
+  add_variable("scale", 0.02) |>
+  add_table("surv_vcov", as.data.frame(vcov(fit))) |>
   add_multivariate_sampling(
-    name = "cost_qaly_correlation",
-    distribution = mvnormal(mean = c(bc_cost, bc_qaly), sd = c(se_cost, se_qaly), cor = 0.6),
-    variables = c("cost_treatment", "qaly_treatment")
+    name = "survival_params",
+    type = "mvnormal",
+    variables = c("shape", "scale"),
+    covariance = "surv_vcov"
   )
 
-# Segment-specific sampling with tibble specification
+# Strategy-specific sampling
 model <- model |>
   add_multivariate_sampling(
     name = "strategy_specific",
-    distribution = mvnormal(mean = c(cost_mean, qaly_mean), sd = c(cost_sd, qaly_sd), cor = 0.5),
-    variables = tibble(
-      variable = c("treatment_cost", "treatment_qaly"),
-      strategy = c("intervention", "intervention"),
-      group = c(NA, NA)
-    )
+    type = "mvnormal",
+    variables = c("treatment_cost", "treatment_qaly"),
+    strategy = "intervention",
+    covariance = "cost_qaly_cov"
   )
 }
 }

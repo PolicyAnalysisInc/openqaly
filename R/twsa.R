@@ -35,7 +35,8 @@ validate_twsa_spec <- function(model) {
   valid_settings <- c(
     "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
     "discount_cost", "discount_outcomes", "half_cycle_method",
-    "reduce_state_cycle", "days_per_year"
+    "reduce_state_cycle", "days_per_year",
+    "discount_rate"
   )
 
   all_var_names <- model$variables$name
@@ -227,18 +228,15 @@ generate_twsa_values <- function(param, namespace = NULL, settings = NULL,
 build_twsa_segments <- function(model) {
   # Get base segments (strategy x group combinations)
   base_segments <- get_segments(model)
+  base_segments <- apply_override_categories(model, base_segments)
 
   # Enrich with evaluated variables for bc context
   enriched_segments <- base_segments %>%
     rowwise() %>%
     do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(model, as_tibble(seg))
+      prepare_segment_for_sampling(model, .)
     }) %>%
     ungroup()
-
-  # Apply override categories as baseline overrides
-  enriched_segments <- apply_override_categories(model, enriched_segments)
 
   n_segments <- nrow(enriched_segments)
   all_segments <- list()
@@ -288,6 +286,7 @@ build_twsa_segments <- function(model) {
 
     for (seg_idx in seq_len(n_segments)) {
       segment <- enriched_segments[seg_idx, ]
+      seg_model <- apply_setting_overrides(segment, model)
       seg_strategy <- segment$strategy[[1]]
       seg_group <- segment$group[[1]]
       seg_ns <- segment$eval_vars[[1]]
@@ -317,25 +316,25 @@ build_twsa_segments <- function(model) {
       # Generate values using this segment's namespace (for correct bc reference)
       if (x_applies) {
         x_values_per_segment[[seg_idx]] <- generate_twsa_values(
-          x_param, seg_ns, model$settings,
+          x_param, seg_ns, seg_model$settings,
           include_base_case = x_param$include_base_case %||% TRUE
         )
         x_bc_per_segment[[seg_idx]] <- if (x_param$param_type == "variable") {
           seg_ns[x_param$name]
         } else {
-          model$settings[[x_param$name]]
+          seg_model$settings[[x_param$name]]
         }
       }
 
       if (y_applies) {
         y_values_per_segment[[seg_idx]] <- generate_twsa_values(
-          y_param, seg_ns, model$settings,
+          y_param, seg_ns, seg_model$settings,
           include_base_case = y_param$include_base_case %||% TRUE
         )
         y_bc_per_segment[[seg_idx]] <- if (y_param$param_type == "variable") {
           seg_ns[y_param$name]
         } else {
-          model$settings[[y_param$name]]
+          seg_model$settings[[y_param$name]]
         }
       }
     }
@@ -397,7 +396,7 @@ build_twsa_segments <- function(model) {
         } else {
           x_val <- x_values_for_grid[x_idx]
           setting_overrides[[x_param$name]] <- x_val
-          x_bc_value <- model$settings[[x_param$name]]
+          x_bc_value <- x_bc_per_segment[[seg_idx]]
         }
 
         # Y parameter override
@@ -410,7 +409,7 @@ build_twsa_segments <- function(model) {
         } else {
           y_val <- y_values_for_grid[y_idx]
           setting_overrides[[y_param$name]] <- y_val
-          y_bc_value <- model$settings[[y_param$name]]
+          y_bc_value <- y_bc_per_segment[[seg_idx]]
         }
 
         # Use grid values for metadata if segment-specific not available
@@ -561,6 +560,7 @@ run_twsa <- function(model,
                      vbp_outcome_summary = NULL,
                      vbp_cost_summary = NULL,
                      progress = NULL,
+                     keep_diagnostics = FALSE,
                      ...) {
   # Finalize builders (convert to openqaly model)
   if ("oq_model_builder" %in% class(model)) {
@@ -651,9 +651,13 @@ run_twsa <- function(model,
 
   results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = if (isTRUE(keep_diagnostics)) "all" else "base_case"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Generate TWSA metadata

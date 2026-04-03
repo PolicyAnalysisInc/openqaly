@@ -136,9 +136,13 @@ run_vbp <- function(model,
 
   segment_results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = "none"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate by price_level + strategy

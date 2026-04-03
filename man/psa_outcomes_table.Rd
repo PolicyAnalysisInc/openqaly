@@ -6,14 +6,14 @@
 \usage{
 psa_outcomes_table(
   results,
-  outcome_summary,
+  outcome,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
   discounted = TRUE,
   cost_decimals = NULL,
-  outcome_decimals = NULL,
+  outcome_decimals = 2,
   abbreviate = FALSE,
   font_size = 11,
   table_format = c("flextable", "kable")
@@ -22,7 +22,7 @@ psa_outcomes_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (e.g., "qalys")}
+\item{outcome}{Name of the outcome to display (e.g., "qalys")}
 
 \item{groups}{Group selection:
 \itemize{

@@ -209,7 +209,7 @@ test_that("write_model_json produces valid JSON that can be parsed back", {
   expect_true(nchar(json_string) > 0)
 
   # Verify it can be parsed back
-  parsed_model <- read_model_json(json_string)
+  parsed_model <- read_model_json(text = json_string)
   expect_s3_class(parsed_model, "oq_model")
 
   # Key structure should be preserved
@@ -245,7 +245,7 @@ test_that("read_model_json parses minimal valid JSON model", {
     ]
   }'
 
-  model <- read_model_json(json_string)
+  model <- read_model_json(text = json_string)
 
   expect_s3_class(model, "oq_model")
   expect_equal(nrow(model$states), 2)
@@ -287,7 +287,7 @@ test_that("read_model_json handles tables array-of-objects format", {
     ]
   }'
 
-  model <- read_model_json(json_string)
+  model <- read_model_json(text = json_string)
 
   # Tables should be converted to named list with data + description structure
   expect_type(model$tables, "list")

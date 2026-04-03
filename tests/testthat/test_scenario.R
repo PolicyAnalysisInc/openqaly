@@ -928,6 +928,10 @@ test_that("scenario CE table correctly classifies ICERs", {
   expect_gt(nrow(prepared$data), 0)
 })
 
+test_that("scenario_ce_table() defaults outcome decimals to 2", {
+  expect_equal(eval(formals(scenario_ce_table)$outcome_decimals), 2)
+})
+
 # ============================================================================
 # Scenario CE: End-to-End Asterisk Tests
 # ============================================================================

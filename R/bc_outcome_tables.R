@@ -31,6 +31,9 @@ prepare_summary_table_data <- function(results,
                                        value_type = "outcome",
                                        currency = FALSE,
                                        font_size = 11) {
+  if (is.null(decimals) && identical(value_type, "outcome")) {
+    decimals <- 2
+  }
 
   # Get summary data (names already mapped by get_summaries)
   summary_data <- get_summaries(
@@ -307,14 +310,19 @@ prepare_summary_table_data <- function(results,
 #'
 #' @param results A openqaly model results object
 #' @param outcome Name of outcome to display (e.g., "total_qalys")
-#' @param groups Group selection: "overall" (default), specific group, or NULL (all groups)
-#' @param strategies Character vector of strategies to include (NULL for all)
-#' @param interventions Character vector of reference strategies for intervention perspective
-#' @param comparators Character vector of reference strategies for comparator perspective
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
+#' @param strategies Character vector of strategies to include when showing
+#'   absolute values (NULL for all). Cannot be combined with interventions or
+#'   comparators.
+#' @param interventions Character vector of reference strategies for intervention
+#'   perspective. Use for differences; cannot be combined with strategies.
+#' @param comparators Character vector of reference strategies for comparator
+#'   perspective. Use for differences; cannot be combined with strategies.
 #' @param show_total Logical. Show TOTAL row? (default: TRUE)
-#' @param decimals Number of decimal places (default: 2)
+#' @param decimals Number of decimal places (default: NULL for auto-precision)
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
-#' @param discounted Logical. Use discounted values?
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param font_size Font size for rendering (default: 11)
 #' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
@@ -329,7 +337,7 @@ prepare_summary_table_data <- function(results,
 #' ft <- outcomes_table(results, "total_qalys")
 #'
 #' # Compare across groups
-#' ft <- outcomes_table(results, "total_qalys", groups = NULL)
+#' ft <- outcomes_table(results, "total_qalys", groups = "all")
 #' }
 #'
 #' @export
@@ -340,7 +348,7 @@ outcomes_table <- function(results,
                            interventions = NULL,
                            comparators = NULL,
                            show_total = TRUE,
-                           decimals = NULL,
+                           decimals = 2,
                            abbreviate = FALSE,
                            discounted = TRUE,
                            font_size = 11,

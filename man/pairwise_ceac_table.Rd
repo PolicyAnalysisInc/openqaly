@@ -6,8 +6,8 @@
 \usage{
 pairwise_ceac_table(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   interventions = NULL,
   comparators = NULL,
   wtp_thresholds = c(0, 20000, 50000, 1e+05),
@@ -20,9 +20,9 @@ pairwise_ceac_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
 \item{interventions}{Reference strategies for comparison (intervention perspective).
 Can be a single strategy or vector of strategies.}
@@ -47,7 +47,7 @@ Default is c(0, 20000, 50000, 100000)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
-\item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
 \value{
 A table object (flextable or kable depending on table_format)

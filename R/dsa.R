@@ -20,7 +20,8 @@ validate_dsa_spec <- function(model) {
     "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
     "discount_cost", "discount_outcomes", "half_cycle_method",
     "discount_timing", "discount_method",
-    "reduce_state_cycle", "days_per_year"
+    "reduce_state_cycle", "days_per_year",
+    "discount_rate"
   )
 
   for (i in seq_along(model$dsa_parameters)) {
@@ -128,21 +129,18 @@ validate_dsa_spec <- function(model) {
 build_dsa_segments <- function(model) {
   # Get base segments (strategy x group combinations)
   base_segments <- get_segments(model)
+  base_segments <- apply_override_categories(model, base_segments)
 
   # Enrich with evaluated variables for bc context
   enriched_segments <- base_segments %>%
     rowwise() %>%
     do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(model, as_tibble(seg))
+      prepare_segment_for_sampling(model, .)
     }) %>%
     ungroup()
 
   all_segments <- list()
   run_id <- 1
-
-  # Apply override categories as baseline overrides
-  enriched_segments <- apply_override_categories(model, enriched_segments)
 
   # Run 1: Base case - all segments with override category values as baseline
   base_case_segments <- enriched_segments %>%
@@ -300,6 +298,10 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
   metadata <- list()
 
   # For each run_id, determine what parameter it represents
+  # Run IDs follow a deterministic pattern:
+  #   run_id 1 = base case
+  #   run_id 2 = param 1 low, run_id 3 = param 1 high
+  #   run_id 4 = param 2 low, run_id 5 = param 2 high, etc.
   for (rid in run_ids) {
     if (rid == 1) {
       # Base case
@@ -315,153 +317,85 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
         range_label = NA_character_
       )
     } else {
-      # Find a segment with this run_id that has non-empty overrides
-      # (For strategy-specific params, only some segments will have overrides)
+      # Map run_id to DSA parameter index and variation
+      param_index <- ceiling((rid - 1) / 2)
+      variation <- if ((rid - 1) %% 2 == 1) "low" else "high"
+      param_spec <- model$dsa_parameters[[param_index]]
+
+      param_name <- param_spec$name
+      param_type <- param_spec$type
+
+      # Extract override value from segments for display
       run_segments <- segments %>% filter(.data$run_id == rid)
-
-      # Find segment with non-empty param_overrides first
-      seg_with_override <- NULL
-      param_overrides <- list()
-      setting_overrides <- list()
-
+      override_value <- NA_character_
       for (i in seq_len(nrow(run_segments))) {
-        seg_param <- run_segments$parameter_overrides[[i]]
-        seg_setting <- run_segments$setting_overrides[[i]]
-
-        if (length(seg_param) > 0) {
-          seg_with_override <- run_segments[i, ]
-          param_overrides <- seg_param
-          break
-        } else if (length(seg_setting) > 0 && is.null(seg_with_override)) {
-          seg_with_override <- run_segments[i, ]
-          setting_overrides <- seg_setting
-        }
-      }
-
-      # Fall back to first segment if none have overrides
-      seg <- if (!is.null(seg_with_override)) seg_with_override else run_segments %>% slice(1)
-
-      if (length(param_overrides) > 0) {
-        # Variable DSA
-        param_name <- names(param_overrides)[1]
-        param_value <- param_overrides[[1]]
-
-        # Get segment's group and strategy to help match the correct DSA spec
-        seg_group <- seg$group[[1]]
-        seg_strategy <- seg$strategy[[1]]
-
-        # Find the parameter in dsa_parameters to get display info
-        # Match on name AND group/strategy if specified in the DSA spec
-        param_spec <- NULL
-        for (p in model$dsa_parameters) {
-          if (p$type == "variable" && p$name == param_name) {
-            # Check if this DSA spec is for the segment's group
-            p_group <- if (!is.na(p$group) && p$group != "") p$group else ""
-            seg_grp <- if (!is.na(seg_group) && seg_group != "_aggregated") seg_group else ""
-
-            # Check if this DSA spec is for the segment's strategy
-            p_strategy <- if (!is.na(p$strategy) && p$strategy != "") p$strategy else ""
-            seg_strat <- if (!is.na(seg_strategy)) seg_strategy else ""
-
-            # Match if: DSA has no restriction, or group matches, or strategy matches
-            group_ok <- (p_group == "" || p_group == seg_grp)
-            strategy_ok <- (p_strategy == "" || p_strategy == seg_strat)
-
-            if (group_ok && strategy_ok) {
-              param_spec <- p
-              break
-            }
+        if (param_type == "variable") {
+          seg_param <- run_segments$parameter_overrides[[i]]
+          if (param_name %in% names(seg_param)) {
+            override_value <- as.character(seg_param[[param_name]])
+            break
           }
-        }
-
-        # Get display name: priority is DSA spec > variable definition > parameter name
-        display_name <- NULL
-
-        # First, check if DSA spec provides a display name
-        if (!is.null(param_spec) && !is.null(param_spec$display_name)) {
-          display_name <- param_spec$display_name
-        }
-
-        # If not, get from model variable, filtering by strategy/group if specified
-        if (is.null(display_name)) {
-          var_row <- model$variables %>% filter(.data$name == param_name)
-
-          # Filter by strategy if specified in param_spec
-          if (!is.null(param_spec) && !is.na(param_spec$strategy) && param_spec$strategy != "") {
-            var_row <- var_row %>% filter(.data$strategy == param_spec$strategy)
-          }
-
-          # Filter by group if specified in param_spec
-          if (!is.null(param_spec) && !is.na(param_spec$group) && param_spec$group != "") {
-            var_row <- var_row %>% filter(.data$group == param_spec$group)
-          }
-
-          var_row <- var_row %>% slice(1)
-          display_name <- if (nrow(var_row) > 0) var_row$display_name else param_name
-        }
-
-        # Determine variation based on param index
-        # (This is approximate - we're inferring from run_id ordering)
-        # Odd run_ids after base are "low", even are "high"
-        variation <- if ((rid - 1) %% 2 == 1) "low" else "high"
-
-        # Extract strategy and group from param_spec (use NA for unspecified)
-        param_strategy <- if (!is.null(param_spec) && !is.na(param_spec$strategy) && param_spec$strategy != "") {
-          param_spec$strategy
         } else {
-          NA_character_
-        }
-
-        param_group <- if (!is.null(param_spec) && !is.na(param_spec$group) && param_spec$group != "") {
-          param_spec$group
-        } else {
-          NA_character_
-        }
-
-        metadata[[length(metadata) + 1]] <- tibble(
-          run_id = rid,
-          parameter = param_name,
-          parameter_type = "variable",
-          variation = variation,
-          parameter_display_name = display_name,
-          strategy = param_strategy,
-          group = param_group,
-          override_value = as.character(param_value),
-          range_label = if (!is.null(param_spec$range_label)) param_spec$range_label else NA_character_
-        )
-
-      } else if (length(setting_overrides) > 0) {
-        # Setting DSA
-        setting_name <- names(setting_overrides)[1]
-        setting_value <- setting_overrides[[1]]
-
-        # Find the parameter in dsa_parameters to get display info
-        param_spec <- NULL
-        for (p in model$dsa_parameters) {
-          if (p$type == "setting" && p$name == setting_name) {
-            param_spec <- p
+          seg_setting <- run_segments$setting_overrides[[i]]
+          if (param_name %in% names(seg_setting)) {
+            override_value <- as.character(seg_setting[[param_name]])
             break
           }
         }
-
-        display_name <- if (!is.null(param_spec)) param_spec$display_name else setting_name
-
-        # Determine variation
-        variation <- if ((rid - 1) %% 2 == 1) "low" else "high"
-
-        # Settings apply to all strategies and groups
-        metadata[[length(metadata) + 1]] <- tibble(
-          run_id = rid,
-          parameter = setting_name,
-          parameter_type = "setting",
-          variation = variation,
-          parameter_display_name = display_name,
-          strategy = NA_character_,
-          group = NA_character_,
-          override_value = as.character(setting_value),
-          range_label = if (!is.null(param_spec$range_label)) param_spec$range_label else NA_character_
-        )
       }
+
+      # Get display name: priority is DSA spec > variable definition > parameter name
+      display_name <- NULL
+
+      if (!is.null(param_spec$display_name) && param_spec$display_name != "") {
+        display_name <- param_spec$display_name
+      }
+
+      if (is.null(display_name) && param_type == "variable") {
+        var_row <- model$variables %>% filter(.data$name == param_name)
+
+        if (!is.null(param_spec$strategy) && !is.na(param_spec$strategy) && param_spec$strategy != "") {
+          var_row <- var_row %>% filter(.data$strategy == param_spec$strategy)
+        }
+
+        if (!is.null(param_spec$group) && !is.na(param_spec$group) && param_spec$group != "") {
+          var_row <- var_row %>% filter(.data$group == param_spec$group)
+        }
+
+        var_row <- var_row %>% slice(1)
+        display_name <- if (nrow(var_row) > 0) var_row$display_name else param_name
+      }
+
+      if (is.null(display_name)) {
+        display_name <- param_name
+      }
+
+      # Extract strategy and group from param_spec (use NA for unspecified)
+      param_strategy <- if (param_type == "variable" && !is.null(param_spec$strategy) &&
+                            !is.na(param_spec$strategy) && param_spec$strategy != "") {
+        param_spec$strategy
+      } else {
+        NA_character_
+      }
+
+      param_group <- if (param_type == "variable" && !is.null(param_spec$group) &&
+                         !is.na(param_spec$group) && param_spec$group != "") {
+        param_spec$group
+      } else {
+        NA_character_
+      }
+
+      metadata[[length(metadata) + 1]] <- tibble(
+        run_id = rid,
+        parameter = param_name,
+        parameter_type = param_type,
+        variation = variation,
+        parameter_display_name = display_name,
+        strategy = param_strategy,
+        group = param_group,
+        override_value = override_value,
+        range_label = if (!is.null(param_spec$range_label)) param_spec$range_label else NA_character_
+      )
     }
   }
 
@@ -560,6 +494,7 @@ run_dsa <- function(model,
                     vbp_outcome_summary = NULL,
                     vbp_cost_summary = NULL,
                     progress = NULL,
+                    keep_diagnostics = FALSE,
                     ...) {
   # Finalize builders (convert to openqaly model)
   if ("oq_model_builder" %in% class(model)) {
@@ -652,9 +587,13 @@ run_dsa <- function(model,
 
   results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = if (isTRUE(keep_diagnostics)) "all" else "base_case"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Generate metadata for DSA runs (for analysis functions and plots)

@@ -6,8 +6,8 @@
 \usage{
 evpi_plot(
   results,
-  outcome_summary = NULL,
-  cost_summary = NULL,
+  health_outcome = NULL,
+  cost_outcome = NULL,
   wtp_range = c(0, 1e+05),
   wtp_step = 5000,
   groups = "overall",
@@ -24,10 +24,10 @@ evpi_plot(
 \item{results}{A openqaly PSA results object, or pre-calculated EVPI data
 from calculate_evpi()}
 
-\item{outcome_summary}{Name of the outcome summary (required if results is
+\item{health_outcome}{Name of the health outcome (required if results is
 a model object)}
 
-\item{cost_summary}{Name of the cost summary (required if results is a
+\item{cost_outcome}{Name of the cost outcome (required if results is a
 model object)}
 
 \item{wtp_range}{Numeric vector with min and max WTP values for x-axis.
