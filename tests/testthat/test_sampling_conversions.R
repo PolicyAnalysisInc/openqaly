@@ -155,16 +155,16 @@ test_that("R to JSON to R preserves all sampling specifications", {
   expect_equal(orig_samples, rest_samples, tolerance = 1e-10)
 })
 
-test_that("R to Excel to R preserves all sampling specifications", {
+test_that("R to YAML to R preserves all sampling specifications", {
   # Create original model
   original_model <- create_test_model_with_all_sampling()
 
-  # Write to Excel
-  temp_path <- tempfile(pattern = "test_r_excel_r_", fileext = "")
-  write_model(original_model, temp_path, format = "excel")
+  # Write to YAML
+  temp_path <- tempfile(pattern = "test_r_yaml_r_", fileext = ".yaml")
+  write_model(original_model, temp_path, format = "yaml")
 
-  # Read back from Excel
-  restored_model <- read_model(temp_path)
+  # Read back from YAML
+  restored_model <- read_model_yaml(file = temp_path)
 
   # Check univariate sampling preserved
   orig_univ <- original_model$variables %>%
@@ -193,117 +193,7 @@ test_that("R to Excel to R preserves all sampling specifications", {
   }
 
   # Clean up
-  unlink(temp_path, recursive = TRUE)
-})
-
-test_that("Excel to JSON to Excel preserves all sampling specifications", {
-  # Create model in Excel format
-  temp_excel_path <- tempfile(pattern = "test_excel_json_excel_", fileext = "")
-  dir.create(temp_excel_path, showWarnings = FALSE)
-
-  # Create Excel structure with sampling
-  settings <- tibble(
-    setting = c("model_type", "n_cycles", "discount_cost", "discount_outcomes"),
-    value = c("markov", "10", "3", "3")
-  )
-
-  states <- tibble(
-    name = c("healthy", "sick", "dead"),
-    initial_probability = c("0.8", "0.15", "0.05")
-  )
-
-  variables <- tibble(
-    name = c("p_hs", "cost_h", "alpha1", "alpha2", "alpha3", "p1", "p2", "p3"),
-    formula = c("0.1", "1000", "80", "15", "5", "0.8", "0.15", "0.05"),
-    sampling = c("beta(mean = 0.1, sd = 0.02)", "normal(mean = 1000, sd = 100)",
-                 rep("", 6))
-  )
-
-  transitions <- tibble(
-    from_state = c("healthy", "healthy", "healthy", "sick", "sick", "dead"),
-    to_state = c("healthy", "sick", "dead", "sick", "dead", "dead"),
-    formula = c("p1", "p2", "p3", "0.9", "0.1", "1")
-  )
-
-  multivariate_sampling <- tibble(
-    name = c("trans_probs"),
-    type = c("dirichlet"),
-    strategy = c(""),
-    group = c(""),
-    description = c("Transition probabilities"),
-    covariance = c(NA_character_),
-    n = c("100")
-  )
-
-  multivariate_sampling_variables <- tibble(
-    sampling_name = rep("trans_probs", 3),
-    variable = c("p1", "p2", "p3")
-  )
-
-  strategies <- tibble(
-    name = c("standard"),
-    display_name = c("Standard"),
-    description = c("Standard treatment")
-  )
-
-  groups <- tibble(
-    name = c("all_patients"),
-    display_name = c("All Patients"),
-    description = c("All patients"),
-    weight = c(1)
-  )
-
-  wb_list <- list(
-    settings = settings,
-    strategies = strategies,
-    groups = groups,
-    states = states,
-    variables = variables,
-    transitions = transitions,
-    multivariate_sampling = multivariate_sampling,
-    multivariate_sampling_variables = multivariate_sampling_variables
-  )
-
-  openxlsx::write.xlsx(wb_list, file.path(temp_excel_path, "model.xlsx"))
-
-  # Read from Excel
-  excel_model <- read_model(temp_excel_path)
-
-  # Convert to JSON
-  json_string <- write_model_json(excel_model)
-  json_model <- read_model_json(text = json_string)
-
-  # Write back to Excel
-  temp_excel_path2 <- tempfile(pattern = "test_excel_restored_", fileext = "")
-  write_model(json_model, temp_excel_path2, format = "excel")
-
-  # Read the restored Excel
-  restored_model <- read_model(temp_excel_path2)
-
-  # Check univariate sampling preserved
-  expect_equal(
-    excel_model$variables$sampling[!is.na(excel_model$variables$sampling)],
-    restored_model$variables$sampling[!is.na(restored_model$variables$sampling)]
-  )
-
-  # Check multivariate sampling preserved
-  expect_equal(length(excel_model$multivariate_sampling),
-               length(restored_model$multivariate_sampling))
-
-  if (length(excel_model$multivariate_sampling) > 0) {
-    expect_equal(
-      excel_model$multivariate_sampling[[1]]$name,
-      restored_model$multivariate_sampling[[1]]$name
-    )
-    expect_equal(
-      excel_model$multivariate_sampling[[1]]$type,
-      restored_model$multivariate_sampling[[1]]$type
-    )
-  }
-
-  # Clean up
-  unlink(temp_excel_path, recursive = TRUE)
-  unlink(temp_excel_path2, recursive = TRUE)
+  unlink(temp_path)
 })
 
 test_that("JSON to R code to JSON preserves all sampling specifications", {
@@ -379,30 +269,30 @@ test_that("PSA runs correctly after format conversions", {
   json_samples <- openqaly:::resample(json_parsed, 10, json_segments, seed = 789)
   expect_equal(nrow(json_samples), 10 * nrow(json_segments))
 
-  # Test after Excel round-trip
-  temp_path <- tempfile(pattern = "test_psa_excel_", fileext = "")
-  write_model(original_model, temp_path, format = "excel")
-  excel_model <- read_model(temp_path)
+  # Test after YAML round-trip
+  temp_path <- tempfile(pattern = "test_psa_yaml_", fileext = ".yaml")
+  write_model(original_model, temp_path, format = "yaml")
+  yaml_model <- read_model_yaml(file = temp_path)
 
   set.seed(789)
-  excel_result <- run_model(excel_model)
-  excel_parsed <- openqaly:::parse_model(excel_model)
-  excel_segments <- excel_result$segments
-  for (i in 1:nrow(excel_segments)) {
-    excel_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
-      excel_parsed, excel_segments[i, ]
+  yaml_result <- run_model(yaml_model)
+  yaml_parsed <- openqaly:::parse_model(yaml_model)
+  yaml_segments <- yaml_result$segments
+  for (i in 1:nrow(yaml_segments)) {
+    yaml_segments[i, ] <- openqaly:::prepare_segment_for_sampling(
+      yaml_parsed, yaml_segments[i, ]
     )
   }
 
   # Should not error
-  excel_samples <- openqaly:::resample(excel_parsed, 10, excel_segments, seed = 789)
-  expect_equal(nrow(excel_samples), 10 * nrow(excel_segments))
+  yaml_samples <- openqaly:::resample(yaml_parsed, 10, yaml_segments, seed = 789)
+  expect_equal(nrow(yaml_samples), 10 * nrow(yaml_segments))
 
   # Results should be identical (same seed)
-  expect_equal(json_samples, excel_samples, tolerance = 1e-10)
+  expect_equal(json_samples, yaml_samples, tolerance = 1e-10)
 
   # Clean up
-  unlink(temp_path, recursive = TRUE)
+  unlink(temp_path)
 })
 
 test_that("Complex multivariate sampling with segment specificity converts correctly", {
@@ -464,24 +354,24 @@ test_that("Complex multivariate sampling with segment specificity converts corre
     expect_equal(orig_mv$group, json_mv$group)
   }
 
-  # Test Excel conversion
-  temp_path <- tempfile(pattern = "test_segment_specific_", fileext = "")
-  write_model(model, temp_path, format = "excel")
-  excel_model <- read_model(temp_path)
+  # Test YAML conversion
+  temp_path <- tempfile(pattern = "test_segment_specific_", fileext = ".yaml")
+  write_model(model, temp_path, format = "yaml")
+  yaml_model <- read_model_yaml(file = temp_path)
 
   expect_equal(length(model$multivariate_sampling),
-               length(excel_model$multivariate_sampling))
+               length(yaml_model$multivariate_sampling))
 
   # Check variables and strategy/group preserved
   for (i in seq_along(model$multivariate_sampling)) {
     orig_mv <- model$multivariate_sampling[[i]]
-    excel_mv <- excel_model$multivariate_sampling[[i]]
+    yaml_mv <- yaml_model$multivariate_sampling[[i]]
 
-    expect_equal(orig_mv$variables, excel_mv$variables)
-    expect_equal(orig_mv$strategy, excel_mv$strategy)
-    expect_equal(orig_mv$group, excel_mv$group)
+    expect_equal(orig_mv$variables, yaml_mv$variables)
+    expect_equal(orig_mv$strategy, yaml_mv$strategy)
+    expect_equal(orig_mv$group, yaml_mv$group)
   }
 
   # Clean up
-  unlink(temp_path, recursive = TRUE)
+  unlink(temp_path)
 })

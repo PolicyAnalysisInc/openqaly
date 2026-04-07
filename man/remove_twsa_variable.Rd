@@ -7,7 +7,7 @@
 remove_twsa_variable(model, twsa_name, variable, strategy = "", group = "")
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{twsa_name}{Name of the TWSA analysis}
 

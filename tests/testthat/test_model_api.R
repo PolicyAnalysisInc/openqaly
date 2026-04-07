@@ -81,7 +81,7 @@ test_that(".validate_model_arg errors on non-model objects", {
   expect_error(get_variables("not a model"), "must be an oq_model")
 })
 
-test_that(".validate_model_arg accepts oq_model and oq_model_builder", {
+test_that(".validate_model_arg accepts oq_model", {
   builder <- define_model("markov")
   expect_no_error(get_variables(builder))
 })

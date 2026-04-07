@@ -7,7 +7,7 @@
 preview_documentation(model)
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 }
 \value{
 Invisibly returns the path to the generated HTML file

@@ -13,7 +13,7 @@ parse_seg_variables <- function(x, segment = NULL, trees = NULL,
   
   # Filter to only variables in this segment
   df <- x %>%
-    mutate_all(~as.character(.)) %>%
+    mutate(across(everything(), ~{ r <- as.character(.); r[is.na(.)] <- NA_character_; r })) %>%
     filter(
       is_in_segment(segment, strat = .data$strategy, grp = .data$group),
       !.data$name %in% names(segment)

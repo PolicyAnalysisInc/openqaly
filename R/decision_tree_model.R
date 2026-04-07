@@ -6,7 +6,8 @@
 #' @return The model with class set to 'decision_tree'
 #' @keywords internal
 parse_decision_tree_model <- function(model) {
-  define_object_(model, class = 'decision_tree')
+  class(model) <- c("oq_decision_tree", "oq_model")
+  model
 }
 
 #' Run Segment for Decision Tree Model
@@ -20,7 +21,7 @@ parse_decision_tree_model <- function(model) {
 #' @param ... Additional arguments
 #' @return The segment with results
 #' @export
-run_segment.decision_tree <- function(segment, model, env, ...) {
+run_segment.oq_decision_tree <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
   diagnostics_policy <- get_diagnostics_policy(...)

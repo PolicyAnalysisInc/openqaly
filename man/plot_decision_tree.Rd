@@ -14,7 +14,7 @@ plot_decision_tree(
 )
 }
 \arguments{
-\item{x}{An \code{oq_model}, \code{oq_model_builder}, or results object
+\item{x}{An \code{oq_model} or results object
 from \code{run_model()}.}
 
 \item{tree_name}{Character string specifying which tree to plot. If

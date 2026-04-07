@@ -7,7 +7,7 @@
 get_model_summaries(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A tibble of summary definitions.

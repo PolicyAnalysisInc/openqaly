@@ -752,76 +752,6 @@ expect_models_equivalent <- function(original, restored, label = "") {
 }
 
 # ==============================================================================
-# Excel <-> JSON Round-Trip Tests
-# ==============================================================================
-
-# NOTE: Excel format now supports full parity with JSON/YAML:
-# - Table/script descriptions stored in _metadata sheet
-# - DSA parameters stored in dsa_parameters sheet
-# - Scenarios stored in scenarios and scenario_overrides sheets
-# - TWSA analyses stored in twsa_analyses and twsa_parameters sheets
-# - Script names preserve original naming (no double .R extension)
-
-test_that("Excel -> JSON -> Excel preserves all components", {
-  skip_if_cran()
-
-  # Use comprehensive model with all components including SA
-  model <- create_comprehensive_model()
-
-  # Model -> Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-
-  # Excel -> JSON
-  model_from_excel <- read_model(excel_dir)
-  json <- write_model_json(model_from_excel)
-
-  # JSON -> Model
-  model_from_json <- read_model_json(text = json)
-
-  # JSON -> Excel
-  excel_dir2 <- tempfile()
-  dir.create(excel_dir2)
-  write_model(model_from_json, excel_dir2, format = "excel")
-
-  # Excel -> Model (final)
-  model_final <- read_model(excel_dir2)
-
-  # Full parity check - no exceptions
-  expect_models_equivalent(model_from_excel, model_final, "Excel->JSON->Excel")
-
-  unlink(excel_dir, recursive = TRUE)
-  unlink(excel_dir2, recursive = TRUE)
-})
-
-test_that("JSON -> Excel -> JSON preserves all components", {
-  skip_if_cran()
-
-  # Use comprehensive model with all components including SA
-  model <- create_comprehensive_model()
-
-  # Model -> JSON
-  json1 <- write_model_json(model)
-  model1 <- read_model_json(text = json1)
-
-  # JSON -> Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model1, excel_dir, format = "excel")
-
-  # Excel -> JSON
-  model_from_excel <- read_model(excel_dir)
-  json2 <- write_model_json(model_from_excel)
-  model2 <- read_model_json(text = json2)
-
-  # Full parity check - no exceptions
-  expect_models_equivalent(model1, model2, "JSON->Excel->JSON")
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
-# ==============================================================================
 # YAML <-> JSON Round-Trip Tests (Comprehensive)
 # ==============================================================================
 
@@ -993,38 +923,21 @@ test_that("all formats produce equivalent JSON for same model", {
   json_via_yaml <- write_model_json(model_yaml)
   model_via_yaml <- read_model_json(text = json_via_yaml)
 
-  # Via Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_excel <- read_model(excel_dir)
-  json_via_excel <- write_model_json(model_excel)
-  model_via_excel <- read_model_json(text = json_via_excel)
-
   # All should have same structure - core components
   expect_equal(nrow(model_direct$states), nrow(model_via_yaml$states))
-  expect_equal(nrow(model_direct$states), nrow(model_via_excel$states))
   expect_equal(nrow(model_direct$transitions), nrow(model_via_yaml$transitions))
-  expect_equal(nrow(model_direct$transitions), nrow(model_via_excel$transitions))
   expect_equal(nrow(model_direct$variables), nrow(model_via_yaml$variables))
-  expect_equal(nrow(model_direct$variables), nrow(model_via_excel$variables))
 
   # All formats should preserve tables and scripts
   expect_equal(length(model_direct$tables), length(model_via_yaml$tables))
-  expect_equal(length(model_direct$tables), length(model_via_excel$tables))
   expect_equal(length(model_direct$scripts), length(model_via_yaml$scripts))
-  expect_equal(length(model_direct$scripts), length(model_via_excel$scripts))
 
   # All formats should preserve sensitivity analysis components
   expect_equal(length(model_direct$dsa_parameters), length(model_via_yaml$dsa_parameters))
-  expect_equal(length(model_direct$dsa_parameters), length(model_via_excel$dsa_parameters))
   expect_equal(length(model_direct$scenarios), length(model_via_yaml$scenarios))
-  expect_equal(length(model_direct$scenarios), length(model_via_excel$scenarios))
   expect_equal(length(model_direct$twsa_analyses), length(model_via_yaml$twsa_analyses))
-  expect_equal(length(model_direct$twsa_analyses), length(model_via_excel$twsa_analyses))
 
   unlink(yaml_path)
-  unlink(excel_dir, recursive = TRUE)
 })
 
 # ==============================================================================
@@ -1390,25 +1303,6 @@ test_that("VBP config survives R code round-trip", {
   unlink(r_path)
 })
 
-test_that("VBP config survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_model_with_vbp()
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$vbp))
-  expect_equal(model_back$vbp$price_variable, "cost_treat")
-  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
-  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
-  expect_equal(model_back$vbp$cost_summary, "total_cost")
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
 test_that("model without VBP has NULL vbp field", {
   model <- create_test_model()
 
@@ -1526,41 +1420,6 @@ test_that("PSA config without seed survives R code round-trip", {
   unlink(r_path)
 })
 
-test_that("PSA config survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_model_with_psa()
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$psa))
-  expect_equal(model_back$psa$n_sim, 500L)
-  expect_equal(model_back$psa$seed, 42)
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
-test_that("PSA config without seed survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_test_model() |>
-    set_psa(n_sim = 150)
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$psa))
-  expect_equal(model_back$psa$n_sim, 150L)
-  expect_null(model_back$psa$seed)
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
 test_that("model without PSA has NULL psa field", {
   model <- create_test_model()
 
@@ -1639,37 +1498,6 @@ test_that("discount_timing and discount_method survive YAML round-trip", {
   expect_equal(model_back$settings$discount_method, "by_year")
 
   unlink(yaml_path)
-})
-
-test_that("discount_timing and discount_method survive Excel round-trip", {
-  model <- define_model("markov") |>
-    set_settings(
-      timeframe = 10,
-      cycle_length = 1,
-      discount_cost = 3,
-      discount_outcomes = 3.5,
-      discount_timing = "midpoint",
-      discount_method = "by_cycle"
-    ) |>
-    add_strategy("base") |>
-    add_state("alive", initial_prob = 1) |>
-    add_state("dead", initial_prob = 0) |>
-    add_transition("alive", "alive", 0.9) |>
-    add_transition("alive", "dead", 0.1) |>
-    add_transition("dead", "dead", 1) |>
-    add_value("cost", 100, state = "alive", type = "cost") |>
-    add_value("qaly", 1, state = "alive", type = "outcome") |>
-    add_summary("total_cost", "cost") |>
-    add_summary("total_qaly", "qaly")
-
-  temp_dir <- tempdir()
-  write_model_excel(model, temp_dir)
-  model_back <- read_model(temp_dir)
-
-  expect_equal(model_back$settings$discount_timing, "midpoint")
-  expect_equal(model_back$settings$discount_method, "by_cycle")
-
-  unlink(file.path(temp_dir, "model.xlsx"))
 })
 
 test_that("discount_timing and discount_method survive R code generation round-trip", {

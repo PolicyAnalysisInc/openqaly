@@ -7,7 +7,7 @@
 set_override_expressions(model, overrides)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 
 \item{overrides}{A list of lists, each with fields: \code{name} (string),
 \code{expression} (string), \code{strategy} (string, default ""),

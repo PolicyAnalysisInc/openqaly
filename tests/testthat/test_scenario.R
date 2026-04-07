@@ -465,7 +465,7 @@ test_that("validate_scenario_spec catches missing scenarios", {
     add_variable("cost", 1000)
 
   # Finalize without adding scenarios
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -480,7 +480,7 @@ test_that("validate_scenario_spec catches invalid variable names", {
     add_scenario("Test") %>%
     add_scenario_variable("Test", "nonexistent_var", 500)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -496,7 +496,7 @@ test_that("validate_scenario_spec catches invalid setting names", {
     add_scenario("Test") %>%
     add_scenario_setting("Test", "invalid_setting", 5)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -609,7 +609,7 @@ test_that("build_scenario_segments includes Base Case", {
     add_scenario("Test") %>%
     add_scenario_variable("Test", "cost", 2000)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   segments <- build_scenario_segments(parsed)
@@ -651,7 +651,7 @@ test_that("generate_scenario_metadata creates correct structure", {
     add_scenario("Optimistic", description = "Best case") %>%
     add_scenario_variable("Optimistic", "cost", 500)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   segments <- build_scenario_segments(parsed)

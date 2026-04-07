@@ -8,7 +8,7 @@
 #' When called with results from \code{run_model()}, edge labels show
 #' evaluated conditional probabilities as percentages.
 #'
-#' @param x An \code{oq_model}, \code{oq_model_builder}, or results object
+#' @param x An \code{oq_model} or results object
 #'   from \code{run_model()}.
 #' @param tree_name Character string specifying which tree to plot. If
 #'   \code{NULL}, auto-detects from the model or results.
@@ -34,7 +34,7 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   }
 
   # Detect input type and extract tree_df + edge labels
-  if (inherits(x, c("oq_model", "oq_model_builder"))) {
+  if (inherits(x, "oq_model")) {
     # Model/builder path: formula labels
     tree_info <- .extract_model_tree(x, tree_name)
     tree_df <- tree_info$tree_df
@@ -56,7 +56,7 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
          "plot_decision_tree() on results requires base-case output from run_model().",
          call. = FALSE)
   } else {
-    stop("'x' must be an oq_model, oq_model_builder, or run_model() results object.",
+    stop("'x' must be an oq_model or run_model() results object.",
          call. = FALSE)
   }
 
@@ -70,7 +70,7 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
 # =============================================================================
 
 #' Extract tree data from a model/builder object
-#' @param model An oq_model or oq_model_builder
+#' @param model An oq_model object
 #' @param tree_name Tree name or NULL for auto-detect
 #' @return List with tree_df, edge_labels, root_label
 #' @keywords internal

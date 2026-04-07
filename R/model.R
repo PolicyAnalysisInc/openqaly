@@ -15,10 +15,7 @@
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
 run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, keep_diagnostics = FALSE, ...) {
-  # Finalize builders (convert to oq_model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
 
   # Fall back to model$psa defaults if runtime args not provided
   if (is.null(n_sim) && !is.null(model$psa$n_sim)) {
@@ -112,10 +109,7 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, keep_diag
 run_model <- function(model, progress = NULL, ...) {
 
   # Base case: existing logic
-  # Finalize builders (convert to oq_model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
 
   # Validate settings and structural requirements before running
   model_type <- tolower(model$settings$model_type %||% "markov")

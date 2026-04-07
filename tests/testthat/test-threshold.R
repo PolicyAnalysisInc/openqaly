@@ -109,7 +109,7 @@ test_that("add_threshold_analysis validates model type", {
   expect_error(
     add_threshold_analysis(list(), "test", "x", 0, 1,
       condition = threshold_condition_outcomes(summary = "s", strategy = "s")),
-    "oq_model_builder"
+    "oq_model"
   )
 })
 
@@ -381,90 +381,6 @@ test_that("remove_threshold_analysis preserves other analyses", {
   expect_equal(model2$threshold_analyses[[1]]$name, "ta2")
 })
 
-# ============================================================================
-# Format Conversion Tests
-# ============================================================================
-
-test_that("flatten_threshold_analysis works for outcomes absolute", {
-  analysis <- list(
-    name = "Test", variable = "p", variable_strategy = "s1",
-    variable_group = "", lower = 0, upper = 1, active = TRUE,
-    condition = list(output = "outcomes", summary = "total_qalys",
-                     type = "absolute", strategy = "s1",
-                     discounted = TRUE, target_value = 5)
-  )
-
-  flat <- openqaly:::flatten_threshold_analysis(analysis)
-  expect_equal(flat$name, "Test")
-  expect_equal(flat$output, "outcomes")
-  expect_equal(flat$summary, "total_qalys")
-  expect_equal(flat$type, "absolute")
-  expect_equal(flat$strategy, "s1")
-  expect_equal(flat$target_value, 5)
-})
-
-test_that("nest_threshold_analysis works for outcomes absolute", {
-  flat <- list(
-    name = "Test", variable = "p", variable_strategy = "s1",
-    variable_group = "", lower = 0, upper = 1, active = TRUE,
-    output = "outcomes", summary = "total_qalys", type = "absolute",
-    strategy = "s1", discounted = TRUE, target_value = 5
-  )
-
-  nested <- openqaly:::nest_threshold_analysis(flat)
-  expect_equal(nested$name, "Test")
-  expect_equal(nested$condition$output, "outcomes")
-  expect_equal(nested$condition$summary, "total_qalys")
-  expect_equal(nested$condition$strategy, "s1")
-  expect_equal(nested$condition$target_value, 5)
-})
-
-test_that("flatten/nest round-trip preserves all output types", {
-  analyses <- list(
-    # Outcomes absolute with summary
-    list(name = "A1", variable = "p", variable_strategy = "", variable_group = "",
-         lower = 0, upper = 1, active = TRUE,
-         condition = list(output = "outcomes", summary = "total_qalys",
-                          type = "absolute", strategy = "s1",
-                          discounted = TRUE, target_value = 5)),
-    # Outcomes difference with value
-    list(name = "A2", variable = "p", variable_strategy = "", variable_group = "",
-         lower = 0, upper = 1, active = TRUE,
-         condition = list(output = "outcomes", value = "qaly_sick",
-                          type = "difference", referent = "s1", comparator = "s2",
-                          discounted = FALSE, target_value = 0.5)),
-    # Costs absolute
-    list(name = "A3", variable = "c", variable_strategy = "treatment", variable_group = "",
-         lower = 0, upper = 50000, active = TRUE,
-         condition = list(output = "costs", summary = "total_cost",
-                          type = "absolute", strategy = "treatment",
-                          discounted = TRUE, target_value = 20000)),
-    # NMB
-    list(name = "A4", variable = "c", variable_strategy = "", variable_group = "",
-         lower = 0, upper = 50000, active = TRUE,
-         condition = list(output = "nmb", health_summary = "total_qalys",
-                          cost_summary = "total_cost", referent = "s1", comparator = "s2",
-                          discounted = TRUE, target_value = 0)),
-    # CE
-    list(name = "A5", variable = "c", variable_strategy = "", variable_group = "",
-         lower = 0, upper = 50000, active = FALSE,
-         condition = list(output = "ce", health_summary = "total_qalys",
-                          cost_summary = "total_cost", referent = "s1", comparator = "s2",
-                          discounted = TRUE))
-  )
-
-  for (a in analyses) {
-    flat <- openqaly:::flatten_threshold_analysis(a)
-    nested <- openqaly:::nest_threshold_analysis(flat)
-    expect_equal(nested$name, a$name, info = paste("Name mismatch for", a$name))
-    expect_equal(nested$variable, a$variable, info = paste("Variable mismatch for", a$name))
-    expect_equal(nested$lower, a$lower, info = paste("Lower mismatch for", a$name))
-    expect_equal(nested$upper, a$upper, info = paste("Upper mismatch for", a$name))
-    expect_equal(nested$active, a$active, info = paste("Active mismatch for", a$name))
-    expect_equal(nested$condition$output, a$condition$output,
-                 info = paste("Output mismatch for", a$name))
-  }
-})
 
 # ============================================================================
 # Serialization Round-Trip Tests
@@ -480,7 +396,7 @@ test_that("JSON round-trip preserves threshold analyses", {
       condition = threshold_condition_nmb(
         "total_qalys", "total_cost", "treatment", "base"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
 
   # Write JSON (returns string)
   json_string <- write_model_json(model_norm)
@@ -496,32 +412,6 @@ test_that("JSON round-trip preserves threshold analyses", {
   expect_equal(model_back$threshold_analyses[[2]]$condition$output, "nmb")
 })
 
-test_that("Excel round-trip preserves threshold analyses", {
-  model <- build_threshold_test_model() %>%
-    add_threshold_analysis("Cost Target", "cost_base", 0, 50000,
-      condition = threshold_condition_costs(
-        value = "cost_drug", type = "absolute",
-        strategy = "treatment", target_value = 20000)) %>%
-    add_threshold_analysis("CE Threshold", "cost_base", 0, 50000,
-      condition = threshold_condition_ce(
-        "total_qalys", "total_cost", "treatment", "base"))
-
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
-
-  # write_model_excel expects a directory path
-  tmp_dir <- tempdir()
-  on.exit(unlink(file.path(tmp_dir, "model.xlsx")), add = TRUE)
-  write_model_excel(model_norm, tmp_dir)
-  model_back <- read_model(tmp_dir)
-
-  expect_equal(length(model_back$threshold_analyses), 2)
-  expect_equal(model_back$threshold_analyses[[1]]$name, "Cost Target")
-  expect_equal(model_back$threshold_analyses[[1]]$condition$output, "costs")
-  expect_equal(model_back$threshold_analyses[[1]]$condition$value, "cost_drug")
-  expect_equal(model_back$threshold_analyses[[2]]$name, "CE Threshold")
-  expect_equal(model_back$threshold_analyses[[2]]$condition$output, "ce")
-})
-
 test_that("YAML round-trip preserves threshold analyses", {
   model <- build_threshold_test_model() %>%
     add_threshold_analysis("Outcomes Diff", "p_disease", 0, 1,
@@ -530,7 +420,7 @@ test_that("YAML round-trip preserves threshold analyses", {
         referent = "treatment", comparator = "base",
         discounted = FALSE, target_value = 0.5))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
 
   tmp <- tempfile(fileext = ".yaml")
   on.exit(unlink(tmp), add = TRUE)
@@ -552,7 +442,7 @@ test_that("R code generation includes threshold analyses", {
       condition = threshold_condition_nmb(
         "total_qalys", "total_cost", "treatment", "base"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_true(any(grepl("add_threshold_analysis", code)))
@@ -566,7 +456,7 @@ test_that("R code generation includes threshold analyses", {
 
 test_that("validate_threshold_spec errors when no analyses defined", {
   model <- build_threshold_test_model()
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   parsed <- openqaly:::parse_model(model_norm)
   expect_error(
     openqaly:::validate_threshold_spec(parsed),
@@ -725,7 +615,7 @@ verify_threshold_at_value <- function(model, threshold_result, analysis_name) {
   variable_name <- row$variable
   threshold_value <- row$value
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   model_norm$variables <- model_norm$variables %>%
     dplyr::mutate(formula = ifelse(name == variable_name, as.character(threshold_value), formula))
 
@@ -740,7 +630,7 @@ verify_threshold_at_value_grouped <- function(model, threshold_result, analysis_
   variable_name <- row$variable
   threshold_value <- row$value
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   if (!is.null(variable_group) && variable_group != "") {
     model_norm$variables <- model_norm$variables %>%
       dplyr::mutate(formula = ifelse(
@@ -965,7 +855,7 @@ test_that("validate_threshold_spec rejects nonexistent group", {
       condition = threshold_condition_outcomes(
         summary = "total_qalys", strategy = "base", group = "nonexistent"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   parsed <- openqaly:::parse_model(model_norm)
 
   expect_error(
@@ -1023,22 +913,6 @@ test_that("group-targeted threshold differs from aggregated threshold", {
   )))
 })
 
-test_that("flatten/nest round-trip preserves group field", {
-  analysis <- list(
-    name = "Test", variable = "p", variable_strategy = "",
-    variable_group = "", lower = 0, upper = 1, active = TRUE,
-    condition = list(output = "outcomes", summary = "total_qalys",
-                     type = "absolute", strategy = "s1",
-                     discounted = TRUE, target_value = 5, group = "high_risk")
-  )
-
-  flat <- openqaly:::flatten_threshold_analysis(analysis)
-  expect_equal(flat$group, "high_risk")
-
-  nested <- openqaly:::nest_threshold_analysis(flat)
-  expect_equal(nested$condition$group, "high_risk")
-})
-
 test_that("JSON round-trip preserves group field in threshold condition", {
   model <- build_threshold_group_model() %>%
     add_threshold_analysis("Grouped", "cost_base", 0, 50000,
@@ -1046,27 +920,9 @@ test_that("JSON round-trip preserves group field in threshold condition", {
         summary = "total_qalys", type = "absolute",
         strategy = "base", target_value = 5, group = "high_risk"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   json_string <- write_model_json(model_norm)
   model_back <- read_model_json(text = json_string)
-
-  expect_equal(length(model_back$threshold_analyses), 1)
-  expect_equal(model_back$threshold_analyses[[1]]$condition$group, "high_risk")
-})
-
-test_that("Excel round-trip preserves group field in threshold condition", {
-  model <- build_threshold_group_model() %>%
-    add_threshold_analysis("Grouped", "cost_base", 0, 50000,
-      condition = threshold_condition_outcomes(
-        summary = "total_qalys", type = "absolute",
-        strategy = "base", target_value = 5, group = "high_risk"))
-
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
-
-  tmp_dir <- tempdir()
-  on.exit(unlink(file.path(tmp_dir, "model.xlsx")), add = TRUE)
-  write_model_excel(model_norm, tmp_dir)
-  model_back <- read_model(tmp_dir)
 
   expect_equal(length(model_back$threshold_analyses), 1)
   expect_equal(model_back$threshold_analyses[[1]]$condition$group, "high_risk")
@@ -1079,7 +935,7 @@ test_that("YAML round-trip preserves group field in threshold condition", {
         summary = "total_qalys", type = "absolute",
         strategy = "base", target_value = 5, group = "high_risk"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
 
   tmp <- tempfile(fileext = ".yaml")
   on.exit(unlink(tmp), add = TRUE)
@@ -1097,7 +953,7 @@ test_that("R code generation includes group parameter", {
         summary = "total_qalys", type = "absolute",
         strategy = "base", target_value = 5, group = "high_risk"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_true(any(grepl('group = "high_risk"', code)))
@@ -1303,7 +1159,7 @@ test_that("validate_threshold_spec rejects nonexistent state in trace condition"
         state = "nonexistent", time = 5,
         strategy = "base", target_value = 0.7))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   parsed <- openqaly:::parse_model(model_norm)
 
   expect_error(
@@ -1319,7 +1175,7 @@ test_that("validate_threshold_spec rejects out-of-range cycle in trace condition
         state = "healthy", time = 100,
         strategy = "base", target_value = 0.7))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   parsed <- openqaly:::parse_model(model_norm)
 
   expect_error(
@@ -1495,7 +1351,7 @@ test_that("JSON round-trip preserves trace condition fields", {
         type = "absolute", strategy = "base",
         target_value = 0.7, group = ""))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   json_string <- write_model_json(model_norm)
   model_back <- read_model_json(text = json_string)
 
@@ -1511,30 +1367,6 @@ test_that("JSON round-trip preserves trace condition fields", {
   expect_equal(a$condition$target_value, 0.7)
 })
 
-test_that("Excel round-trip preserves trace condition fields", {
-  model <- build_threshold_test_model() %>%
-    add_threshold_analysis("Trace Test", "p_disease", 0, 1,
-      condition = threshold_condition_trace(
-        state = "healthy", time = 5, time_unit = "year",
-        type = "absolute", strategy = "base", target_value = 0.7))
-
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
-
-  tmp_dir <- tempdir()
-  on.exit(unlink(file.path(tmp_dir, "model.xlsx")), add = TRUE)
-  write_model_excel(model_norm, tmp_dir)
-  model_back <- read_model(tmp_dir)
-
-  expect_equal(length(model_back$threshold_analyses), 1)
-  a <- model_back$threshold_analyses[[1]]
-  expect_equal(a$condition$output, "trace")
-  expect_equal(a$condition$state, "healthy")
-  expect_equal(a$condition$time, 5)
-  expect_equal(a$condition$time_unit, "year")
-  expect_equal(a$condition$strategy, "base")
-  expect_equal(a$condition$target_value, 0.7)
-})
-
 test_that("YAML round-trip preserves trace condition fields", {
   model <- build_threshold_test_model() %>%
     add_threshold_analysis("Trace Test", "p_disease", 0, 1,
@@ -1542,7 +1374,7 @@ test_that("YAML round-trip preserves trace condition fields", {
         state = "healthy", time = 5, time_unit = "year",
         type = "absolute", strategy = "base", target_value = 0.7))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
 
   tmp <- tempfile(fileext = ".yaml")
   on.exit(unlink(tmp), add = TRUE)
@@ -1567,7 +1399,7 @@ test_that("R code generation includes trace condition", {
         type = "absolute", strategy = "base",
         target_value = 0.7, group = "high_risk"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_true(any(grepl("threshold_condition_trace", code)))
@@ -1746,7 +1578,7 @@ test_that("R code generation includes wtp parameter for NMB condition", {
       condition = threshold_condition_nmb(
         "total_qalys", "total_cost", "treatment", "base", wtp = 75000))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_true(any(grepl("wtp = 75000", code)))
@@ -1758,7 +1590,7 @@ test_that("R code generation includes wtp parameter for CE condition", {
       condition = threshold_condition_ce(
         "total_qalys", "total_cost", "treatment", "base", wtp = 75000))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_true(any(grepl("wtp = 75000", code)))
@@ -1770,7 +1602,7 @@ test_that("R code generation omits wtp when NULL", {
       condition = threshold_condition_nmb(
         "total_qalys", "total_cost", "treatment", "base"))
 
-  model_norm <- openqaly:::normalize_and_validate_model(model, preserve_builder = FALSE)
+  model_norm <- openqaly:::normalize_and_validate_model(model)
   code <- model_to_r_code(model_norm)
 
   expect_false(any(grepl("wtp =", code)))

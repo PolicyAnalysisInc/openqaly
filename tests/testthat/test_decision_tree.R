@@ -60,7 +60,7 @@ test_that("define_model accepts 'decision_tree' type", {
   model <- define_model("decision_tree")
   expect_equal(model$settings$model_type, "decision_tree")
   expect_null(model$decision_tree)
-  expect_s3_class(model, "oq_model_builder")
+  expect_s3_class(model, "oq_model")
 })
 
 test_that("add_tree_node creates and appends to trees tibble", {
@@ -255,7 +255,7 @@ test_that("validate_decision_tree catches missing tree reference", {
   )
 
   expect_error(
-    normalize_and_validate_model(model, preserve_builder = FALSE),
+    normalize_and_validate_model(model),
     "does not exist"
   )
 })
@@ -272,7 +272,7 @@ test_that("standalone DT without decision_tree config fails validation", {
   model$decision_tree <- NULL
 
   expect_error(
-    normalize_and_validate_model(model, preserve_builder = FALSE),
+    normalize_and_validate_model(model),
     "must have a decision_tree configuration"
   )
 })
@@ -322,7 +322,7 @@ test_that("model_type 'decision_tree' is normalized correctly", {
   model <- define_model("decision_tree") |>
     add_tree_node("t", "root", parent = NA, formula = 1) |>
     set_decision_tree("t", duration = 0, duration_unit = "days")
-  model <- normalize_and_validate_model(model, preserve_builder = TRUE)
+  model <- normalize_and_validate_model(model)
   expect_equal(model$settings$model_type, "decision_tree")
 })
 
@@ -523,8 +523,8 @@ test_that("PSM + DT: DT values undiscounted, state values discounted with offset
       'define_surv_param("weibull", shape = 1.2, scale = 8)') |>
     add_variable("os_dist",
       'define_surv_param("weibull", shape = 1.1, scale = 14)') |>
-    add_psm_transition("PFS", "years", pfs_dist) |>
-    add_psm_transition("OS", "years", os_dist) |>
+    add_transition("PFS", "years", pfs_dist) |>
+    add_transition("OS", "years", os_dist) |>
     add_value("dt_cost", type = "cost", state = "decision_tree",
               formula = "p(alive, t) * 50000") |>
     add_value("treatment_cost", type = "cost", state = "progression_free",
@@ -577,8 +577,8 @@ test_that("PSM + DT reduces cycle count by DT duration", {
       'define_surv_param("weibull", shape = 1.2, scale = 8)') |>
     add_variable("os_dist",
       'define_surv_param("weibull", shape = 1.1, scale = 14)') |>
-    add_psm_transition("PFS", "years", pfs_dist) |>
-    add_psm_transition("OS", "years", os_dist) |>
+    add_transition("PFS", "years", pfs_dist) |>
+    add_transition("OS", "years", os_dist) |>
     add_value("dt_cost", type = "cost", state = "decision_tree",
               formula = "p(alive, t) * 50000") |>
     add_value("treatment_cost", type = "cost", state = "progression_free",
@@ -1041,7 +1041,7 @@ test_that("validation-time detection of tree name collision", {
     strategy = "", group = "", source = "", sampling = ""
   )
   expect_error(
-    normalize_and_validate_model(model, preserve_builder = FALSE),
+    normalize_and_validate_model(model),
     "Name collision.*decision trees and variables"
   )
 })

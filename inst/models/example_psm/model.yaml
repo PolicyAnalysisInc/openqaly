@@ -1,0 +1,378 @@
+format_version: '1.0'
+model_type: psm
+settings:
+  cycle_length: 1.0
+  cycle_length_unit: months
+  timeframe: 10.0
+  timeframe_unit: years
+  days_per_year: 365.25
+  discount_cost: 3.5
+  discount_outcomes: 3.5
+  reduce_state_cycle: no
+  half_cycle_method: start
+  discount_timing: start
+  discount_method: by_cycle
+strategies:
+  - name: chemo
+    display_name: Chemotherapy
+    description: Standard chemotherapy
+    abbreviation: ~
+    enabled: 1.0
+  - name: targeted
+    display_name: Targeted Therapy
+    description: Targeted therapeutic agent
+    abbreviation: ~
+    enabled: 1.0
+  - name: immuno
+    display_name: Immunotherapy
+    description: Immunotherapy treatment
+    abbreviation: ~
+    enabled: 1.0
+groups:
+  - name: high_risk
+    display_name: High Risk
+    description: High risk population
+    weight: '0.4'
+    enabled: 1.0
+  - name: low_risk
+    display_name: Low Risk
+    description: Low risk population
+    weight: '0.6'
+    enabled: 1.0
+states:
+  - name: progression_free
+    display_name: Progression Free
+    description: No disease progression
+  - name: progressed
+    display_name: Progressed
+    description: Disease has progressed
+  - name: dead
+    display_name: Dead
+    description: Death
+variables:
+  - name: pfs_shape
+    display_name: PFS Shape
+    description: PFS Weibull shape parameter
+    formula: '1.2'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: pfs_scale
+    display_name: PFS Scale
+    description: PFS Weibull scale parameter
+    formula: '8'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: os_shape
+    display_name: OS Shape
+    description: OS Weibull shape parameter
+    formula: '1.1'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: os_scale
+    display_name: OS Scale
+    description: OS Weibull scale parameter
+    formula: '14'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: pfs_chemo
+    display_name: PFS Distribution (Chemo)
+    description: PFS Weibull distribution for chemotherapy
+    formula: define_surv_param("weibull", shape = pfs_shape, scale = pfs_scale)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: os_chemo
+    display_name: OS Distribution (Chemo)
+    description: OS Weibull distribution for chemotherapy
+    formula: define_surv_param("weibull", shape = os_shape, scale = os_scale)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: pfs_dist
+    display_name: PFS Distribution
+    description: Progression-free survival
+    formula: apply_hr(pfs_chemo, pfs_hr)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: os_dist
+    display_name: OS Distribution
+    description: Overall survival
+    formula: apply_hr(os_chemo, os_hr)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: u_pfs
+    display_name: Utility PFS
+    description: Quality of life in PFS
+    formula: '0.8'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: u_prog
+    display_name: Utility Progressed
+    description: Quality of life after progression
+    formula: '0.6'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_prog
+    display_name: Progression Cost
+    description: Monthly progression cost
+    formula: '1500'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_drug
+    display_name: Drug Cost
+    description: Monthly drug cost
+    formula: '7000'
+    strategy: chemo
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_drug
+    display_name: Drug Cost
+    description: Monthly drug cost
+    formula: '12000'
+    strategy: targeted
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_drug
+    display_name: Drug Cost
+    description: Monthly drug cost
+    formula: '14000'
+    strategy: immuno
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_admin
+    display_name: Administration Cost
+    description: Monthly admin cost
+    formula: '500'
+    strategy: chemo
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_admin
+    display_name: Administration Cost
+    description: Monthly admin cost
+    formula: '800'
+    strategy: targeted
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_admin
+    display_name: Administration Cost
+    description: Monthly admin cost
+    formula: '1000'
+    strategy: immuno
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_ae
+    display_name: AE Cost
+    description: Monthly AE cost
+    formula: '200'
+    strategy: chemo
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_ae
+    display_name: AE Cost
+    description: Monthly AE cost
+    formula: '400'
+    strategy: targeted
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_ae
+    display_name: AE Cost
+    description: Monthly AE cost
+    formula: '500'
+    strategy: immuno
+    group: ~
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '1.0'
+    strategy: chemo
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '1.0'
+    strategy: chemo
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '0.85'
+    strategy: chemo
+    group: low_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '0.88'
+    strategy: chemo
+    group: low_risk
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '0.80'
+    strategy: targeted
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '0.85'
+    strategy: targeted
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '0.70'
+    strategy: targeted
+    group: low_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '0.77'
+    strategy: targeted
+    group: low_risk
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '0.58'
+    strategy: immuno
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '0.66'
+    strategy: immuno
+    group: high_risk
+    source: ~
+    sampling: ~
+  - name: pfs_hr
+    display_name: PFS Hazard Ratio
+    description: PFS Hazard Ratio
+    formula: '0.46'
+    strategy: immuno
+    group: low_risk
+    source: ~
+    sampling: ~
+  - name: os_hr
+    display_name: OS Hazard Ratio
+    description: OS Hazard Ratio
+    formula: '0.56'
+    strategy: immuno
+    group: low_risk
+    source: ~
+    sampling: ~
+transitions:
+  - endpoint: PFS
+    time_unit: months
+    formula: pfs_dist
+  - endpoint: OS
+    time_unit: months
+    formula: os_dist
+values:
+  - name: qalys
+    display_name: QALYs
+    description: Quality-adjusted life years
+    state: progression_free
+    destination: ~
+    formula: u_pfs
+    type: outcome
+    discounting_override: ~
+  - name: qalys
+    display_name: QALYs
+    description: Quality-adjusted life years
+    state: progressed
+    destination: ~
+    formula: u_prog
+    type: outcome
+    discounting_override: ~
+  - name: cost_drug
+    display_name: Drug Cost
+    description: Drug costs
+    state: ~
+    destination: ~
+    formula: c_drug
+    type: cost
+    discounting_override: ~
+  - name: cost_admin
+    display_name: Admin Cost
+    description: Administration costs
+    state: ~
+    destination: ~
+    formula: c_admin
+    type: cost
+    discounting_override: ~
+  - name: cost_ae
+    display_name: AE Cost
+    description: AE costs
+    state: ~
+    destination: ~
+    formula: c_ae
+    type: cost
+    discounting_override: ~
+  - name: cost_prog
+    display_name: Progression Cost
+    description: Progression costs
+    state: progressed
+    destination: ~
+    formula: c_prog
+    type: cost
+    discounting_override: ~
+summaries:
+  - name: total_qalys
+    display_name: Total QALYs
+    description: Total quality-adjusted life years
+    values: qalys
+    type: outcome
+    wtp: ~
+  - name: total_cost
+    display_name: Total Cost
+    description: Total costs
+    values: cost_drug,cost_admin,cost_ae,cost_prog
+    type: outcome
+    wtp: ~
+

@@ -12,4 +12,3 @@ validate_threshold_condition(condition)
 \description{
 Validate Threshold Condition Fields
 }
-\keyword{internal}

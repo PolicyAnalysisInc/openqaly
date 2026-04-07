@@ -15,4 +15,3 @@ Invisible model
 \description{
 Displays a formatted summary of override categories and their overrides.
 }
-\keyword{internal}

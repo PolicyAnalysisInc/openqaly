@@ -14,7 +14,7 @@ validate_variable_targeting(
 )
 }
 \arguments{
-\item{model}{A model object (oq_model_builder or parsed)}
+\item{model}{An oq_model object}
 
 \item{variable}{Character string naming the variable}
 
@@ -35,4 +35,3 @@ in sensitivity analyses. If the variable is defined with specific strategies
 or groups, this validation ensures the user explicitly specifies which
 strategy/group to target.
 }
-\keyword{internal}

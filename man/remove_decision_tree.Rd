@@ -7,7 +7,7 @@
 remove_decision_tree(model)
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 }
 \value{
 The modified model object

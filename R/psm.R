@@ -37,11 +37,12 @@ parse_psm <- function(model) {
     }
   }
 
-  define_object_(model, class = 'psm')
+  class(model) <- c("oq_psm", "oq_model")
+  model
 }
 
 #' @export
-run_segment.psm <- function(segment, model, env, ...) {
+run_segment.oq_psm <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
   diagnostics_policy <- get_diagnostics_policy(...)

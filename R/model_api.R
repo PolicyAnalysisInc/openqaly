@@ -4,8 +4,8 @@
 
 # Internal validation helper
 .validate_model_arg <- function(model) {
-  if (!inherits(model, c("oq_model", "oq_model_builder"))) {
-    stop("model must be an oq_model or oq_model_builder object", call. = FALSE)
+  if (!inherits(model, "oq_model")) {
+    stop("model must be an oq_model object", call. = FALSE)
   }
 }
 
@@ -15,7 +15,7 @@
 
 #' Get Override Categories
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A list of override categories.
 #' @export
 get_override_categories <- function(model) {
@@ -25,7 +25,7 @@ get_override_categories <- function(model) {
 
 #' Get Variables
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of variables.
 #' @export
 get_variables <- function(model) {
@@ -43,7 +43,7 @@ get_variables <- function(model) {
 
 #' Get Variable Names
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of unique variable names.
 #' @export
 get_variable_names <- function(model) {
@@ -59,7 +59,7 @@ get_variable_names <- function(model) {
 #'
 #' Returns variables where strategy and group are both empty or NA.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of global variables.
 #' @export
 get_global_variables <- function(model) {
@@ -83,7 +83,7 @@ get_global_variables <- function(model) {
 #' Analyzes a model's variables to determine which variables have
 #' strategy-specific or group-specific definitions.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A named list where each element is a list with \code{strategies}
 #'   and \code{groups} character vectors (or NULL if the variable is global).
 #' @export
@@ -113,7 +113,7 @@ get_variable_targeting <- function(model) {
 
 #' Get Strategies
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of strategies.
 #' @export
 get_strategies <- function(model) {
@@ -129,7 +129,7 @@ get_strategies <- function(model) {
 
 #' Get Groups
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of groups.
 #' @export
 get_groups <- function(model) {
@@ -146,7 +146,7 @@ get_groups <- function(model) {
 
 #' Get Settings
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A list of model settings.
 #' @export
 get_settings <- function(model) {
@@ -156,7 +156,7 @@ get_settings <- function(model) {
 
 #' Get Model Type
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A string indicating the model type (e.g., "markov", "psm").
 #' @export
 get_model_type <- function(model) {
@@ -169,7 +169,7 @@ get_model_type <- function(model) {
 
 #' Get DSA Parameters
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A dsa_parameters object (list with class "dsa_parameters").
 #' @export
 get_dsa_parameters <- function(model) {
@@ -182,7 +182,7 @@ get_dsa_parameters <- function(model) {
 
 #' Get Tables
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A named list of data frames.
 #' @export
 get_tables <- function(model) {
@@ -192,7 +192,7 @@ get_tables <- function(model) {
 
 #' Get Table Names
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of table names.
 #' @export
 get_table_names <- function(model) {
@@ -209,7 +209,7 @@ get_table_names <- function(model) {
 #' Returns the value definitions from the model object (not results).
 #' Use \code{get_values()} from model results to get computed values.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of values.
 #' @export
 get_model_values <- function(model) {
@@ -229,7 +229,7 @@ get_model_values <- function(model) {
 #'
 #' Returns the unique value definition names from the model object.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of unique value names.
 #' @export
 get_model_value_names <- function(model) {
@@ -243,7 +243,7 @@ get_model_value_names <- function(model) {
 
 #' Get Trees
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A data frame of trees, or NULL if none.
 #' @export
 get_trees <- function(model) {
@@ -253,7 +253,7 @@ get_trees <- function(model) {
 
 #' Get Tree Names
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of unique tree names.
 #' @export
 get_tree_names <- function(model) {
@@ -269,7 +269,7 @@ get_tree_names <- function(model) {
 #'
 #' Returns the value-based pricing (VBP) configuration from the model definition.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A list with fields \code{price_variable}, \code{intervention_strategy},
 #'   \code{outcome_summary}, and \code{cost_summary}, or NULL if VBP is not configured.
 #' @export
@@ -282,7 +282,7 @@ get_vbp <- function(model) {
 #'
 #' Returns the list of scenario definitions from the model.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A list of scenario objects, each with \code{name}, \code{description},
 #'   \code{variable_overrides}, and \code{setting_overrides}.
 #' @export
@@ -293,7 +293,7 @@ get_scenarios <- function(model) {
 
 #' Get Scenario Names
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of scenario names.
 #' @export
 get_scenario_names <- function(model) {
@@ -308,7 +308,7 @@ get_scenario_names <- function(model) {
 #' Returns the summary definitions from the model object (not results).
 #' Use \code{get_summaries()} from model results to get computed summaries.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of summary definitions.
 #' @export
 get_model_summaries <- function(model) {
@@ -329,7 +329,7 @@ get_model_summaries <- function(model) {
 #' by model type (Markov models have additional columns like
 #' \code{initial_probability}).
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of state definitions.
 #' @export
 get_states <- function(model) {
@@ -358,7 +358,7 @@ get_states <- function(model) {
 #' Use \code{get_transitions()} from model results to get computed transitions.
 #' The tibble structure varies by model type.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A tibble of transition definitions.
 #' @export
 get_model_transitions <- function(model) {
@@ -388,7 +388,7 @@ get_model_transitions <- function(model) {
 #'
 #' Returns the decision tree configuration from the model.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A list with \code{tree_name}, \code{duration}, and \code{duration_unit},
 #'   or NULL if no decision tree is configured.
 #' @export
@@ -399,7 +399,7 @@ get_decision_tree <- function(model) {
 
 #' Get Scripts
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A named list of scripts, each with \code{code} and \code{description}.
 #' @export
 get_scripts <- function(model) {
@@ -409,7 +409,7 @@ get_scripts <- function(model) {
 
 #' Get Script Names
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @return A character vector of script names.
 #' @export
 get_script_names <- function(model) {
@@ -427,7 +427,7 @@ get_script_names <- function(model) {
 #'
 #' Replaces override categories wholesale on a model object.
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @param categories A list of override categories.
 #' @return The modified model object.
 #' @export
@@ -499,7 +499,7 @@ set_override_categories <- function(model, categories) {
 #' Sets the overridden expression for a specific override identified by
 #' (name, strategy, group).
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @param name The name of the override.
 #' @param expression The new expression value.
 #' @param strategy The strategy targeting (default "").
@@ -536,7 +536,7 @@ set_override_expression <- function(model, name, expression,
 #' Sets overridden expressions for multiple overrides at once. Each entry
 #' targets a specific override by (name, strategy, group).
 #'
-#' @param model An oq_model or oq_model_builder object.
+#' @param model An oq_model object.
 #' @param overrides A list of lists, each with fields: \code{name} (string),
 #'   \code{expression} (string), \code{strategy} (string, default ""),
 #'   \code{group} (string, default "").

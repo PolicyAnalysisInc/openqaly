@@ -1,366 +1,19 @@
 #' Read a Model from Directory
 #'
-#' Reads a complete openqaly model from a directory structure containing
-#' an Excel workbook (`model.xlsx`), optional data CSVs, and optional R scripts.
+#' Reads a complete openqaly model from a directory containing
+#' a YAML model file (`model.yaml`).
 #'
-#' @param path Path to the model directory containing `model.xlsx` and
-#'   optional `data/` and `scripts/` subdirectories.
+#' @param path Path to the model directory containing `model.yaml`.
 #'
 #' @return A normalized and validated `oq_model` object.
 #'
 #' @export
 read_model <- function(path) {
-
-  # Read raw Excel data
-  model <- read_workbook(file.path(path, 'model.xlsx'))
-
-  # Convert multivariate sampling tables from Excel format to internal list structure
-  if ("multivariate_sampling" %in% names(model) &&
-      "multivariate_sampling_variables" %in% names(model)) {
-
-    mv_sampling <- model$multivariate_sampling
-    mv_variables <- model$multivariate_sampling_variables
-
-    # Build list structure from sheets
-    sampling_order <- mv_sampling$name
-
-    model$multivariate_sampling <- lapply(sampling_order, function(spec_name) {
-      spec_row <- mv_sampling[mv_sampling$name == spec_name, ]
-      spec_vars <- mv_variables[mv_variables$sampling_name == spec_name, ]
-
-      result <- list(
-        name = spec_name,
-        type = spec_row[["type"]],
-        strategy = if ("strategy" %in% names(spec_row) && !is.na(spec_row[["strategy"]])) spec_row[["strategy"]] else "",
-        group = if ("group" %in% names(spec_row) && !is.na(spec_row[["group"]])) spec_row[["group"]] else "",
-        description = if ("description" %in% names(spec_row) && !is.na(spec_row[["description"]])) {
-          spec_row[["description"]]
-        } else {
-          ""
-        },
-        variables = spec_vars[["variable"]]
-      )
-
-      # Type-specific fields (use [[ to avoid partial matching)
-      if ("covariance" %in% names(spec_row) && !is.na(spec_row[["covariance"]])) result$covariance <- as.oq_formula(spec_row[["covariance"]])
-      if ("n" %in% names(spec_row) && !is.na(spec_row[["n"]])) result$n <- spec_row[["n"]]
-
-      result
-    })
-
-    # Remove raw tables
-    model$multivariate_sampling_variables <- NULL
-    if ("multivariate_sampling_alpha" %in% names(model)) {
-      model$multivariate_sampling_alpha <- NULL
-    }
+  yaml_file <- file.path(path, "model.yaml")
+  if (!file.exists(yaml_file)) {
+    stop("No model.yaml found in directory: ", path)
   }
-
-  # Read metadata sheet for table/script descriptions
-  metadata <- NULL
-  if ("_metadata" %in% names(model)) {
-    metadata <- model$`_metadata`
-    model$`_metadata` <- NULL
-  }
-
-  # Read DSA parameters sheet
-  if ("dsa_parameters" %in% names(model)) {
-    dsa_df <- model$dsa_parameters
-    model$dsa_parameters <- lapply(seq_len(nrow(dsa_df)), function(i) {
-      row <- dsa_df[i, ]
-      param_type <- row$type
-      list(
-        type = param_type,
-        name = row$name,
-        low = deserialize_to_formula(row$low, param_type),
-        high = deserialize_to_formula(row$high, param_type),
-        strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
-        group = if (is.na(row$group) || row$group == "") "" else row$group,
-        display_name = if (is.na(row$display_name) || row$display_name == "") NULL else row$display_name,
-        range_label = if ("range_label" %in% names(row) && !is.na(row$range_label) && row$range_label != "") row$range_label else NULL
-      )
-    })
-    class(model$dsa_parameters) <- "dsa_parameters"
-  } else {
-    model$dsa_parameters <- structure(list(), class = "dsa_parameters")
-  }
-
-  # Read scenarios sheets
-  if ("scenarios" %in% names(model) && "scenario_overrides" %in% names(model)) {
-    scenarios_df <- model$scenarios
-    overrides_df <- model$scenario_overrides
-
-    model$scenarios <- lapply(seq_len(nrow(scenarios_df)), function(i) {
-      s <- scenarios_df[i, ]
-      s_overrides <- overrides_df[overrides_df$scenario_name == s$name, ]
-
-      var_overrides <- list()
-      var_indices <- which(s_overrides$override_type == "variable")
-      if (length(var_indices) > 0) {
-        var_overrides <- lapply(var_indices, function(j) {
-          row <- s_overrides[j, ]
-          list(
-            name = row$name,
-            value = deserialize_to_formula(row$value, "variable"),
-            strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
-            group = if (is.na(row$group) || row$group == "") "" else row$group
-          )
-        })
-      }
-
-      setting_overrides <- list()
-      setting_indices <- which(s_overrides$override_type == "setting")
-      if (length(setting_indices) > 0) {
-        setting_overrides <- lapply(setting_indices, function(j) {
-          row <- s_overrides[j, ]
-          list(name = row$name, value = row$value)
-        })
-      }
-
-      list(
-        name = s$name,
-        description = if (is.na(s$description)) "" else s$description,
-        variable_overrides = var_overrides,
-        setting_overrides = setting_overrides
-      )
-    })
-
-    # Remove raw tables
-    model$scenario_overrides <- NULL
-  } else {
-    model$scenarios <- list()
-  }
-
-  # Read TWSA sheets
-  if ("twsa_analyses" %in% names(model) && "twsa_parameters" %in% names(model)) {
-    twsa_df <- model$twsa_analyses
-    params_df <- model$twsa_parameters
-
-    model$twsa_analyses <- lapply(seq_len(nrow(twsa_df)), function(i) {
-      t <- twsa_df[i, ]
-      t_params <- params_df[params_df$twsa_name == t$name, ]
-
-      parameters <- list()
-      if (nrow(t_params) > 0) {
-        parameters <- lapply(seq_len(nrow(t_params)), function(j) {
-          p <- t_params[j, ]
-          param <- list(
-            param_type = p$param_type,
-            name = p$name,
-            type = p$type,
-            strategy = if (is.na(p$strategy) || p$strategy == "") "" else p$strategy,
-            group = if (is.na(p$group) || p$group == "") "" else p$group,
-            display_name = if (is.na(p$display_name) || p$display_name == "") NULL else p$display_name,
-            include_base_case = if (is.na(p$include_base_case)) TRUE else p$include_base_case
-          )
-          if (!is.na(p$min) && p$min != "") param$min <- deserialize_to_formula(p$min, p$param_type)
-          if (!is.na(p$max) && p$max != "") param$max <- deserialize_to_formula(p$max, p$param_type)
-          if (!is.na(p$radius) && p$radius != "") param$radius <- deserialize_to_formula(p$radius, p$param_type)
-          if (!is.na(p$steps)) param$steps <- p$steps
-          if (!is.na(p$values) && p$values != "") {
-            param$values <- strsplit(p$values, ",")[[1]]
-          }
-          param
-        })
-      }
-
-      list(
-        name = t$name,
-        description = if (is.na(t$description)) "" else t$description,
-        parameters = parameters
-      )
-    })
-
-    # Remove raw tables
-    model$twsa_parameters <- NULL
-  } else {
-    model$twsa_analyses <- list()
-  }
-
-  # Read threshold analyses sheet (flat format -> nested)
-  if ("threshold_analyses" %in% names(model) && is.data.frame(model$threshold_analyses) &&
-      nrow(model$threshold_analyses) > 0) {
-    threshold_df <- model$threshold_analyses
-    model$threshold_analyses <- lapply(seq_len(nrow(threshold_df)), function(i) {
-      row <- as.list(threshold_df[i, ])
-      # Convert NA to appropriate defaults
-      if (is.na(row$variable_strategy)) row$variable_strategy <- ""
-      if (is.na(row$variable_group)) row$variable_group <- ""
-      if (is.na(row$active)) row$active <- TRUE
-      nest_threshold_analysis(row)
-    })
-  } else {
-    model$threshold_analyses <- list()
-  }
-
-  # Read VBP configuration sheet
-  if ("vbp" %in% names(model) && is.data.frame(model$vbp) && nrow(model$vbp) > 0) {
-    model$vbp <- as.list(model$vbp[1, ])
-  } else {
-    model$vbp <- NULL
-  }
-
-  # Read PSA configuration sheet
-  if ("psa" %in% names(model) && is.data.frame(model$psa) && nrow(model$psa) > 0) {
-    psa_row <- as.list(model$psa[1, ])
-    model$psa <- list(n_sim = as.integer(psa_row$n_sim))
-    if (!is.null(psa_row$seed) && !is.na(psa_row$seed)) {
-      model$psa$seed <- psa_row$seed
-    } else {
-      model$psa$seed <- NULL
-    }
-  } else {
-    model$psa <- NULL
-  }
-
-  # Read documentation sheet
-  if ("documentation" %in% names(model) && is.data.frame(model$documentation) &&
-      nrow(model$documentation) > 0 && "text" %in% names(model$documentation)) {
-    model$documentation <- as.character(model$documentation$text[1])
-  } else {
-    model$documentation <- NULL
-  }
-
-  # Read decision_tree configuration sheet
-  if ("decision_tree" %in% names(model) && is.data.frame(model$decision_tree) && nrow(model$decision_tree) > 0) {
-    model$decision_tree <- as.list(model$decision_tree[1, ])
-  } else {
-    model$decision_tree <- NULL
-  }
-
-  # Read override categories sheets
-  if ("override_categories" %in% names(model)) {
-    cats_df <- model$override_categories
-    overrides_df <- if ("overrides" %in% names(model)) model$overrides else NULL
-    dropdown_df <- if ("override_dropdown_options" %in% names(model)) model$override_dropdown_options else NULL
-
-    model$override_categories <- lapply(seq_len(nrow(cats_df)), function(i) {
-      cat_row <- cats_df[i, ]
-      cat_name <- cat_row$category_name
-
-      # Get overrides for this category
-      overrides_list <- list()
-      if (!is.null(overrides_df)) {
-        cat_overrides <- overrides_df[overrides_df$category_name == cat_name, ]
-        if (nrow(cat_overrides) > 0) {
-          overrides_list <- lapply(seq_len(nrow(cat_overrides)), function(j) {
-            row <- cat_overrides[j, ]
-
-            # Build input_config based on input_type
-            input_config <- list()
-            if (row$input_type %in% c("numeric", "slider")) {
-              if (!is.na(row$config_min) && row$config_min != "") {
-                input_config$min <- as.numeric(row$config_min)
-              }
-              if (!is.na(row$config_max) && row$config_max != "") {
-                input_config$max <- as.numeric(row$config_max)
-              }
-            }
-            if (row$input_type == "slider") {
-              if (!is.na(row$config_step_size) && row$config_step_size != "") {
-                input_config$step_size <- as.numeric(row$config_step_size)
-              }
-            }
-            if (row$input_type == "dropdown" && !is.null(dropdown_df)) {
-              dd_opts <- dropdown_df[dropdown_df$category_name == cat_name &
-                                     dropdown_df$override_title == row$title, ]
-              if (nrow(dd_opts) > 0) {
-                input_config$options <- lapply(seq_len(nrow(dd_opts)), function(k) {
-                  list(
-                    label = dd_opts$label[k],
-                    value = as.character(dd_opts$value[k]),
-                    is_base_case = as.logical(dd_opts$is_base_case[k])
-                  )
-                })
-              } else {
-                input_config$options <- list()
-              }
-            }
-
-            list(
-              title = row$title,
-              description = if (is.na(row$description)) "" else row$description,
-              type = row$type,
-              name = row$name,
-              strategy = if (is.na(row$strategy) || row$strategy == "") "" else row$strategy,
-              group = if (is.na(row$group) || row$group == "") "" else row$group,
-              general = as.logical(row$general),
-              input_type = row$input_type,
-              overridden_expression = as.character(row$overridden_expression),
-              input_config = input_config
-            )
-          })
-        }
-      }
-
-      list(
-        name = cat_name,
-        general = as.logical(cat_row$general),
-        overrides = overrides_list
-      )
-    })
-
-    # Clean up raw tables
-    model$overrides <- NULL
-    model$override_dropdown_options <- NULL
-  } else {
-    model$override_categories <- list()
-  }
-
-  # Read tables from CSV files
-  data_path <- file.path(path, 'data')
-  if (dir.exists(data_path)) {
-    table_files <- list.files(data_path)
-    table_names <- gsub('.csv$', '', table_files)
-    model$tables <- list()
-    for (i in seq_along(table_files)) {
-      table_data <- read.csv(file.path(data_path, table_files[i]),
-                              stringsAsFactors = FALSE, check.names = FALSE)
-      # Look up description from metadata
-      table_description <- NULL
-      if (!is.null(metadata)) {
-        tbl_meta <- metadata[metadata$component_type == "table" & metadata$name == table_names[i], ]
-        if (nrow(tbl_meta) > 0) {
-          table_description <- tbl_meta$description[1]
-        }
-      }
-      model$tables[[table_names[i]]] <- list(
-        data = table_data,
-        description = table_description
-      )
-    }
-  } else {
-    model$tables <- list()
-  }
-
-  # Read scripts from R files
-  scripts_path <- file.path(path, 'scripts')
-  if (dir.exists(scripts_path)) {
-    script_files <- list.files(scripts_path)
-    script_names <- gsub("\\.R$", "", script_files)
-    model$scripts <- list()
-    for (i in seq_along(script_files)) {
-      script_code <- read_file(file.path(scripts_path, script_files[i]))
-      # Look up description from metadata
-      script_description <- NULL
-      if (!is.null(metadata)) {
-        scr_meta <- metadata[metadata$component_type == "script" & metadata$name == script_names[i], ]
-        if (nrow(scr_meta) > 0) {
-          script_description <- scr_meta$description[1]
-        }
-      }
-      model$scripts[[script_names[i]]] <- list(
-        code = script_code,
-        description = script_description
-      )
-    }
-  } else {
-    model$scripts <- list()
-  }
-
-  # UNIFIED VALIDATION - applies type-specific specs
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-
-  return(model)
+  read_model_yaml(file = yaml_file)
 }
 
 convert_settings_from_df <- function(settings_df) {
@@ -475,23 +128,6 @@ convert_settings_from_df <- function(settings_df) {
 }
 
 
-#' Read an Excel Workbook
-#' 
-#' Takes the path of an excel workbook and reads it in as a named list of
-#' data frames.
-#' 
-#' @param path the path to the workbook.
-#' 
-#' @return a named list of data.frames
-#' 
-#' @export
-read_workbook <- function(path) {
-  sheet_names <- getSheetNames(path)
-  names(sheet_names) <- sheet_names
-  lapply(sheet_names, function(x) {
-    suppressWarnings(as_tibble(readWorkbook(path, sheet = x)))
-  })
-}
 
 define_object_ <- function(obj, class) {
   class(obj) <- class
@@ -1388,11 +1024,10 @@ validate_settings <- function(settings, model_type) {
 #' Used by all three input paths (Excel, JSON, R Builder) to ensure consistency.
 #'
 #' @param model Raw model list
-#' @param preserve_builder If TRUE, keeps oq_model_builder class; if FALSE, returns oq_model
 #'
 #' @return Validated model with correct structure
 #' @export
-normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
+normalize_and_validate_model <- function(model) {
 
   # Extract model_type (handle both dataframe and list formats)
   if (is.list(model$settings) && !is.data.frame(model$settings)) {
@@ -1625,12 +1260,15 @@ normalize_and_validate_model <- function(model, preserve_builder = FALSE) {
     validate_tree_name_collisions(unique(model$trees$name), model)
   }
 
-  # Set class
-  if (preserve_builder && "oq_model_builder" %in% class(model)) {
-    class(model) <- c("oq_model_builder", "oq_model")
-  } else {
-    class(model) <- "oq_model"
-  }
+  # Set class based on model type
+  model_type_str <- tolower(model$settings$model_type %||% "markov")
+  class(model) <- switch(model_type_str,
+    markov = c("oq_markov", "oq_model"),
+    psm = c("oq_psm", "oq_model"),
+    custom_psm = c("oq_custom_psm", "oq_model"),
+    decision_tree = c("oq_decision_tree", "oq_model"),
+    c("oq_markov", "oq_model")
+  )
 
   return(model)
 }
@@ -2176,7 +1814,7 @@ read_model_json <- function(file = NULL, text = NULL) {
   }
 
   # UNIFIED VALIDATION - applies type-specific specs
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   return(model)
 }

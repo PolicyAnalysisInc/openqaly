@@ -71,7 +71,8 @@ parse_psm_custom <- function(model) {
     stop(glue("Custom PSM: Only one state can use the complement operator 'C'. Found in states: {paste(complement_states, collapse = ', ')}"))
   }
 
-  define_object_(model, class = 'psm_custom')
+  class(model) <- c("oq_custom_psm", "oq_model")
+  model
 }
 
 #' Run Segment for Custom PSM Model
@@ -86,7 +87,7 @@ parse_psm_custom <- function(model) {
 #' @return The segment with trace and values calculated
 #' @keywords internal
 #' @export
-run_segment.psm_custom <- function(segment, model, env, ...) {
+run_segment.oq_custom_psm <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
   diagnostics_policy <- get_diagnostics_policy(...)

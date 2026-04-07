@@ -7,7 +7,7 @@
 get_documentation(model)
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 }
 \value{
 The documentation string, or NULL if not set

@@ -1,7 +1,7 @@
 #' Model Format Converters
 #'
 #' Functions for converting openqaly models between different formats
-#' (Excel folders, JSON files, YAML files, and R code).
+#' (JSON files, YAML files, and R code).
 #'
 #' @name model_converters
 #' @importFrom jsonlite validate
@@ -12,22 +12,17 @@ NULL
 #' Write Model to File
 #'
 #' Write a oq_model object to a file in the specified format.
-#'
-#' For Excel format, the path should be a folder (will be created if needed).
-#' For JSON, R, and YAML formats, the path should include the filename.
+#' The path should include the filename.
 #'
 #' @param model A oq_model object
 #' @param path Character string specifying the output path
-#' @param format Character string specifying the format ("excel", "json", "r", or "yaml")
+#' @param format Character string specifying the format ("json", "r", or "yaml")
 #'
 #' @return Invisibly returns the path
 #'
 #' @export
 #' @examples
 #' \dontrun{
-#' # Write to Excel folder structure
-#' write_model(model, "output/my_model/", format = "excel")
-#'
 #' # Write to JSON file
 #' write_model(model, "output/my_model.json", format = "json")
 #'
@@ -37,22 +32,10 @@ NULL
 #' # Write to YAML file
 #' write_model(model, "output/my_model.yaml", format = "yaml")
 #' }
-write_model <- function(model, path, format = c("excel", "json", "r", "yaml")) {
+write_model <- function(model, path, format = c("json", "r", "yaml")) {
   format <- match.arg(format)
 
-  if (format == "excel") {
-    # Excel format requires a folder path
-    if (file_ext(path) != "") {
-      stop("For Excel format, path must be a folder, not a file. Got: ", path)
-    }
-
-    # Create folder structure if needed
-    dir.create(path, recursive = TRUE, showWarnings = FALSE)
-
-    # Write Excel workbook
-    write_model_excel(model, path)
-
-  } else if (format == "yaml") {
+  if (format == "yaml") {
     # YAML format - single file
     if (!grepl("\\.(yaml|yml)$", path, ignore.case = TRUE)) {
       path <- paste0(path, ".yaml")
@@ -82,407 +65,6 @@ write_model <- function(model, path, format = c("excel", "json", "r", "yaml")) {
   invisible(path)
 }
 
-#' Write Model as Excel
-#'
-#' Internal function to write a model to Excel folder structure.
-#'
-#' @param model A oq_model object
-#' @param path Folder path
-#'
-#' @keywords internal
-write_model_excel <- function(model, path) {
-  # Prepare settings dataframe
-  if (!is.null(model$settings) && is.list(model$settings)) {
-    settings_df <- fast_tibble(
-      setting = names(model$settings),
-      value = as.character(unlist(model$settings))
-    )
-  } else {
-    settings_df <- model$settings
-  }
-
-  # Create workbook with all sheets
-  wb_list <- list(
-    settings = settings_df,
-    strategies = model$strategies %||% tibble(),
-    groups = model$groups %||% tibble(),
-    states = model$states %||% tibble(),
-    transitions = model$transitions %||% tibble(),
-    values = model$values %||% tibble(),
-    variables = model$variables %||% tibble(),
-    summaries = model$summaries %||% tibble()
-  )
-
-  # Handle trees if present
-  if (!is.null(model$trees) && nrow(model$trees) > 0) {
-    wb_list$trees <- model$trees
-  }
-
-  # Handle decision_tree config if present
-  if (!is.null(model$decision_tree)) {
-    wb_list$decision_tree <- fast_tibble(
-      tree_name = model$decision_tree$tree_name,
-      duration = model$decision_tree$duration,
-      duration_unit = model$decision_tree$duration_unit
-    )
-  }
-
-  # Handle multivariate sampling if present
-  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
-    mv_sampling_df <- tibble()
-    mv_variables_df <- tibble()
-
-    for (mv_spec in model$multivariate_sampling) {
-      # Main spec sheet
-      mv_sampling_df <- bind_rows(
-        mv_sampling_df,
-        fast_tibble(
-          name = mv_spec[["name"]],
-          type = mv_spec[["type"]],
-          strategy = mv_spec[["strategy"]] %||% "",
-          group = mv_spec[["group"]] %||% "",
-          description = mv_spec[["description"]] %||% "",
-          covariance = if (!is.null(mv_spec[["covariance"]])) as.character(mv_spec[["covariance"]]) else NA_character_,
-          n = mv_spec[["n"]] %||% NA_real_
-        )
-      )
-
-      # Variables sheet
-      if (!is.null(mv_spec$variables)) {
-        vars <- mv_spec$variables
-        vars_df <- fast_tibble(
-          sampling_name = mv_spec$name,
-          variable = vars
-        )
-        mv_variables_df <- bind_rows(mv_variables_df, vars_df)
-      }
-    }
-
-    wb_list$multivariate_sampling <- mv_sampling_df
-    wb_list$multivariate_sampling_variables <- mv_variables_df
-  }
-
-  # Build metadata sheet for table/script descriptions
-  metadata_df <- fast_tibble(
-    component_type = character(),
-    name = character(),
-    description = character()
-  )
-
-  # Collect table metadata
-  if (!is.null(model$tables)) {
-    for (tbl_name in names(model$tables)) {
-      tbl <- model$tables[[tbl_name]]
-      desc <- if (is.list(tbl)) tbl$description else NULL
-      if (!is.null(desc) && !is.na(desc) && desc != "") {
-        metadata_df <- bind_rows(metadata_df, fast_tibble(
-          component_type = "table",
-          name = tbl_name,
-          description = desc
-        ))
-      }
-    }
-  }
-
-  # Collect script metadata
-  if (!is.null(model$scripts)) {
-    for (scr_name in names(model$scripts)) {
-      scr <- model$scripts[[scr_name]]
-      desc <- if (is.list(scr)) scr$description else NULL
-      if (!is.null(desc) && !is.na(desc) && desc != "") {
-        metadata_df <- bind_rows(metadata_df, fast_tibble(
-          component_type = "script",
-          name = scr_name,
-          description = desc
-        ))
-      }
-    }
-  }
-
-  if (nrow(metadata_df) > 0) {
-    wb_list$`_metadata` <- metadata_df
-  }
-
-  # Add DSA parameters sheet
-  if (length(model$dsa_parameters) > 0) {
-    dsa_df <- fast_tibble(
-      type = character(),
-      name = character(),
-      low = character(),
-      high = character(),
-      strategy = character(),
-      group = character(),
-      display_name = character(),
-      range_label = character()
-    )
-    for (p in model$dsa_parameters) {
-      dsa_df <- bind_rows(dsa_df, fast_tibble(
-        type = p$type,
-        name = p$name,
-        low = as.character(serialize_formula_or_value(p$low)),
-        high = as.character(serialize_formula_or_value(p$high)),
-        strategy = p$strategy %||% "",
-        group = p$group %||% "",
-        display_name = p$display_name %||% "",
-        range_label = p$range_label %||% ""
-      ))
-    }
-    wb_list$dsa_parameters <- dsa_df
-  }
-
-  # Add scenarios sheets
-  if (length(model$scenarios) > 0) {
-    scenarios_df <- fast_tibble(name = character(), description = character())
-    overrides_df <- fast_tibble(
-      scenario_name = character(),
-      override_type = character(),
-      name = character(),
-      value = character(),
-      strategy = character(),
-      group = character()
-    )
-
-    for (s in model$scenarios) {
-      scenarios_df <- bind_rows(scenarios_df, fast_tibble(
-        name = s$name,
-        description = s$description %||% ""
-      ))
-
-      if (!is.null(s$variable_overrides)) {
-        for (v in s$variable_overrides) {
-          overrides_df <- bind_rows(overrides_df, fast_tibble(
-            scenario_name = s$name,
-            override_type = "variable",
-            name = v$name,
-            value = as.character(serialize_formula_or_value(v$value)),
-            strategy = v$strategy %||% "",
-            group = v$group %||% ""
-          ))
-        }
-      }
-
-      if (!is.null(s$setting_overrides)) {
-        for (st in s$setting_overrides) {
-          overrides_df <- bind_rows(overrides_df, fast_tibble(
-            scenario_name = s$name,
-            override_type = "setting",
-            name = st$name,
-            value = as.character(st$value),
-            strategy = "",
-            group = ""
-          ))
-        }
-      }
-    }
-
-    wb_list$scenarios <- scenarios_df
-    wb_list$scenario_overrides <- overrides_df
-  }
-
-  # Add TWSA sheets
-  if (length(model$twsa_analyses) > 0) {
-    twsa_df <- fast_tibble(name = character(), description = character())
-    params_df <- fast_tibble(
-      twsa_name = character(),
-      param_type = character(),
-      name = character(),
-      type = character(),
-      min = character(),
-      max = character(),
-      radius = character(),
-      steps = numeric(),
-      values = character(),
-      strategy = character(),
-      group = character(),
-      display_name = character(),
-      include_base_case = logical()
-    )
-
-    for (t in model$twsa_analyses) {
-      twsa_df <- bind_rows(twsa_df, fast_tibble(
-        name = t$name,
-        description = t$description %||% ""
-      ))
-
-      if (!is.null(t$parameters)) {
-        for (p in t$parameters) {
-          params_df <- bind_rows(params_df, fast_tibble(
-            twsa_name = t$name,
-            param_type = p$param_type,
-            name = p$name,
-            type = p$type,
-            min = if (!is.null(p$min)) as.character(serialize_formula_or_value(p$min)) else "",
-            max = if (!is.null(p$max)) as.character(serialize_formula_or_value(p$max)) else "",
-            radius = if (!is.null(p$radius)) as.character(serialize_formula_or_value(p$radius)) else "",
-            steps = p$steps %||% NA_real_,
-            values = if (!is.null(p$values)) paste(p$values, collapse = ",") else "",
-            strategy = p$strategy %||% "",
-            group = p$group %||% "",
-            display_name = p$display_name %||% "",
-            include_base_case = p$include_base_case %||% TRUE
-          ))
-        }
-      }
-    }
-
-    wb_list$twsa_analyses <- twsa_df
-    wb_list$twsa_parameters <- params_df
-  }
-
-  # Add threshold analyses sheet (flat format)
-  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
-    threshold_rows <- lapply(model$threshold_analyses, flatten_threshold_analysis)
-
-    # Collect all possible column names
-    all_cols <- unique(unlist(lapply(threshold_rows, names)))
-
-    threshold_df <- tibble::as_tibble(do.call(rbind, lapply(threshold_rows, function(row) {
-      vals <- lapply(all_cols, function(col) {
-        val <- row[[col]]
-        if (is.null(val)) NA else val
-      })
-      names(vals) <- all_cols
-      as.data.frame(vals, stringsAsFactors = FALSE)
-    })))
-
-    wb_list$threshold_analyses <- threshold_df
-  }
-
-  # Add VBP configuration sheet
-  if (!is.null(model$vbp)) {
-    wb_list$vbp <- tibble::as_tibble(data.frame(
-      price_variable = model$vbp$price_variable,
-      intervention_strategy = model$vbp$intervention_strategy,
-      outcome_summary = model$vbp$outcome_summary,
-      cost_summary = model$vbp$cost_summary,
-      stringsAsFactors = FALSE
-    ))
-  }
-
-  # Add PSA configuration sheet
-  if (!is.null(model$psa)) {
-    psa_df <- data.frame(n_sim = model$psa$n_sim, stringsAsFactors = FALSE)
-    if (!is.null(model$psa$seed)) {
-      psa_df$seed <- model$psa$seed
-    }
-    wb_list$psa <- tibble::as_tibble(psa_df)
-  }
-
-  # Add documentation sheet
-  if (!is.null(model$documentation)) {
-    wb_list$documentation <- fast_tibble(text = model$documentation)
-  }
-
-  # Add override categories sheets
-  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
-    categories_df <- fast_tibble(category_name = character(), general = logical())
-    overrides_df <- fast_tibble(
-      category_name = character(),
-      title = character(),
-      description = character(),
-      type = character(),
-      name = character(),
-      strategy = character(),
-      group = character(),
-      general = logical(),
-      input_type = character(),
-      overridden_expression = character(),
-      config_min = character(),
-      config_max = character(),
-      config_step_size = character()
-    )
-    dropdown_options_df <- fast_tibble(
-      category_name = character(),
-      override_title = character(),
-      label = character(),
-      value = character(),
-      is_base_case = logical()
-    )
-
-    for (cat_item in model$override_categories) {
-      categories_df <- bind_rows(categories_df, fast_tibble(
-        category_name = cat_item$name,
-        general = cat_item$general
-      ))
-
-      for (ovr in cat_item$overrides) {
-        overrides_df <- bind_rows(overrides_df, fast_tibble(
-          category_name = cat_item$name,
-          title = ovr$title,
-          description = ovr$description %||% "",
-          type = ovr$type,
-          name = ovr$name,
-          strategy = ovr$strategy %||% "",
-          group = ovr$group %||% "",
-          general = ovr$general,
-          input_type = ovr$input_type,
-          overridden_expression = ovr$overridden_expression,
-          config_min = if (!is.null(ovr$input_config$min)) as.character(ovr$input_config$min) else "",
-          config_max = if (!is.null(ovr$input_config$max)) as.character(ovr$input_config$max) else "",
-          config_step_size = if (!is.null(ovr$input_config$step_size)) as.character(ovr$input_config$step_size) else ""
-        ))
-
-        # Collect dropdown options
-        if (ovr$input_type == "dropdown" && !is.null(ovr$input_config$options)) {
-          for (opt in ovr$input_config$options) {
-            dropdown_options_df <- bind_rows(dropdown_options_df, fast_tibble(
-              category_name = cat_item$name,
-              override_title = ovr$title,
-              label = opt$label,
-              value = opt$value,
-              is_base_case = opt$is_base_case
-            ))
-          }
-        }
-      }
-    }
-
-    wb_list$override_categories <- categories_df
-    if (nrow(overrides_df) > 0) {
-      wb_list$overrides <- overrides_df
-    }
-    if (nrow(dropdown_options_df) > 0) {
-      wb_list$override_dropdown_options <- dropdown_options_df
-    }
-  }
-
-  # Write the Excel file
-  excel_path <- file.path(path, "model.xlsx")
-  write.xlsx(wb_list, excel_path)
-
-  # Write tables as CSV files
-  if (!is.null(model$tables) && length(model$tables) > 0) {
-    data_dir <- file.path(path, "data")
-    dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
-
-    for (table_name in names(model$tables)) {
-      extracted <- extract_table_entry(model$tables[[table_name]])
-      if (is.null(extracted)) next
-      csv_path <- file.path(data_dir, paste0(table_name, ".csv"))
-      write.csv(extracted$data, csv_path, row.names = FALSE)
-    }
-  }
-
-  # Write scripts as R files
-  if (!is.null(model$scripts) && length(model$scripts) > 0) {
-    scripts_dir <- file.path(path, "scripts")
-    dir.create(scripts_dir, recursive = TRUE, showWarnings = FALSE)
-
-    for (script_name in names(model$scripts)) {
-      extracted <- extract_script_entry(model$scripts[[script_name]])
-      if (is.null(extracted)) next
-      # Don't add .R if already present
-      file_name <- if (grepl("\\.R$", script_name, ignore.case = TRUE)) {
-        script_name
-      } else {
-        paste0(script_name, ".R")
-      }
-      r_path <- file.path(scripts_dir, file_name)
-      writeLines(extracted$code, r_path)
-    }
-  }
-}
-
 #' Convert Model Between Formats
 #'
 #' Universal converter function that can detect input format and convert
@@ -490,28 +72,22 @@ write_model_excel <- function(model, path) {
 #'
 #' @param input Either a oq_model object, a path to a model file/folder, or a JSON string
 #' @param output Output path for the converted model
-#' @param from Input format ("auto" to detect, or "excel", "json", "yaml", "r", "object")
-#' @param to Output format ("auto" to detect from extension, or "excel", "json", "yaml", "r")
+#' @param from Input format ("auto" to detect, or "json", "yaml", "r", "object")
+#' @param to Output format ("auto" to detect from extension, or "json", "yaml", "r")
 #'
 #' @return Invisibly returns the output path
 #'
 #' @export
 #' @examples
 #' \dontrun{
-#' # Convert Excel to JSON
-#' convert_model("models/my_model/", "models/my_model.json")
-#'
 #' # Convert JSON to R code
 #' convert_model("models/my_model.json", "models/my_model.R")
 #'
-#' # Convert R code to Excel
-#' convert_model("models/my_model.R", "models/my_model_output/")
-#'
-#' # Convert Excel to YAML
-#' convert_model("models/my_model/", "models/my_model.yaml")
-#'
 #' # Convert YAML to JSON
 #' convert_model("models/my_model.yaml", "models/my_model.json")
+#'
+#' # Convert directory (model.yaml) to JSON
+#' convert_model("models/my_model/", "models/my_model.json")
 #' }
 convert_model <- function(input, output, from = "auto", to = "auto") {
 
@@ -526,13 +102,8 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
       if (validate(input)) {
         model <- read_model_json(text = input)
       } else if (dir.exists(input)) {
-        # Check if it's an Excel model folder
-        excel_file <- file.path(input, "model.xlsx")
-        if (file.exists(excel_file)) {
-          model <- read_model(input)
-        } else {
-          stop("Directory exists but no model.xlsx found: ", input)
-        }
+        # Check if it's a YAML model folder
+        model <- read_model(input)
       } else if (file.exists(input)) {
         # It's a file - check extension
         ext <- file_ext(input)
@@ -566,7 +137,6 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
   } else {
     # Explicit format specified
     model <- switch(from,
-      excel = read_model(input),
       json = {
         if (file.exists(input)) {
           read_model_json(file = input)
@@ -598,8 +168,8 @@ convert_model <- function(input, output, from = "auto", to = "auto") {
     } else if (ext == "R") {
       to <- "r"
     } else {
-      # Default to Excel for folders
-      to <- "excel"
+      # Default to YAML for folders/unknown extensions
+      to <- "yaml"
     }
   }
 
@@ -815,7 +385,7 @@ read_model_yaml <- function(file = NULL, text = NULL) {
   }
 
   # Validate and normalize
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   return(model)
 }

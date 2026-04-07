@@ -10,65 +10,6 @@
 NULL
 
 # ============================================================================
-# Format Conversion
-# ============================================================================
-
-#' Flatten Threshold Analysis
-#'
-#' Converts a nested threshold analysis to flat format (for Excel serialization).
-#'
-#' @param analysis A nested threshold analysis list
-#' @return A flat list with all condition fields at top level
-#' @keywords internal
-flatten_threshold_analysis <- function(analysis) {
-  flat <- list(
-    name = analysis$name,
-    variable = analysis$variable,
-    variable_strategy = analysis$variable_strategy %||% "",
-    variable_group = analysis$variable_group %||% "",
-    lower = analysis$lower,
-    upper = analysis$upper,
-    active = analysis$active %||% TRUE,
-    output = analysis$condition$output
-  )
-  for (field in setdiff(names(analysis$condition), "output")) {
-    flat[[field]] <- analysis$condition[[field]]
-  }
-  flat
-}
-
-#' Nest Threshold Analysis
-#'
-#' Converts a flat threshold analysis to nested format (from Excel deserialization).
-#'
-#' @param flat A flat threshold analysis list
-#' @return A nested list with condition sub-list
-#' @keywords internal
-nest_threshold_analysis <- function(flat) {
-  top_fields <- c("name", "variable", "variable_strategy", "variable_group",
-                   "lower", "upper", "active")
-  condition_fields <- setdiff(names(flat), c(top_fields, "output"))
-
-  condition <- list(output = flat$output)
-  for (field in condition_fields) {
-    val <- flat[[field]]
-    if (is.null(val) || (length(val) == 1 && is.na(val))) next
-    if (is.logical(val)) {
-      condition[[field]] <- val
-    } else if (is.numeric(val)) {
-      condition[[field]] <- val
-    } else if (is.character(val) && val != "") {
-      condition[[field]] <- val
-    }
-  }
-
-  result <- list()
-  for (f in top_fields) result[[f]] <- flat[[f]]
-  result$condition <- condition
-  result
-}
-
-# ============================================================================
 # Validation
 # ============================================================================
 
@@ -224,7 +165,7 @@ validate_threshold_spec <- function(model) {
 #' Runs threshold analyses on a model using iterative root-finding to find
 #' the input parameter value that produces a desired output condition.
 #'
-#' @param model An oq_model_builder or oq_model object with threshold analyses defined
+#' @param model An oq_model object with threshold analyses defined
 #' @param progress Optional progress callback function. Called with
 #'   \code{progress(total = N)} to declare total units, then
 #'   \code{progress(amount = K)} for each completed unit.
@@ -232,10 +173,7 @@ validate_threshold_spec <- function(model) {
 #' @return A list with threshold_values tibble, root_finder_history tibble, and metadata
 #' @export
 run_threshold <- function(model, progress = NULL, ...) {
-  # Finalize builders
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
 
   # Parse model
   parsed_model <- parse_model(model, ...)

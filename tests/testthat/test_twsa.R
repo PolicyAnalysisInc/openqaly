@@ -603,7 +603,7 @@ test_that("validate_twsa_spec catches missing TWSA analyses", {
   model <- define_model("markov") %>%
     add_variable("cost", 1000)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -619,7 +619,7 @@ test_that("validate_twsa_spec catches TWSA with wrong number of parameters", {
     add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
   # Only 1 parameter added, need 2
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -637,7 +637,7 @@ test_that("validate_twsa_spec catches invalid variable names", {
     add_twsa_variable("Test", "cost", type = "range",
                        min = 500, max = 1500, steps = 5)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -655,7 +655,7 @@ test_that("validate_twsa_spec catches invalid setting names", {
     add_twsa_setting("Test", "invalid_setting", type = "range",
                       min = 0, max = 5, steps = 3)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(

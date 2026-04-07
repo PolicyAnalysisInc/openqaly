@@ -7,13 +7,12 @@
 read_model(path)
 }
 \arguments{
-\item{path}{Path to the model directory containing `model.xlsx` and
-optional `data/` and `scripts/` subdirectories.}
+\item{path}{Path to the model directory containing `model.yaml`.}
 }
 \value{
 A normalized and validated `oq_model` object.
 }
 \description{
-Reads a complete openqaly model from a directory structure containing
-an Excel workbook (`model.xlsx`), optional data CSVs, and optional R scripts.
+Reads a complete openqaly model from a directory containing
+a YAML model file (`model.yaml`).
 }

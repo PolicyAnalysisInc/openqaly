@@ -16,7 +16,7 @@ edit_tree_node(
 )
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{tree_name}{Character string for the tree name}
 

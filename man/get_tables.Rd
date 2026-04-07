@@ -7,7 +7,7 @@
 get_tables(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A named list of data frames.

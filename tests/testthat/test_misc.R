@@ -80,43 +80,6 @@ test_that("vswitch handles logical output type", {
 })
 
 # ==============================================================================
-# read_workbook() Tests - EXPORTED
-# ==============================================================================
-
-test_that("read_workbook reads Excel file with multiple sheets", {
-  # Use existing test fixture
-  test_file <- system.file("test_cases", "test_variables.xlsx", package = "openqaly")
-  skip_if(test_file == "", "Test file not found")
-
-  result <- read_workbook(test_file)
-
-  # Verify it's a named list
-  expect_type(result, "list")
-
-  # Verify sheet names are preserved
-  expect_true(length(names(result)) > 0)
-
-  # Verify each element is a tibble/data.frame
-  for (sheet_name in names(result)) {
-    expect_true(is.data.frame(result[[sheet_name]]),
-                info = paste("Sheet", sheet_name, "should be a data.frame"))
-  }
-})
-
-test_that("read_workbook sheets have expected content structure", {
-  test_file <- system.file("test_cases", "test_variables.xlsx", package = "openqaly")
-  skip_if(test_file == "", "Test file not found")
-
-  result <- read_workbook(test_file)
-
-  # The sorted sheet should have the standard variable columns
-  if ("sorted" %in% names(result)) {
-    expect_true("name" %in% colnames(result$sorted))
-    expect_true("formula" %in% colnames(result$sorted))
-  }
-})
-
-# ==============================================================================
 # read_model() Tests - EXPORTED
 # ==============================================================================
 

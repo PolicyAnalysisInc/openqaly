@@ -7,7 +7,7 @@
 set_documentation(model, text)
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{text}{A character string containing the documentation (typically markdown)}
 }

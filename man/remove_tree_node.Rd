@@ -7,7 +7,7 @@
 remove_tree_node(model, tree_name, node)
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{tree_name}{Character string for the tree name}
 

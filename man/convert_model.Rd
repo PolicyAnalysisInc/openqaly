@@ -11,9 +11,9 @@ convert_model(input, output, from = "auto", to = "auto")
 
 \item{output}{Output path for the converted model}
 
-\item{from}{Input format ("auto" to detect, or "excel", "json", "yaml", "r", "object")}
+\item{from}{Input format ("auto" to detect, or "json", "yaml", "r", "object")}
 
-\item{to}{Output format ("auto" to detect from extension, or "excel", "json", "yaml", "r")}
+\item{to}{Output format ("auto" to detect from extension, or "json", "yaml", "r")}
 }
 \value{
 Invisibly returns the output path
@@ -24,19 +24,13 @@ to the specified output format.
 }
 \examples{
 \dontrun{
-# Convert Excel to JSON
-convert_model("models/my_model/", "models/my_model.json")
-
 # Convert JSON to R code
 convert_model("models/my_model.json", "models/my_model.R")
 
-# Convert R code to Excel
-convert_model("models/my_model.R", "models/my_model_output/")
-
-# Convert Excel to YAML
-convert_model("models/my_model/", "models/my_model.yaml")
-
 # Convert YAML to JSON
 convert_model("models/my_model.yaml", "models/my_model.json")
+
+# Convert directory (model.yaml) to JSON
+convert_model("models/my_model/", "models/my_model.json")
 }
 }

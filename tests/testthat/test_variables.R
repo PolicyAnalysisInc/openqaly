@@ -1,8 +1,8 @@
 context("Variables")
 
 # Prep data for test cases
-var_tests <- system.file("test_cases", "test_variables.xlsx", package = "openqaly") %>%
-  read_workbook()
+var_tests <- system.file("test_cases", "test_variables.rds", package = "openqaly") %>%
+  readRDS()
 segment <- tibble::tibble(strategy = "S1", group = "G1")
 test_ns <- openqaly:::create_test_ns(segment)
 

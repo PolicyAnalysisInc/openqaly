@@ -354,49 +354,6 @@ test_that("Covariance is stored as oq_formula", {
   expect_equal(as.character(mv_spec$covariance), "my_cov")
 })
 
-test_that("Excel round-trip preserves multivariate sampling", {
-  original_model <- define_model("markov") |>
-    set_settings(n_cycles = 10) |>
-    add_state("healthy", initial_prob = 0.7) |>
-    add_state("sick", initial_prob = 0.2) |>
-    add_state("dead", initial_prob = 0.1) |>
-    add_variable("p1", 0.7) |>
-    add_variable("p2", 0.2) |>
-    add_variable("p3", 0.1) |>
-    add_transition("healthy", "healthy", "p1") |>
-    add_transition("healthy", "sick", "p2") |>
-    add_transition("healthy", "dead", "p3") |>
-    add_transition("sick", "sick", "1") |>
-    add_transition("dead", "dead", "1") |>
-    add_multivariate_sampling(
-      name = "test_dirichlet",
-      type = "dirichlet",
-      variables = c("p1", "p2", "p3"),
-      n = 100,
-      description = "Test Dirichlet distribution"
-    )
-
-  temp_path <- tempfile(pattern = "test_excel_mv_", fileext = "")
-  write_model(original_model, temp_path, format = "excel")
-  loaded_model <- read_model(temp_path)
-
-  expect_equal(length(original_model$multivariate_sampling),
-               length(loaded_model$multivariate_sampling))
-
-  if (length(loaded_model$multivariate_sampling) > 0) {
-    mv_orig <- original_model$multivariate_sampling[[1]]
-    mv_load <- loaded_model$multivariate_sampling[[1]]
-
-    expect_equal(mv_orig$name, mv_load$name)
-    expect_equal(mv_orig$type, mv_load$type)
-    expect_equal(mv_orig$description, mv_load$description)
-    expect_equal(mv_orig$variables, mv_load$variables)
-    expect_equal(mv_orig$n, mv_load$n)
-  }
-
-  unlink(temp_path, recursive = TRUE)
-})
-
 test_that("JSON round-trip preserves multivariate sampling", {
   cov_mat <- data.frame(v1 = c(100, 5, 2), v2 = c(5, 50, 3), v3 = c(2, 3, 25))
 

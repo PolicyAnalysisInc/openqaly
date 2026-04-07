@@ -373,8 +373,8 @@ test_that("PSM models require exactly 3 states", {
     add_state("dead") |>
     add_variable("pfs_dist", define_surv_param("exp", rate = 0.2)) |>
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS", "months", os_dist)
 
   expect_error(
     run_model(model_2_states),
@@ -391,8 +391,8 @@ test_that("PSM models require exactly 3 states", {
     add_state("dead") |>
     add_variable("pfs_dist", define_surv_param("exp", rate = 0.2)) |>
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS", "months", os_dist)
 
   expect_error(
     run_model(model_4_states),
@@ -408,7 +408,7 @@ test_that("PSM models require PFS endpoint", {
     add_state("progressed") |>
     add_state("dead") |>
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("OS", "months", os_dist)
 
   expect_error(
     run_model(model),
@@ -424,7 +424,7 @@ test_that("PSM models require OS endpoint", {
     add_state("progressed") |>
     add_state("dead") |>
     add_variable("pfs_dist", define_surv_param("exp", rate = 0.2)) |>
-    add_psm_transition("PFS", "months", pfs_dist)
+    add_transition("PFS", "months", pfs_dist)
 
   expect_error(
     run_model(model),
@@ -463,8 +463,8 @@ test_that("PSM endpoint formulas must reference surv_dist objects", {
     add_state("dead") |>
     add_variable("bad_var", 0.5) |>  # Not a survival distribution
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("PFS", "months", bad_var) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("PFS", "months", bad_var) |>
+    add_transition("OS", "months", os_dist)
 
   expect_error(
     run_model(model),
@@ -579,8 +579,8 @@ test_that("PSM correctly validates trace probabilities", {
     add_state("dead") |>
     add_variable("pfs_dist", define_surv_param("exp", rate = 0.2)) |>
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS", "months", os_dist)
 
   # Should run without validation errors
   expect_no_error(run_model(model))
@@ -1743,8 +1743,8 @@ test_that("PSM handles missing summaries gracefully (empty summary tibble)", {
     add_state("dead") |>
     add_variable("pfs_dist", define_surv_param("exp", rate = 0.2)) |>
     add_variable("os_dist", define_surv_param("exp", rate = 0.1)) |>
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS", "months", os_dist)
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS", "months", os_dist)
   # NO summaries added - this triggers the else branch at lines 208-210
 
   results <- run_model(model)
@@ -2093,8 +2093,8 @@ test_that("run_segment.psm_custom executes correctly via run_model", {
       description = ""
     ),
     groups = tibble::tibble(
-      name = "all",
-      display_name = "All",
+      name = "everyone",
+      display_name = "Everyone",
       description = "",
       weight = "1"
     ),

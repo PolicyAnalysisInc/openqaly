@@ -1,5 +1,6 @@
 parse_markov <- function(model) {
-  define_object_(model, class = 'markov')
+  class(model) <- c("oq_markov", "oq_model")
+  model
 }
 
 run_segment <- function(segment, model, env, ...) {
@@ -164,7 +165,7 @@ finalize_segment <- function(segment, model, eval_vars) {
 }
 
 #' @export
-run_segment.markov <- function(segment, model, env, ...) {
+run_segment.oq_markov <- function(segment, model, env, ...) {
 
   tick <- make_progress(...)
   diagnostics_policy <- get_diagnostics_policy(...)

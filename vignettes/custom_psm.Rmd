@@ -90,13 +90,13 @@ discontinuation_model <- define_model("custom_psm") |>
   add_variable("S_on_tx", surv_prob(ttd_dist, month)) |>
   # State probability formulas
   # PF On Tx: PFS survival * still on treatment
-  add_custom_psm_transition("pf_on_tx", S_pfs * S_on_tx) |>
+  add_transition("pf_on_tx", S_pfs * S_on_tx) |>
   # PF Off Tx: PFS survival * discontinued treatment
-  add_custom_psm_transition("pf_off_tx", S_pfs * (1 - S_on_tx)) |>
+  add_transition("pf_off_tx", S_pfs * (1 - S_on_tx)) |>
   # Progressed: alive but not PF (OS - PFS area)
-  add_custom_psm_transition("progressed", S_os - S_pfs) |>
+  add_transition("progressed", S_os - S_pfs) |>
   # Dead: complement (1 - sum of others)
-  add_custom_psm_transition("dead", C) |>
+  add_transition("dead", C) |>
   # Values - costs
   add_variable("c_drug", 5000, description = "Monthly drug cost") |>
   add_variable("c_admin", 500, description = "Monthly administration cost") |>
@@ -210,13 +210,13 @@ response_model <- define_model("custom_psm") |>
   add_variable("S_os_refractory", surv_prob(os_refractory_dist, month)) |>
   # State probability formulas
   # Response: responders who haven't relapsed and are alive
-  add_custom_psm_transition("response", p_response * S_dor * S_os_response) |>
+  add_transition("response", p_response * S_dor * S_os_response) |>
   # Refractory: non-responders still alive
-  add_custom_psm_transition("refractory", (1 - p_response) * S_os_refractory) |>
+  add_transition("refractory", (1 - p_response) * S_os_refractory) |>
   # Relapse: responders who relapsed (simplified - in practice would need more complex modeling)
-  add_custom_psm_transition("relapse", p_response * (1 - S_dor) * S_os_response) |>
+  add_transition("relapse", p_response * (1 - S_dor) * S_os_response) |>
   # Dead: complement
-  add_custom_psm_transition("dead", C) |>
+  add_transition("dead", C) |>
   # Values - costs
   add_variable("c_maintenance", 3000, description = "Monthly maintenance cost in response") |>
   add_variable("c_salvage", 8000, description = "Monthly salvage therapy cost") |>
@@ -296,7 +296,7 @@ state's probability is calculated as `1 - sum(all other states)`, ensuring
 probabilities sum to 1. Typically used for the absorbing "Dead" state.
 
 ```r
-add_custom_psm_transition("dead", C)
+add_transition("dead", C)
 ```
 
 ### Formulas Can Use Variables and Time

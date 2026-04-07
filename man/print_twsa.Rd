@@ -7,7 +7,7 @@
 print_twsa(model)
 }
 \arguments{
-\item{model}{An oq_model_builder object with TWSA analyses}
+\item{model}{An oq_model object with TWSA analyses}
 }
 \value{
 Invisible model
@@ -15,4 +15,3 @@ Invisible model
 \description{
 Print method for displaying two-way sensitivity analyses defined in a model
 }
-\keyword{internal}

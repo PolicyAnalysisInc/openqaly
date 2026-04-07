@@ -1,4 +1,4 @@
-context("Model codegen")
+context("Model codegen v2")
 
 # =============================================================================
 # model_to_r_code() - Main Function Tests
@@ -55,12 +55,12 @@ test_that("model_to_r_code handles PSM model type", {
   model <- define_model("psm") |>
     add_state("pfs") |>
     add_state("dead") |>
-    add_psm_transition("death", "years", exp(-0.1 * time))
+    add_transition("death", "years", exp(-0.1 * time))
 
   code <- model_to_r_code(model)
 
   expect_true(any(grepl('define_model\\("psm"\\)', code)))
-  expect_true(any(grepl("add_psm_transition", code)))
+  expect_true(any(grepl("add_transition", code)))
 })
 
 test_that("model_to_r_code handles empty model components", {
@@ -223,7 +223,7 @@ test_that("generate_transitions_code handles Markov transitions", {
     to_state = "sick",
     formula = "0.1"
   )
-  code <- openqaly:::generate_transitions_code(transitions, is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(transitions, model_type = "markov")
 
   expect_true(any(grepl('add_transition\\("healthy", "sick", 0.1\\)', code)))
 })
@@ -234,16 +234,16 @@ test_that("generate_transitions_code handles PSM transitions", {
     time_unit = "years",
     formula = "exp(-0.1 * time)"
   )
-  code <- openqaly:::generate_transitions_code(transitions, is_psm = TRUE)
+  code <- openqaly:::generate_transitions_code(transitions, model_type = "psm")
 
-  expect_true(any(grepl('add_psm_transition\\("death", "years", exp\\(-0.1 \\* time\\)\\)', code)))
+  expect_true(any(grepl('add_transition\\("death", "years", exp\\(-0.1 \\* time\\)\\)', code)))
 })
 
 test_that("generate_transitions_code returns empty for empty transitions", {
-  code <- openqaly:::generate_transitions_code(NULL, is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(NULL, model_type = "markov")
   expect_equal(length(code), 0)
 
-  code <- openqaly:::generate_transitions_code(tibble::tibble(), is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(tibble::tibble(), model_type = "markov")
   expect_equal(length(code), 0)
 })
 

@@ -309,10 +309,7 @@ run_scenario <- function(model,
                          progress = NULL,
                          keep_diagnostics = FALSE,
                          ...) {
-  # Finalize builders (convert to openqaly model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
   # Parse model
   parsed_model <- parse_model(model, ...)
 

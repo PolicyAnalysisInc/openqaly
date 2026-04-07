@@ -7,7 +7,7 @@
 .extract_model_tree(model, tree_name)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder}
+\item{model}{An oq_model object}
 
 \item{tree_name}{Tree name or NULL for auto-detect}
 }

@@ -1,0 +1,336 @@
+format_version: '1.0'
+model_type: markov
+settings:
+  cycle_length: 1.0
+  cycle_length_unit: years
+  timeframe: 20.0
+  timeframe_unit: years
+  days_per_year: 365.25
+  discount_cost: 3.5
+  discount_outcomes: 3.5
+  reduce_state_cycle: no
+  half_cycle_method: start
+  discount_timing: start
+  discount_method: by_cycle
+strategies:
+  - name: seritinib
+    display_name: Seritinib
+    description: Seritinib
+    abbreviation: ~
+    enabled: 1.0
+  - name: volantor
+    display_name: Volantor
+    description: Volantor
+    abbreviation: ~
+    enabled: 1.0
+  - name: cendralimab
+    display_name: Cendralimab
+    description: Cendralimab
+    abbreviation: ~
+    enabled: 1.0
+groups:
+  - name: low_risk
+    display_name: Low Risk
+    description: Low Risk
+    weight: '0.6'
+    enabled: 1.0
+  - name: high_risk
+    display_name: High Risk
+    description: High Risk
+    weight: '0.4'
+    enabled: 1.0
+states:
+  - name: healthy
+    display_name: Healthy
+    description: Healthy
+    initial_probability: '1'
+    state_group: alive
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: cycles
+  - name: mild
+    display_name: Mild Disease
+    description: Mild Disease
+    initial_probability: '0'
+    state_group: alive
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: cycles
+  - name: severe
+    display_name: Severe Disease
+    description: Severe Disease
+    initial_probability: '0'
+    state_group: alive
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: cycles
+  - name: dead
+    display_name: Dead
+    description: Dead
+    initial_probability: '0'
+    state_group: dead
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: cycles
+variables:
+  - name: p_death_healthy
+    display_name: Background mortality (healthy)
+    description: Background mortality (healthy)
+    formula: '0.01'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: beta(mean = 0.01, sd = 0.002)
+  - name: p_death_mild
+    display_name: Mortality (mild disease)
+    description: Mortality (mild disease)
+    formula: '0.03'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: beta(mean = 0.03, sd = 0.005)
+  - name: u_healthy
+    display_name: Utility (healthy)
+    description: Utility (healthy)
+    formula: '1.0'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: u_mild
+    display_name: Utility (mild disease)
+    description: Utility (mild disease)
+    formula: '0.8'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: u_severe
+    display_name: Utility (severe disease)
+    description: Utility (severe disease)
+    formula: '0.5'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: beta(mean = 0.5, sd = 0.1)
+  - name: c_mild
+    display_name: Annual cost (mild disease)
+    description: Annual cost (mild disease)
+    formula: '2000'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: c_severe
+    display_name: Annual cost (severe disease)
+    description: Annual cost (severe disease)
+    formula: '8000'
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: gamma(mean = 8000, sd = 1600)
+  - name: c_treatment
+    display_name: Treatment cost
+    description: Treatment cost
+    formula: '500'
+    strategy: seritinib
+    group: ~
+    source: ~
+    sampling: gamma(mean = 500, sd = 100)
+  - name: c_treatment
+    display_name: Treatment cost
+    description: Treatment cost
+    formula: '3000'
+    strategy: volantor
+    group: ~
+    source: ~
+    sampling: gamma(mean = 3000, sd = 600)
+  - name: hr_progression
+    display_name: Hazard ratio for progression
+    description: Hazard ratio for progression
+    formula: '1.0'
+    strategy: seritinib
+    group: ~
+    source: ~
+    sampling: ~
+  - name: hr_progression
+    display_name: Hazard ratio for progression
+    description: Hazard ratio for progression
+    formula: '0.6'
+    strategy: volantor
+    group: ~
+    source: ~
+    sampling: lognormal(mean = 0.6, sd = 0.1)
+  - name: p_mild
+    display_name: Probability of developing mild disease
+    description: Probability of developing mild disease
+    formula: '0.05'
+    strategy: ~
+    group: low_risk
+    source: ~
+    sampling: beta(mean = 0.05, sd = 0.01)
+  - name: p_mild
+    display_name: Probability of developing mild disease
+    description: Probability of developing mild disease
+    formula: '0.12'
+    strategy: ~
+    group: high_risk
+    source: ~
+    sampling: beta(mean = 0.12, sd = 0.024)
+  - name: p_severe
+    display_name: Probability of progression to severe
+    description: Probability of progression to severe
+    formula: '0.10'
+    strategy: ~
+    group: low_risk
+    source: ~
+    sampling: beta(mean = 0.10, sd = 0.02)
+  - name: p_severe
+    display_name: Probability of progression to severe
+    description: Probability of progression to severe
+    formula: '0.20'
+    strategy: ~
+    group: high_risk
+    source: ~
+    sampling: beta(mean = 0.20, sd = 0.04)
+  - name: p_death_severe
+    display_name: Mortality (severe disease)
+    description: Mortality (severe disease)
+    formula: '0.08'
+    strategy: ~
+    group: low_risk
+    source: ~
+    sampling: beta(mean = 0.08, sd = 0.016)
+  - name: p_death_severe
+    display_name: Mortality (severe disease)
+    description: Mortality (severe disease)
+    formula: '0.18'
+    strategy: ~
+    group: high_risk
+    source: ~
+    sampling: beta(mean = 0.18, sd = 0.036)
+  - name: c_treatment
+    display_name: Treatment cost
+    description: Treatment cost
+    formula: '5000'
+    strategy: cendralimab
+    group: ~
+    source: ~
+    sampling: gamma(mean = 5000, sd = 1000)
+  - name: hr_progression
+    display_name: Hazard ratio for progression
+    description: Hazard ratio for progression
+    formula: '0.4'
+    strategy: cendralimab
+    group: ~
+    source: ~
+    sampling: lognormal(mean = 0.4, sd = 0.08)
+transitions:
+  - from: healthy
+    to: mild
+    formula: p_mild
+  - from: healthy
+    to: dead
+    formula: p_death_healthy
+  - from: healthy
+    to: healthy
+    formula: 1 - p_mild - p_death_healthy
+  - from: mild
+    to: severe
+    formula: p_severe * hr_progression
+  - from: mild
+    to: dead
+    formula: p_death_mild
+  - from: mild
+    to: mild
+    formula: 1 - p_severe * hr_progression - p_death_mild
+  - from: severe
+    to: dead
+    formula: p_death_severe
+  - from: severe
+    to: severe
+    formula: 1 - p_death_severe
+  - from: dead
+    to: dead
+    formula: '1'
+values:
+  - name: qaly_healthy
+    display_name: qaly_healthy
+    description: qaly_healthy
+    state: healthy
+    destination: ~
+    formula: u_healthy * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: qaly_mild
+    display_name: qaly_mild
+    description: qaly_mild
+    state: mild
+    destination: ~
+    formula: u_mild * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: qaly_severe
+    display_name: qaly_severe
+    description: qaly_severe
+    state: severe
+    destination: ~
+    formula: u_severe * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: cost_healthy
+    display_name: cost_healthy
+    description: cost_healthy
+    state: healthy
+    destination: ~
+    formula: c_treatment
+    type: cost
+    discounting_override: ~
+  - name: cost_mild
+    display_name: cost_mild
+    description: cost_mild
+    state: mild
+    destination: ~
+    formula: c_treatment + c_mild
+    type: cost
+    discounting_override: ~
+  - name: cost_severe
+    display_name: cost_severe
+    description: cost_severe
+    state: severe
+    destination: ~
+    formula: c_treatment + c_severe
+    type: cost
+    discounting_override: ~
+summaries:
+  - name: qalys
+    display_name: QALYs
+    description: QALYs
+    values: qaly_healthy, qaly_mild, qaly_severe
+    type: outcome
+    wtp: 100000.0
+  - name: costs
+    display_name: Total Costs
+    description: Total Costs
+    values: cost_healthy, cost_mild, cost_severe
+    type: outcome
+    wtp: ~
+tables:
+  cost_utility_cov:
+    description: ~
+    data: |-
+      "u_mild","c_mild"
+      0.0025,-6
+      -6,160000
+multivariate_sampling:
+  - name: cost_utility_correlation
+    type: mvnormal
+    strategy: ''
+    group: ''
+    description: Correlated mild utility and cost
+    variables:
+      - u_mild
+      - c_mild
+    covariance: cost_utility_cov
+    'n': cost_utility_correlation
+

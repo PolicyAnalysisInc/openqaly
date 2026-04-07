@@ -7,7 +7,7 @@
 get_global_variables(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A tibble of global variables.
