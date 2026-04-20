@@ -44,6 +44,7 @@ Encoding: UTF-8
 LazyData: true
 Suggests:
     openqalyregimen,
+    renv,
     testthat,
     withr,
     commonmark,

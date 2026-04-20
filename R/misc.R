@@ -1260,6 +1260,14 @@ normalize_and_validate_model <- function(model) {
     validate_tree_name_collisions(unique(model$trees$name), model)
   }
 
+  # Check model environment if lockfile is present
+  if (!is.null(model$lockfile)) {
+    check_action <- getOption("openqaly.env_check", default = "warn")
+    if (!identical(check_action, "none")) {
+      check_model_environment(model, action = check_action)
+    }
+  }
+
   # Set class based on model type
   model_type_str <- tolower(model$settings$model_type %||% "markov")
   class(model) <- switch(model_type_str,
@@ -1298,6 +1306,19 @@ read_model_json <- function(file = NULL, text = NULL) {
   }
   # Parse JSON to list
   model <- fromJSON(json_string, simplifyVector = TRUE)
+
+  # Extract renv lockfile fields if present
+  if (!is.null(model$R) && !is.null(model$Packages)) {
+    # Re-parse with simplifyVector=FALSE to preserve lockfile structure
+    raw <- fromJSON(json_string, simplifyVector = FALSE)
+    model$lockfile <- list(R = raw$R, Packages = raw$Packages)
+    if (!is.null(raw$Bioconductor)) model$lockfile$Bioconductor <- raw$Bioconductor
+    if (!is.null(raw$Python)) model$lockfile$Python <- raw$Python
+    model$R <- NULL
+    model$Packages <- NULL
+    model$Bioconductor <- NULL
+    model$Python <- NULL
+  }
 
   # Normalize NULLs
   model <- normalize_model_nulls(model)
@@ -2369,6 +2390,18 @@ write_model_json <- function(model) {
       )
     })
     json_model$override_categories <- oc_array
+  }
+
+  # Merge renv lockfile fields at top level
+  if (!is.null(model$lockfile)) {
+    json_model$R <- model$lockfile$R
+    json_model$Packages <- model$lockfile$Packages
+    if (!is.null(model$lockfile$Bioconductor)) {
+      json_model$Bioconductor <- model$lockfile$Bioconductor
+    }
+    if (!is.null(model$lockfile$Python)) {
+      json_model$Python <- model$lockfile$Python
+    }
   }
 
   # Convert to JSON using jsonlite

@@ -665,6 +665,113 @@ set_psa <- function(model, n_sim, seed = NULL) {
   model
 }
 
+# --- Lockfile (singleton setter) -----------------------------------------------
+
+#' Set renv Lockfile on Model
+#'
+#' Attaches a parsed renv lockfile to the model. When the model is written to
+#' JSON, the lockfile fields (\code{R}, \code{Packages}) are merged at the top
+#' level, making the JSON file a valid renv lockfile.
+#'
+#' @param model An openqaly model object.
+#' @param lockfile Either a list with \code{R} and \code{Packages} fields
+#'   (as returned by \code{jsonlite::fromJSON} on an renv.lock file), or a
+#'   single JSON string containing a valid renv lockfile.
+#'
+#' @return The model with \code{lockfile} field set.
+#'
+#' @export
+set_lockfile <- function(model, lockfile) {
+  if (is.character(lockfile) && length(lockfile) == 1) {
+    if (!jsonlite::validate(lockfile)) {
+      stop("lockfile must be valid JSON", call. = FALSE)
+    }
+    lockfile <- jsonlite::fromJSON(lockfile, simplifyVector = FALSE)
+  }
+  if (!is.list(lockfile) || is.null(lockfile$R) || is.null(lockfile$Packages)) {
+    stop("lockfile must contain 'R' and 'Packages' fields", call. = FALSE)
+  }
+  model$lockfile <- lockfile
+  model
+}
+
+#' Capture renv Lockfile from File
+#'
+#' Reads an existing \code{renv.lock} file and attaches it to the model.
+#'
+#' @param model An openqaly model object.
+#' @param lockfile_path Path to an renv lockfile. Defaults to \code{"renv.lock"}.
+#'
+#' @return The model with \code{lockfile} field set.
+#'
+#' @export
+capture_lockfile <- function(model, lockfile_path = "renv.lock") {
+  if (!file.exists(lockfile_path)) {
+    stop("Lockfile not found: ", lockfile_path, call. = FALSE)
+  }
+  json_string <- paste(readLines(lockfile_path, warn = FALSE), collapse = "\n")
+  set_lockfile(model, json_string)
+}
+
+#' Snapshot Current Environment as Lockfile
+#'
+#' Captures the currently installed package versions and R version into a
+#' lockfile structure and attaches it to the model. If \code{renv} is available,
+#' uses \code{renv::lockfile_create()} for a complete lockfile. Otherwise,
+#' builds the lockfile from \code{installed.packages()}.
+#'
+#' @param model An openqaly model object.
+#' @param repos Character vector of repository URLs to record. Defaults to
+#'   \code{getOption("repos")}.
+#'
+#' @return The model with \code{lockfile} field set.
+#'
+#' @export
+snapshot_lockfile <- function(model, repos = getOption("repos")) {
+  if (requireNamespace("renv", quietly = TRUE)) {
+    # Use renv for a complete lockfile with hashes
+    lockfile_path <- tempfile(fileext = ".lock")
+    on.exit(unlink(lockfile_path), add = TRUE)
+    renv::snapshot(lockfile = lockfile_path, prompt = FALSE, force = TRUE)
+    json_string <- paste(readLines(lockfile_path, warn = FALSE), collapse = "\n")
+    return(set_lockfile(model, json_string))
+  }
+
+  # Fallback: build lockfile manually from installed packages
+  installed <- utils::installed.packages()
+
+  # Build R section
+  repo_list <- lapply(names(repos), function(nm) {
+    list(Name = nm, URL = unname(repos[nm]))
+  })
+  r_section <- list(
+    Version = paste0(R.version$major, ".", R.version$minor),
+    Repositories = repo_list
+  )
+
+  # Build Packages section
+  packages_section <- list()
+  for (i in seq_len(nrow(installed))) {
+    pkg_name <- installed[i, "Package"]
+    packages_section[[pkg_name]] <- list(
+      Package = pkg_name,
+      Version = installed[i, "Version"],
+      Source = "Repository",
+      Repository = "CRAN"
+    )
+  }
+
+  set_lockfile(model, list(R = r_section, Packages = packages_section))
+}
+
+#' Remove Lockfile from Model
+#'
+#' @param model An openqaly model object.
+#' @return The model with \code{lockfile} field removed.
+#'
+#' @export
+remove_lockfile <- function(model) { model$lockfile <- NULL; model }
+
 # --- Edit/Remove Summary (via engine) ----------------------------------------
 
 #' @export
