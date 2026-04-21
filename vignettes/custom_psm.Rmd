@@ -65,7 +65,7 @@ discontinuation_model <- define_model("custom_psm") |>
     timeframe = 5,
     timeframe_unit = "years",
     cycle_length = 1,
-    cycle_length_unit = "month",
+    cycle_length_unit = "months",
     discount_cost = 3.5,
     discount_outcomes = 3.5
   ) |>
@@ -182,7 +182,7 @@ response_model <- define_model("custom_psm") |>
     timeframe = 3,
     timeframe_unit = "years",
     cycle_length = 1,
-    cycle_length_unit = "month",
+    cycle_length_unit = "months",
     discount_cost = 3.5,
     discount_outcomes = 3.5
   ) |>

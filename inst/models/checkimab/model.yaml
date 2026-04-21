@@ -251,6 +251,22 @@ variables:
     group: ~
     source: ~
     sampling: ~
+  - name: p_tx_to_disc
+    display_name: Probability of transitioning to off-treatment
+    description: Probability of discontinuing treatment (tree-derived, mutually exclusive with relapse and death)
+    formula: p(to_off_tx, tree = response_on_tx)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: p_tx_to_relapse
+    display_name: Probability of transitioning to relapse
+    description: Probability of relapsing (tree-derived, mutually exclusive with discontinuation and death)
+    formula: p(to_relapse, tree = response_on_tx)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
   - name: p_relapse_or_discontinue
     display_name: Probability of relapse or discontinuation
     description: Probability of relapse or discontinuation
@@ -289,10 +305,10 @@ transitions:
     formula: C
   - from: relapse_free_on_tx
     to: relapse_free_off_tx
-    formula: p_disc
+    formula: p_tx_to_disc
   - from: relapse_free_on_tx
     to: relapse
-    formula: p_relapse
+    formula: p_tx_to_relapse
   - from: relapse_free_on_tx
     to: dead
     formula: p_death_response
