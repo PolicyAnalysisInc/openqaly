@@ -67,7 +67,7 @@ eval_formula <- function(x, ns, max_st = NULL) {
   # Otherwise, check if it was caused by a dependency error
   if (is_oq_error(res)) {
     # Check if any of the variables referenced is an error
-    vars <- x$depends
+    vars <- x$fo_depends
     for (i in rev(vars)) {
       if (i %in% get_names(ns, 'all', keywords = F)) {
         value <- ns[i]
