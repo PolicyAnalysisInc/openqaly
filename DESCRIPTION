@@ -57,6 +57,9 @@ Suggests:
     MASS,
     patchwork
 VignetteBuilder: knitr
+Remotes:
+    PolicyAnalysisInc/openqalysurv,
+    PolicyAnalysisInc/openqalyregimen
 RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp

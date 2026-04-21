@@ -1,3 +1,5 @@
+requireNamespace <- function(package, ...) base::requireNamespace(package, ...)
+
 #' Check Model Environment Against Embedded Lockfile
 #'
 #' Compares the packages recorded in a model's embedded renv lockfile against
