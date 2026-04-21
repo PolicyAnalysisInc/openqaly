@@ -75,7 +75,7 @@ test_that("basic model survives JSON round-trip", {
   model <- create_test_model()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_s3_class(model_back, "oq_model")
   expect_equal(nrow(model$states), nrow(model_back$states))
@@ -90,7 +90,7 @@ test_that("model with tables/scripts survives JSON round-trip", {
   model <- create_model_with_tables()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(names(model$tables), names(model_back$tables))
   expect_equal(names(model$scripts), names(model_back$scripts))
@@ -109,7 +109,7 @@ test_that("model with sensitivity analysis survives JSON round-trip", {
   model <- create_model_with_sa()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model$dsa_parameters), length(model_back$dsa_parameters))
   expect_equal(length(model$scenarios), length(model_back$scenarios))
@@ -217,7 +217,7 @@ test_that("JSON -> YAML -> JSON preserves model", {
   json_path <- tempfile(fileext = ".json")
   convert_model(yaml_path, json_path)
 
-  model_back <- read_model_json(paste(readLines(json_path), collapse = "\n"))
+  model_back <- read_model_json(file = json_path)
 
   expect_equal(nrow(model$states), nrow(model_back$states))
   expect_equal(nrow(model$transitions), nrow(model_back$transitions))
@@ -263,7 +263,7 @@ test_that("table descriptions preserved across JSON -> YAML", {
 
   # JSON
   json <- write_model_json(model)
-  model_json <- read_model_json(json)
+  model_json <- read_model_json(text = json)
   expect_equal(model_json$tables[["test"]]$description, "Test table description")
 
   # JSON -> YAML
@@ -284,7 +284,7 @@ test_that("script descriptions preserved across JSON -> YAML", {
 
   # JSON
   json <- write_model_json(model)
-  model_json <- read_model_json(json)
+  model_json <- read_model_json(text = json)
   expect_equal(model_json$scripts[["test"]]$description, "Test script description")
 
   # JSON -> YAML
@@ -308,7 +308,7 @@ test_that("empty model components serialize correctly", {
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_equal(nrow(model_back$strategies), 0)
   expect_equal(nrow(model_back$variables), 0)
 
@@ -330,7 +330,7 @@ test_that("numeric precision preserved in round-trip", {
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_equal(as.numeric(model_back$variables$formula[1]),
                0.123456789012345, tolerance = 1e-10)
 
@@ -352,7 +352,7 @@ test_that("unicode characters preserved in round-trip", {
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_equal(model_back$strategies$display_name[1], "Tratamiento")
 
   # YAML
@@ -375,7 +375,7 @@ test_that("markov model type round-trips correctly", {
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_equal(model_back$settings$model_type, "markov")
 
   # YAML
@@ -394,7 +394,7 @@ test_that("psm model type round-trips correctly", {
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_equal(model_back$settings$model_type, "psm")
 
   # YAML
@@ -495,11 +495,14 @@ create_comprehensive_model <- function() {
     add_twsa_variable("Risk vs Efficacy", "efficacy",
                       type = "range", min = 0.3, max = 0.7, steps = 5,
                       strategy = "treatment") |>
+    # Covariance table for multivariate sampling
+    add_table("utility_cov", data.frame(u1 = c(0.01, 0.009), u2 = c(0.009, 0.0225))) |>
     # Multivariate Sampling
     add_multivariate_sampling(
       name = "correlated_utilities",
-      distribution = mvnormal(mean = c(utility_healthy, utility_sick), sd = c(0.1, 0.15), cor = 0.6),
+      type = "mvnormal",
       variables = c("utility_healthy", "utility_sick"),
+      covariance = "utility_cov",
       description = "Correlated utility sampling"
     ) |>
     # VBP configuration
@@ -654,12 +657,12 @@ expect_models_equivalent <- function(original, restored, label = "") {
       rest_mv <- restored$multivariate_sampling[[i]]
       expect_equal(rest_mv$name, orig_mv$name,
                    label = paste0(prefix, "mv_sampling[", i, "]$name"))
-      expect_equal(rest_mv$distribution, orig_mv$distribution,
-                   label = paste0(prefix, "mv_sampling[", i, "]$distribution"))
+      expect_equal(rest_mv$type, orig_mv$type,
+                   label = paste0(prefix, "mv_sampling[", i, "]$type"))
       expect_equal(rest_mv$description, orig_mv$description,
                    label = paste0(prefix, "mv_sampling[", i, "]$description"))
-      expect_equal(nrow(rest_mv$variables), nrow(orig_mv$variables),
-                   label = paste0(prefix, "mv_sampling[", i, "]$variables count"))
+      expect_equal(rest_mv$variables, orig_mv$variables,
+                   label = paste0(prefix, "mv_sampling[", i, "]$variables"))
     }
   }
 
@@ -749,76 +752,6 @@ expect_models_equivalent <- function(original, restored, label = "") {
 }
 
 # ==============================================================================
-# Excel <-> JSON Round-Trip Tests
-# ==============================================================================
-
-# NOTE: Excel format now supports full parity with JSON/YAML:
-# - Table/script descriptions stored in _metadata sheet
-# - DSA parameters stored in dsa_parameters sheet
-# - Scenarios stored in scenarios and scenario_overrides sheets
-# - TWSA analyses stored in twsa_analyses and twsa_parameters sheets
-# - Script names preserve original naming (no double .R extension)
-
-test_that("Excel -> JSON -> Excel preserves all components", {
-  skip_if_cran()
-
-  # Use comprehensive model with all components including SA
-  model <- create_comprehensive_model()
-
-  # Model -> Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-
-  # Excel -> JSON
-  model_from_excel <- read_model(excel_dir)
-  json <- write_model_json(model_from_excel)
-
-  # JSON -> Model
-  model_from_json <- read_model_json(json)
-
-  # JSON -> Excel
-  excel_dir2 <- tempfile()
-  dir.create(excel_dir2)
-  write_model(model_from_json, excel_dir2, format = "excel")
-
-  # Excel -> Model (final)
-  model_final <- read_model(excel_dir2)
-
-  # Full parity check - no exceptions
-  expect_models_equivalent(model_from_excel, model_final, "Excel->JSON->Excel")
-
-  unlink(excel_dir, recursive = TRUE)
-  unlink(excel_dir2, recursive = TRUE)
-})
-
-test_that("JSON -> Excel -> JSON preserves all components", {
-  skip_if_cran()
-
-  # Use comprehensive model with all components including SA
-  model <- create_comprehensive_model()
-
-  # Model -> JSON
-  json1 <- write_model_json(model)
-  model1 <- read_model_json(json1)
-
-  # JSON -> Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model1, excel_dir, format = "excel")
-
-  # Excel -> JSON
-  model_from_excel <- read_model(excel_dir)
-  json2 <- write_model_json(model_from_excel)
-  model2 <- read_model_json(json2)
-
-  # Full parity check - no exceptions
-  expect_models_equivalent(model1, model2, "JSON->Excel->JSON")
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
-# ==============================================================================
 # YAML <-> JSON Round-Trip Tests (Comprehensive)
 # ==============================================================================
 
@@ -834,7 +767,7 @@ test_that("YAML -> JSON -> YAML preserves all components", {
   json <- write_model_json(model_from_yaml)
 
   # JSON -> YAML
-  model_from_json <- read_model_json(json)
+  model_from_json <- read_model_json(text = json)
   yaml2 <- tempfile(fileext = ".yaml")
   write_model_yaml(model_from_json, yaml2)
 
@@ -851,7 +784,7 @@ test_that("JSON -> YAML -> JSON preserves all components", {
 
   # Model -> JSON
   json1 <- write_model_json(model)
-  model1 <- read_model_json(json1)
+  model1 <- read_model_json(text = json1)
 
   # JSON -> YAML
   yaml_path <- tempfile(fileext = ".yaml")
@@ -860,7 +793,7 @@ test_that("JSON -> YAML -> JSON preserves all components", {
   # YAML -> JSON
   model_from_yaml <- read_model_yaml(yaml_path)
   json2 <- write_model_json(model_from_yaml)
-  model2 <- read_model_json(json2)
+  model2 <- read_model_json(text = json2)
 
   expect_models_equivalent(model1, model2, "JSON->YAML->JSON")
 
@@ -908,7 +841,7 @@ test_that("R -> JSON -> R preserves core components", {
   json <- write_model_json(model_from_r)
 
   # JSON -> Model
-  model_from_json <- read_model_json(json)
+  model_from_json <- read_model_json(text = json)
 
   # JSON -> R code
   r_path2 <- tempfile(fileext = ".R")
@@ -945,7 +878,7 @@ test_that("JSON -> R -> JSON preserves core components", {
 
   # Model -> JSON
   json1 <- write_model_json(model)
-  model1 <- read_model_json(json1)
+  model1 <- read_model_json(text = json1)
 
   # JSON -> R code
   r_path <- tempfile(fileext = ".R")
@@ -959,7 +892,7 @@ test_that("JSON -> R -> JSON preserves core components", {
 
   # R -> JSON
   json2 <- write_model_json(model_from_r)
-  model2 <- read_model_json(json2)
+  model2 <- read_model_json(text = json2)
 
   expect_equal(nrow(model1$states), nrow(model2$states),
                label = "JSON->R->JSON states")
@@ -981,47 +914,30 @@ test_that("all formats produce equivalent JSON for same model", {
 
   # Direct to JSON
   json_direct <- write_model_json(model)
-  model_direct <- read_model_json(json_direct)
+  model_direct <- read_model_json(text = json_direct)
 
   # Via YAML
   yaml_path <- tempfile(fileext = ".yaml")
   write_model_yaml(model, yaml_path)
   model_yaml <- read_model_yaml(yaml_path)
   json_via_yaml <- write_model_json(model_yaml)
-  model_via_yaml <- read_model_json(json_via_yaml)
-
-  # Via Excel
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_excel <- read_model(excel_dir)
-  json_via_excel <- write_model_json(model_excel)
-  model_via_excel <- read_model_json(json_via_excel)
+  model_via_yaml <- read_model_json(text = json_via_yaml)
 
   # All should have same structure - core components
   expect_equal(nrow(model_direct$states), nrow(model_via_yaml$states))
-  expect_equal(nrow(model_direct$states), nrow(model_via_excel$states))
   expect_equal(nrow(model_direct$transitions), nrow(model_via_yaml$transitions))
-  expect_equal(nrow(model_direct$transitions), nrow(model_via_excel$transitions))
   expect_equal(nrow(model_direct$variables), nrow(model_via_yaml$variables))
-  expect_equal(nrow(model_direct$variables), nrow(model_via_excel$variables))
 
   # All formats should preserve tables and scripts
   expect_equal(length(model_direct$tables), length(model_via_yaml$tables))
-  expect_equal(length(model_direct$tables), length(model_via_excel$tables))
   expect_equal(length(model_direct$scripts), length(model_via_yaml$scripts))
-  expect_equal(length(model_direct$scripts), length(model_via_excel$scripts))
 
   # All formats should preserve sensitivity analysis components
   expect_equal(length(model_direct$dsa_parameters), length(model_via_yaml$dsa_parameters))
-  expect_equal(length(model_direct$dsa_parameters), length(model_via_excel$dsa_parameters))
   expect_equal(length(model_direct$scenarios), length(model_via_yaml$scenarios))
-  expect_equal(length(model_direct$scenarios), length(model_via_excel$scenarios))
   expect_equal(length(model_direct$twsa_analyses), length(model_via_yaml$twsa_analyses))
-  expect_equal(length(model_direct$twsa_analyses), length(model_via_excel$twsa_analyses))
 
   unlink(yaml_path)
-  unlink(excel_dir, recursive = TRUE)
 })
 
 # ==============================================================================
@@ -1074,7 +990,7 @@ test_that("DSA variable parameters round-trip through JSON with field verificati
     add_dsa_variable("p_disease", low = bc * 0.5, high = bc * 1.5)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model_back$dsa_parameters), 1)
   expect_equal(model_back$dsa_parameters[[1]]$type, "variable")
@@ -1091,7 +1007,7 @@ test_that("DSA setting parameters round-trip through JSON with field verificatio
     add_dsa_setting("discount_cost", low = 0, high = 5)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model_back$dsa_parameters), 1)
   expect_equal(model_back$dsa_parameters[[1]]$type, "setting")
@@ -1108,7 +1024,7 @@ test_that("strategy-specific DSA parameters preserved in JSON", {
     add_dsa_variable("cost", low = 500, high = 1500, strategy = "tx_a")
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$dsa_parameters[[1]]$strategy, "tx_a")
 })
@@ -1121,7 +1037,7 @@ test_that("DSA with display_name preserved in JSON", {
     add_dsa_variable("p", low = 0.3, high = 0.7, display_name = "Probability of Event")
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$dsa_parameters[[1]]$display_name, "Probability of Event")
 })
@@ -1134,7 +1050,7 @@ test_that("oq_formula bc keyword preserved in DSA", {
     add_dsa_variable("p", low = bc * 0.5, high = bc + 0.1)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   low <- model_back$dsa_parameters[[1]]$low
   high <- model_back$dsa_parameters[[1]]$high
@@ -1156,7 +1072,7 @@ test_that("scenarios with variable overrides round-trip through JSON", {
     add_scenario_variable("Optimistic", "p_disease", 0.02)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model_back$scenarios), 1)
   expect_equal(model_back$scenarios[[1]]$name, "Optimistic")
@@ -1174,7 +1090,7 @@ test_that("scenarios with formula overrides round-trip through JSON", {
     add_scenario_variable("Modified", "p_disease", base_p * 0.8)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   override_value <- model_back$scenarios[[1]]$variable_overrides[[1]]$value
   expect_true(inherits(override_value, "oq_formula") || is.character(override_value))
@@ -1189,7 +1105,7 @@ test_that("scenarios with setting overrides round-trip through JSON", {
     add_scenario_setting("Extended", "timeframe", 150)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$scenarios[[1]]$setting_overrides[[1]]$value, 150)
 })
@@ -1201,7 +1117,7 @@ test_that("scenario description preserved in JSON", {
     add_scenario("Optimistic", description = "Best case assumptions")
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$scenarios[[1]]$description, "Best case assumptions")
 })
@@ -1217,7 +1133,7 @@ test_that("multiple scenarios round-trip through JSON", {
     add_scenario_variable("Pessimistic", "p", 0.7)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model_back$scenarios), 2)
   expect_equal(model_back$scenarios[[1]]$name, "Optimistic")
@@ -1241,7 +1157,7 @@ test_that("TWSA with range parameters round-trip through JSON", {
                       type = "range", min = 0.3, max = 0.7, steps = 5)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(length(model_back$twsa_analyses), 1)
   expect_equal(length(model_back$twsa_analyses[[1]]$parameters), 2)
@@ -1261,7 +1177,7 @@ test_that("TWSA with radius parameters round-trip through JSON", {
                       type = "radius", radius = 0.1, steps = 3)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   param <- model_back$twsa_analyses[[1]]$parameters[[1]]
   expect_equal(param$type, "radius")
@@ -1280,7 +1196,7 @@ test_that("TWSA with custom values round-trip through JSON", {
                      type = "custom", values = c(50, 100, 150))
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$twsa_analyses[[1]]$parameters[[1]]$type, "custom")
 })
@@ -1298,7 +1214,7 @@ test_that("TWSA description preserved in JSON", {
                       type = "range", min = 0.3, max = 0.7, steps = 3)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$twsa_analyses[[1]]$description, "Trade-off analysis")
 })
@@ -1318,7 +1234,7 @@ test_that("TWSA with strategy-specific variable round-trip", {
                       type = "range", min = 0.3, max = 0.7, steps = 3)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$twsa_analyses[[1]]$parameters[[1]]$strategy, "tx_a")
 })
@@ -1342,7 +1258,7 @@ test_that("VBP config survives JSON round-trip", {
   model <- create_model_with_vbp()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_false(is.null(model_back$vbp))
   expect_equal(model_back$vbp$price_variable, "cost_treat")
@@ -1387,31 +1303,12 @@ test_that("VBP config survives R code round-trip", {
   unlink(r_path)
 })
 
-test_that("VBP config survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_model_with_vbp()
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$vbp))
-  expect_equal(model_back$vbp$price_variable, "cost_treat")
-  expect_equal(model_back$vbp$intervention_strategy, "treatment_a")
-  expect_equal(model_back$vbp$outcome_summary, "total_qaly")
-  expect_equal(model_back$vbp$cost_summary, "total_cost")
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
 test_that("model without VBP has NULL vbp field", {
   model <- create_test_model()
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_null(model_back$vbp)
 
   # YAML
@@ -1438,7 +1335,7 @@ test_that("PSA config survives JSON round-trip", {
   model <- create_model_with_psa()
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_false(is.null(model_back$psa))
   expect_equal(model_back$psa$n_sim, 500L)
@@ -1450,7 +1347,7 @@ test_that("PSA config without seed survives JSON round-trip", {
     set_psa(n_sim = 100)
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_false(is.null(model_back$psa))
   expect_equal(model_back$psa$n_sim, 100L)
@@ -1523,47 +1420,12 @@ test_that("PSA config without seed survives R code round-trip", {
   unlink(r_path)
 })
 
-test_that("PSA config survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_model_with_psa()
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$psa))
-  expect_equal(model_back$psa$n_sim, 500L)
-  expect_equal(model_back$psa$seed, 42)
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
-test_that("PSA config without seed survives Excel round-trip", {
-  skip_if_cran()
-
-  model <- create_test_model() |>
-    set_psa(n_sim = 150)
-
-  excel_dir <- tempfile()
-  dir.create(excel_dir)
-  write_model(model, excel_dir, format = "excel")
-  model_back <- read_model(excel_dir)
-
-  expect_false(is.null(model_back$psa))
-  expect_equal(model_back$psa$n_sim, 150L)
-  expect_null(model_back$psa$seed)
-
-  unlink(excel_dir, recursive = TRUE)
-})
-
 test_that("model without PSA has NULL psa field", {
   model <- create_test_model()
 
   # JSON
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
   expect_null(model_back$psa)
 
   # YAML
@@ -1601,7 +1463,7 @@ test_that("discount_timing and discount_method survive JSON round-trip", {
     add_summary("total_qaly", "qaly")
 
   json <- write_model_json(model)
-  model_back <- read_model_json(json)
+  model_back <- read_model_json(text = json)
 
   expect_equal(model_back$settings$discount_timing, "midpoint")
   expect_equal(model_back$settings$discount_method, "by_year")
@@ -1636,37 +1498,6 @@ test_that("discount_timing and discount_method survive YAML round-trip", {
   expect_equal(model_back$settings$discount_method, "by_year")
 
   unlink(yaml_path)
-})
-
-test_that("discount_timing and discount_method survive Excel round-trip", {
-  model <- define_model("markov") |>
-    set_settings(
-      timeframe = 10,
-      cycle_length = 1,
-      discount_cost = 3,
-      discount_outcomes = 3.5,
-      discount_timing = "midpoint",
-      discount_method = "by_cycle"
-    ) |>
-    add_strategy("base") |>
-    add_state("alive", initial_prob = 1) |>
-    add_state("dead", initial_prob = 0) |>
-    add_transition("alive", "alive", 0.9) |>
-    add_transition("alive", "dead", 0.1) |>
-    add_transition("dead", "dead", 1) |>
-    add_value("cost", 100, state = "alive", type = "cost") |>
-    add_value("qaly", 1, state = "alive", type = "outcome") |>
-    add_summary("total_cost", "cost") |>
-    add_summary("total_qaly", "qaly")
-
-  temp_dir <- tempdir()
-  write_model_excel(model, temp_dir)
-  model_back <- read_model(temp_dir)
-
-  expect_equal(model_back$settings$discount_timing, "midpoint")
-  expect_equal(model_back$settings$discount_method, "by_cycle")
-
-  unlink(file.path(temp_dir, "model.xlsx"))
 })
 
 test_that("discount_timing and discount_method survive R code generation round-trip", {
@@ -1721,14 +1552,14 @@ test_that("discount_timing and discount_method survive JSON -> YAML cross-format
 
   # JSON -> read -> YAML -> read -> JSON -> read
   json1 <- write_model_json(model)
-  model_from_json <- read_model_json(json1)
+  model_from_json <- read_model_json(text = json1)
 
   yaml_path <- tempfile(fileext = ".yaml")
   write_model_yaml(model_from_json, yaml_path)
   model_from_yaml <- read_model_yaml(yaml_path)
 
   json2 <- write_model_json(model_from_yaml)
-  model_final <- read_model_json(json2)
+  model_final <- read_model_json(text = json2)
 
   expect_equal(model_final$settings$discount_timing, "midpoint")
   expect_equal(model_final$settings$discount_method, "by_year")

@@ -195,6 +195,312 @@ test_that("multiple TWSA analyses can be defined", {
 })
 
 # ============================================================================
+# Edit/Remove TWSA Tests
+# ============================================================================
+
+test_that("edit_twsa renames analysis", {
+  model <- define_model("markov") %>%
+    add_twsa("Cost vs Efficacy")
+
+  model2 <- edit_twsa(model, "Cost vs Efficacy", new_name = "Price vs Effect")
+
+  expect_equal(model2$twsa_analyses[[1]]$name, "Price vs Effect")
+})
+
+test_that("edit_twsa auto-updates description when it matched old name", {
+  model <- define_model("markov") %>%
+    add_twsa("Cost vs Efficacy")
+
+  expect_equal(model$twsa_analyses[[1]]$description, "Cost vs Efficacy")
+
+  model2 <- edit_twsa(model, "Cost vs Efficacy", new_name = "Price vs Effect")
+  expect_equal(model2$twsa_analyses[[1]]$description, "Price vs Effect")
+})
+
+test_that("edit_twsa does not auto-update description when explicitly set", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  model2 <- edit_twsa(model, "Test", new_name = "New Name",
+                       description = "Custom desc")
+  expect_equal(model2$twsa_analyses[[1]]$description, "Custom desc")
+})
+
+test_that("edit_twsa errors on Base Case name", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  expect_error(
+    edit_twsa(model, "Test", new_name = "Base Case"),
+    "reserved"
+  )
+})
+
+test_that("edit_twsa errors on duplicate name", {
+  model <- define_model("markov") %>%
+    add_twsa("A") %>%
+    add_twsa("B")
+
+  expect_error(
+    edit_twsa(model, "A", new_name = "B"),
+    "already exists"
+  )
+})
+
+test_that("edit_twsa errors for nonexistent analysis", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_twsa(model, "NonExistent", new_name = "X"),
+    "not found"
+  )
+})
+
+test_that("edit_twsa updates description only", {
+  model <- define_model("markov") %>%
+    add_twsa("Test", description = "Old desc")
+
+  model2 <- edit_twsa(model, "Test", description = "New desc")
+  expect_equal(model2$twsa_analyses[[1]]$description, "New desc")
+  expect_equal(model2$twsa_analyses[[1]]$name, "Test")
+})
+
+test_that("edit_twsa_variable updates steps", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
+
+  model2 <- edit_twsa_variable(model, "Test", "cost", steps = 10)
+
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$steps, 10)
+})
+
+test_that("edit_twsa_variable changes type with required params", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
+
+  model2 <- edit_twsa_variable(model, "Test", "cost", type = "custom",
+                                values = c(500, 1000, 1500))
+
+  param <- model2$twsa_analyses[[1]]$parameters[[1]]
+  expect_equal(param$type, "custom")
+  expect_s3_class(param$values, "oq_formula")
+  expect_null(param$min)
+  expect_null(param$max)
+})
+
+test_that("edit_twsa_variable errors when changing type without required params", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
+
+  expect_error(
+    edit_twsa_variable(model, "Test", "cost", type = "radius"),
+    "radius and steps are required"
+  )
+})
+
+test_that("edit_twsa_variable re-keys variable", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_variable("price", 2000) %>%
+    add_twsa("Test") %>%
+    add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
+
+  model2 <- edit_twsa_variable(model, "Test", "cost", new_variable = "price")
+
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$name, "price")
+})
+
+test_that("edit_twsa_variable errors for nonexistent parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  expect_error(
+    edit_twsa_variable(model, "Test", "nonexistent", steps = 10),
+    "not found"
+  )
+})
+
+test_that("edit_twsa_variable errors for nonexistent TWSA", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_twsa_variable(model, "NonExistent", "var", steps = 10),
+    "not found"
+  )
+})
+
+test_that("edit_twsa_setting updates value fields", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+
+  model2 <- edit_twsa_setting(model, "Test", "discount_cost", min = 1, max = 4)
+
+  param <- model2$twsa_analyses[[1]]$parameters[[1]]
+  expect_equal(param$min, 1)
+  expect_equal(param$max, 4)
+  expect_equal(param$steps, 3)  # Unchanged
+})
+
+test_that("edit_twsa_setting re-keys setting", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+
+  model2 <- edit_twsa_setting(model, "Test", "discount_cost",
+                               new_setting = "discount_outcomes")
+
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$name, "discount_outcomes")
+})
+
+test_that("edit_twsa_setting auto-updates display_name on re-key", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+
+  # display_name defaults to setting name
+  expect_equal(model$twsa_analyses[[1]]$parameters[[1]]$display_name, "discount_cost")
+
+  model2 <- edit_twsa_setting(model, "Test", "discount_cost",
+                               new_setting = "discount_outcomes")
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$display_name, "discount_outcomes")
+})
+
+test_that("edit_twsa_setting errors on invalid setting name", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+
+  expect_error(
+    edit_twsa_setting(model, "Test", "discount_cost",
+                      new_setting = "invalid_setting"),
+    "Invalid TWSA setting"
+  )
+})
+
+test_that("edit_twsa_setting errors on duplicate setting", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3) %>%
+    add_twsa_setting("Test", "discount_outcomes", type = "range", min = 0, max = 5, steps = 3)
+
+  expect_error(
+    edit_twsa_setting(model, "Test", "discount_cost",
+                      new_setting = "discount_outcomes"),
+    "already exists"
+  )
+})
+
+test_that("edit_twsa_setting changes type with required params", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3)
+
+  model2 <- edit_twsa_setting(model, "Test", "discount_cost",
+                               type = "custom", values = c(0, 3, 5))
+
+  param <- model2$twsa_analyses[[1]]$parameters[[1]]
+  expect_equal(param$type, "custom")
+  expect_equal(param$values, c(0, 3, 5))
+  expect_null(param$min)
+})
+
+test_that("edit_twsa_setting errors for nonexistent parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  expect_error(
+    edit_twsa_setting(model, "Test", "nonexistent", steps = 10),
+    "not found"
+  )
+})
+
+test_that("remove_twsa removes analysis", {
+  model <- define_model("markov") %>%
+    add_twsa("A") %>%
+    add_twsa("B")
+
+  model2 <- remove_twsa(model, "A")
+
+  expect_equal(length(model2$twsa_analyses), 1)
+  expect_equal(model2$twsa_analyses[[1]]$name, "B")
+})
+
+test_that("remove_twsa errors for nonexistent analysis", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_twsa(model, "NonExistent"),
+    "not found"
+  )
+})
+
+test_that("remove_twsa_variable removes parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5) %>%
+    add_twsa_variable("Test", "efficacy", type = "radius", radius = 0.1, steps = 3)
+
+  model2 <- remove_twsa_variable(model, "Test", "cost")
+
+  expect_equal(length(model2$twsa_analyses[[1]]$parameters), 1)
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$name, "efficacy")
+})
+
+test_that("remove_twsa_variable errors for nonexistent parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  expect_error(
+    remove_twsa_variable(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_twsa_variable errors for nonexistent TWSA", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_twsa_variable(model, "NonExistent", "var"),
+    "not found"
+  )
+})
+
+test_that("remove_twsa_setting removes parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test") %>%
+    add_twsa_setting("Test", "discount_cost", type = "range", min = 0, max = 5, steps = 3) %>%
+    add_twsa_setting("Test", "discount_outcomes", type = "range", min = 0, max = 5, steps = 3)
+
+  model2 <- remove_twsa_setting(model, "Test", "discount_cost")
+
+  expect_equal(length(model2$twsa_analyses[[1]]$parameters), 1)
+  expect_equal(model2$twsa_analyses[[1]]$parameters[[1]]$name, "discount_outcomes")
+})
+
+test_that("remove_twsa_setting errors for nonexistent parameter", {
+  model <- define_model("markov") %>%
+    add_twsa("Test")
+
+  expect_error(
+    remove_twsa_setting(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_twsa_setting errors for nonexistent TWSA", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_twsa_setting(model, "NonExistent", "timeframe"),
+    "not found"
+  )
+})
+
+# ============================================================================
 # Strategy/Group Targeting Validation Tests
 # ============================================================================
 
@@ -297,7 +603,7 @@ test_that("validate_twsa_spec catches missing TWSA analyses", {
   model <- define_model("markov") %>%
     add_variable("cost", 1000)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -313,7 +619,7 @@ test_that("validate_twsa_spec catches TWSA with wrong number of parameters", {
     add_twsa_variable("Test", "cost", type = "range", min = 500, max = 1500, steps = 5)
   # Only 1 parameter added, need 2
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -331,7 +637,7 @@ test_that("validate_twsa_spec catches invalid variable names", {
     add_twsa_variable("Test", "cost", type = "range",
                        min = 500, max = 1500, steps = 5)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -349,7 +655,7 @@ test_that("validate_twsa_spec catches invalid setting names", {
     add_twsa_setting("Test", "invalid_setting", type = "range",
                       min = 0, max = 5, steps = 3)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -481,6 +787,20 @@ test_that("twsa_costs_table() returns a rendered table", {
   results <- get_cached_twsa_vbp_results()
   tbl <- twsa_costs_table(results, "costs", backend = "kable")
   expect_true(inherits(tbl, "kableExtra") || is.character(tbl))
+})
+
+test_that("prepare_twsa_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_cached_twsa_vbp_results()
+
+  prepared_default <- openqaly:::prepare_twsa_summary_table_data(
+    results, "qalys", groups = "overall", value_type = "outcome", currency = FALSE
+  )
+  prepared_explicit <- openqaly:::prepare_twsa_summary_table_data(
+    results, "qalys", groups = "overall", value_type = "outcome",
+    currency = FALSE, decimals = 2
+  )
+
+  expect_equal(prepared_default$tables[[1]]$data, prepared_explicit$tables[[1]]$data)
 })
 
 # ============================================================================

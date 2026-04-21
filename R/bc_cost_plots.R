@@ -74,8 +74,8 @@ costs_plot_bar <- function(res, outcome,
 #'
 #' @param res A openqaly model results object (output from run_model)
 #' @param outcome Name of the cost summary to plot (e.g., "total_costs")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups, or NULL
-#'   (all groups plus aggregated)
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param interventions Character vector of reference strategies for intervention perspective (e.g., "new_treatment").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
@@ -113,10 +113,10 @@ costs_plot_bar <- function(res, outcome,
 #' costs_plot_line(results, outcome = "total_costs", cumulative = FALSE)
 #'
 #' # Differences vs control (comparator perspective)
-#' costs_plot_line(results, outcome = "total_costs", comparator = "control")
+#' costs_plot_line(results, outcome = "total_costs", comparators = "control")
 #'
 #' # New treatment vs others (intervention perspective)
-#' costs_plot_line(results, outcome = "total_costs", intervention = "new_treatment")
+#' costs_plot_line(results, outcome = "total_costs", interventions = "new_treatment")
 #' }
 #'
 #' @export

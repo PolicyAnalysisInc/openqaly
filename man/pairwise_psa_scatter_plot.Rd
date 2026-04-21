@@ -6,8 +6,8 @@
 \usage{
 pairwise_psa_scatter_plot(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   interventions = NULL,
   comparators = NULL,
   wtp = NULL,
@@ -26,13 +26,17 @@ pairwise_psa_scatter_plot(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
-\item{interventions}{Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).}
+\item{interventions}{Reference strategies for comparison (intervention
+perspective: A vs. B, A vs. C). At least one of interventions or
+comparators must be provided.}
 
-\item{comparators}{Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).}
+\item{comparators}{Reference strategies for comparison (comparator
+perspective: B vs. A, C vs. A). At least one of interventions or
+comparators must be provided.}
 
 \item{wtp}{Numeric WTP threshold for cost-effectiveness evaluation. When provided,
 points are colored by cost-effectiveness status and a WTP threshold line is drawn.
@@ -47,13 +51,13 @@ Mutually exclusive with interventions/comparators.}
 
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 
-\item{title}{Plot title. If NULL, auto-generated}
+\item{title}{Plot title. If NULL (default), no title is shown}
 
-\item{xlab}{X-axis label. If NULL, auto-generated from outcome_summary}
+\item{xlab}{X-axis label. If NULL (default), auto-generated from health_outcome}
 
-\item{ylab}{Y-axis label. If NULL, auto-generated from cost_summary}
+\item{ylab}{Y-axis label. If NULL (default), auto-generated from cost_outcome}
 
-\item{legend_position}{Legend position: "bottom" (default), "right", "top",
+\item{legend_position}{Legend position: "right" (default), "bottom", "top",
 "left", or "none"}
 
 \item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}

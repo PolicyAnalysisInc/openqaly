@@ -13,7 +13,7 @@ parse_seg_variables <- function(x, segment = NULL, trees = NULL,
   
   # Filter to only variables in this segment
   df <- x %>%
-    mutate_all(~as.character(.)) %>%
+    mutate(across(everything(), ~{ r <- as.character(.); r[is.na(.)] <- NA_character_; r })) %>%
     filter(
       is_in_segment(segment, strat = .data$strategy, grp = .data$group),
       !.data$name %in% names(segment)
@@ -98,84 +98,65 @@ sort_variables <- function(x, extra_vars = NULL) {
   } else {
     extras <- set_names(extra_vars$formula, extra_vars$name)
   }
-  
+
   par_names <- x$name
-  
-  # Extract the variable names referenced in each variable's
-  # formula
-  var_list <-  map(x$formula, function(y) {
-      vars <- c(y$depends, y$after)
-      vars[vars %in% par_names]
-    }) %>%
-    set_names(x$name)
-  
-  ordered <- c()
-  unordered <- var_list
-  
-  # While we still have variables in the unordered list...
-  while (length(unordered) > 0) {
-    
-    to_remove <- c()
-    
-    for (i in seq_len(length(unordered))) {
-      
-      # If all the variables its formula references are in the ordered
-      # list then it can be added to ordered list.
-      if (all(unordered[[i]] %in% ordered)) {
-        
-        ordered <- c(ordered, names(unordered)[i])
-        
-        current_var <-  names(unordered)[i]
-        
-        # Make a named list of all variables
-        all_vars <- c(
-          set_names(x$formula, x$name),
-          extras,
-          c('strategy', 'group')
-        )
-        
-        # Extract any decision tree probability calls
-        p_calls <- extract_func_calls(quo_get_expr(x$formula[[which(x$name == current_var)]]$quo), 'p')
-        tree_deps <- map(p_calls, function(y) {
-          referenced_nodes <- all_vars[[y$arg2]]$node_depends %>%
-            keep(~any(.$tags %in% y$arg1)) %>%
-            map(~.$depends) %>%
-            flatten_chr()
-          
-          referenced_nodes
-        }) %>% flatten_chr()
-        
-        # Assemble first-order depencies
-        fo_deps <- unique(c(x$formula[[which(x$name == current_var)]]$depends, tree_deps))
-        
-        # Add second+ order dependencies to variable
-        x$formula[[which(x$name == current_var)]]$depends <- x$formula %>%
-          set_names(x$name) %>%
-          c(extras) %>%
-          .[fo_deps] %>%
-          lapply(function(y) y$depends) %>%
-          discard(is.null) %>%
-          flatten_chr(.) %>%
-          union(fo_deps)
-        
-        # and mark it  for removal
-        to_remove <- c(to_remove, i)
-      }
-    }
-    
-    if (length(to_remove) == 0) {
-      # If we didn't find anything to move to the ordered list,
-      # throw a circular reference error
-      err_txt <- err_name_string(names(unordered))
-      stop('Circular reference detected: ', err_txt)
-    } else {
-      # Otherwise, remove from the unordered list the variables
-      # that were appended to the ordered list
-      unordered <- unordered[-to_remove]
-    }
+
+  # Make a named list of all variables (needed for tree dep extraction)
+  all_vars <- c(
+    set_names(x$formula, x$name),
+    extras,
+    c('strategy', 'group')
+  )
+
+  # Pre-extract sort deps (depends + after, filtered to par_names)
+  dep_lists <- lapply(x$formula, function(y) {
+    vars <- c(y$depends, y$after)
+    vars[vars %in% par_names]
+  })
+
+  # Pre-extract first-order deps including tree p() call deps
+  fo_dep_lists <- lapply(seq_len(nrow(x)), function(i) {
+    formula <- x$formula[[i]]
+
+    # Extract any decision tree probability calls
+    p_calls <- extract_func_calls(quo_get_expr(formula$quo), 'p')
+    tree_deps <- unlist(lapply(p_calls, function(y) {
+      referenced_nodes <- all_vars[[y$arg2]]$node_depends %>%
+        keep(~any(.$tags %in% y$arg1)) %>%
+        map(~.$depends) %>%
+        flatten_chr()
+      referenced_nodes
+    }), use.names = FALSE)
+    if (is.null(tree_deps)) tree_deps <- character()
+
+    unique(c(formula$depends, tree_deps))
+  })
+
+  # Extra vars deps
+  extra_names <- if (length(extras) > 0) names(extras) else character()
+  extra_dep_lists <- lapply(extras, function(y) {
+    if (is.null(y$depends)) character() else y$depends
+  })
+  if (length(extra_dep_lists) == 0) extra_dep_lists <- list()
+
+  # Call C++
+  result <- cppSortVariables(
+    names = par_names,
+    dep_lists = dep_lists,
+    fo_dep_lists = fo_dep_lists,
+    extra_names = extra_names,
+    extra_dep_lists = extra_dep_lists
+  )
+
+  # Reorder dataframe
+  sorted_x <- x[result$order, ]
+
+  # Write back expanded deps
+  for (i in seq_len(nrow(sorted_x))) {
+    sorted_x$formula[[i]]$depends <- result$expanded_deps[[i]]
   }
-  
-  as_tibble(x[order(factor(x$name, levels = ordered)), ])
+
+  as_tibble(sorted_x)
 }
 
 # Evaluate a variables object

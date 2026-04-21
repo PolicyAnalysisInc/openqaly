@@ -188,3 +188,84 @@ test_that("errors in distribution parsing are handled properly", {
   )
 
 })
+
+test_that("bootstrap default row-id path is warning-free", {
+  x <- tibble::tibble(value = 11:15)
+  sampler <- bootstrap(x)
+
+  withr::local_envvar(TESTTHAT_PKG = "openqaly")
+  withr::local_options(list(lifecycle_verbosity = "warning"))
+
+  expect_no_warning(
+    withr::with_seed(1, sampler(c(0.25, 0.75)))
+  )
+})
+
+test_that("bootstrap resamples within a single strata column", {
+  ipd <- tibble::tibble(
+    patient_id = 1:6,
+    strata = c("A", "A", "A", "B", "B", "B"),
+    outcome = c(10, 20, 30, 40, 50, 60)
+  )
+
+  sampler <- bootstrap(ipd, id = "patient_id", strata = "strata")
+  sampled <- withr::with_seed(1, sampler(c(0.25, 0.75)))
+
+  sampled_counts <- purrr::map_dfr(seq_along(sampled), function(i) {
+    sampled[[i]] %>%
+      dplyr::count(strata, name = "n") %>%
+      dplyr::mutate(.sim = i)
+  }) %>%
+    dplyr::arrange(.sim, strata)
+
+  expected_counts <- tidyr::crossing(.sim = 1:2, strata = c("A", "B")) %>%
+    dplyr::mutate(n = 3L) %>%
+    dplyr::arrange(.sim, strata) %>%
+    dplyr::select(strata, n, .sim)
+
+  expect_equal(sampled_counts, expected_counts)
+})
+
+test_that("bootstrap resamples within combined multi-column strata", {
+  ipd <- tibble::tibble(
+    patient_id = 1:8,
+    arm = c("A", "A", "A", "A", "B", "B", "B", "B"),
+    sex = c("F", "F", "M", "M", "F", "F", "M", "M"),
+    outcome = c(10, 20, 30, 40, 50, 60, 70, 80)
+  )
+
+  sampler <- bootstrap(ipd, id = "patient_id", strata = c("arm", "sex"))
+  sampled <- withr::with_seed(1, sampler(c(0.25, 0.75)))
+
+  sampled_counts <- purrr::map_dfr(seq_along(sampled), function(i) {
+    sampled[[i]] %>%
+      dplyr::count(arm, sex, name = "n") %>%
+      dplyr::mutate(.sim = i)
+  }) %>%
+    dplyr::arrange(.sim, arm, sex)
+
+  expected_counts <- tidyr::crossing(
+    .sim = 1:2,
+    arm = c("A", "B"),
+    sex = c("F", "M")
+  ) %>%
+    dplyr::mutate(n = 2L) %>%
+    dplyr::arrange(.sim, arm, sex) %>%
+    dplyr::select(arm, sex, n, .sim)
+
+  expect_equal(sampled_counts, expected_counts)
+})
+
+test_that("bootstrap uses sampling weights", {
+  ipd <- tibble::tibble(
+    patient_id = 1:4,
+    weight = c(1, 0, 0, 0),
+    outcome = c(10, 20, 30, 40)
+  )
+
+  sampler <- bootstrap(ipd, id = "patient_id", weight = "weight")
+  sampled <- withr::with_seed(1, sampler(c(0.25, 0.75)))
+  sampled_ids <- unlist(purrr::map(sampled, "patient_id"))
+
+  expect_true(all(sampled_ids == 1L))
+})

@@ -357,6 +357,17 @@ extract_values_wide <- function(source_data, values_field, values_filter,
       values_data$cycle <- seq_len(nrow(values_data))
     }
 
+    # Join pre-calculated time columns from the collapsed trace
+    trace_data <- source_data$collapsed_trace[[i]]
+    if (!is.null(trace_data)) {
+      time_cols_available <- intersect(c("day", "week", "month", "year"), colnames(trace_data))
+      if (length(time_cols_available) > 0) {
+        time_mapping <- trace_data[, c("cycle", time_cols_available), drop = FALSE]
+        time_mapping <- time_mapping[!duplicated(time_mapping$cycle), , drop = FALSE]
+        values_data <- merge(values_data, time_mapping, by = "cycle", sort = FALSE)
+      }
+    }
+
     # Get value column names (exclude time columns)
     time_cols <- c("cycle", "day", "week", "month", "year")
     value_cols <- setdiff(colnames(values_data), time_cols)
@@ -436,6 +447,17 @@ extract_values_long <- function(source_data, values_field, values_filter,
       values_data$cycle <- seq_len(nrow(values_data))
     }
 
+    # Join pre-calculated time columns from the collapsed trace
+    trace_data <- source_data$collapsed_trace[[i]]
+    if (!is.null(trace_data)) {
+      time_cols_available <- intersect(c("day", "week", "month", "year"), colnames(trace_data))
+      if (length(time_cols_available) > 0) {
+        time_mapping <- trace_data[, c("cycle", time_cols_available), drop = FALSE]
+        time_mapping <- time_mapping[!duplicated(time_mapping$cycle), , drop = FALSE]
+        values_data <- merge(values_data, time_mapping, by = "cycle", sort = FALSE)
+      }
+    }
+
     # Determine which time column to use
     time_col <- switch(time_unit,
                       "cycle" = "cycle",
@@ -445,11 +467,8 @@ extract_values_long <- function(source_data, values_field, values_filter,
                       "year" = "year",
                       "cycle")
 
-    # Check if time column exists - for now, we only have cycle
+    # Fall back to cycle if requested time column doesn't exist (e.g. decision trees)
     if (!time_col %in% colnames(values_data)) {
-      if (time_unit != "cycle") {
-        warning(sprintf("Time unit '%s' not available, using cycle instead", time_unit))
-      }
       time_col <- "cycle"
     }
 

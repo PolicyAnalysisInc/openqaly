@@ -573,6 +573,19 @@ test_that("incremental_ce_table() formats numeric columns with decimals", {
   expect_true(inherits(tbl_kable, "kableExtra") || inherits(tbl_kable, "character"))
 })
 
+test_that("prepare_incremental_ce_table_data() defaults outcome decimals to 2", {
+  results <- get_example_results()
+
+  prepared_default <- openqaly:::prepare_incremental_ce_table_data(
+    results, "total_qalys", "total_cost", groups = "overall"
+  )
+  prepared_explicit <- openqaly:::prepare_incremental_ce_table_data(
+    results, "total_qalys", "total_cost", groups = "overall", outcome_decimals = 2
+  )
+
+  expect_equal(prepared_default$data, prepared_explicit$data)
+})
+
 test_that("incremental_ce_table() shows first strategy with blank for ICER", {
   results <- get_example_results()
 

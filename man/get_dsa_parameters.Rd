@@ -7,7 +7,7 @@
 get_dsa_parameters(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A dsa_parameters object (list with class "dsa_parameters").

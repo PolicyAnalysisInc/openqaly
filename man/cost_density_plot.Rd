@@ -6,7 +6,7 @@
 \usage{
 cost_density_plot(
   results,
-  outcome_summary,
+  outcome,
   interventions = NULL,
   comparators = NULL,
   groups = "overall",
@@ -24,7 +24,7 @@ cost_density_plot(
 \arguments{
 \item{results}{A openqaly PSA results object (from run_psa)}
 
-\item{outcome_summary}{Name of the cost summary to plot (e.g., "total_cost")}
+\item{outcome}{Name of the cost outcome to plot (e.g., "total_cost")}
 
 \item{interventions}{Reference strategies for comparison (intervention perspective).
 Cannot be used with \code{strategies}.}

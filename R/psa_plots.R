@@ -6,9 +6,9 @@
 #'
 #' @param results A openqaly PSA results object, or pre-calculated CEAC data
 #'   from calculate_incremental_ceac()
-#' @param outcome_summary Name of the outcome summary (required if results is
+#' @param health_outcome Name of the health outcome (required if results is
 #'   a model object)
-#' @param cost_summary Name of the cost summary (required if results is a
+#' @param cost_outcome Name of the cost outcome (required if results is a
 #'   model object)
 #' @param wtp_range Numeric vector with min and max WTP values for x-axis.
 #'   Default is c(0, 100000)
@@ -53,8 +53,8 @@
 #'
 #' @export
 incremental_ceac_plot <- function(results,
-                                  outcome_summary = NULL,
-                                  cost_summary = NULL,
+                                  health_outcome = NULL,
+                                  cost_outcome = NULL,
                                   wtp_range = c(0, 100000),
                                   wtp_step = 5000,
                                   groups = "overall",
@@ -79,8 +79,8 @@ incremental_ceac_plot <- function(results,
     ceac_data <- results
   } else {
     # Model results - calculate CEAC
-    if (is.null(outcome_summary) || is.null(cost_summary)) {
-      stop("outcome_summary and cost_summary required when results is a model object")
+    if (is.null(health_outcome) || is.null(cost_outcome)) {
+      stop("health_outcome and cost_outcome required when results is a model object")
     }
 
     # Generate WTP sequence
@@ -89,8 +89,8 @@ incremental_ceac_plot <- function(results,
     # Always use discounted values (cost-effectiveness measure)
     ceac_data <- calculate_incremental_ceac(
       results = results,
-      outcome_summary = outcome_summary,
-      cost_summary = cost_summary,
+      outcome_summary = health_outcome,
+      cost_summary = cost_outcome,
       wtp = wtp_seq,
       groups = groups,
       strategies = strategies
@@ -143,9 +143,22 @@ incremental_ceac_plot <- function(results,
 #' Creates a scatter plot showing the distribution of costs and outcomes
 #' from PSA simulations. Each point represents one simulation, colored by strategy.
 #'
-#' @inheritParams incremental_ceac_plot
+#' @param results A openqaly PSA results object
+#' @param health_outcome Name of the health outcome to plot
+#' @param cost_outcome Name of the cost outcome to plot
+#' @param groups Group selection: "overall" (default) uses overall/aggregated
+#'   results, "all" includes overall + all groups, "all_groups" includes all
+#'   groups without overall, and specific group name(s) filter to those groups.
+#' @param strategies Character vector of strategy names to include (NULL for all)
 #' @param show_means Logical. Show mean values as larger points? Default is TRUE
 #' @param alpha Transparency of scatter points (0-1). Default is 0.3
+#' @param title Plot title. If NULL (default), no title is shown
+#' @param xlab X-axis label. If NULL (default), uses the health outcome display
+#'   name when available
+#' @param ylab Y-axis label. If NULL (default), uses the cost outcome display
+#'   name when available
+#' @param legend_position Legend position: "right" (default), "bottom", "top",
+#'   "left", or "none"
 #' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
 #' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
@@ -173,8 +186,8 @@ incremental_ceac_plot <- function(results,
 #'
 #' @export
 psa_scatter_plot <- function(results,
-                             outcome_summary,
-                             cost_summary,
+                             health_outcome,
+                             cost_outcome,
                              groups = "overall",
                              strategies = NULL,
                              show_means = TRUE,
@@ -193,8 +206,8 @@ psa_scatter_plot <- function(results,
   # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     strategies = strategies
   )
@@ -207,28 +220,28 @@ psa_scatter_plot <- function(results,
   if (is.null(xlab)) {
     xlab <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(.data$name == outcome_summary)
+        filter(.data$name == health_outcome)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
-        outcome_summary
+        health_outcome
       }
     } else {
-      outcome_summary
+      health_outcome
     }
   }
 
   if (is.null(ylab)) {
     ylab <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(.data$name == cost_summary)
+        filter(.data$name == cost_outcome)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
-        cost_summary
+        cost_outcome
       }
     } else {
-      cost_summary
+      cost_outcome
     }
   }
 
@@ -306,10 +319,14 @@ psa_scatter_plot <- function(results,
 #' different WTP thresholds.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
-#' @param interventions Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).
-#' @param comparators Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
+#' @param interventions Reference strategies for comparison (intervention
+#'   perspective: A vs. B, A vs. C). At least one of interventions or
+#'   comparators must be provided.
+#' @param comparators Reference strategies for comparison (comparator
+#'   perspective: B vs. A, C vs. A). At least one of interventions or
+#'   comparators must be provided.
 #' @param wtp_range Numeric vector with min and max WTP values for x-axis.
 #'   Default is c(0, 100000)
 #' @param wtp_step Step size for WTP thresholds. Default is 5000
@@ -346,17 +363,17 @@ psa_scatter_plot <- function(results,
 #'
 #' # Comparator perspective: Compare strategies to control
 #' pairwise_ceac_plot(psa_results, "total_qalys", "total_cost",
-#'                    comparator = "control")
+#'                    comparators = "control")
 #'
 #' # Intervention perspective: Compare new treatment to others
 #' pairwise_ceac_plot(psa_results, "total_qalys", "total_cost",
-#'                    intervention = "new_treatment")
+#'                    interventions = "new_treatment")
 #' }
 #'
 #' @export
 pairwise_ceac_plot <- function(results,
-                              outcome_summary,
-                              cost_summary,
+                              health_outcome,
+                              cost_outcome,
                               interventions = NULL,
                               comparators = NULL,
                               wtp_range = c(0, 100000),
@@ -383,8 +400,8 @@ pairwise_ceac_plot <- function(results,
   # Calculate pairwise CEAC (always use discounted values - cost-effectiveness measure)
   pairwise_data <- calculate_pairwise_ceac(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     interventions = interventions,
     comparators = comparators,
     wtp = wtp_seq,
@@ -514,42 +531,24 @@ pairwise_ceac_plot <- function(results,
 #'
 #' @examples
 #' \dontrun{
-#' model <- read_model(system.file("models/example", package = "openqaly"))
+#' model <- read_model(system.file("models/example_markov", package = "openqaly"))
 #' psa_results <- run_psa(model, n_sim = 1000)
 #'
-#' # Visualize selected parameters (all strategies/groups)
+#' # Visualize sampled parameters for one strategy/group combination
 #' psa_parameter_scatter_matrix(
 #'   psa_results,
-#'   variables = c("p_transition", "utility_well", "utility_sick", "cost_treatment")
+#'   variables = c("u_mild", "u_severe", "c_treatment"),
+#'   strategies = "seritinib",
+#'   group = "low_risk"
 #' )
 #'
-#' # Focus on specific strategy
+#' # Disable axis-label wrapping
 #' psa_parameter_scatter_matrix(
 #'   psa_results,
-#'   variables = c("p_transition", "utility_well"),
-#'   strategies = "treatment_a"
-#' )
-#'
-#' # Visualize specific (variable, strategy, group) combinations
-#' psa_parameter_scatter_matrix(
-#'   psa_results,
-#'   variables = c("p_well_to_sick", "p_well_to_dead", "p_well_to_well"),
-#'   strategies = c("treatment_a", "treatment_a", "treatment_a"),
-#'   group = c("group_1", "group_1", "group_1")
-#' )
-#'
-#' # Control label wrapping for long variable names
-#' psa_parameter_scatter_matrix(
-#'   psa_results,
-#'   variables = c("very_long_parameter_name", "another_long_parameter"),
-#'   label_wrap_width = 15  # Wrap at 15 characters
-#' )
-#'
-#' # Disable wrapping for short variable names
-#' psa_parameter_scatter_matrix(
-#'   psa_results,
-#'   variables = c("param1", "param2", "param3"),
-#'   label_wrap_width = NULL  # No wrapping
+#'   variables = c("u_mild", "u_severe", "c_treatment"),
+#'   strategies = "seritinib",
+#'   group = "low_risk",
+#'   label_wrap_width = NULL
 #' )
 #' }
 #'
@@ -664,6 +663,124 @@ psa_parameter_scatter_matrix <- function(results,
 }
 
 
+#' PSA Parameter Pair Plot
+#'
+#' Creates a pair plot for PSA sampled parameters using \code{GGally::ggpairs},
+#' with panel types suited for discrete or mixed discrete/continuous data.
+#' Columns with few unique values (e.g., 0/1 from multinomial sampling) are
+#' automatically converted to factors so that bar charts and dot plots are used
+#' instead of scatter plots and density curves.
+#'
+#' @inheritParams psa_parameter_scatter_matrix
+#' @param discrete_threshold Columns with this many or fewer unique values are
+#'   treated as discrete (converted to factors). Default 5.
+#' @param upper List passed to \code{GGally::ggpairs()} for upper-triangle
+#'   panels. By default, discrete and mixed panels use \code{"facetbar"};
+#'   continuous-continuous panels use \code{GGally} defaults.
+#' @param lower List passed to \code{GGally::ggpairs()} for lower-triangle
+#'   panels. By default, discrete panels use \code{"facetbar"} and mixed
+#'   panels use \code{"dot"}.
+#' @param diag List passed to \code{GGally::ggpairs()} for diagonal panels. By
+#'   default, discrete variables use \code{"barDiag"} and continuous variables
+#'   use \code{"densityDiag"}.
+#'
+#' @return A \code{GGally::ggpairs} plot object
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' model <- read_model(system.file("models/example_markov", package = "openqaly"))
+#' psa_results <- run_psa(model, n_sim = 1000)
+#'
+#' psa_parameter_pair_plot(
+#'   psa_results,
+#'   variables = c("u_mild", "u_severe", "c_treatment"),
+#'   strategies = "seritinib",
+#'   group = "low_risk"
+#' )
+#' }
+psa_parameter_pair_plot <- function(results,
+                                    variables,
+                                    group = NULL,
+                                    strategies = NULL,
+                                    alpha = 0.3,
+                                    title = NULL,
+                                    label_wrap_width = 20,
+                                    discrete_threshold = 5,
+                                    upper = list(discrete = "facetbar", combo = "facetbar"),
+                                    lower = list(discrete = "facetbar", combo = "dot"),
+                                    diag = list(discrete = "barDiag", continuous = "densityDiag"),
+                                    axis_decimals = NULL) {
+
+  locale <- get_results_locale(results)
+
+  if (!requireNamespace("GGally", quietly = TRUE)) {
+    stop("Package 'GGally' is required for psa_parameter_pair_plot(). Please install it with: install.packages('GGally')")
+  }
+
+  if (missing(variables) || is.null(variables) || length(variables) == 0) {
+    stop("'variables' parameter is required and must specify which variables to visualize")
+  }
+
+  param_data <- get_sampled_parameters(
+    results = results,
+    variables = variables,
+    group = group,
+    strategies = strategies
+  )
+
+  plot_data <- param_data %>%
+    select(-"simulation")
+
+  if (ncol(plot_data) < 2) {
+    stop("Need at least 2 variables to create a pair plot. Found ", ncol(plot_data))
+  }
+
+  # Convert columns with few unique values to factors
+  for (col in names(plot_data)) {
+    if (length(unique(plot_data[[col]])) <= discrete_threshold) {
+      plot_data[[col]] <- factor(plot_data[[col]])
+    }
+  }
+
+  if (is.null(title)) {
+    n_sim <- nrow(plot_data)
+    title <- sprintf("PSA Parameter Pair Plot (n=%d simulations)", n_sim)
+  }
+
+  if (!is.null(label_wrap_width)) {
+    wrapped_labels <- colnames(plot_data) %>%
+      gsub("_", " ", .) %>%
+      gsub("\\(", " (", .) %>%
+      gsub(",", ", ", .) %>%
+      gsub("  +", " ", .)
+
+    p <- GGally::ggpairs(
+      plot_data,
+      columnLabels = wrapped_labels,
+      labeller = label_wrap_gen(width = label_wrap_width),
+      upper = upper,
+      lower = lower,
+      diag = diag,
+      title = title,
+      progress = FALSE
+    )
+  } else {
+    p <- GGally::ggpairs(
+      plot_data,
+      upper = upper,
+      lower = lower,
+      diag = diag,
+      title = title,
+      progress = FALSE
+    )
+  }
+
+  return(p)
+}
+
+
 #' Plot Expected Value of Perfect Information (EVPI)
 #'
 #' Creates a line plot showing how EVPI changes across different willingness-to-pay
@@ -672,9 +789,9 @@ psa_parameter_scatter_matrix <- function(results,
 #'
 #' @param results A openqaly PSA results object, or pre-calculated EVPI data
 #'   from calculate_evpi()
-#' @param outcome_summary Name of the outcome summary (required if results is
+#' @param health_outcome Name of the health outcome (required if results is
 #'   a model object)
-#' @param cost_summary Name of the cost summary (required if results is a
+#' @param cost_outcome Name of the cost outcome (required if results is a
 #'   model object)
 #' @param wtp_range Numeric vector with min and max WTP values for x-axis.
 #'   Default is c(0, 100000)
@@ -727,8 +844,8 @@ psa_parameter_scatter_matrix <- function(results,
 #'
 #' @export
 evpi_plot <- function(results,
-                      outcome_summary = NULL,
-                      cost_summary = NULL,
+                      health_outcome = NULL,
+                      cost_outcome = NULL,
                       wtp_range = c(0, 100000),
                       wtp_step = 5000,
                       groups = "overall",
@@ -753,8 +870,8 @@ evpi_plot <- function(results,
     evpi_data <- results
   } else {
     # Model results - calculate EVPI
-    if (is.null(outcome_summary) || is.null(cost_summary)) {
-      stop("outcome_summary and cost_summary required when results is a model object")
+    if (is.null(health_outcome) || is.null(cost_outcome)) {
+      stop("health_outcome and cost_outcome required when results is a model object")
     }
 
     # Generate WTP sequence
@@ -763,8 +880,8 @@ evpi_plot <- function(results,
     # Always use discounted values (cost-effectiveness measure)
     evpi_data <- calculate_evpi(
       results = results,
-      outcome_summary = outcome_summary,
-      cost_summary = cost_summary,
+      outcome_summary = health_outcome,
+      cost_summary = cost_outcome,
       wtp = wtp_seq,
       groups = groups,
       strategies = strategies
@@ -840,8 +957,11 @@ evpi_plot <- function(results,
 #'   points are colored by cost-effectiveness status and a WTP threshold line is drawn.
 #'   Default is NULL (no coloring or threshold line)
 #' @param alpha Transparency of scatter points (0-1). Default is 0.3
-#' @param xlab X-axis label. If NULL, auto-generated from outcome_summary
-#' @param ylab Y-axis label. If NULL, auto-generated from cost_summary
+#' @param title Plot title. If NULL (default), no title is shown
+#' @param xlab X-axis label. If NULL (default), auto-generated from health_outcome
+#' @param ylab Y-axis label. If NULL (default), auto-generated from cost_outcome
+#' @param legend_position Legend position: "right" (default), "bottom", "top",
+#'   "left", or "none"
 #' @param cost_axis_decimals Fixed decimal places for cost axis labels, or NULL for auto-precision
 #' @param outcome_axis_decimals Fixed decimal places for outcome axis labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
@@ -920,8 +1040,8 @@ evpi_plot <- function(results,
 #'
 #' @export
 pairwise_psa_scatter_plot <- function(results,
-                                      outcome_summary,
-                                      cost_summary,
+                                      health_outcome,
+                                      cost_outcome,
                                       interventions = NULL,
                                       comparators = NULL,
                                       wtp = NULL,
@@ -955,8 +1075,8 @@ pairwise_psa_scatter_plot <- function(results,
   # Get PSA simulation data (always uses discounted values for CE-related analysis)
   psa_data <- get_psa_simulations(
     results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     strategies = strategies
   )
@@ -1090,14 +1210,14 @@ pairwise_psa_scatter_plot <- function(results,
   if (is.null(xlab)) {
     outcome_label <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(.data$name == outcome_summary)
+        filter(.data$name == health_outcome)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
-        outcome_summary
+        health_outcome
       }
     } else {
-      outcome_summary
+      health_outcome
     }
     xlab <- paste0("\u0394 ", outcome_label)
   }
@@ -1105,14 +1225,14 @@ pairwise_psa_scatter_plot <- function(results,
   if (is.null(ylab)) {
     cost_label <- if (!is.null(results$metadata$summaries)) {
       summary_meta <- results$metadata$summaries %>%
-        filter(.data$name == cost_summary)
+        filter(.data$name == cost_outcome)
       if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
         summary_meta$display_name[1]
       } else {
-        cost_summary
+        cost_outcome
       }
     } else {
-      cost_summary
+      cost_outcome
     }
     ylab <- paste0("\u0394 ", cost_label)
   }
@@ -1233,13 +1353,15 @@ psa_density_x_scale <- function(x, include = NULL, n = 4) {
 #' Benefit (NMB) relative to a comparator at a given willingness-to-pay threshold.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary (e.g., "total_qalys")
-#' @param cost_summary Name of the cost summary (e.g., "total_cost")
+#' @param health_outcome Name of the health outcome (e.g., "total_qalys")
+#' @param cost_outcome Name of the cost outcome (e.g., "total_cost")
 #' @param wtp Willingness-to-pay threshold for NMB calculation
 #' @param interventions Character vector of intervention strategy name(s).
-#'   Can be combined with comparators for N x M comparisons.
+#'   Can be combined with comparators for N x M comparisons. At least one of
+#'   interventions or comparators must be provided.
 #' @param comparators Character vector of comparator strategy name(s).
-#'   Can be combined with interventions for N x M comparisons.
+#'   Can be combined with interventions for N x M comparisons. At least one of
+#'   interventions or comparators must be provided.
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (aggregated, default)
@@ -1300,8 +1422,8 @@ psa_density_x_scale <- function(x, include = NULL, n = 4) {
 #'
 #' @export
 nmb_density_plot <- function(results,
-                             outcome_summary,
-                             cost_summary,
+                             health_outcome,
+                             cost_outcome,
                              wtp,
                              interventions = NULL,
                              comparators = NULL,
@@ -1333,8 +1455,8 @@ nmb_density_plot <- function(results,
   # Get PSA simulation data (always uses discounted values for NMB - cost-effectiveness measure)
   psa_data <- get_psa_simulations(
     results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     groups = groups,
     strategies = strategies
   )
@@ -1536,7 +1658,7 @@ nmb_density_plot <- function(results,
 #' differences between intervention/comparator pairs.
 #'
 #' @param results A openqaly PSA results object (from run_psa)
-#' @param outcome_summary Name of the summary to plot (e.g., "total_qalys", "total_cost")
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys", "total_cost")
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #'   Cannot be used with \code{strategies}.
 #' @param comparators Reference strategies for comparison (comparator perspective).
@@ -1689,7 +1811,7 @@ density_plot_impl <- function(results,
 #' outcome differences between intervention/comparator pairs.
 #'
 #' @param results A openqaly PSA results object (from run_psa)
-#' @param outcome_summary Name of the outcome summary to plot (e.g., "total_qalys")
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys")
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #'   Cannot be used with \code{strategies}.
 #' @param comparators Reference strategies for comparison (comparator perspective).
@@ -1711,7 +1833,7 @@ density_plot_impl <- function(results,
 #'
 #' @export
 outcome_density_plot <- function(results,
-                                 outcome_summary,
+                                 outcome,
                                  interventions = NULL,
                                  comparators = NULL,
                                  groups = "overall",
@@ -1727,7 +1849,7 @@ outcome_density_plot <- function(results,
 
   density_plot_impl(
     results = results,
-    outcome_summary = outcome_summary,
+    outcome_summary = outcome,
     interventions = interventions,
     comparators = comparators,
     groups = groups,
@@ -1753,7 +1875,7 @@ outcome_density_plot <- function(results,
 #' cost differences between intervention/comparator pairs.
 #'
 #' @param results A openqaly PSA results object (from run_psa)
-#' @param outcome_summary Name of the cost summary to plot (e.g., "total_cost")
+#' @param outcome Name of the cost outcome to plot (e.g., "total_cost")
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #'   Cannot be used with \code{strategies}.
 #' @param comparators Reference strategies for comparison (comparator perspective).
@@ -1775,7 +1897,7 @@ outcome_density_plot <- function(results,
 #'
 #' @export
 cost_density_plot <- function(results,
-                              outcome_summary,
+                              outcome,
                               interventions = NULL,
                               comparators = NULL,
                               groups = "overall",
@@ -1791,7 +1913,7 @@ cost_density_plot <- function(results,
 
   density_plot_impl(
     results = results,
-    outcome_summary = outcome_summary,
+    outcome_summary = outcome,
     interventions = interventions,
     comparators = comparators,
     groups = groups,
@@ -1807,4 +1929,527 @@ cost_density_plot <- function(results,
     axis_decimals = axis_decimals,
     abbreviate = abbreviate
   )
+}
+
+
+#' Ridgeline Plot Implementation
+#'
+#' Internal helper that creates a ridgeline plot of values from PSA simulations
+#' using \code{ggridges::geom_density_ridges()}. Strategies are displayed on the
+#' y-axis with their density distributions along the x-axis, allowing comparison
+#' within a single panel.
+#'
+#' @param results A openqaly PSA results object (from run_psa)
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys", "total_cost")
+#' @param interventions Reference strategies for comparison (intervention perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param comparators Reference strategies for comparison (comparator perspective).
+#'   Cannot be used with \code{strategies}.
+#' @param groups Which groups to include. Options: "overall" (default), "all",
+#'   "all_groups", or a character vector of specific group names.
+#' @param strategies Character vector of strategies to include. For absolute
+#'   values. Cannot be used with \code{interventions} or \code{comparators}.
+#' @param discounted Logical. Use discounted values? Default TRUE.
+#' @param value_type Character. Type of value to extract: "outcome" or "cost". Default "outcome".
+#' @param currency Logical. Format values as currency? Default FALSE.
+#' @param show_mean Logical. Add median quantile lines within ridges? Default TRUE.
+#' @param alpha Numeric. Transparency level for density fill (0-1). Default 0.4.
+#' @param scale Numeric. Controls height/overlap of ridgeline densities. Default 3.
+#'   Higher values create more overlap between ridges.
+#' @param title Character. Plot title. If NULL (default), no title is shown.
+#' @param xlab Character. X-axis label. If NULL (default), auto-generated.
+#' @param ylab Character. Y-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "none".
+#' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
+#' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#'
+#' @return A ggplot object
+#'
+#' @keywords internal
+ridgeline_plot_impl <- function(results,
+                                outcome_summary,
+                                interventions = NULL,
+                                comparators = NULL,
+                                groups = "overall",
+                                strategies = NULL,
+                                discounted = TRUE,
+                                value_type = "outcome",
+                                currency = FALSE,
+                                show_mean = TRUE,
+                                alpha = 0.4,
+                                scale = 3,
+                                title = NULL,
+                                xlab = NULL,
+                                ylab = NULL,
+                                legend_position = "none",
+                                axis_decimals = NULL,
+                                abbreviate = FALSE) {
+
+
+  locale <- get_results_locale(results)
+
+  plot_data <- get_psa_outcome_simulations(
+    results,
+    outcome_summary = outcome_summary,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted,
+    value_type = value_type
+  )
+
+  is_difference_mode <- !is.null(interventions) || !is.null(comparators)
+
+  outcome_label <- outcome_summary
+  if (!is.null(results$metadata) && !is.null(results$metadata$summaries)) {
+    summary_meta <- results$metadata$summaries %>%
+      filter(.data$name == outcome_summary)
+    if (nrow(summary_meta) > 0 && !is.na(summary_meta$display_name[1])) {
+      outcome_label <- summary_meta$display_name[1]
+    }
+  }
+
+  if (is.null(xlab)) {
+    if (is_difference_mode) {
+      xlab <- paste0("\u0394 ", outcome_label)
+    } else {
+      xlab <- outcome_label
+    }
+  }
+
+  if (is_difference_mode) {
+    fill_col <- "comparison"
+    legend_label <- "Comparison"
+  } else {
+    fill_col <- "strategy"
+    legend_label <- "Strategy"
+  }
+
+  if (is.null(ylab)) {
+    ylab <- legend_label
+  }
+
+  x_scale <- psa_density_x_scale(plot_data$outcome)
+
+  n_levels <- length(unique(plot_data[[fill_col]]))
+
+  base_aes <- aes(x = .data$outcome, y = .data[[fill_col]], fill = .data[[fill_col]], color = .data[[fill_col]])
+
+  if (n_levels == 1) {
+    if (show_mean) {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_ridgeline(
+          aes(height = after_stat(ndensity) * scale),
+          stat = "density_ridges", alpha = alpha,
+          quantile_lines = TRUE, quantiles = 2
+        )
+    } else {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_ridgeline(
+          aes(height = after_stat(ndensity) * scale),
+          stat = "density_ridges", alpha = alpha
+        )
+    }
+  } else {
+    if (show_mean) {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_density_ridges(alpha = alpha, scale = scale, quantile_lines = TRUE, quantiles = 2)
+    } else {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_density_ridges(alpha = alpha, scale = scale)
+    }
+  }
+
+  p <- p +
+    scale_x_continuous(
+      breaks = x_scale$breaks,
+      limits = x_scale$limits,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = abbreviate || currency, currency = currency)
+    ) +
+    theme_bw() +
+    labs(
+      title = title,
+      x = xlab,
+      y = ylab,
+      fill = legend_label,
+      color = legend_label
+    )
+
+  if (n_levels == 1) {
+    p <- p + scale_y_discrete(expand = expansion(add = c(0.3, 1.2)))
+  }
+
+  n_groups <- length(unique(plot_data$group))
+  if (n_groups > 1) {
+    p <- p + facet_wrap(vars(.data$group), scales = "free_x")
+  }
+
+  if (legend_position != "default") {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  p
+}
+
+
+#' Outcome Ridgeline Plot
+#'
+#' Creates a ridgeline plot of outcome values from PSA simulations using
+#' \code{ggridges::geom_density_ridges()}. Strategies are displayed on the
+#' y-axis with their density distributions along the x-axis, allowing easy
+#' visual comparison within a single panel.
+#'
+#' When \code{show_mean = TRUE}, a median line is drawn within each ridge
+#' using quantile lines.
+#'
+#' @inheritParams outcome_density_plot
+#' @param scale Numeric. Controls the height/overlap of ridgeline densities.
+#'   Default 3. Higher values create more overlap between ridges.
+#' @param ylab Character. Y-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "none" since strategy
+#'   labels appear on the y-axis.
+#'
+#' @return A ggplot object
+#'
+#' @export
+outcome_ridgeline_plot <- function(results,
+                                    outcome,
+                                    interventions = NULL,
+                                    comparators = NULL,
+                                    groups = "overall",
+                                    strategies = NULL,
+                                    discounted = TRUE,
+                                    show_mean = TRUE,
+                                    alpha = 0.4,
+                                    scale = 3,
+                                    title = NULL,
+                                    xlab = NULL,
+                                    ylab = NULL,
+                                    legend_position = "none",
+                                    axis_decimals = NULL,
+                                    abbreviate = FALSE) {
+
+  ridgeline_plot_impl(
+    results = results,
+    outcome_summary = outcome,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted,
+    value_type = "outcome",
+    currency = FALSE,
+    show_mean = show_mean,
+    alpha = alpha,
+    scale = scale,
+    title = title,
+    xlab = xlab,
+    ylab = ylab,
+    legend_position = legend_position,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate
+  )
+}
+
+
+#' Cost Ridgeline Plot
+#'
+#' Creates a ridgeline plot of cost values from PSA simulations using
+#' \code{ggridges::geom_density_ridges()}. Strategies are displayed on the
+#' y-axis with their cost distributions along the x-axis, with currency
+#' formatting.
+#'
+#' When \code{show_mean = TRUE}, a median line is drawn within each ridge
+#' using quantile lines.
+#'
+#' @inheritParams cost_density_plot
+#' @param scale Numeric. Controls the height/overlap of ridgeline densities.
+#'   Default 3. Higher values create more overlap between ridges.
+#' @param ylab Character. Y-axis label. If NULL (default), auto-generated.
+#' @param legend_position Position of the legend. Default "none" since strategy
+#'   labels appear on the y-axis.
+#'
+#' @return A ggplot object
+#'
+#' @export
+cost_ridgeline_plot <- function(results,
+                                 outcome,
+                                 interventions = NULL,
+                                 comparators = NULL,
+                                 groups = "overall",
+                                 strategies = NULL,
+                                 discounted = TRUE,
+                                 show_mean = TRUE,
+                                 alpha = 0.4,
+                                 scale = 3,
+                                 title = NULL,
+                                 xlab = NULL,
+                                 ylab = NULL,
+                                 legend_position = "none",
+                                 axis_decimals = NULL,
+                                 abbreviate = FALSE) {
+
+  ridgeline_plot_impl(
+    results = results,
+    outcome_summary = outcome,
+    interventions = interventions,
+    comparators = comparators,
+    groups = groups,
+    strategies = strategies,
+    discounted = discounted,
+    value_type = "cost",
+    currency = TRUE,
+    show_mean = show_mean,
+    alpha = alpha,
+    scale = scale,
+    title = title,
+    xlab = xlab,
+    ylab = ylab,
+    legend_position = legend_position,
+    axis_decimals = axis_decimals,
+    abbreviate = abbreviate
+  )
+}
+
+
+#' NMB Ridgeline Plot
+#'
+#' Creates a ridgeline plot of incremental Net Monetary Benefit (NMB) from PSA
+#' simulations using \code{ggridges::geom_density_ridges()}. Comparisons are
+#' displayed on the y-axis with their NMB distributions along the x-axis.
+#'
+#' A vertical dashed line at x = 0 indicates the threshold for cost-effectiveness:
+#' positive values indicate the intervention is cost-effective.
+#'
+#' When \code{show_mean = TRUE}, a median line is drawn within each ridge
+#' using quantile lines.
+#'
+#' NMB calculations always use discounted values as this is a cost-effectiveness measure.
+#'
+#' @inheritParams nmb_density_plot
+#' @param scale Numeric. Controls the height/overlap of ridgeline densities.
+#'   Default 3. Higher values create more overlap between ridges.
+#' @param ylab Character. Y-axis label. If NULL (default), auto-generated as "Comparison".
+#' @param legend_position Position of the legend. Default "none" since comparison
+#'   labels appear on the y-axis.
+#'
+#' @return A ggplot object
+#'
+#' @export
+nmb_ridgeline_plot <- function(results,
+                                health_outcome,
+                                cost_outcome,
+                                wtp,
+                                interventions = NULL,
+                                comparators = NULL,
+                                groups = "overall",
+                                strategies = NULL,
+                                show_mean = TRUE,
+                                alpha = 0.4,
+                                scale = 3,
+                                title = NULL,
+                                xlab = NULL,
+                                ylab = NULL,
+                                legend_position = "none",
+                                axis_decimals = NULL,
+                                abbreviate = FALSE) {
+
+
+  locale <- get_results_locale(results)
+
+  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
+    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
+         "Use interventions/comparators vectors to specify exact comparisons.")
+  }
+
+  if (is.null(interventions) && is.null(comparators)) {
+    stop("At least one of 'interventions' or 'comparators' must be provided. ",
+         "NMB is a comparative measure and requires a reference strategy.")
+  }
+
+  psa_data <- get_psa_simulations(
+    results,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
+    groups = groups,
+    strategies = strategies
+  )
+
+  group_levels <- get_group_order(unique(psa_data$group), results$metadata)
+  psa_data <- psa_data %>% mutate(group = factor(.data$group, levels = group_levels))
+
+  all_strategies <- unique(psa_data$strategy)
+
+  resolve_strategy <- function(strat_name) {
+    if (strat_name %in% all_strategies) {
+      return(strat_name)
+    }
+    if (!is.null(results$metadata) && !is.null(results$metadata$strategies)) {
+      strategy_map <- results$metadata$strategies
+      matched_display <- strategy_map$display_name[strategy_map$name == strat_name]
+      if (length(matched_display) > 0 && !is.na(matched_display[1])) {
+        return(matched_display[1])
+      }
+    }
+    stop(sprintf("Strategy '%s' not found in results", strat_name))
+  }
+
+  if (!is.null(interventions)) {
+    interventions <- sapply(interventions, resolve_strategy, USE.NAMES = FALSE)
+  }
+  if (!is.null(comparators)) {
+    comparators <- sapply(comparators, resolve_strategy, USE.NAMES = FALSE)
+  }
+
+  comparison_pairs <- list()
+
+  if (!is.null(interventions) && !is.null(comparators)) {
+    for (int_strat in interventions) {
+      for (comp_strat in comparators) {
+        if (int_strat != comp_strat) {
+          comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+            intervention = int_strat,
+            comparator = comp_strat
+          )
+        }
+      }
+    }
+    if (length(comparison_pairs) == 0) {
+      stop("No valid comparisons after excluding self-comparisons")
+    }
+  } else if (!is.null(interventions)) {
+    for (int_strat in interventions) {
+      other_strategies <- setdiff(all_strategies, int_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = int_strat,
+          comparator = other
+        )
+      }
+    }
+  } else {
+    for (comp_strat in comparators) {
+      other_strategies <- setdiff(all_strategies, comp_strat)
+      for (other in other_strategies) {
+        comparison_pairs[[length(comparison_pairs) + 1]] <- list(
+          intervention = other,
+          comparator = comp_strat
+        )
+      }
+    }
+  }
+
+  incremental_data_list <- list()
+
+  for (pair in comparison_pairs) {
+    int_strat <- pair$intervention
+    comp_strat <- pair$comparator
+
+    comp_label <- paste0(int_strat, " vs. ", comp_strat)
+
+    int_data <- psa_data %>%
+      filter(.data$strategy == int_strat) %>%
+      select("simulation", "group", int_outcome = "outcome", int_cost = "cost")
+
+    comp_data <- psa_data %>%
+      filter(.data$strategy == comp_strat) %>%
+      select("simulation", "group", comp_outcome = "outcome", comp_cost = "cost")
+
+    pair_data <- int_data %>%
+      inner_join(comp_data, by = c("simulation", "group")) %>%
+      mutate(
+        delta_outcome = .data$int_outcome - .data$comp_outcome,
+        delta_cost = .data$int_cost - .data$comp_cost,
+        nmb = .data$delta_outcome * wtp - .data$delta_cost,
+        strategy = comp_label
+      ) %>%
+      select("simulation", "group", "strategy", "nmb")
+
+    incremental_data_list[[length(incremental_data_list) + 1]] <- pair_data
+  }
+
+  plot_data <- bind_rows(incremental_data_list)
+
+  strategy_order <- unique(plot_data$strategy)
+  plot_data <- plot_data %>%
+    mutate(strategy = factor(.data$strategy, levels = strategy_order))
+
+  if (!is.null(results$metadata) && !is.null(results$metadata$groups)) {
+    plot_data$group <- map_names(as.character(plot_data$group),
+                                  results$metadata$groups, "display_name")
+    group_levels_mapped <- map_names(group_levels, results$metadata$groups, "display_name")
+    plot_data <- plot_data %>%
+      mutate(group = factor(.data$group, levels = group_levels_mapped))
+  }
+
+  if (is.null(xlab)) {
+    xlab <- "Incremental Net Monetary Benefit"
+  }
+
+  if (is.null(ylab)) {
+    ylab <- "Comparison"
+  }
+
+  x_scale <- psa_density_x_scale(plot_data$nmb, include = 0)
+
+  n_levels <- length(levels(plot_data$strategy))
+
+  base_aes <- aes(x = .data$nmb, y = .data$strategy, fill = .data$strategy, color = .data$strategy)
+
+  if (n_levels == 1) {
+    if (show_mean) {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_ridgeline(
+          aes(height = after_stat(ndensity) * scale),
+          stat = "density_ridges", alpha = alpha,
+          quantile_lines = TRUE, quantiles = 2
+        )
+    } else {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_ridgeline(
+          aes(height = after_stat(ndensity) * scale),
+          stat = "density_ridges", alpha = alpha
+        )
+    }
+  } else {
+    if (show_mean) {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_density_ridges(alpha = alpha, scale = scale, quantile_lines = TRUE, quantiles = 2)
+    } else {
+      p <- ggplot(plot_data, base_aes) +
+        ggridges::geom_density_ridges(alpha = alpha, scale = scale)
+    }
+  }
+
+  p <- p +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    scale_x_continuous(
+      breaks = x_scale$breaks,
+      limits = x_scale$limits,
+      labels = oq_label_fn(decimals = axis_decimals, locale = locale, currency = TRUE, abbreviate = TRUE)
+    ) +
+    theme_bw() +
+    labs(
+      title = title,
+      x = xlab,
+      y = ylab,
+      fill = "Comparison",
+      color = "Comparison"
+    )
+
+  if (n_levels == 1) {
+    p <- p + scale_y_discrete(expand = expansion(add = c(0.3, 1.2)))
+  }
+
+  n_groups <- length(unique(plot_data$group))
+  if (n_groups > 1) {
+    p <- p + facet_wrap(vars(.data$group), scales = "free_x")
+  }
+
+  if (legend_position != "default") {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  p
 }

@@ -116,6 +116,299 @@ test_that("multiple scenarios can be defined", {
 })
 
 # ============================================================================
+# Duplicate Handling Tests (add functions)
+# ============================================================================
+
+test_that("add_scenario_variable warns and replaces duplicate", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95)
+
+  expect_warning(
+    model2 <- add_scenario_variable(model, "Test", "efficacy", 0.99),
+    "Replacing existing"
+  )
+
+  expect_equal(length(model2$scenarios[[1]]$variable_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$value, 0.99)
+})
+
+test_that("add_scenario_setting warns and replaces duplicate", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  expect_warning(
+    model2 <- add_scenario_setting(model, "Test", "timeframe", 40),
+    "Replacing existing"
+  )
+
+  expect_equal(length(model2$scenarios[[1]]$setting_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$value, 40)
+})
+
+# ============================================================================
+# Edit/Remove Scenario Tests
+# ============================================================================
+
+test_that("edit_scenario renames scenario", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case Scenario")
+
+  expect_equal(model2$scenarios[[1]]$name, "Best Case Scenario")
+})
+
+test_that("edit_scenario auto-updates description when it matched old name", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  # description defaults to name
+  expect_equal(model$scenarios[[1]]$description, "Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case")
+  expect_equal(model2$scenarios[[1]]$description, "Best Case")
+})
+
+test_that("edit_scenario does not auto-update description when explicitly set", {
+  model <- define_model("markov") %>%
+    add_scenario("Optimistic")
+
+  model2 <- edit_scenario(model, "Optimistic", new_name = "Best Case",
+                          description = "Custom desc")
+  expect_equal(model2$scenarios[[1]]$description, "Custom desc")
+})
+
+test_that("edit_scenario errors on Base Case name", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario(model, "Test", new_name = "Base Case"),
+    "reserved"
+  )
+})
+
+test_that("edit_scenario errors on duplicate name", {
+  model <- define_model("markov") %>%
+    add_scenario("A") %>%
+    add_scenario("B")
+
+  expect_error(
+    edit_scenario(model, "A", new_name = "B"),
+    "already exists"
+  )
+})
+
+test_that("edit_scenario errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_scenario(model, "NonExistent", new_name = "X"),
+    "not found"
+  )
+})
+
+test_that("edit_scenario updates description only", {
+  model <- define_model("markov") %>%
+    add_scenario("Test", description = "Old desc")
+
+  model2 <- edit_scenario(model, "Test", description = "New desc")
+  expect_equal(model2$scenarios[[1]]$description, "New desc")
+  expect_equal(model2$scenarios[[1]]$name, "Test")
+})
+
+test_that("edit_scenario_variable updates value", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95)
+
+  model2 <- edit_scenario_variable(model, "Test", "efficacy", value = 0.99)
+
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$value, 0.99)
+})
+
+test_that("edit_scenario_variable supports NSE", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "cost", 5000)
+
+  model2 <- edit_scenario_variable(model, "Test", "cost", value = base_cost * 0.8)
+
+  expect_s3_class(model2$scenarios[[1]]$variable_overrides[[1]]$value, "oq_formula")
+})
+
+test_that("edit_scenario_variable re-keys variable", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_variable("price", 2000) %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "cost", 1500)
+
+  model2 <- edit_scenario_variable(model, "Test", "cost", new_variable = "price")
+
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$name, "price")
+})
+
+test_that("edit_scenario_variable errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario_variable(model, "Test", "nonexistent", value = 1),
+    "not found"
+  )
+})
+
+test_that("edit_scenario_variable errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    edit_scenario_variable(model, "NonExistent", "var", value = 1),
+    "not found"
+  )
+})
+
+test_that("edit_scenario_setting updates value", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  model2 <- edit_scenario_setting(model, "Test", "timeframe", value = 40)
+
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$value, 40)
+})
+
+test_that("edit_scenario_setting re-keys setting", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  model2 <- edit_scenario_setting(model, "Test", "timeframe",
+                                   new_setting = "discount_cost")
+
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$name, "discount_cost")
+})
+
+test_that("edit_scenario_setting errors on invalid setting name", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30)
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "timeframe",
+                          new_setting = "invalid_setting"),
+    "Invalid scenario setting"
+  )
+})
+
+test_that("edit_scenario_setting errors on duplicate setting", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30) %>%
+    add_scenario_setting("Test", "discount_cost", 5)
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "timeframe",
+                          new_setting = "discount_cost"),
+    "already exists"
+  )
+})
+
+test_that("edit_scenario_setting errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    edit_scenario_setting(model, "Test", "nonexistent", value = 1),
+    "not found"
+  )
+})
+
+test_that("remove_scenario removes scenario", {
+  model <- define_model("markov") %>%
+    add_scenario("A") %>%
+    add_scenario("B")
+
+  model2 <- remove_scenario(model, "A")
+
+  expect_equal(length(model2$scenarios), 1)
+  expect_equal(model2$scenarios[[1]]$name, "B")
+})
+
+test_that("remove_scenario errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario(model, "NonExistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_variable removes override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_variable("Test", "efficacy", 0.95) %>%
+    add_scenario_variable("Test", "cost", 5000)
+
+  model2 <- remove_scenario_variable(model, "Test", "efficacy")
+
+  expect_equal(length(model2$scenarios[[1]]$variable_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$variable_overrides[[1]]$name, "cost")
+})
+
+test_that("remove_scenario_variable errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    remove_scenario_variable(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_variable errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario_variable(model, "NonExistent", "var"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_setting removes override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test") %>%
+    add_scenario_setting("Test", "timeframe", 30) %>%
+    add_scenario_setting("Test", "discount_cost", 5)
+
+  model2 <- remove_scenario_setting(model, "Test", "timeframe")
+
+  expect_equal(length(model2$scenarios[[1]]$setting_overrides), 1)
+  expect_equal(model2$scenarios[[1]]$setting_overrides[[1]]$name, "discount_cost")
+})
+
+test_that("remove_scenario_setting errors for nonexistent override", {
+  model <- define_model("markov") %>%
+    add_scenario("Test")
+
+  expect_error(
+    remove_scenario_setting(model, "Test", "nonexistent"),
+    "not found"
+  )
+})
+
+test_that("remove_scenario_setting errors for nonexistent scenario", {
+  model <- define_model("markov")
+
+  expect_error(
+    remove_scenario_setting(model, "NonExistent", "timeframe"),
+    "not found"
+  )
+})
+
+# ============================================================================
 # Strategy/Group Targeting Validation Tests
 # ============================================================================
 
@@ -172,7 +465,7 @@ test_that("validate_scenario_spec catches missing scenarios", {
     add_variable("cost", 1000)
 
   # Finalize without adding scenarios
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -187,7 +480,7 @@ test_that("validate_scenario_spec catches invalid variable names", {
     add_scenario("Test") %>%
     add_scenario_variable("Test", "nonexistent_var", 500)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
@@ -203,13 +496,95 @@ test_that("validate_scenario_spec catches invalid setting names", {
     add_scenario("Test") %>%
     add_scenario_setting("Test", "invalid_setting", 5)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   expect_error(
     validate_scenario_spec(parsed),
     "invalid setting name"
   )
+})
+
+# ============================================================================
+# NSE and bc keyword tests
+# ============================================================================
+
+test_that("add_scenario_variable accepts expressions with bc keyword via NSE", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    add_scenario("Optimistic") %>%
+    add_scenario_variable("Optimistic", "cost", bc * 0.8)
+
+  expect_s3_class(model$scenarios[[1]]$variable_overrides[[1]]$value, "oq_formula")
+  expect_match(as.character(model$scenarios[[1]]$variable_overrides[[1]]$value), "bc")
+})
+
+test_that("run_scenario evaluates bc correctly in formula overrides", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "dead", 0.05) %>%
+    add_transition("healthy", "healthy", 0.95) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("control") %>%
+    add_value("total_cost", cost, type = "cost") %>%
+    add_value("qalys", 0, type = "outcome") %>%
+    add_summary("total_cost", "total_cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome") %>%
+    add_scenario("Optimistic") %>%
+    add_scenario_variable("Optimistic", "cost", bc * 0.8)
+
+  # Should run without error (bc resolves to 1000, override = 800)
+  results <- run_scenario(model)
+
+  # Extract summary amounts from aggregated results
+  agg <- results$aggregated
+  base_cost <- agg %>% filter(scenario_id == 1) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+  scenario_cost <- agg %>% filter(scenario_id == 2) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+
+  # Scenario cost should be 80% of base case cost (bc * 0.8)
+  expect_equal(scenario_cost / base_cost, 0.8)
+})
+
+test_that("run_scenario evaluates bc combined with other variables", {
+  model <- define_model("markov") %>%
+    add_variable("cost_tx", 1000) %>%
+    add_variable("cost_se", 100) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years"
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "dead", 0.05) %>%
+    add_transition("healthy", "healthy", 0.95) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("control") %>%
+    add_value("total_cost", cost_tx, type = "cost") %>%
+    add_value("qalys", 0, type = "outcome") %>%
+    add_summary("total_cost", "total_cost", type = "cost") %>%
+    add_summary("total_qalys", "qalys", type = "outcome") %>%
+    add_scenario("Adjusted") %>%
+    add_scenario_variable("Adjusted", "cost_tx", bc - 2 * cost_se)
+
+  # bc = 1000, cost_se = 100, so override = 1000 - 200 = 800
+  results <- run_scenario(model)
+
+  agg <- results$aggregated
+  base_cost <- agg %>% filter(scenario_id == 1) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+  scenario_cost <- agg %>% filter(scenario_id == 2) %>%
+    pull(summaries) %>% .[[1]] %>% filter(summary == "total_cost") %>% pull(amount)
+
+  # Scenario cost should be 80% of base case (800/1000)
+  expect_equal(scenario_cost / base_cost, 0.8)
 })
 
 # ============================================================================
@@ -234,7 +609,7 @@ test_that("build_scenario_segments includes Base Case", {
     add_scenario("Test") %>%
     add_scenario_variable("Test", "cost", 2000)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   segments <- build_scenario_segments(parsed)
@@ -276,7 +651,7 @@ test_that("generate_scenario_metadata creates correct structure", {
     add_scenario("Optimistic", description = "Best case") %>%
     add_scenario_variable("Optimistic", "cost", 500)
 
-  finalized <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  finalized <- normalize_and_validate_model(model)
   parsed <- parse_model(finalized)
 
   segments <- build_scenario_segments(parsed)
@@ -392,6 +767,51 @@ build_scenario_vbp_model <- function() {
     add_summary("costs", "cost", type = "cost") %>%
     add_summary("qalys", "qalys", type = "outcome", wtp = 50000)
 }
+
+build_shared_price_scenario_vbp_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      timeframe = 1,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("alive", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("drug_price", 500) %>%
+    add_variable("drug_units", 1, strategy = "control") %>%
+    add_variable("drug_units", 3, strategy = "treatment") %>%
+    add_variable("utility", 1, strategy = "control") %>%
+    add_variable("utility", 2, strategy = "treatment") %>%
+    add_scenario("Higher Utility") %>%
+    add_scenario_variable("Higher Utility", "utility", 2.5, strategy = "treatment") %>%
+    add_transition("alive", "alive", 1) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_value("cost", drug_price * drug_units, state = "alive", type = "cost") %>%
+    add_value("qaly", utility, state = "alive", type = "outcome") %>%
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qaly", type = "outcome")
+}
+
+test_that("Scenario+VBP applies a global price row override to all strategies", {
+  model <- build_shared_price_scenario_vbp_model()
+  parsed <- openqaly:::parse_model(model)
+  spec <- list(
+    price_variable = "drug_price",
+    intervention_strategy = "treatment",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost",
+    price_values = c(0, 1000, 2000)
+  )
+
+  segments <- openqaly:::build_scenario_vbp_segments(parsed, spec)
+  pl1 <- segments[segments$vbp_price_level == 1, ]
+
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) "drug_price" %in% names(x), logical(1))))
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) identical(x$drug_price, 0), logical(1))))
+})
 
 test_that("scenario_ce_plot() returns ggplot object", {
   model <- build_scenario_ce_model()
@@ -551,6 +971,10 @@ test_that("scenario CE table correctly classifies ICERs", {
 
   # Data should have rows (one per scenario)
   expect_gt(nrow(prepared$data), 0)
+})
+
+test_that("scenario_ce_table() defaults outcome decimals to 2", {
+  expect_equal(eval(formals(scenario_ce_table)$outcome_decimals), 2)
 })
 
 # ============================================================================

@@ -6,8 +6,8 @@
 \usage{
 psa_scatter_plot(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   groups = "overall",
   strategies = NULL,
   show_means = TRUE,
@@ -22,18 +22,15 @@ psa_scatter_plot(
 )
 }
 \arguments{
-\item{results}{A openqaly PSA results object, or pre-calculated CEAC data
-from calculate_incremental_ceac()}
+\item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (required if results is
-a model object)}
+\item{health_outcome}{Name of the health outcome to plot}
 
-\item{cost_summary}{Name of the cost summary (required if results is a
-model object)}
+\item{cost_outcome}{Name of the cost outcome to plot}
 
-\item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
-"all" includes overall + all groups, "all_groups" includes all groups without overall,
-specific group name(s) filter to those groups (triggers faceting by group)}
+\item{groups}{Group selection: "overall" (default) uses overall/aggregated
+results, "all" includes overall + all groups, "all_groups" includes all
+groups without overall, and specific group name(s) filter to those groups.}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
@@ -41,13 +38,15 @@ specific group name(s) filter to those groups (triggers faceting by group)}
 
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 
-\item{title}{Plot title. If NULL, auto-generated}
+\item{title}{Plot title. If NULL (default), no title is shown}
 
-\item{xlab}{X-axis label. Default is "Willingness to Pay"}
+\item{xlab}{X-axis label. If NULL (default), uses the health outcome display
+name when available}
 
-\item{ylab}{Y-axis label. Default is "Probability of Being Most Cost-Effective"}
+\item{ylab}{Y-axis label. If NULL (default), uses the cost outcome display
+name when available}
 
-\item{legend_position}{Legend position: "bottom" (default), "right", "top",
+\item{legend_position}{Legend position: "right" (default), "bottom", "top",
 "left", or "none"}
 
 \item{cost_axis_decimals}{Fixed decimal places for cost axis labels, or NULL for auto-precision}

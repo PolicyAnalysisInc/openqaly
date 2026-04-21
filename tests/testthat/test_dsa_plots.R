@@ -910,6 +910,57 @@ test_that("dsa_ce_plot() drop_zero_impact option works", {
   expect_s3_class(p, "ggplot")
 })
 
+test_that("dsa_ce_plot() reserves an in-panel footnote lane for special-case notes", {
+  results <- get_cached_flipped_dsa_results()
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  built <- ggplot_build(p)
+
+  bar_layers <- built$data[vapply(
+    built$data,
+    function(layer) all(c("xmin", "xmax", "ymin", "ymax") %in% names(layer)),
+    logical(1)
+  )]
+  expect_true(length(bar_layers) > 0)
+
+  all_bar_data <- bind_rows(bar_layers)
+  lowest_bar_y <- min(all_bar_data$ymin, na.rm = TRUE)
+
+  footnote_layers <- built$data[vapply(
+    built$data,
+    function(layer) "label" %in% names(layer) && any(grepl("\n", layer$label, fixed = TRUE)),
+    logical(1)
+  )]
+  expect_true(length(footnote_layers) > 0)
+
+  footnote_layer <- footnote_layers[[1]]
+  expect_true(all(footnote_layer$y < lowest_bar_y))
+  panel_x_range <- built$layout$panel_params[[1]]$x.range
+  expect_true(all(footnote_layer$x > panel_x_range[1]))
+
+  panel_y_range <- built$layout$panel_params[[1]]$y.range
+  expect_lt(panel_y_range[1], lowest_bar_y)
+})
+
+test_that("dsa_ce_plot() does not add a special-case footnote when none is needed", {
+  results <- get_cached_normal_icer_dsa_results()
+
+  p <- dsa_ce_plot(results, "total_qalys", "total_cost",
+                   interventions = "treatment", comparators = "control",
+                   drop_zero_impact = FALSE)
+  built <- ggplot_build(p)
+
+  has_multiline_footnote <- any(vapply(
+    built$data,
+    function(layer) "label" %in% names(layer) && any(grepl("\n", layer$label, fixed = TRUE)),
+    logical(1)
+  ))
+
+  expect_false(has_multiline_footnote)
+})
+
 # ============================================================================
 # Tests for ICER Helper Functions
 # ============================================================================

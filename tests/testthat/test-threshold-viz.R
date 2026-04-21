@@ -477,6 +477,137 @@ test_that("prepare_threshold_history_data returns all when analyses is NULL", {
 })
 
 # ============================================================================
+# Display Name Tests
+# ============================================================================
+
+test_that("get_threshold_input_label uses display name by default", {
+  results <- build_mock_threshold_results(1)
+  label <- openqaly:::get_threshold_input_label(
+    results$analyses[[1]], results$metadata)
+  expect_equal(label, "Disease Probability")
+})
+
+test_that("get_threshold_input_label uses raw name when field = 'name'", {
+  results <- build_mock_threshold_results(1)
+  label <- openqaly:::get_threshold_input_label(
+    results$analyses[[1]], results$metadata, field = "name")
+  expect_equal(label, "p_disease")
+})
+
+test_that("threshold_plot uses display name for x-axis by default", {
+  results <- build_mock_threshold_results(1)
+  p <- threshold_plot(results)
+  expect_equal(p$labels$x, "Disease Probability")
+})
+
+test_that("threshold_plot uses raw name when use_display_names = FALSE", {
+  results <- build_mock_threshold_results(1)
+  p <- threshold_plot(results, use_display_names = FALSE)
+  expect_equal(p$labels$x, "p_disease")
+})
+
+test_that("threshold_plot multi-analysis uses display name when all share same variable", {
+  results <- build_mock_threshold_results(2)
+  # Override second analysis to use same variable
+  results$analyses[[2]]$variable <- "p_disease"
+  results$root_finder_history$variable[results$root_finder_history$name == "Analysis 2"] <- "p_disease"
+  p <- threshold_plot(results)
+  expect_equal(p$labels$x, "Disease Probability")
+})
+
+test_that("threshold_plot multi-analysis uses 'Variable' when variables differ", {
+  results <- build_mock_threshold_results(2)
+  p <- threshold_plot(results)
+  # Different variables (p_disease, cost_base) so falls back
+  expect_equal(p$labels$x, "Variable")
+})
+
+test_that("threshold_table single analysis uses display name in header", {
+  results <- build_mock_threshold_results(1)
+  kt <- threshold_table(results, table_format = "kable")
+  # kable output should contain the display name
+  expect_true(grepl("Disease Probability", paste(kt, collapse = "")))
+})
+
+test_that("threshold_table single analysis uses raw name when use_display_names = FALSE", {
+  results <- build_mock_threshold_results(1)
+  kt <- threshold_table(results, use_display_names = FALSE, table_format = "kable")
+  expect_true(grepl("p_disease", paste(kt, collapse = "")))
+})
+
+test_that("threshold_convergence_table uses display name by default", {
+  results <- build_mock_threshold_results(1)
+  kt <- threshold_convergence_table(results, table_format = "kable")
+  expect_true(grepl("Disease Probability", paste(kt, collapse = "")))
+})
+
+test_that("threshold_convergence_table uses raw name when use_display_names = FALSE", {
+  results <- build_mock_threshold_results(1)
+  kt <- threshold_convergence_table(results, use_display_names = FALSE, table_format = "kable")
+  expect_true(grepl("p_disease", paste(kt, collapse = "")))
+})
+
+test_that("get_multi_threshold_input_label returns display name when all same variable", {
+  results <- build_mock_threshold_results(2)
+  results$analyses[[2]]$variable <- "p_disease"
+  label <- openqaly:::get_multi_threshold_input_label(
+    results$analyses, results$metadata)
+  expect_equal(label, "Disease Probability")
+})
+
+test_that("get_multi_threshold_input_label returns 'Variable' when variables differ", {
+  results <- build_mock_threshold_results(2)
+  label <- openqaly:::get_multi_threshold_input_label(
+    results$analyses, results$metadata)
+  expect_equal(label, "Variable")
+})
+
+test_that("get_multi_threshold_output_label returns specific label when all same output", {
+  results <- build_mock_threshold_results(2)
+  # Both have outcomes condition with same structure; output labels differ only
+
+  # by strategy — but they actually share the same summary
+  label <- openqaly:::get_multi_threshold_output_label(
+    results$analyses, results$metadata)
+  # Both analyses use outcomes/absolute/base so labels are the same
+  expect_equal(label, "Total QALYs")
+})
+
+# ============================================================================
+# Accessor Function Tests
+# ============================================================================
+
+test_that("get_threshold_values maps display names by default", {
+  results <- build_mock_threshold_results(1)
+  tv <- get_threshold_values(results)
+  expect_equal(tv$variable, "Disease Probability")
+})
+
+test_that("get_threshold_values returns raw names when use_display_names = FALSE", {
+  results <- build_mock_threshold_results(1)
+  tv <- get_threshold_values(results, use_display_names = FALSE)
+  expect_equal(tv$variable, "p_disease")
+})
+
+test_that("get_threshold_history maps display names by default", {
+  results <- build_mock_threshold_results(1)
+  h <- get_threshold_history(results)
+  expect_true(all(h$variable == "Disease Probability"))
+})
+
+test_that("get_threshold_history returns raw names when use_display_names = FALSE", {
+  results <- build_mock_threshold_results(1)
+  h <- get_threshold_history(results, use_display_names = FALSE)
+  expect_true(all(h$variable == "p_disease"))
+})
+
+test_that("get_threshold_values handles multiple analyses", {
+  results <- build_mock_threshold_results(2)
+  tv <- get_threshold_values(results)
+  expect_equal(tv$variable, c("Disease Probability", "Base Cost"))
+})
+
+# ============================================================================
 # run_threshold includes analyses field
 # ============================================================================
 

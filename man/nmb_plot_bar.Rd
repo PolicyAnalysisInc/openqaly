@@ -25,7 +25,8 @@ nmb_plot_bar(
 
 \item{cost_outcome}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 
@@ -63,10 +64,11 @@ model <- read_model(system.file("models/example_psm", package = "openqaly"))
 results <- run_model(model)
 
 # NMB with WTP from metadata (comparator perspective)
-nmb_plot_bar(results, "total_qalys", "total_cost", comparator = "control")
+nmb_plot_bar(results, "total_qalys", "total_cost", comparators = "control")
 
 # NMB with explicit WTP (intervention perspective)
-nmb_plot_bar(results, "total_qalys", "total_cost", intervention = "new_treatment", wtp = 50000)
+nmb_plot_bar(results, "total_qalys", "total_cost",
+             interventions = "new_treatment", wtp = 50000)
 }
 
 }

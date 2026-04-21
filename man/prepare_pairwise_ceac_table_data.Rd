@@ -19,10 +19,6 @@ prepare_pairwise_ceac_table_data(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
-
-\item{cost_summary}{Name of the cost summary}
-
 \item{interventions}{Reference strategies for comparison (intervention perspective).}
 
 \item{comparators}{Reference strategies for comparison (comparator perspective).}
@@ -42,6 +38,10 @@ prepare_pairwise_ceac_table_data(
 \item{decimals}{Number of decimal places for percentages}
 
 \item{font_size}{Font size for rendering}
+
+\item{health_outcome}{Name of the health outcome}
+
+\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

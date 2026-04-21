@@ -175,6 +175,19 @@ test_that("outcomes_table() returns flextable when requested", {
   expect_s3_class(tbl, "flextable")
 })
 
+test_that("prepare_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_test_results()
+
+  prepared_default <- openqaly:::prepare_summary_table_data(
+    results, outcome = "total_qalys", groups = "overall"
+  )
+  prepared_explicit <- openqaly:::prepare_summary_table_data(
+    results, outcome = "total_qalys", groups = "overall", decimals = 2
+  )
+
+  expect_equal(prepared_default$data, prepared_explicit$data)
+})
+
 # ============================================================================
 # Tests for parameter validation
 # ============================================================================

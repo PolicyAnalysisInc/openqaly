@@ -67,15 +67,21 @@ model <- define_model("markov") |>
   # Utilities (base values, sampled via multivariate)
   add_variable("u_mild", 0.85) |>
   add_variable("u_severe", 0.55) |>
+  # Covariance table for correlated utilities
+  # sd_mild=0.05, sd_severe=0.08, cor=0.6
+  # cov(mild,mild) = 0.05^2 = 0.0025
+  # cov(severe,severe) = 0.08^2 = 0.0064
+  # cov(mild,severe) = 0.6 * 0.05 * 0.08 = 0.0024
+  add_table("utility_cov", data.frame(
+    u_mild = c(0.0025, 0.0024),
+    u_severe = c(0.0024, 0.0064)
+  )) |>
   # Multivariate sampling for correlated utilities
   add_multivariate_sampling(
     name = "utility_correlation",
-    distribution = mvnormal(
-      mean = c(0.85, 0.55),
-      sd = c(0.05, 0.08),
-      cor = 0.6
-    ),
-    variables = c("u_mild", "u_severe")
+    type = "mvnormal",
+    variables = c("u_mild", "u_severe"),
+    covariance = "utility_cov"
   ) |>
   # Transitions
   add_transition("mild", "severe", "p_severe") |>
@@ -136,17 +142,87 @@ model <- model %>%
 
 ### Multivariate sampling for correlated parameters
 
-Use `add_multivariate_sampling()` when parameters should be sampled together with correlation.
+Use `add_multivariate_sampling()` when parameters should be sampled together. Three distribution types are supported: multivariate normal, Dirichlet, and multinomial.
+
+#### Multivariate normal with covariance from a model table
+
+Store the covariance matrix as a model table (e.g., from `vcov()` of a fitted model) and reference it by name. Means are taken from the variable base case values automatically.
 
 ```{r, eval = FALSE}
-model <- model %>%
+# Example: survival model parameters from flexsurv
+# fit <- flexsurvreg(Surv(time, status) ~ 1, data = dat, dist = "gengamma")
+# vcov(fit) produces a 3x3 covariance matrix for mu, sigma, Q
+model <- model |>
+  add_variable("mu", 2.1) |>
+  add_variable("sigma", 0.8) |>
+  add_variable("Q", 0.5) |>
+  add_table("surv_vcov", as.data.frame(vcov(fit))) |>
   add_multivariate_sampling(
-    name = "utility_correlation",
-    distribution = multi_normal(
-      means = c(0.8, 0.6),
-      covariance = matrix(c(0.01, 0.005, 0.005, 0.02), nrow = 2)
-    ),
-    variables = c("u_mild", "u_severe")
+    name = "survival_params",
+    type = "mvnormal",
+    variables = c("mu", "sigma", "Q"),
+    covariance = "surv_vcov"
+  )
+```
+
+#### Dirichlet for transition probabilities
+
+Dirichlet sampling ensures probabilities sum to 1. Specify `n` (effective sample size) and alpha values are derived as `n * base_case_value`.
+
+```{r, eval = FALSE}
+model <- model |>
+  add_variable("p_stable", 0.7) |>
+  add_variable("p_prog", 0.2) |>
+  add_variable("p_death", 0.1) |>
+  add_multivariate_sampling(
+    name = "sick_transitions",
+    type = "dirichlet",
+    variables = c("p_stable", "p_prog", "p_death"),
+    n = 100  # alpha = c(70, 20, 10)
+  )
+```
+
+You can also pass an explicit `alpha` vector instead of `n`:
+
+```{r, eval = FALSE}
+model <- model |>
+  add_multivariate_sampling(
+    name = "sick_transitions",
+    type = "dirichlet",
+    variables = c("p_stable", "p_prog", "p_death"),
+    alpha = c(70, 20, 10)
+  )
+```
+
+#### Multinomial for categorical outcomes
+
+Multinomial sampling produces one-hot encoded outcomes. Probabilities are taken from variable base case values.
+
+```{r, eval = FALSE}
+model <- model |>
+  add_variable("init_s1", 0.5) |>
+  add_variable("init_s2", 0.3) |>
+  add_variable("init_s3", 0.2) |>
+  add_multivariate_sampling(
+    name = "initial_states",
+    type = "multinomial",
+    variables = c("init_s1", "init_s2", "init_s3"),
+    size = 1
+  )
+```
+
+#### Strategy-specific multivariate sampling
+
+Use the `strategy` parameter to restrict sampling to a specific strategy:
+
+```{r, eval = FALSE}
+model <- model |>
+  add_multivariate_sampling(
+    name = "intervention_costs",
+    type = "mvnormal",
+    variables = c("drug_cost", "admin_cost"),
+    strategy = "intervention",
+    covariance = "cost_cov_table"
   )
 ```
 
@@ -176,7 +252,7 @@ Display outcome distributions for all strategies.
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor", "cendralimab")
 )
 ```
@@ -186,7 +262,7 @@ outcome_density_plot(
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor")
 )
 ```
@@ -198,7 +274,7 @@ Show outcome differences relative to a comparator.
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   comparators = "seritinib"
 )
 ```
@@ -208,7 +284,7 @@ outcome_density_plot(
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   interventions = "volantor"
 )
 ```
@@ -220,7 +296,7 @@ Compare multiple interventions against a common comparator.
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   interventions = c("volantor", "cendralimab"),
   comparators = "seritinib"
 )
@@ -231,7 +307,7 @@ outcome_density_plot(
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor", "cendralimab"),
   show_mean = FALSE
 )
@@ -242,7 +318,7 @@ outcome_density_plot(
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor", "cendralimab"),
   discounted = FALSE
 )
@@ -255,7 +331,7 @@ Use `groups = "all_groups"` to display results for each population subgroup sepa
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor", "cendralimab"),
   groups = "all_groups"
 )
@@ -266,9 +342,44 @@ Use `groups = "all"` to include both the overall population and all subgroups.
 ```{r, fig.width=9, fig.height=6}
 outcome_density_plot(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor", "cendralimab"),
   groups = "all"
+)
+```
+
+### Outcome Ridgeline Plot
+
+The `outcome_ridgeline_plot()` function creates ridgeline plots as an alternative to density plots. All strategies are displayed on the y-axis with distributions along the x-axis, making it easy to compare across strategies in a single panel.
+
+#### Basic usage (absolute mode)
+
+```{r, fig.width=9, fig.height=5}
+outcome_ridgeline_plot(
+  psa_results,
+  outcome = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab")
+)
+```
+
+#### Incremental mode
+
+```{r, fig.width=9, fig.height=5}
+outcome_ridgeline_plot(
+  psa_results,
+  outcome = "qalys",
+  comparators = "seritinib"
+)
+```
+
+#### Results by population subgroup
+
+```{r, fig.width=9, fig.height=5}
+outcome_ridgeline_plot(
+  psa_results,
+  outcome = "qalys",
+  strategies = c("seritinib", "volantor", "cendralimab"),
+  groups = "all_groups"
 )
 ```
 
@@ -281,7 +392,7 @@ The `cost_density_plot()` function creates density plots of cost values from PSA
 ```{r, fig.width=9, fig.height=6}
 cost_density_plot(
   psa_results,
-  outcome_summary = "costs",
+  outcome = "costs",
   strategies = c("seritinib", "volantor", "cendralimab")
 )
 ```
@@ -291,7 +402,7 @@ cost_density_plot(
 ```{r, fig.width=9, fig.height=6}
 cost_density_plot(
   psa_results,
-  outcome_summary = "costs",
+  outcome = "costs",
   comparators = "seritinib"
 )
 ```
@@ -301,9 +412,33 @@ cost_density_plot(
 ```{r, fig.width=9, fig.height=6}
 cost_density_plot(
   psa_results,
-  outcome_summary = "costs",
+  outcome = "costs",
   strategies = c("seritinib", "volantor", "cendralimab"),
   groups = "all_groups"
+)
+```
+
+### Cost Ridgeline Plot
+
+The `cost_ridgeline_plot()` function creates ridgeline plots of cost distributions with currency formatting.
+
+#### Basic usage (absolute mode)
+
+```{r, fig.width=9, fig.height=5}
+cost_ridgeline_plot(
+  psa_results,
+  outcome = "costs",
+  strategies = c("seritinib", "volantor", "cendralimab")
+)
+```
+
+#### Incremental mode
+
+```{r, fig.width=9, fig.height=5}
+cost_ridgeline_plot(
+  psa_results,
+  outcome = "costs",
+  comparators = "seritinib"
 )
 ```
 
@@ -316,7 +451,7 @@ The `psa_outcomes_table()` function displays summary statistics for outcome valu
 ```{r}
 psa_outcomes_table(
   psa_results,
-  outcome_summary = "qalys"
+  outcome = "qalys"
 )
 ```
 
@@ -325,7 +460,7 @@ psa_outcomes_table(
 ```{r}
 psa_outcomes_table(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   comparators = "seritinib"
 )
 ```
@@ -335,7 +470,7 @@ psa_outcomes_table(
 ```{r}
 psa_outcomes_table(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   discounted = FALSE
 )
 ```
@@ -345,7 +480,7 @@ psa_outcomes_table(
 ```{r}
 psa_outcomes_table(
   psa_results,
-  outcome_summary = "qalys",
+  outcome = "qalys",
   groups = "all_groups"
 )
 ```
@@ -359,7 +494,7 @@ The `psa_costs_table()` function displays summary statistics for cost values fro
 ```{r}
 psa_costs_table(
   psa_results,
-  outcome_summary = "costs"
+  outcome = "costs"
 )
 ```
 
@@ -368,7 +503,7 @@ psa_costs_table(
 ```{r}
 psa_costs_table(
   psa_results,
-  outcome_summary = "costs",
+  outcome = "costs",
   comparators = "seritinib"
 )
 ```
@@ -378,7 +513,7 @@ psa_costs_table(
 ```{r}
 psa_costs_table(
   psa_results,
-  outcome_summary = "costs",
+  outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -394,8 +529,8 @@ The `psa_summary_table()` function provides comprehensive summary statistics inc
 ```{r}
 psa_summary_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -404,8 +539,8 @@ psa_summary_table(
 ```{r}
 psa_summary_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   pce_wtp = c(20000, 50000, 100000, 150000)
 )
 ```
@@ -415,8 +550,8 @@ psa_summary_table(
 ```{r}
 psa_summary_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   strategies = c("seritinib", "volantor")
 )
 ```
@@ -426,8 +561,8 @@ psa_summary_table(
 ```{r}
 psa_summary_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -443,8 +578,8 @@ The `psa_scatter_plot()` function shows costs vs outcomes for all simulations.
 ```{r, fig.width=9, fig.height=6}
 psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -453,8 +588,8 @@ psa_scatter_plot(
 ```{r, fig.width=9, fig.height=6}
 psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   strategies = c("seritinib", "volantor")
 )
 ```
@@ -464,8 +599,8 @@ psa_scatter_plot(
 ```{r, fig.width=9, fig.height=6}
 psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   show_means = FALSE
 )
 ```
@@ -477,8 +612,8 @@ Use `groups = "all_groups"` to display results for each population subgroup sepa
 ```{r, fig.width=9, fig.height=6}
 psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -488,8 +623,8 @@ Use `groups = "all"` to include both the overall population and all subgroups.
 ```{r, fig.width=9, fig.height=6}
 psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all"
 )
 ```
@@ -503,8 +638,8 @@ The `pairwise_psa_scatter_plot()` function shows incremental costs and outcomes 
 ```{r, fig.width=9, fig.height=6}
 pairwise_psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "seritinib"
 )
 ```
@@ -514,8 +649,8 @@ pairwise_psa_scatter_plot(
 ```{r, fig.width=9, fig.height=6}
 pairwise_psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "seritinib",
   wtp = 50000
 )
@@ -528,8 +663,8 @@ Compare multiple interventions against a common comparator.
 ```{r, fig.width=9, fig.height=6}
 pairwise_psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = c("volantor", "cendralimab"),
   comparators = "seritinib",
   wtp = 50000
@@ -541,8 +676,8 @@ pairwise_psa_scatter_plot(
 ```{r, fig.width=9, fig.height=6}
 pairwise_psa_scatter_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "seritinib",
   groups = "all_groups"
 )
@@ -557,8 +692,8 @@ The `ce_quadrant_table()` function shows the percentage of simulations falling i
 ```{r}
 ce_quadrant_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparator = "Seritinib"
 )
 ```
@@ -568,8 +703,8 @@ ce_quadrant_table(
 ```{r}
 ce_quadrant_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparator = "Seritinib",
   groups = "all_groups"
 )
@@ -588,8 +723,8 @@ The `incremental_ceac_plot()` function shows the probability that each strategy 
 ```{r, fig.width=9, fig.height=6}
 incremental_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -598,8 +733,8 @@ incremental_ceac_plot(
 ```{r, fig.width=9, fig.height=6}
 incremental_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp_range = c(0, 200000),
   wtp_step = 5000
 )
@@ -610,8 +745,8 @@ incremental_ceac_plot(
 ```{r, fig.width=9, fig.height=6}
 incremental_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -625,8 +760,8 @@ The `incremental_ceac_table()` function presents CEAC probabilities at selected 
 ```{r}
 incremental_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -635,8 +770,8 @@ incremental_ceac_table(
 ```{r}
 incremental_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp_thresholds = c(20000, 50000, 100000, 150000, 200000)
 )
 ```
@@ -646,8 +781,8 @@ incremental_ceac_table(
 ```{r}
 incremental_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -661,8 +796,8 @@ The `pairwise_ceac_plot()` function shows the probability that an intervention i
 ```{r, fig.width=9, fig.height=6}
 pairwise_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = "volantor"
 )
 ```
@@ -672,8 +807,8 @@ pairwise_ceac_plot(
 ```{r, fig.width=9, fig.height=6}
 pairwise_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "seritinib"
 )
 ```
@@ -685,8 +820,8 @@ Compare multiple interventions against a common comparator.
 ```{r, fig.width=9, fig.height=6}
 pairwise_ceac_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = c("volantor", "cendralimab"),
   comparators = "seritinib"
 )
@@ -701,8 +836,8 @@ The `pairwise_ceac_table()` function shows pairwise cost-effectiveness probabili
 ```{r}
 pairwise_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = "volantor"
 )
 ```
@@ -712,8 +847,8 @@ pairwise_ceac_table(
 ```{r}
 pairwise_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   comparators = "seritinib"
 )
 ```
@@ -723,8 +858,8 @@ pairwise_ceac_table(
 ```{r}
 pairwise_ceac_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   interventions = c("volantor", "cendralimab"),
   comparators = "seritinib"
 )
@@ -741,8 +876,8 @@ The `nmb_density_plot()` function shows the distribution of incremental net mone
 ```{r, fig.width=9, fig.height=6}
 nmb_density_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   comparators = "seritinib"
 )
@@ -753,8 +888,8 @@ nmb_density_plot(
 ```{r, fig.width=9, fig.height=6}
 nmb_density_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   comparators = "seritinib",
   show_mean = FALSE
@@ -766,8 +901,8 @@ nmb_density_plot(
 ```{r, fig.width=9, fig.height=6}
 nmb_density_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 100000,
   interventions = "volantor"
 )
@@ -780,8 +915,8 @@ Compare multiple interventions against a common comparator.
 ```{r, fig.width=9, fig.height=6}
 nmb_density_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   interventions = c("volantor", "cendralimab"),
   comparators = "seritinib"
@@ -793,11 +928,40 @@ nmb_density_plot(
 ```{r, fig.width=9, fig.height=6}
 nmb_density_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   comparators = "seritinib",
   groups = "all_groups"
+)
+```
+
+### Incremental NMB Ridgeline Plot
+
+The `nmb_ridgeline_plot()` function creates ridgeline plots of incremental NMB distributions. Comparisons are displayed on the y-axis with a vertical dashed line at zero indicating the cost-effectiveness threshold.
+
+#### Basic usage (comparator mode)
+
+```{r, fig.width=9, fig.height=5}
+nmb_ridgeline_plot(
+  psa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  wtp = 50000,
+  comparators = "seritinib"
+)
+```
+
+#### Multiple comparisons
+
+```{r, fig.width=9, fig.height=5}
+nmb_ridgeline_plot(
+  psa_results,
+  health_outcome = "qalys",
+  cost_outcome = "costs",
+  wtp = 50000,
+  interventions = c("volantor", "cendralimab"),
+  comparators = "seritinib"
 )
 ```
 
@@ -810,8 +974,8 @@ The `psa_nmb_table()` function displays summary statistics for incremental net m
 ```{r}
 psa_nmb_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   comparators = "seritinib"
 )
@@ -822,8 +986,8 @@ psa_nmb_table(
 ```{r}
 psa_nmb_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 100000,
   interventions = "volantor"
 )
@@ -834,8 +998,8 @@ psa_nmb_table(
 ```{r}
 psa_nmb_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp = 50000,
   comparators = "seritinib",
   groups = "all_groups"
@@ -853,8 +1017,8 @@ The expected value of perfect information (EVPI) represents the maximum amount a
 ```{r, fig.width=9, fig.height=6}
 evpi_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -863,8 +1027,8 @@ evpi_plot(
 ```{r, fig.width=9, fig.height=6}
 evpi_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   wtp_range = c(0, 200000),
   wtp_step = 5000
 )
@@ -875,8 +1039,8 @@ evpi_plot(
 ```{r, fig.width=9, fig.height=6}
 evpi_plot(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```
@@ -890,8 +1054,8 @@ The `evpi_table()` function presents EVPI values at selected WTP thresholds.
 ```{r}
 evpi_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs"
+  health_outcome = "qalys",
+  cost_outcome = "costs"
 )
 ```
 
@@ -900,8 +1064,8 @@ evpi_table(
 ```{r}
 evpi_table(
   psa_results,
-  outcome_summary = "qalys",
-  cost_summary = "costs",
+  health_outcome = "qalys",
+  cost_outcome = "costs",
   groups = "all_groups"
 )
 ```

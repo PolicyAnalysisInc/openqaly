@@ -4,7 +4,7 @@
 \alias{generate_states_code}
 \title{Generate States Code}
 \usage{
-generate_states_code(states, is_psm = FALSE)
+generate_states_code(states, model_type = "markov")
 }
 \description{
 Generate States Code

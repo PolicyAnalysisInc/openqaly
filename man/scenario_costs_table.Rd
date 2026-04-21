@@ -22,9 +22,11 @@ scenario_costs_table(
 
 \item{outcome}{Name of cost outcome to display (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{strategies}{Character vector of strategy names to include (NULL for all)}
+\item{strategies}{Character vector of strategy names to include when showing
+absolute values (NULL for all)}
 
 \item{interventions}{Character vector of intervention strategy name(s).
 When specified, shows differences (intervention - comparator).}
@@ -35,12 +37,12 @@ When specified, shows differences (intervention - comparator).}
 
 \item{abbreviate}{Logical. Use K/M/B/T suffixes? (default: FALSE)}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 }
 \value{
-A gt table object
+A flextable object
 }
 \description{
 Creates a table showing scenario cost values. Each row represents a scenario,

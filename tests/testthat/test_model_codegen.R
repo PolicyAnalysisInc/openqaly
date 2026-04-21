@@ -1,4 +1,4 @@
-context("Model codegen")
+context("Model codegen v2")
 
 # =============================================================================
 # model_to_r_code() - Main Function Tests
@@ -55,12 +55,12 @@ test_that("model_to_r_code handles PSM model type", {
   model <- define_model("psm") |>
     add_state("pfs") |>
     add_state("dead") |>
-    add_psm_transition("death", "years", exp(-0.1 * time))
+    add_transition("death", "years", exp(-0.1 * time))
 
   code <- model_to_r_code(model)
 
   expect_true(any(grepl('define_model\\("psm"\\)', code)))
-  expect_true(any(grepl("add_psm_transition", code)))
+  expect_true(any(grepl("add_transition", code)))
 })
 
 test_that("model_to_r_code handles empty model components", {
@@ -223,7 +223,7 @@ test_that("generate_transitions_code handles Markov transitions", {
     to_state = "sick",
     formula = "0.1"
   )
-  code <- openqaly:::generate_transitions_code(transitions, is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(transitions, model_type = "markov")
 
   expect_true(any(grepl('add_transition\\("healthy", "sick", 0.1\\)', code)))
 })
@@ -234,16 +234,16 @@ test_that("generate_transitions_code handles PSM transitions", {
     time_unit = "years",
     formula = "exp(-0.1 * time)"
   )
-  code <- openqaly:::generate_transitions_code(transitions, is_psm = TRUE)
+  code <- openqaly:::generate_transitions_code(transitions, model_type = "psm")
 
-  expect_true(any(grepl('add_psm_transition\\("death", "years", exp\\(-0.1 \\* time\\)\\)', code)))
+  expect_true(any(grepl('add_transition\\("death", "years", exp\\(-0.1 \\* time\\)\\)', code)))
 })
 
 test_that("generate_transitions_code returns empty for empty transitions", {
-  code <- openqaly:::generate_transitions_code(NULL, is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(NULL, model_type = "markov")
   expect_equal(length(code), 0)
 
-  code <- openqaly:::generate_transitions_code(tibble::tibble(), is_psm = FALSE)
+  code <- openqaly:::generate_transitions_code(tibble::tibble(), model_type = "markov")
   expect_equal(length(code), 0)
 })
 
@@ -588,67 +588,82 @@ test_that("generate_summaries_code returns empty for empty summaries", {
 # generate_multivariate_sampling_code() Tests
 # =============================================================================
 
-test_that("generate_multivariate_sampling_code handles character vector variables", {
+test_that("generate_multivariate_sampling_code handles mvnormal type", {
   mv_sampling <- list(
     list(
       name = "joint_params",
-      distribution = "mvnorm(mu, sigma)",
-      variables = c("p_sick", "p_death")
+      type = "mvnormal",
+      strategy = "",
+      group = "",
+      variables = c("p_sick", "p_death"),
+      covariance = as.oq_formula("cov_matrix")
     )
   )
   code <- openqaly:::generate_multivariate_sampling_code(mv_sampling)
 
   expect_true(any(grepl('name = "joint_params"', code)))
+  expect_true(any(grepl('type = "mvnormal"', code)))
   expect_true(any(grepl('variables = c\\("p_sick", "p_death"\\)', code)))
+  expect_true(any(grepl('covariance = "cov_matrix"', code)))
+  expect_false(any(grepl('strategy', code)))
+  expect_false(any(grepl('group', code)))
 })
 
-test_that("generate_multivariate_sampling_code handles simple tibble variables", {
+test_that("generate_multivariate_sampling_code handles dirichlet with n", {
   mv_sampling <- list(
     list(
-      name = "joint_params",
-      distribution = "mvnorm(mu, sigma)",
-      variables = tibble::tibble(
-        variable = c("p_sick", "p_death"),
-        strategy = c("", ""),
-        group = c("", "")
-      )
+      name = "dir_params",
+      type = "dirichlet",
+      strategy = "",
+      group = "",
+      variables = c("p_sick", "p_death"),
+      n = 100
     )
   )
   code <- openqaly:::generate_multivariate_sampling_code(mv_sampling)
 
+  expect_true(any(grepl('type = "dirichlet"', code)))
   expect_true(any(grepl('variables = c\\("p_sick", "p_death"\\)', code)))
+  expect_true(any(grepl('n = 100', code)))
+  expect_false(any(grepl('tibble', code)))
 })
 
-test_that("generate_multivariate_sampling_code handles complex tibble with strategy/group", {
+test_that("generate_multivariate_sampling_code handles strategy and group", {
   mv_sampling <- list(
     list(
       name = "joint_params",
-      distribution = "mvnorm(mu, sigma)",
-      variables = tibble::tibble(
-        variable = c("cost", "cost"),
-        strategy = c("standard", "intervention"),
-        group = c("", "")
-      )
+      type = "dirichlet",
+      strategy = "intervention",
+      group = "elderly",
+      variables = c("cost_a", "cost_b"),
+      n = 100
     )
   )
   code <- openqaly:::generate_multivariate_sampling_code(mv_sampling)
 
-  expect_true(any(grepl("variables = ", code)))
-  expect_true(any(grepl("tibble", code)))
+  expect_true(any(grepl('variables = c\\("cost_a", "cost_b"\\)', code)))
+  expect_true(any(grepl('strategy = "intervention"', code)))
+  expect_true(any(grepl('group = "elderly"', code)))
+  expect_true(any(grepl('n = 100', code)))
+  expect_false(any(grepl('tibble', code)))
 })
 
 test_that("generate_multivariate_sampling_code handles description", {
   mv_sampling <- list(
     list(
       name = "joint_params",
-      distribution = "mvnorm(mu, sigma)",
+      type = "mvnormal",
+      strategy = "",
+      group = "",
       variables = c("p_sick"),
+      covariance = as.oq_formula("sigma_table"),
       description = "Correlated parameters"
     )
   )
   code <- openqaly:::generate_multivariate_sampling_code(mv_sampling)
 
   expect_true(any(grepl('description = "Correlated parameters"', code)))
+  expect_true(any(grepl('type = "mvnormal"', code)))
 })
 
 test_that("generate_multivariate_sampling_code returns empty for empty input", {

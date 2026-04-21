@@ -135,14 +135,55 @@ get_threshold_output_label <- function(analysis, metadata) {
 #' @param metadata Model metadata
 #' @return Character string label
 #' @keywords internal
-get_threshold_input_label <- function(analysis, metadata) {
+get_threshold_input_label <- function(analysis, metadata, field = "display_name") {
   var_name <- analysis$variable
-  if (!is.null(metadata$variables) && nrow(metadata$variables) > 0 &&
-      "display_name" %in% names(metadata$variables)) {
-    mapped <- map_names(var_name, metadata$variables, "display_name")
+  if (field != "name" && !is.null(metadata$variables) && nrow(metadata$variables) > 0 &&
+      field %in% names(metadata$variables)) {
+    mapped <- map_names(var_name, metadata$variables, field)
     if (!is.na(mapped) && mapped != "") return(mapped)
   }
   var_name
+}
+
+#' Get Multi-Analysis Threshold Input Label
+#'
+#' Returns a display label for the input variable when multiple analyses are shown.
+#' If all analyses share the same variable, returns the mapped label for that variable.
+#' Otherwise returns "Variable".
+#'
+#' @param specs List of threshold analysis specs
+#' @param metadata Model metadata
+#' @param field Field to use for mapping (default "display_name")
+#' @return Character string label
+#' @keywords internal
+get_multi_threshold_input_label <- function(specs, metadata, field = "display_name") {
+  variables <- vapply(specs, function(s) s$variable, character(1))
+  if (length(unique(variables)) == 1) {
+    # All analyses share the same variable — use its label
+    return(get_threshold_input_label(specs[[1]], metadata, field = field))
+  }
+  "Variable"
+}
+
+#' Get Multi-Analysis Threshold Output Label
+#'
+#' Returns a display label for the output metric when multiple analyses are shown.
+#' If all analyses share the same output condition structure, returns the formatted
+#' label. Otherwise returns "Output".
+#'
+#' @param specs List of threshold analysis specs
+#' @param metadata Model metadata
+#' @return Character string label
+#' @keywords internal
+get_multi_threshold_output_label <- function(specs, metadata) {
+  # Check if all analyses have identical output condition shapes
+  labels <- vapply(specs, function(s) {
+    as.character(get_threshold_output_label(s, metadata))
+  }, character(1))
+  if (length(unique(labels)) == 1) {
+    return(labels[1])
+  }
+  "Output"
 }
 
 # ============================================================================
@@ -160,10 +201,13 @@ get_threshold_input_label <- function(analysis, metadata) {
 #' @param axis_decimals Number of decimal places for axis labels, or NULL for auto
 #' @param label_decimals Number of decimal places for threshold value label, or NULL for auto
 #' @param abbreviate Logical. If TRUE, use K/M/B/T abbreviations. Default FALSE
+#' @param use_display_names Logical. If TRUE (default), use display names for
+#'   threshold input variables where available.
 #' @return A ggplot object
 #' @export
 threshold_plot <- function(results, analyses = NULL, axis_decimals = NULL,
-                           label_decimals = NULL, abbreviate = FALSE) {
+                           label_decimals = NULL, abbreviate = FALSE,
+                           use_display_names = TRUE) {
   # Get locale for formatting
   locale <- get_results_locale(results)
 
@@ -184,12 +228,13 @@ threshold_plot <- function(results, analyses = NULL, axis_decimals = NULL,
   names(tv_for_join)[names(tv_for_join) == "value"] <- "threshold_value"
 
   # Build y-axis label (use first analysis if multiple)
+  name_field <- field_from_display_names(use_display_names)
   if (length(specs) == 1) {
     ylab_text <- as.character(get_threshold_output_label(specs[[1]], results$metadata))
-    xlab_text <- get_threshold_input_label(specs[[1]], results$metadata)
+    xlab_text <- get_threshold_input_label(specs[[1]], results$metadata, field = name_field)
   } else {
-    ylab_text <- "Output"
-    xlab_text <- "Input"
+    ylab_text <- get_multi_threshold_output_label(specs, results$metadata)
+    xlab_text <- get_multi_threshold_input_label(specs, results$metadata, field = name_field)
   }
 
   # Get goal values per analysis for geom_hline
@@ -298,11 +343,14 @@ threshold_plot <- function(results, analyses = NULL, axis_decimals = NULL,
 #' @param analyses Optional character vector of analysis names to include
 #' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
+#' @param use_display_names Logical. Included for API consistency with
+#'   threshold_plot(); currently has no effect on the convergence plot output.
 #' @return A ggplot object
 #' @export
 threshold_convergence_plot <- function(results, analyses = NULL,
                                        axis_decimals = NULL,
-                                       abbreviate = FALSE) {
+                                       abbreviate = FALSE,
+                                       use_display_names = TRUE) {
   # Get locale for formatting
   locale <- get_results_locale(results)
 

@@ -7,7 +7,7 @@
 set_decision_tree(model, tree_name, duration, duration_unit = "days")
 }
 \arguments{
-\item{model}{An oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{tree_name}{Character string referencing a tree in model$trees}
 

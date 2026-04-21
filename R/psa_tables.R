@@ -4,8 +4,8 @@
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
 #' @param groups Group selection:
 #'   \itemize{
@@ -115,7 +115,7 @@ prepare_incremental_ceac_table_data <- function(results,
 
       # Add group's strategy columns
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, grepl(paste0("^", grp, "_"), colnames(pivot_data)), drop = FALSE]
+      grp_cols <- pivot_data[, startsWith(colnames(pivot_data), paste0(grp, "_")), drop = FALSE]
       result_cols <- cbind(result_cols, grp_cols)
     }
   } else {
@@ -207,8 +207,8 @@ prepare_incremental_ceac_table_data <- function(results,
 #' (incremental) comparison.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns.
 #'   Default is c(0, 20000, 50000, 100000)
 #' @param groups Group selection:
@@ -223,7 +223,7 @@ prepare_incremental_ceac_table_data <- function(results,
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places for percentages (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -252,8 +252,8 @@ prepare_incremental_ceac_table_data <- function(results,
 #'
 #' @export
 incremental_ceac_table <- function(results,
-                                   outcome_summary,
-                                   cost_summary,
+                                   health_outcome,
+                                   cost_outcome,
                                    wtp_thresholds = c(0, 20000, 50000, 100000),
                                    groups = "overall",
                                    strategies = NULL,
@@ -266,8 +266,8 @@ incremental_ceac_table <- function(results,
   # Prepare data
   prepared <- prepare_incremental_ceac_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     wtp_thresholds = wtp_thresholds,
     groups = groups,
     strategies = strategies,
@@ -286,8 +286,8 @@ incremental_ceac_table <- function(results,
 #' Creates a transposed table with strategies as columns and statistics as rows.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
 #' @param groups Group selection:
 #'   \itemize{
@@ -315,6 +315,9 @@ prepare_psa_summary_table_data <- function(results,
                                           cost_decimals = NULL,
                                           abbreviate = FALSE,
                                           font_size = 11) {
+  if (is.null(outcome_decimals)) {
+    outcome_decimals <- 2
+  }
 
   locale <- get_results_locale(results)
 
@@ -679,8 +682,8 @@ prepare_psa_summary_table_data <- function(results,
 #' statistics as rows.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
 #'   (default: c(50000, 100000, 150000))
 #' @param groups Group selection:
@@ -697,7 +700,7 @@ prepare_psa_summary_table_data <- function(results,
 #' @param cost_decimals Number of decimal places for costs (default: NULL, auto)
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -732,12 +735,12 @@ prepare_psa_summary_table_data <- function(results,
 #'
 #' @export
 psa_summary_table <- function(results,
-                             outcome_summary,
-                             cost_summary,
+                             health_outcome,
+                             cost_outcome,
                              pce_wtp = c(50000, 100000, 150000),
                              groups = "overall",
                              strategies = NULL,
-                             outcome_decimals = NULL,
+                             outcome_decimals = 2,
                              cost_decimals = NULL,
                              abbreviate = FALSE,
                              font_size = 11,
@@ -748,8 +751,8 @@ psa_summary_table <- function(results,
   # Prepare data
   prepared <- prepare_psa_summary_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     pce_wtp = pce_wtp,
     groups = groups,
     strategies = strategies,
@@ -770,8 +773,8 @@ psa_summary_table <- function(results,
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #' @param comparators Reference strategies for comparison (comparator perspective).
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
@@ -882,7 +885,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 
       # Add group's comparison columns
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, grepl(paste0("^", grp, "_"), colnames(pivot_data)), drop = FALSE]
+      grp_cols <- pivot_data[, startsWith(colnames(pivot_data), paste0(grp, "_")), drop = FALSE]
       result_cols <- cbind(result_cols, grp_cols)
     }
   } else {
@@ -973,8 +976,8 @@ prepare_pairwise_ceac_table_data <- function(results,
 #' willingness-to-pay thresholds.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #'   Can be a single strategy or vector of strategies.
 #' @param comparators Reference strategies for comparison (comparator perspective).
@@ -992,7 +995,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'   }
 #' @param decimals Number of decimal places for percentages (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -1032,8 +1035,8 @@ prepare_pairwise_ceac_table_data <- function(results,
 #'
 #' @export
 pairwise_ceac_table <- function(results,
-                                outcome_summary,
-                                cost_summary,
+                                health_outcome,
+                                cost_outcome,
                                 interventions = NULL,
                                 comparators = NULL,
                                 wtp_thresholds = c(0, 20000, 50000, 100000),
@@ -1047,8 +1050,8 @@ pairwise_ceac_table <- function(results,
   # Prepare data
   prepared <- prepare_pairwise_ceac_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     interventions = interventions,
     comparators = comparators,
     wtp_thresholds = wtp_thresholds,
@@ -1068,8 +1071,8 @@ pairwise_ceac_table <- function(results,
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows
 #' @param groups Group selection:
 #'   \itemize{
@@ -1211,8 +1214,8 @@ prepare_evpi_table_data <- function(results,
 #' at selected willingness-to-pay thresholds.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows.
 #'   Default is c(20000, 50000, 100000, 150000)
 #' @param groups Group selection:
@@ -1227,7 +1230,7 @@ prepare_evpi_table_data <- function(results,
 #' @param strategies Character vector of strategies to include (NULL for all)
 #' @param decimals Number of decimal places for EVPI values (default: NULL, auto)
 #' @param font_size Font size for rendering (default: 11)
-#' @param table_format Character. Backend to use: "kable" (default) or "flextable"
+#' @param table_format Character. Backend to use: "flextable" (default) or "kable"
 #'
 #' @return A table object (flextable or kable depending on table_format)
 #'
@@ -1261,8 +1264,8 @@ prepare_evpi_table_data <- function(results,
 #'
 #' @export
 evpi_table <- function(results,
-                       outcome_summary,
-                       cost_summary,
+                       health_outcome,
+                       cost_outcome,
                        wtp_thresholds = c(20000, 50000, 100000, 150000),
                        groups = "overall",
                        strategies = NULL,
@@ -1275,8 +1278,8 @@ evpi_table <- function(results,
   # Prepare data
   prepared <- prepare_evpi_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     wtp_thresholds = wtp_thresholds,
     groups = groups,
     strategies = strategies,
@@ -1296,8 +1299,8 @@ evpi_table <- function(results,
 #' falling into each quadrant relative to a comparator strategy.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param comparator Name of the comparator strategy
 #' @param groups Group selection
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -1485,8 +1488,8 @@ prepare_ce_quadrant_table_data <- function(results,
 #' quadrant of the cost-effectiveness plane relative to a comparator strategy.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param comparator Name of the comparator strategy
 #' @param groups Group selection:
 #'   \itemize{
@@ -1528,8 +1531,8 @@ prepare_ce_quadrant_table_data <- function(results,
 #'
 #' @export
 ce_quadrant_table <- function(results,
-                              outcome_summary,
-                              cost_summary,
+                              health_outcome,
+                              cost_outcome,
                               comparator,
                               groups = "overall",
                               strategies = NULL,
@@ -1542,8 +1545,8 @@ ce_quadrant_table <- function(results,
   # Prepare data
   prepared <- prepare_ce_quadrant_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     comparator = comparator,
     groups = groups,
     strategies = strategies,
@@ -1843,6 +1846,10 @@ prepare_psa_value_summary_table_data <- function(results,
                                             outcome_decimals = NULL,
                                             abbreviate = FALSE,
                                             font_size = 11) {
+  active_decimals <- if (identical(value_type, "cost")) cost_decimals else outcome_decimals
+  if (identical(value_type, "outcome") && is.null(active_decimals)) {
+    active_decimals <- 2
+  }
 
   locale <- get_results_locale(results)
 
@@ -1948,11 +1955,11 @@ prepare_psa_value_summary_table_data <- function(results,
 
       values_col <- c(
         format_with_ci(stat_row$mean_val, stat_row$ci_lower,
-                       stat_row$ci_upper, outcome_decimals),
-        format_numeric(stat_row$sd_val, outcome_decimals),
+                       stat_row$ci_upper, active_decimals),
+        format_numeric(stat_row$sd_val, active_decimals),
         format_with_ci(stat_row$median_val, stat_row$q25,
-                       stat_row$q75, outcome_decimals),
-        format_range(stat_row$min_val, stat_row$max_val, outcome_decimals)
+                       stat_row$q75, active_decimals),
+        format_range(stat_row$min_val, stat_row$max_val, active_decimals)
       )
 
       row_data_list[[paste0(col_val, "_", grp)]] <- tibble(
@@ -2085,7 +2092,7 @@ prepare_psa_value_summary_table_data <- function(results,
 #' or comparison.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary (e.g., "qalys")
+#' @param outcome Name of the outcome to display (e.g., "qalys")
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (aggregated, default)
@@ -2140,14 +2147,14 @@ prepare_psa_value_summary_table_data <- function(results,
 #'
 #' @export
 psa_outcomes_table <- function(results,
-                               outcome_summary,
+                               outcome,
                                groups = "overall",
                                strategies = NULL,
                                interventions = NULL,
                                comparators = NULL,
                                discounted = TRUE,
                                cost_decimals = NULL,
-                               outcome_decimals = NULL,
+                               outcome_decimals = 2,
                                abbreviate = FALSE,
                                font_size = 11,
                                table_format = c("flextable", "kable")) {
@@ -2157,7 +2164,7 @@ psa_outcomes_table <- function(results,
   # Prepare data
   prepared <- prepare_psa_value_summary_table_data(
     results = results,
-    outcome_summary = outcome_summary,
+    outcome_summary = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -2183,7 +2190,7 @@ psa_outcomes_table <- function(results,
 #' or comparison.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the cost summary (e.g., "total_cost")
+#' @param outcome Name of the cost outcome to display (e.g., "total_cost")
 #' @param groups Group selection:
 #'   \itemize{
 #'     \item \code{"overall"} - Overall population (aggregated, default)
@@ -2235,7 +2242,7 @@ psa_outcomes_table <- function(results,
 #'
 #' @export
 psa_costs_table <- function(results,
-                             outcome_summary,
+                             outcome,
                              groups = "overall",
                              strategies = NULL,
                              interventions = NULL,
@@ -2252,7 +2259,7 @@ psa_costs_table <- function(results,
   # Prepare data
   prepared <- prepare_psa_value_summary_table_data(
     results = results,
-    outcome_summary = outcome_summary,
+    outcome_summary = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -2278,8 +2285,8 @@ psa_costs_table <- function(results,
 #' and statistics as rows.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary
-#' @param cost_summary Name of the cost summary
+#' @param health_outcome Name of the health outcome
+#' @param cost_outcome Name of the cost outcome
 #' @param wtp Willingness-to-pay threshold
 #' @param groups Group selection:
 #'   \itemize{
@@ -2642,8 +2649,8 @@ prepare_psa_nmb_table_data <- function(results,
 #' and probability of positive NMB for each comparison.
 #'
 #' @param results A openqaly PSA results object
-#' @param outcome_summary Name of the outcome summary (e.g., "qalys")
-#' @param cost_summary Name of the cost summary (e.g., "costs")
+#' @param health_outcome Name of the health outcome (e.g., "qalys")
+#' @param cost_outcome Name of the cost outcome (e.g., "costs")
 #' @param wtp Willingness-to-pay threshold for NMB calculation
 #' @param groups Group selection:
 #'   \itemize{
@@ -2702,8 +2709,8 @@ prepare_psa_nmb_table_data <- function(results,
 #'
 #' @export
 psa_nmb_table <- function(results,
-                          outcome_summary,
-                          cost_summary,
+                          health_outcome,
+                          cost_outcome,
                           wtp,
                           groups = "overall",
                           interventions = NULL,
@@ -2719,8 +2726,8 @@ psa_nmb_table <- function(results,
   # Prepare data
   prepared <- prepare_psa_nmb_table_data(
     results = results,
-    outcome_summary = outcome_summary,
-    cost_summary = cost_summary,
+    outcome_summary = health_outcome,
+    cost_summary = cost_outcome,
     wtp = wtp,
     groups = groups,
     interventions = interventions,

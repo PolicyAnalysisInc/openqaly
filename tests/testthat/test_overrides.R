@@ -551,13 +551,13 @@ create_test_override_model <- function() {
 
 test_that("JSON serialization round-trip preserves overrides", {
   model <- create_test_override_model()
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   # Write to JSON
   json_str <- write_model_json(model)
 
   # Read back
-  model2 <- read_model_json(json_str)
+  model2 <- read_model_json(text = json_str)
 
   # Verify structure
   expect_equal(length(model2$override_categories), 2)
@@ -594,10 +594,10 @@ test_that("JSON serialization round-trip preserves dropdown overrides", {
         override_option("Intensive", "0.95")
       )
     )
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   json_str <- write_model_json(model)
-  model2 <- read_model_json(json_str)
+  model2 <- read_model_json(text = json_str)
 
   ovr <- model2$override_categories[[1]]$overrides[[1]]
   expect_equal(ovr$input_type, "dropdown")
@@ -609,7 +609,7 @@ test_that("JSON serialization round-trip preserves dropdown overrides", {
 
 test_that("YAML serialization round-trip preserves overrides", {
   model <- create_test_override_model()
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   # Write to YAML temp file
   tmp_file <- tempfile(fileext = ".yaml")
@@ -629,38 +629,9 @@ test_that("YAML serialization round-trip preserves overrides", {
   expect_equal(ovr1$overridden_expression, "0.03")
 })
 
-test_that("Excel serialization round-trip preserves overrides", {
-  model <- create_test_override_model()
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-
-  # Write to Excel temp dir
-  tmp_dir <- tempdir()
-  model_dir <- file.path(tmp_dir, "test_override_model")
-  dir.create(model_dir, recursive = TRUE, showWarnings = FALSE)
-  on.exit(unlink(model_dir, recursive = TRUE))
-
-  write_model_excel(model, model_dir)
-
-  # Read back
-  model2 <- read_model(model_dir)
-
-  # Verify structure
-  expect_equal(length(model2$override_categories), 2)
-  expect_equal(model2$override_categories[[1]]$name, "Clinical Parameters")
-
-  ovr1 <- model2$override_categories[[1]]$overrides[[1]]
-  expect_equal(ovr1$title, "Disease Probability")
-  expect_equal(ovr1$name, "p_disease")
-  expect_equal(ovr1$input_type, "slider")
-  expect_equal(ovr1$overridden_expression, "0.03")
-  expect_equal(ovr1$input_config$min, 0)
-  expect_equal(ovr1$input_config$max, 0.1)
-  expect_equal(ovr1$input_config$step_size, 0.005)
-})
-
 test_that("R code generation includes overrides", {
   model <- create_test_override_model()
-  model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
 
   code <- model_to_r_code(model)
   code_str <- paste(code, collapse = "\n")

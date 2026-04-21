@@ -7,7 +7,7 @@
 print_scenarios(model)
 }
 \arguments{
-\item{model}{An oq_model_builder object with scenarios}
+\item{model}{An oq_model object with scenarios}
 }
 \value{
 Invisible model
@@ -15,4 +15,3 @@ Invisible model
 \description{
 Print method for displaying scenarios defined in a model
 }
-\keyword{internal}

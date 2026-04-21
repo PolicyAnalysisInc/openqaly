@@ -1,8 +1,8 @@
 context("Decision trees")
 
 # Prep data for test cases
-tree_tests <- system.file("test_cases", "test_trees.xlsx", package = "openqaly") %>%
-  read_workbook()
+tree_tests <- system.file("test_cases", "test_trees.rds", package = "openqaly") %>%
+  readRDS()
 segment <- tibble::tibble(strategy = "S1", group = "G1")
 
 # Tree Parsing

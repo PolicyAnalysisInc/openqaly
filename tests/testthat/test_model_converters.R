@@ -15,14 +15,14 @@ test_that("convert_model detects oq_model object input", {
   expect_equal(result, json_path)
 
   # Verify round-trip
-  converted <- read_model_json(paste(readLines(json_path), collapse = "\n"))
+  converted <- read_model_json(file = json_path)
   expect_s3_class(converted, "oq_model")
   expect_equal(nrow(model$states), nrow(converted$states))
 
   unlink(json_path)
 })
 
-test_that("convert_model detects Excel folder input", {
+test_that("convert_model detects YAML folder input", {
   model_path <- system.file("models/markov_medium", package = "openqaly")
   skip_if(model_path == "", "markov_medium model not available")
 
@@ -31,7 +31,7 @@ test_that("convert_model detects Excel folder input", {
 
   # Verify round-trip preserves structure
   original <- read_model(model_path)
-  converted <- read_model_json(paste(readLines(json_path), collapse = "\n"))
+  converted <- read_model_json(file = json_path)
   expect_equal(nrow(original$states), nrow(converted$states))
   expect_equal(nrow(original$variables), nrow(converted$variables))
 
@@ -70,7 +70,7 @@ test_that("convert_model detects R file input", {
   convert_model(r_in, json_out)
 
   # Verify round-trip
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
   expect_equal(model$variables$name, converted$variables$name)
 
@@ -83,20 +83,20 @@ test_that("convert_model detects raw JSON string input", {
     add_transition("alive", "alive", 1)
 
   json_str <- as_json(model)
-  excel_out <- tempfile()
+  yaml_out <- tempfile(fileext = ".yaml")
 
   expect_no_warning(
-    convert_model(json_str, excel_out, to = "excel")
+    convert_model(json_str, yaml_out, to = "yaml")
   )
 
-  # Verify Excel structure created
-  expect_true(file.exists(file.path(excel_out, "model.xlsx")))
+  # Verify YAML file created
+  expect_true(file.exists(yaml_out))
 
   # Verify round-trip
-  converted <- read_model(excel_out)
+  converted <- read_model_yaml(file = yaml_out)
   expect_equal(nrow(model$states), nrow(converted$states))
 
-  unlink(excel_out, recursive = TRUE)
+  unlink(yaml_out)
 })
 
 # ==============================================================================
@@ -118,13 +118,12 @@ test_that("convert_model auto-detects output format from extension", {
   convert_model(model, r_out)
   expect_true(any(grepl("define_model", readLines(r_out))))
 
-  # No extension -> Excel format (default)
-  excel_out <- tempfile()
-  convert_model(model, excel_out)
-  expect_true(file.exists(file.path(excel_out, "model.xlsx")))
+  # .yaml extension -> YAML format
+  yaml_out <- tempfile(fileext = ".yaml")
+  convert_model(model, yaml_out)
+  expect_true(file.exists(yaml_out))
 
-  unlink(c(json_out, r_out))
-  unlink(excel_out, recursive = TRUE)
+  unlink(c(json_out, r_out, yaml_out))
 })
 
 # ==============================================================================
@@ -139,7 +138,7 @@ test_that("convert_model respects explicit from='object' parameter", {
   json_out <- tempfile(fileext = ".json")
   convert_model(model, json_out, from = "object", to = "json")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_s3_class(converted, "oq_model")
 
   unlink(json_out)
@@ -157,23 +156,10 @@ test_that("convert_model respects explicit from='json' for non-.json file", {
   json_out <- tempfile(fileext = ".json")
   convert_model(txt_path, json_out, from = "json")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
 
   unlink(c(txt_path, json_out))
-})
-
-test_that("convert_model respects explicit from='excel'", {
-  model_path <- system.file("models/markov_medium", package = "openqaly")
-  skip_if(model_path == "", "markov_medium model not available")
-
-  json_out <- tempfile(fileext = ".json")
-  convert_model(model_path, json_out, from = "excel")
-
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
-  expect_s3_class(converted, "oq_model")
-
-  unlink(json_out)
 })
 
 test_that("convert_model respects explicit from='r'", {
@@ -187,7 +173,7 @@ test_that("convert_model respects explicit from='r'", {
   json_out <- tempfile(fileext = ".json")
   convert_model(r_path, json_out, from = "r")
 
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_equal(nrow(model$states), nrow(converted$states))
 
   unlink(c(r_path, json_out))
@@ -214,7 +200,7 @@ test_that("convert_model warns when R file has multiple models", {
   )
 
   # Should still produce valid output (using first model)
-  converted <- read_model_json(paste(readLines(json_out), collapse = "\n"))
+  converted <- read_model_json(file = json_out)
   expect_s3_class(converted, "oq_model")
 
   unlink(c(r_path, json_out))
@@ -224,13 +210,13 @@ test_that("convert_model warns when R file has multiple models", {
 # convert_model - Error cases
 # ==============================================================================
 
-test_that("convert_model errors for directory without model.xlsx", {
+test_that("convert_model errors for directory without model.yaml", {
   empty_dir <- tempfile()
   dir.create(empty_dir)
 
   expect_error(
     convert_model(empty_dir, tempfile(fileext = ".json")),
-    "no model.xlsx found"
+    "No model.yaml found"
   )
 
   unlink(empty_dir, recursive = TRUE)

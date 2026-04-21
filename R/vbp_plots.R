@@ -18,9 +18,9 @@ NULL
 #' @param wtp_step Step size for WTP thresholds. If NULL, auto-calculated.
 #' @param comparators Comparator selection:
 #'   \itemize{
-#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"all_comparators"} - Individual comparators only (default)
+#'     \item \code{"all"} - All comparators plus aggregate
 #'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
-#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
 #'     \item Character vector - Specific comparator name(s)
 #'   }
 #' @param groups Group selection:
@@ -195,9 +195,9 @@ prepare_vbp_plot_data <- function(vbp_results,
 #'   for smooth curve (~40 points).
 #' @param comparators Comparator selection:
 #'   \itemize{
-#'     \item \code{"all"} - All comparators plus aggregate (default)
+#'     \item \code{"all_comparators"} - Individual comparators only (default)
+#'     \item \code{"all"} - All comparators plus aggregate
 #'     \item \code{"overall"} - Aggregate only ("vs. All Comparators")
-#'     \item \code{"all_comparators"} - Individual comparators only (no aggregate)
 #'     \item Character vector - Specific comparator name(s)
 #'   }
 #' @param groups Group selection:
@@ -233,7 +233,7 @@ prepare_vbp_plot_data <- function(vbp_results,
 #'   intervention_strategy = "targeted"
 #' )
 #'
-#' # Basic VBP plot with auto-generated WTP range (individuals only by default)
+#' # Basic VBP plot with auto-generated WTP range (individual comparators only by default)
 #' vbp_plot(vbp_results)
 #'
 #' # Custom WTP range
@@ -358,35 +358,70 @@ vbp_plot <- function(vbp_results,
 
       # Add VBP value callouts at default WTP
       if (show_vbp_at_wtp) {
-        # Find the closest WTP point in the data to the default WTP
-        wtp_tolerance <- (max(plot_data$wtp) - min(plot_data$wtp)) / 100
-        vbp_at_wtp <- plot_data %>%
-          filter(abs(.data$wtp - default_wtp) <= wtp_tolerance) %>%
-          group_by(.data$comparator_label, .data$group) %>%
-          slice(1) %>%
-          ungroup()
+        # Calculate exact VBP at default WTP directly from equations
+        # Work with internal names from equations, then map to display names
+        plotted_comparators <- unique(plot_data$comparator)
+        plotted_groups <- unique(plot_data$group)
 
-        # If no exact match found, calculate VBP at default WTP directly
-        if (nrow(vbp_at_wtp) == 0) {
-          unique_comparators <- unique(plot_data$comparator)
-          unique_groups <- unique(plot_data$group)
-
-          vbp_at_wtp <- expand_grid(
-            comparator = unique_comparators,
-            group = unique_groups
-          ) %>%
-            rowwise() %>%
-            mutate(
-              vbp_price = calculate_vbp_price(
-                vbp_results,
-                wtp = default_wtp,
-                comparator = .data$comparator,
-                group = .data$group
-              ),
-              comparator_label = paste0("vs. ", .data$comparator)
-            ) %>%
-            ungroup()
+        # Collect equation sources: overall and/or by-group
+        eq_sources <- list()
+        if ("Overall" %in% plotted_groups) {
+          eqs <- vbp_results$vbp_equations
+          if (nrow(eqs) > 0) {
+            eqs$display_group <- "Overall"
+            eq_sources[["overall"]] <- eqs
+          }
         }
+        if (nrow(vbp_results$vbp_equations_by_group) > 0) {
+          by_grp <- vbp_results$vbp_equations_by_group %>%
+            mutate(display_group = .data$group)
+          # Map group internal names to display names
+          by_grp$display_group <- ifelse(
+            by_grp$display_group == "overall", "Overall", by_grp$display_group
+          )
+          if (!is.null(metadata) && !is.null(metadata$groups)) {
+            by_grp$display_group <- map_names(
+              by_grp$display_group, metadata$groups, "display_name"
+            )
+          }
+          # Keep only groups shown in the plot
+          by_grp <- by_grp %>% filter(.data$display_group %in% plotted_groups)
+          if (nrow(by_grp) > 0) eq_sources[["by_group"]] <- by_grp
+        }
+
+        all_eqs <- bind_rows(eq_sources)
+
+        vbp_rows <- list()
+        for (grp in unique(all_eqs$display_group)) {
+          grp_eqs <- all_eqs %>% filter(.data$display_group == grp)
+          grp_comparators <- unique(plot_data$comparator[plot_data$group == grp])
+
+          # Individual comparators
+          for (j in seq_len(nrow(grp_eqs))) {
+            comp_display <- grp_eqs$comparator[j]
+            if (!is.null(metadata) && !is.null(metadata$strategies)) {
+              comp_display <- map_names(comp_display, metadata$strategies, "display_name")
+            }
+            if (!comp_display %in% grp_comparators) next
+            vbp_rows[[length(vbp_rows) + 1]] <- tibble(
+              comparator_label = paste0("vs. ", comp_display),
+              group = grp,
+              vbp_price = grp_eqs$vbp_slope[j] * default_wtp + grp_eqs$vbp_intercept[j]
+            )
+          }
+
+          # "All Comparators" aggregate (min across all)
+          if ("All Comparators" %in% grp_comparators) {
+            all_prices <- grp_eqs$vbp_slope * default_wtp + grp_eqs$vbp_intercept
+            vbp_rows[[length(vbp_rows) + 1]] <- tibble(
+              comparator_label = "All Comparators",
+              group = grp,
+              vbp_price = min(all_prices)
+            )
+          }
+        }
+
+        vbp_at_wtp <- if (length(vbp_rows) > 0) bind_rows(vbp_rows) else tibble()
 
         if (nrow(vbp_at_wtp) > 0) {
           # Add points at intersections

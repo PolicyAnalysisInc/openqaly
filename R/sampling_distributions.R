@@ -59,30 +59,47 @@ bootstrap <- function(x, id = NULL, strata = NULL, weight = NULL) {
   }
   function(q) {
     n <- length(q)
-    resampled_df <- group_by(x, !!strata) %>%
-      do({
+    grouped_x <- if (is.null(strata)) {
+      list(x)
+    } else {
+      split(x, interaction(x[strata], drop = TRUE, lex.order = TRUE))
+    }
 
-        # Get the set of unique observations
-        unique_df <- distinct(x, !!sym(id))
-        n_unique <- nrow(unique_df)
+    resampled_df <- lapply(grouped_x, function(group_df) {
 
-        # Handle the weights if provided
-        if (is.null(weight)) {
-          prob <- NULL
-        } else {
-          prob <- unique_df[[weight]]
+      # Ensure weights are well-defined for each sampling unit within a stratum
+      if (!is.null(weight)) {
+        weight_check <- distinct(group_df, .data[[id]], .data[[weight]]) %>%
+          count(.data[[id]]) %>%
+          filter(.data$n > 1)
+
+        if (nrow(weight_check) > 0) {
+          stop(
+            glue("bootstrap() requires a single '{weight}' value per '{id}' within each stratum."),
+            call. = FALSE
+          )
         }
+      }
 
-        # Resample data frame
-        sampled_indices <- sample(seq_len(n_unique), n * n_unique, replace = TRUE, prob = prob)
-        sampled_df <- slice(unique_df, sampled_indices) %>%
-          mutate(.sim = rep(seq_len(n), each = n_unique)) %>%
-          select(c(".sim", id)) %>%
-          left_join(x, by = id, relationship = 'many-to-many')
+      # Get the set of unique observations for this stratum
+      unique_df <- distinct(group_df, .data[[id]], .keep_all = TRUE)
+      n_unique <- nrow(unique_df)
 
-        sampled_df
-      }) %>%
-      ungroup()
+      # Handle the weights if provided
+      if (is.null(weight)) {
+        prob <- NULL
+      } else {
+        prob <- unique_df[[weight]]
+      }
+
+      # Resample data frame within this stratum
+      sampled_indices <- sample(seq_len(n_unique), n * n_unique, replace = TRUE, prob = prob)
+      slice(unique_df, sampled_indices) %>%
+        mutate(.sim = rep(seq_len(n), each = n_unique)) %>%
+        select(all_of(c(".sim", id))) %>%
+        left_join(group_df, by = id, relationship = "many-to-many")
+    }) %>%
+      bind_rows()
 
     sim_index <- resampled_df$.sim
     select(resampled_df, -".sim") %>%
@@ -233,58 +250,26 @@ dirichlet <- function(alpha) {
 #' Useful when parameters are known to be correlated (e.g., cost and effectiveness).
 #'
 #' @param mean Mean vector (length k for k variables)
-#' @param sd Standard deviation vector (for correlation parameterization)
-#' @param cor Correlation (scalar for bivariate, matrix for multivariate)
-#' @param cov Covariance matrix (alternative to sd/cor)
+#' @param cov Covariance matrix (k x k)
 #'
-#' @return Function that takes n (number of samples) and returns n × k matrix
+#' @return Function that takes n (number of samples) and returns n x k matrix
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Bivariate with correlation
-#' dist_fn <- mvnormal(mean = c(0.5, 1000), sd = c(0.1, 100), cor = 0.5)
-#' samples <- dist_fn(1000)  # 1000 × 2 matrix
-#'
-#' # With full covariance matrix
 #' cov_mat <- matrix(c(0.01, 5, 5, 10000), nrow = 2)
 #' dist_fn <- mvnormal(mean = c(0.5, 1000), cov = cov_mat)
+#' samples <- dist_fn(1000)  # 1000 x 2 matrix
 #' }
-mvnormal <- function(mean, sd = NULL, cor = NULL, cov = NULL) {
+mvnormal <- function(mean, cov) {
   if (!is.numeric(mean)) {
     stop("mean must be a numeric vector")
   }
 
-  # Construct covariance matrix
-  if (!is.null(cov)) {
-    cov_matrix <- as.matrix(cov)
-    if (nrow(cov_matrix) != length(mean) || ncol(cov_matrix) != length(mean)) {
-      stop("cov matrix dimensions must match length of mean")
-    }
-  } else if (!is.null(sd) && !is.null(cor)) {
-    if (length(sd) != length(mean)) {
-      stop("sd vector must have same length as mean")
-    }
-
-    if (length(mean) == 2 && length(cor) == 1) {
-      # Bivariate shorthand: scalar correlation
-      cov_matrix <- matrix(c(
-        sd[1]^2, cor * sd[1] * sd[2],
-        cor * sd[1] * sd[2], sd[2]^2
-      ), nrow = 2)
-    } else {
-      # General case: cor is correlation matrix
-      cor <- as.matrix(cor)
-      if (nrow(cor) != length(mean) || ncol(cor) != length(mean)) {
-        stop("cor matrix dimensions must match length of mean")
-      }
-      # Convert correlation matrix and sd vector to covariance
-      D <- diag(sd)
-      cov_matrix <- D %*% cor %*% D
-    }
-  } else {
-    stop("Must provide either 'cov' or both 'sd' and 'cor'")
+  cov_matrix <- as.matrix(cov)
+  if (nrow(cov_matrix) != length(mean) || ncol(cov_matrix) != length(mean)) {
+    stop("cov matrix dimensions must match length of mean")
   }
 
   function(n) {

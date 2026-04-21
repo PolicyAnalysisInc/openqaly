@@ -841,42 +841,17 @@ test_that("checkpoint error mode stops execution instead of warning", {
 
   value_names <- character(0)
 
-  # Test with checkpoint error mode - should stop execution
-  withr::with_options(
-    list(openqaly.error_mode = "checkpoint"),
-    {
-      expect_error(
-        cppCalculateTraceAndValues(
-          init,
-          mat,
-          values,
-          value_names,
-          state_names,
-          expanded_state_map,
-          "start"
-        ),
-        "Transition probability errors detected"
-      )
-    }
-  )
-
-  # Test with default warning mode - should warn but not stop
-  withr::with_options(
-    list(openqaly.error_mode = "warning"),
-    {
-      expect_warning(
-        cppCalculateTraceAndValues(
-          init,
-          mat,
-          values,
-          value_names,
-          state_names,
-          expanded_state_map,
-          "start"
-        ),
-        "Transition probability errors detected"
-      )
-    }
+  expect_error(
+    cppCalculateTraceAndValues(
+      init,
+      mat,
+      values,
+      value_names,
+      state_names,
+      expanded_state_map,
+      "start"
+    ),
+    "Transition probability errors detected"
   )
 })
 
@@ -1273,23 +1248,17 @@ test_that("error table truncates at 40 rows with message", {
 
   value_names <- character(0)
 
-  # Should produce warning with truncation message (44 groups > 40 limit)
-  withr::with_options(
-    list(openqaly.error_mode = "warning"),
-    {
-      expect_warning(
-        cppCalculateTraceAndValues(
-          init,
-          mat,
-          values,
-          value_names,
-          state_names,
-          expanded_state_map,
-          "start"
-        ),
-        "showing top 40 of"
-      )
-    }
+  expect_error(
+    cppCalculateTraceAndValues(
+      init,
+      mat,
+      values,
+      value_names,
+      state_names,
+      expanded_state_map,
+      "start"
+    ),
+    "showing top 40 of"
   )
 })
 
@@ -1559,23 +1528,17 @@ test_that("error table shows State Time column for expanded states", {
     values_list = I(list())
   )
 
-  # Use cppCalculateTraceAndValues with warning mode to capture the warning
-  withr::with_options(
-    list(openqaly.error_mode = "warning"),
-    {
-      expect_warning(
-        cppCalculateTraceAndValues(
-          init,
-          mat,
-          values,
-          value_names,
-          state_names,
-          expanded_state_map,
-          "start"
-        ),
-        "State Time"  # Warning should include "State Time" column for expanded states
-      )
-    }
+  expect_error(
+    cppCalculateTraceAndValues(
+      init,
+      mat,
+      values,
+      value_names,
+      state_names,
+      expanded_state_map,
+      "start"
+    ),
+    "State Time"
   )
 })
 
@@ -1968,7 +1931,7 @@ test_that("eval_trans_markov_lf handles formula evaluation errors", {
   openqaly:::clear_oq_errors()
 })
 
-test_that("eval_trans_markov_lf stops on error when option is set", {
+test_that("eval_trans_markov_lf throws accumulated errors at checkpoint", {
   openqaly:::clear_oq_errors()
 
   # Create a minimal namespace
@@ -1990,15 +1953,9 @@ test_that("eval_trans_markov_lf stops on error when option is set", {
   )
   df$formula <- list(openqaly:::as.oq_formula("undefined_var_xyz"))
 
-  # Run with stop_on_error = TRUE
-  withr::with_options(
-    list(openqaly.stop_on_error = TRUE),
-    {
-      expect_error(
-        openqaly:::eval_trans_markov_lf(df, ns),
-        "Error evaluating transition"
-      )
-    }
+  expect_error(
+    openqaly:::eval_trans_markov_lf(df, ns),
+    "Evaluation of transition"
   )
 
   openqaly:::clear_oq_errors()
@@ -2131,4 +2088,3 @@ test_that("shared state time with conflicting state_cycle_limit values errors", 
     "conflicting state_cycle_limit"
   )
 })
-

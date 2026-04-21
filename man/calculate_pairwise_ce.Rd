@@ -6,11 +6,13 @@
 \usage{
 calculate_pairwise_ce(
   results,
-  outcome_summary,
-  cost_summary,
+  outcome_summary = NULL,
+  cost_summary = NULL,
   groups = "overall",
   interventions = NULL,
-  comparators = NULL
+  comparators = NULL,
+  health_outcome = NULL,
+  cost_outcome = NULL
 )
 }
 \arguments{

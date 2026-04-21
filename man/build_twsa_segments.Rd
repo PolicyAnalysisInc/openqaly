@@ -4,7 +4,7 @@
 \alias{build_twsa_segments}
 \title{Build TWSA Segments with Overrides}
 \usage{
-build_twsa_segments(model)
+build_twsa_segments(model, progress = NULL)
 }
 \arguments{
 \item{model}{Parsed model object}

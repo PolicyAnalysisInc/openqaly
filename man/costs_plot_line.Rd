@@ -23,8 +23,8 @@ costs_plot_line(
 
 \item{outcome}{Name of the cost summary to plot (e.g., "total_costs")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL
-(all groups plus aggregated)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategy names to include (NULL for all)}
 
@@ -77,10 +77,10 @@ costs_plot_line(results, outcome = "total_costs")
 costs_plot_line(results, outcome = "total_costs", cumulative = FALSE)
 
 # Differences vs control (comparator perspective)
-costs_plot_line(results, outcome = "total_costs", comparator = "control")
+costs_plot_line(results, outcome = "total_costs", comparators = "control")
 
 # New treatment vs others (intervention perspective)
-costs_plot_line(results, outcome = "total_costs", intervention = "new_treatment")
+costs_plot_line(results, outcome = "total_costs", interventions = "new_treatment")
 }
 
 }

@@ -6,7 +6,7 @@
 \usage{
 psa_costs_table(
   results,
-  outcome_summary,
+  outcome,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
@@ -22,7 +22,7 @@ psa_costs_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the cost summary (e.g., "total_cost")}
+\item{outcome}{Name of the cost outcome to display (e.g., "total_cost")}
 
 \item{groups}{Group selection:
 \itemize{

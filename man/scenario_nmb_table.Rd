@@ -26,12 +26,14 @@ scenario_nmb_table(
 
 \item{wtp}{Willingness to pay threshold. If NULL, extracted from outcome metadata.}
 
-\item{groups}{Group selection: "overall" (default), specific group name, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{interventions}{Character vector of intervention strategy name(s).
 At least one of interventions or comparators must be specified.}
 
-\item{comparators}{Character vector of comparator strategy name(s).}
+\item{comparators}{Character vector of comparator strategy name(s).
+At least one of interventions or comparators must be specified.}
 
 \item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
@@ -40,7 +42,7 @@ At least one of interventions or comparators must be specified.}
 \item{font_size}{Font size for rendering (default: 11)}
 }
 \value{
-A gt table object
+A flextable object
 }
 \description{
 Creates a table showing incremental Net Monetary Benefit for each scenario.

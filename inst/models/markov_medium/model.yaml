@@ -1,0 +1,1059 @@
+format_version: '1.0'
+model_type: markov
+settings:
+  timeframe: 5.0
+  timeframe_unit: years
+  cycle_length: 1.0
+  cycle_length_unit: weeks
+  discount_cost: 3.5
+  discount_outcomes: 3.5
+  half_cycle_method: life-table
+  reduce_state_cycle: yes
+  days_per_year: 365.0
+  discount_timing: start
+  discount_method: by_cycle
+strategies:
+  - name: checkimab
+    display_name: Checkimab
+    description: Checkimab
+    abbreviation: ~
+    enabled: 1.0
+  - name: chemoplatin
+    display_name: Chemoplatin
+    description: Chemoplatin
+    abbreviation: ~
+    enabled: 1.0
+  - name: lenrastim
+    display_name: Lenrastim
+    description: Lenrastim
+    abbreviation: ~
+    enabled: 1.0
+groups:
+  - name: hsct_eligible
+    display_name: HSCT Eligible
+    description: HSCT Eligible
+    weight: '0.61'
+    enabled: 1.0
+  - name: hsct_ineligible
+    display_name: HSCT Ineligible
+    description: HSCT Ineligible
+    weight: '0.39'
+    enabled: 1.0
+states:
+  - name: initial
+    display_name: Initial Treatment
+    description: initial
+    initial_probability: '1'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 1.0
+    state_cycle_limit_unit: Cycles
+  - name: l1_maint
+    display_name: L1 Maintenance
+    description: l1_maint
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: Cycles
+  - name: l2_rescue
+    display_name: Line 2 Rescue
+    description: l2_rescue
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 10.0
+    state_cycle_limit_unit: Cycles
+  - name: l2_maint
+    display_name: Line 2 Maintenance
+    description: l2_maint
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: .inf
+    state_cycle_limit_unit: Cycles
+  - name: hsct
+    display_name: HSCT
+    description: hsct
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 1.0
+    state_cycle_limit_unit: Cycles
+  - name: post_hsct
+    display_name: Post-HSCT
+    description: post_hsct
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 10.0
+    state_cycle_limit_unit: Cycles
+  - name: palliative
+    display_name: Palliative
+    description: palliative
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 1.0
+    state_cycle_limit_unit: Cycles
+  - name: dead
+    display_name: Dead
+    description: dead
+    initial_probability: '0'
+    state_group: ~
+    share_state_time: no
+    state_cycle_limit: 1.0
+    state_cycle_limit_unit: Cycles
+variables:
+  - name: p_male
+    display_name: resp_l1_rescue
+    description: resp_l1_rescue
+    formula: '0.47'
+    strategy: ~
+    group: ~
+    source: resp_l1_rescue
+    sampling: ~
+  - name: age
+    display_name: age
+    description: age
+    formula: '34'
+    strategy: ~
+    group: hsct_eligible
+    source: age
+    sampling: ~
+  - name: age
+    display_name: age
+    description: age
+    formula: '52'
+    strategy: ~
+    group: hsct_ineligible
+    source: age
+    sampling: ~
+  - name: smr_init
+    display_name: smr_init
+    description: smr_init
+    formula: '12.21'
+    strategy: ~
+    group: ~
+    source: smr_init
+    sampling: ~
+  - name: smr_l1_maint
+    display_name: smr_l1_maint
+    description: smr_l1_maint
+    formula: '5.0599999999999996'
+    strategy: ~
+    group: ~
+    source: smr_l1_maint
+    sampling: ~
+  - name: smr_l2_rescue
+    display_name: smr_l2_rescue
+    description: smr_l2_rescue
+    formula: '14.86'
+    strategy: ~
+    group: ~
+    source: smr_l2_rescue
+    sampling: ~
+  - name: smr_l2_maint
+    display_name: smr_l2_maint
+    description: smr_l2_maint
+    formula: '6.78'
+    strategy: ~
+    group: ~
+    source: smr_l2_maint
+    sampling: ~
+  - name: smr_hsct
+    display_name: smr_hsct
+    description: smr_hsct
+    formula: '3.14'
+    strategy: ~
+    group: ~
+    source: smr_hsct
+    sampling: ~
+  - name: smr_post_hsct
+    display_name: smr_post_hsct
+    description: smr_post_hsct
+    formula: '3.14'
+    strategy: ~
+    group: ~
+    source: smr_post_hsct
+    sampling: ~
+  - name: smr_palliative
+    display_name: smr_palliative
+    description: smr_palliative
+    formula: '70.099999999999994'
+    strategy: ~
+    group: ~
+    source: smr_palliative
+    sampling: ~
+  - name: l1_relapse_shape
+    display_name: l1_relapse_shape
+    description: l1_relapse_shape
+    formula: '1.6870000000000001'
+    strategy: ~
+    group: ~
+    source: l1_relapse_shape
+    sampling: ~
+  - name: l1_relapse_scale
+    display_name: l1_relapse_scale
+    description: l1_relapse_scale
+    formula: '9.6430000000000007'
+    strategy: ~
+    group: ~
+    source: l1_relapse_scale
+    sampling: ~
+  - name: l2_relapse_shape
+    display_name: l2_relapse_shape
+    description: l2_relapse_shape
+    formula: '1.3028999999999999'
+    strategy: ~
+    group: ~
+    source: l2_relapse_shape
+    sampling: ~
+  - name: l2_relapse_scale
+    display_name: l2_relapse_scale
+    description: l2_relapse_scale
+    formula: '3.4136000000000002'
+    strategy: ~
+    group: ~
+    source: l2_relapse_scale
+    sampling: ~
+  - name: resp_rate_lenrastim
+    display_name: resp_rate_lenrastim
+    description: resp_rate_lenrastim
+    formula: '0.25'
+    strategy: ~
+    group: ~
+    source: resp_rate_lenrastim
+    sampling: ~
+  - name: rr_chemoplatin
+    display_name: rr_chemoplatin
+    description: rr_chemoplatin
+    formula: '1.23'
+    strategy: ~
+    group: ~
+    source: rr_chemoplatin
+    sampling: ~
+  - name: rr_checkimab
+    display_name: rr_checkimab
+    description: rr_checkimab
+    formula: '2.21'
+    strategy: ~
+    group: ~
+    source: rr_checkimab
+    sampling: ~
+  - name: resp_l1_rescue
+    display_name: resp_l1_rescue
+    description: resp_l1_rescue
+    formula: resp_rate_lenrastim
+    strategy: lenrastim
+    group: ~
+    source: resp_l1_rescue
+    sampling: ~
+  - name: resp_l1_rescue
+    display_name: resp_l1_rescue
+    description: resp_l1_rescue
+    formula: rr_chemoplatin * resp_rate_lenrastim
+    strategy: chemoplatin
+    group: ~
+    source: resp_l1_rescue
+    sampling: ~
+  - name: resp_l1_rescue
+    display_name: resp_l1_rescue
+    description: resp_l1_rescue
+    formula: rr_checkimab * resp_rate_lenrastim
+    strategy: checkimab
+    group: ~
+    source: resp_l1_rescue
+    sampling: ~
+  - name: resp_l2_rescue
+    display_name: resp_l2_rescue
+    description: resp_l2_rescue
+    formula: '0.18'
+    strategy: ~
+    group: ~
+    source: resp_l2_rescue
+    sampling: ~
+  - name: p_hsct
+    display_name: p_hsct
+    description: p_hsct
+    formula: '0.67'
+    strategy: ~
+    group: hsct_eligible
+    source: p_hsct
+    sampling: ~
+  - name: p_hsct
+    display_name: p_hsct
+    description: p_hsct
+    formula: '0'
+    strategy: ~
+    group: hsct_ineligible
+    source: p_hsct
+    sampling: ~
+  - name: p_death_hsct
+    display_name: p_death_hsct
+    description: p_death_hsct
+    formula: '0.01'
+    strategy: ~
+    group: ~
+    source: p_death_hsct
+    sampling: ~
+  - name: init_util
+    display_name: init_util
+    description: init_util
+    formula: '0.64'
+    strategy: ~
+    group: ~
+    source: init_util
+    sampling: ~
+  - name: l1_maint_util
+    display_name: l1_maint_util
+    description: l1_maint_util
+    formula: '0.74'
+    strategy: ~
+    group: ~
+    source: l1_maint_util
+    sampling: ~
+  - name: l2_rescue_util
+    display_name: l2_rescue_util
+    description: l2_rescue_util
+    formula: '0.61'
+    strategy: ~
+    group: ~
+    source: l2_rescue_util
+    sampling: ~
+  - name: l2_maint_util
+    display_name: l2_maint_util
+    description: l2_maint_util
+    formula: '0.68'
+    strategy: ~
+    group: ~
+    source: l2_maint_util
+    sampling: ~
+  - name: hsct_util
+    display_name: hsct_util
+    description: hsct_util
+    formula: '0.57999999999999996'
+    strategy: ~
+    group: ~
+    source: hsct_util
+    sampling: ~
+  - name: post_hsct_util
+    display_name: post_hsct_util
+    description: post_hsct_util
+    formula: '0.88'
+    strategy: ~
+    group: ~
+    source: post_hsct_util
+    sampling: ~
+  - name: palliative_util
+    display_name: palliative_util
+    description: palliative_util
+    formula: '0.51'
+    strategy: ~
+    group: ~
+    source: palliative_util
+    sampling: ~
+  - name: bsa_m2
+    display_name: bsa_m2
+    description: bsa_m2
+    formula: '1.78'
+    strategy: ~
+    group: ~
+    source: bsa_m2
+    sampling: ~
+  - name: weight_kg
+    display_name: weight_kg
+    description: weight_kg
+    formula: '78.099999999999994'
+    strategy: ~
+    group: ~
+    source: weight_kg
+    sampling: ~
+  - name: ae_cost_sum
+    display_name: ae_cost_sum
+    description: ae_cost_sum
+    formula: sum(ae_incidence$Lenrastim * ae_cost$Cost)
+    strategy: lenrastim
+    group: ~
+    source: ~
+    sampling: ~
+  - name: ae_cost_sum
+    display_name: ae_cost_sum
+    description: ae_cost_sum
+    formula: sum(ae_incidence$Chemoplatin * ae_cost$Cost)
+    strategy: chemoplatin
+    group: ~
+    source: ~
+    sampling: ~
+  - name: ae_cost_sum
+    display_name: ae_cost_sum
+    description: ae_cost_sum
+    formula: sum(ae_incidence$Checkimab * ae_cost$Cost)
+    strategy: checkimab
+    group: ~
+    source: ~
+    sampling: ~
+  - name: ae_qaly_dec_sum
+    display_name: ae_qaly_dec_sum
+    description: ae_qaly_dec_sum
+    formula: sum(ae_incidence$Lenrastim * ae_util$Disutility * ae_util$Duration)/365
+    strategy: lenrastim
+    group: ~
+    source: ~
+    sampling: ~
+  - name: ae_qaly_dec_sum
+    display_name: ae_qaly_dec_sum
+    description: ae_qaly_dec_sum
+    formula: sum(ae_incidence$Chemoplatin * ae_util$Disutility * ae_util$Duration)/365
+    strategy: chemoplatin
+    group: ~
+    source: ~
+    sampling: ~
+  - name: ae_qaly_dec_sum
+    display_name: ae_qaly_dec_sum
+    description: ae_qaly_dec_sum
+    formula: sum(ae_incidence$Checkimab * ae_util$Disutility * ae_util$Duration)/365
+    strategy: checkimab
+    group: ~
+    source: ~
+    sampling: ~
+  - name: init_med_cost_per_cycle
+    display_name: init_med_cost_per_cycle
+    description: init_med_cost_per_cycle
+    formula: calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Lenrastim'))
+    strategy: lenrastim
+    group: ~
+    source: ~
+    sampling: ~
+  - name: init_med_cost_per_cycle
+    display_name: init_med_cost_per_cycle
+    description: init_med_cost_per_cycle
+    formula: calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Chemoplatin'))
+    strategy: chemoplatin
+    group: ~
+    source: ~
+    sampling: ~
+  - name: init_med_cost_per_cycle
+    display_name: init_med_cost_per_cycle
+    description: init_med_cost_per_cycle
+    formula: calc_med_cost(day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Checkimab'))
+    strategy: checkimab
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l1_maint_med_cost_per_cycle
+    display_name: l1_maint_med_cost_per_cycle
+    description: l1_maint_med_cost_per_cycle
+    formula: calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Molgramotin'))
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l2_rescue_med_cost_per_cycle
+    display_name: l2_rescue_med_cost_per_cycle
+    description: l2_rescue_med_cost_per_cycle
+    formula: calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Bendecogin'))
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l2_maint_med_cost_per_cycle
+    display_name: l2_maint_med_cost_per_cycle
+    description: l2_maint_med_cost_per_cycle
+    formula: calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Sargramotide'))
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: post_hsct_med_cost_per_cycle
+    display_name: post_hsct_med_cost_per_cycle
+    description: post_hsct_med_cost_per_cycle
+    formula: calc_med_cost(state_day, cycle_length_days, bsa_m2, weight_kg, filter(regimens,
+      Medication == 'Lupprumab'))
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: gp_mort_surv
+    display_name: gp_mort_surv
+    description: gp_mort_surv
+    formula: define_surv_lifetable(life_table, age, p_male, output_unit = 'years')
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: init_mort
+    display_name: init_mort
+    description: init_mort
+    formula: apply_hr(gp_mort_surv, smr_init)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l1_maint_mort
+    display_name: l1_maint_mort
+    description: l1_maint_mort
+    formula: apply_hr(gp_mort_surv, smr_l1_maint)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l2_rescue_mort
+    display_name: l2_rescue_mort
+    description: l2_rescue_mort
+    formula: apply_hr(gp_mort_surv, smr_l2_rescue)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l2_maint_mort
+    display_name: l2_maint_mort
+    description: l2_maint_mort
+    formula: apply_hr(gp_mort_surv, smr_l2_maint)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: hsct_mort
+    display_name: hsct_mort
+    description: hsct_mort
+    formula: apply_hr(gp_mort_surv, smr_hsct)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: post_hsct_mort
+    display_name: post_hsct_mort
+    description: post_hsct_mort
+    formula: apply_hr(gp_mort_surv, smr_post_hsct)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: palliative_mort
+    display_name: palliative_mort
+    description: palliative_mort
+    formula: apply_hr(gp_mort_surv, smr_palliative)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l1_relapse_weib
+    display_name: l1_relapse_weib
+    description: l1_relapse_weib
+    formula: define_surv_param(dist = "weibull", shape = l1_relapse_shape, scale =
+      l1_relapse_scale)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+  - name: l2_relapse_weib
+    display_name: l2_relapse_weib
+    description: l2_relapse_weib
+    formula: define_surv_param(dist = "weibull", shape = l2_relapse_shape, scale =
+      l2_relapse_scale)
+    strategy: ~
+    group: ~
+    source: ~
+    sampling: ~
+transitions:
+  - from: initial
+    to: initial
+    formula: ifelse(week > 8, 0, C)
+  - from: initial
+    to: hsct
+    formula: ifelse(week > 8, resp_l1_rescue * p_hsct, 0)
+  - from: initial
+    to: l1_maint
+    formula: ifelse(week > 8, resp_l1_rescue * (1 - p_hsct), 0)
+  - from: initial
+    to: l2_rescue
+    formula: ifelse(week > 8, C, 0)
+  - from: initial
+    to: dead
+    formula: event_prob(init_mort, year_lag, year)
+  - from: l1_maint
+    to: l1_maint
+    formula: C
+  - from: l1_maint
+    to: l2_rescue
+    formula: event_prob(l1_relapse_weib, state_year_lag, state_year)
+  - from: l1_maint
+    to: dead
+    formula: event_prob(l1_maint_mort, year_lag, year)
+  - from: hsct
+    to: post_hsct
+    formula: C
+  - from: hsct
+    to: dead
+    formula: p_death_hsct + event_prob(hsct_mort, year_lag, year)
+  - from: l2_rescue
+    to: l2_rescue
+    formula: ifelse(state_week > 8, 0, C)
+  - from: l2_rescue
+    to: hsct
+    formula: ifelse(state_week > 8, resp_l2_rescue * p_hsct, 0)
+  - from: l2_rescue
+    to: l2_maint
+    formula: ifelse(state_week > 8, resp_l2_rescue * (1 - p_hsct), 0)
+  - from: l2_rescue
+    to: palliative
+    formula: ifelse(state_week > 8, C, 0)
+  - from: l2_rescue
+    to: dead
+    formula: event_prob(l2_rescue_mort, year_lag, year)
+  - from: l2_maint
+    to: l2_maint
+    formula: C
+  - from: l2_maint
+    to: palliative
+    formula: event_prob(l2_relapse_weib, state_year_lag, state_year)
+  - from: l2_maint
+    to: dead
+    formula: event_prob(l2_maint_mort, year_lag, year)
+  - from: post_hsct
+    to: post_hsct
+    formula: C
+  - from: post_hsct
+    to: dead
+    formula: event_prob(post_hsct_mort, year_lag, year)
+  - from: palliative
+    to: palliative
+    formula: C
+  - from: palliative
+    to: dead
+    formula: event_prob(palliative_mort, year_lag, year)
+  - from: dead
+    to: dead
+    formula: '1'
+values:
+  - name: init_lys
+    display_name: Initial Tx LYs
+    description: init_lys
+    state: initial
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: hsct_lys
+    display_name: HSCT Lys
+    description: hsct_lys
+    state: hsct
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: post_hsct_lys
+    display_name: Post-HSCT Lys
+    description: post_hsct_lys
+    state: post_hsct
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l1_maint_lys
+    display_name: L1 Maintenance Lys
+    description: l1_maint_lys
+    state: l1_maint
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l2_rescue_lys
+    display_name: L2 Rescue Lys
+    description: l2_rescue_lys
+    state: l2_rescue
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l2_maint_lys
+    display_name: L2 Maintenance Lys
+    description: l2_maint_lys
+    state: l2_maint
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: palliative_lys
+    display_name: Palliative Lys
+    description: palliative_lys
+    state: palliative
+    destination: ~
+    formula: cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: init_qalys
+    display_name: Initial QALYs
+    description: init_qalys
+    state: initial
+    destination: ~
+    formula: init_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: hsct_qalys
+    display_name: HSCT QALYs
+    description: hsct_qalys
+    state: hsct
+    destination: ~
+    formula: hsct_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: post_hsct_qalys
+    display_name: Post-HSCT QALYs
+    description: post_hsct_qalys
+    state: post_hsct
+    destination: ~
+    formula: post_hsct_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l1_maint_qalys
+    display_name: L1 Maintenance QALYs
+    description: l1_maint_qalys
+    state: l1_maint
+    destination: ~
+    formula: l1_maint_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l2_rescue_qalys
+    display_name: L2 Rescue QALYs
+    description: l2_rescue_qalys
+    state: l2_rescue
+    destination: ~
+    formula: l2_rescue_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: l2_maint_qalys
+    display_name: L2 Maintenance QALYs
+    description: l2_maint_qalys
+    state: l2_maint
+    destination: ~
+    formula: l2_maint_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: palliative_qalys
+    display_name: Palliative QALYs
+    description: palliative_qalys
+    state: palliative
+    destination: ~
+    formula: palliative_util * cycle_length_years
+    type: outcome
+    discounting_override: ~
+  - name: ae_qalys
+    display_name: Adverse Event QALYs
+    description: ae_qalys
+    state: ~
+    destination: ~
+    formula: ae_qaly_dec_sum * -1
+    type: outcome
+    discounting_override: ~
+  - name: cost_ae
+    display_name: Adverse Event Costs
+    description: cost_ae
+    state: ~
+    destination: ~
+    formula: ae_cost_sum
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_init
+    display_name: Routine Care Costs, Initial Tx
+    description: cost_routine_init
+    state: initial
+    destination: ~
+    formula: 400 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_l1m
+    display_name: Routine Care Costs, L1 Maintenance
+    description: cost_routine_l1m
+    state: l1_maint
+    destination: ~
+    formula: 200 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_l2r
+    display_name: Routine Care Costs, Line 2 Rescue
+    description: cost_routine_l2r
+    state: l2_rescue
+    destination: ~
+    formula: 400 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_l2m
+    display_name: Routine Care Costs, Line 2 Maintenance
+    description: cost_routine_l2m
+    state: l2_maint
+    destination: ~
+    formula: 200 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_hsct
+    display_name: Routine Care Costs, HSCT
+    description: cost_routine_hsct
+    state: hsct
+    destination: ~
+    formula: 500 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_psthsct
+    display_name: Routine Care Costs, Post-HSCT
+    description: cost_routine_psthsct
+    state: post_hsct
+    destination: ~
+    formula: 80 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_routine_pall
+    display_name: Routine Care Costs, Palliative
+    description: cost_routine_pall
+    state: palliative
+    destination: ~
+    formula: 800 * cycle_length_months
+    type: cost
+    discounting_override: ~
+  - name: cost_med_init
+    display_name: Medication Costs, Initial Tx
+    description: cost_med_init
+    state: initial
+    destination: ~
+    formula: init_med_cost_per_cycle
+    type: cost
+    discounting_override: ~
+  - name: cost_med_l1m
+    display_name: Medication Costs, Line1 Maintenance
+    description: cost_med_l1m
+    state: l1_maint
+    destination: ~
+    formula: l1_maint_med_cost_per_cycle
+    type: cost
+    discounting_override: ~
+  - name: cost_med_l2r
+    display_name: Medication Costs, Line 2 Rescue
+    description: cost_med_l2r
+    state: l2_rescue
+    destination: ~
+    formula: l2_rescue_med_cost_per_cycle
+    type: cost
+    discounting_override: ~
+  - name: cost_med_l2m
+    display_name: Medication Costs, Line 2 Maintenance
+    description: cost_med_l2m
+    state: l2_maint
+    destination: ~
+    formula: l2_maint_med_cost_per_cycle
+    type: cost
+    discounting_override: ~
+  - name: cost_med_post_hsct
+    display_name: Medication Costs, Post-HSCT
+    description: cost_med_post_hsct
+    state: post_hsct
+    destination: ~
+    formula: post_hsct_med_cost_per_cycle
+    type: cost
+    discounting_override: ~
+  - name: cost_hsct
+    display_name: HSCT Procedure Cost
+    description: cost_hsct
+    state: hsct
+    destination: ~
+    formula: '25071'
+    type: cost
+    discounting_override: ~
+summaries:
+  - name: life_years
+    display_name: Life-years
+    description: Life-years
+    values: init_lys, hsct_lys, post_hsct_lys, l1_maint_lys, l2_rescue_lys, l2_maint_lys,
+      palliative_lys
+    type: outcome
+    wtp: ~
+  - name: qalys
+    display_name: QALYs
+    description: QALYs
+    values: init_qalys, hsct_qalys, post_hsct_qalys, l1_maint_qalys, l2_rescue_qalys,
+      l2_maint_qalys, palliative_qalys, ae_qalys
+    type: outcome
+    wtp: ~
+  - name: costs
+    display_name: Total Costs
+    description: Total Costs
+    values: cost_ae, cost_routine_init, cost_routine_l1m, cost_routine_l2r, cost_routine_l2m,
+      cost_routine_hsct, cost_routine_psthsct, cost_routine_pall, cost_med_init, cost_med_l1m,
+      cost_med_l2r, cost_med_l2m, cost_med_post_hsct, cost_hsct
+    type: outcome
+    wtp: ~
+tables:
+  ae_cost:
+    description: ~
+    data: |-
+      "Event","Cost"
+      "Nausea",221
+      "Insomnia",543
+      "Abdominal pain",89
+      "Neutropenia",240
+  ae_incidence:
+    description: ~
+    data: |-
+      "Event","Checkimab","Chemoplatin","Lenrastim"
+      "Nausea",0.05,0.19,0.06
+      "Insomnia",0.12,0.08,0.05
+      "Abdominal pain",0.02,0.02,0.14
+      "Neutropenia",0.08,0.09,0.04
+  ae_util:
+    description: ~
+    data: |-
+      "Event","Disutility","Duration"
+      "Nausea",0.08,24
+      "Insomnia",0.06,31
+      "Abdominal pain",0.04,12
+      "Neutropenia",0.01,26
+  life_table:
+    description: ~
+    data: |-
+      "age","male","female"
+      0,0.004548,0.003571
+      1,0.00024,0.000221
+      2,0.000169,0.000139
+      3,0.000115,9.5e-05
+      4,8.6e-05,6.8e-05
+      5,8.5e-05,6.9e-05
+      6,6.9e-05,6.9e-05
+      7,7e-05,5.9e-05
+      8,7.7e-05,6.2e-05
+      9,7.2e-05,6.1e-05
+      10,6e-05,6.6e-05
+      11,9.2e-05,7.3e-05
+      12,0.000101,6.5e-05
+      13,0.000114,0.000105
+      14,0.000138,8.6e-05
+      15,0.000179,0.000132
+      16,0.000229,0.000121
+      17,0.000304,0.000166
+      18,0.000432,0.000176
+      19,0.000502,0.000191
+      20,0.000456,0.000222
+      21,0.000494,0.000211
+      22,0.000502,0.000208
+      23,0.000551,0.000242
+      24,0.000513,0.00024
+      25,0.000525,0.000231
+      26,0.000633,0.00027
+      27,0.000604,0.000302
+      28,0.000663,0.000307
+      29,0.000739,0.000338
+      30,0.000749,0.000351
+      31,0.000867,0.000387
+      32,0.000883,0.000442
+      33,0.000949,0.000477
+      34,0.000981,0.000545
+      35,0.001091,0.000614
+      36,0.001192,0.00058
+      37,0.001276,0.000715
+      38,0.001373,0.000839
+      39,0.001549,0.000898
+      40,0.001653,0.000962
+      41,0.001808,0.001024
+      42,0.001865,0.001177
+      43,0.002028,0.001183
+      44,0.002205,0.001333
+      45,0.002402,0.001415
+      46,0.002566,0.001576
+      47,0.002867,0.001842
+      48,0.003147,0.001922
+      49,0.003387,0.002086
+      50,0.003699,0.002304
+      51,0.003947,0.002454
+      52,0.004358,0.002577
+      53,0.004589,0.002882
+      54,0.004943,0.003081
+      55,0.00531,0.003387
+      56,0.005746,0.003699
+      57,0.006254,0.004015
+      58,0.00675,0.004274
+      59,0.007225,0.004646
+      60,0.008032,0.005107
+      61,0.008855,0.005453
+      62,0.00958,0.006154
+      63,0.010363,0.006803
+      64,0.01138,0.00748
+      65,0.012389,0.008042
+      66,0.013666,0.008997
+      67,0.015075,0.00981
+      68,0.016594,0.010806
+      69,0.017954,0.011665
+      70,0.019639,0.01298
+      71,0.021509,0.01398
+      72,0.023699,0.01535
+      73,0.02541,0.016933
+      74,0.027562,0.018619
+      75,0.030559,0.021063
+      76,0.034412,0.023411
+      77,0.038379,0.026864
+      78,0.043246,0.030073
+      79,0.047924,0.033678
+      80,0.05481,0.039002
+      81,0.060929,0.044073
+      82,0.069091,0.049797
+      83,0.075578,0.055957
+      84,0.084871,0.063023
+      85,0.094935,0.07114
+      86,0.106503,0.081537
+      87,0.120024,0.09162
+      88,0.135261,0.105934
+      89,0.150561,0.118178
+      90,0.170423,0.134099
+      91,0.18754,0.152218
+      92,0.209766,0.171228
+      93,0.229759,0.190351
+      94,0.254123,0.210095
+      95,0.274965,0.230103
+      96,0.298702,0.251247
+      97,0.327806,0.278312
+      98,0.337947,0.304062
+      99,0.378259,0.323944
+      100,0.403475,0.352311
+  regimens:
+    description: ~
+    data: |-
+      "Medication","Type","Dosing Unit","Dose","Doses per Cycle","Cycle Length (days)","Max Cycles","Cost per mg"
+      "Checkimab","Initial Tx","mg per patient",200,28,28,0,3.78
+      "Chemoplatin","Initial Tx","mg per m^2",40,1,7,0,6.5
+      "Lenrastim","Initial Tx","mg per kg",10,1,7,0,0.17
+      "Molgramotin","L1 Maintenance","mg per patient",250,3,21,0,0.12
+      "Bendecogin","L2 Rescue","mg per patient",400,1,7,0,0.17
+      "Sargramotide","L1 Maintenance","mg per patient",250,3,21,0,0.09
+      "Lupprumab","Post-HSCT Immunosuppressive","mg per patient",30,30,30,2,4.58
+scripts:
+  calc_med_cost.r:
+    description: ~
+    code: |
+      calc_med_cost_ <- function(time, model_cycle_length, dose_unit, dose, doses_per_cycle, med_cycle_length, max_cycles, cost_per_mg, bsa, weight) {
+          if (max_cycles == 0) max_cycles <- Inf
+          dose_mult <- 1
+          if (dose_unit[1] == 'mg per kg') {
+              dose_mult <- weight[1]
+          } else if(dose_unit[1] == 'mg per m^2') {
+              dose_mult <- bsa[1]
+          }
+          cost_per_dose <- dose_mult * dose[1] * cost_per_mg[1]
+          cost_per_cycle <- cost_per_dose * doses_per_cycle
+          cost_per_time <- cost_per_cycle / med_cycle_length
+          max_time <- max_cycles * med_cycle_length
+          interval_start <- pmin(time - model_cycle_length, max_time)
+          interval_end <- pmin(time, max_time)
+          interval_length <- interval_end - interval_start
+          interval_cost <- interval_length * cost_per_time
+
+          interval_cost
+      }
+
+      calc_med_cost <- function(time, cycle_length, bsa, weight, regimen) {
+          calc_med_cost_(time, cycle_length, regimen[['Dosing Unit']], regimen[['Dose']], regimen[['Doses per Cycle']], regimen[['Cycle Length (days)']], regimen[['Max Cycles']], regimen[['Cost per mg']], bsa, weight)
+      }
+

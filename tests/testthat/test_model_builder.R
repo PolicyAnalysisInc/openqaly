@@ -47,7 +47,6 @@ test_that("Strategies and groups work correctly", {
 })
 
 test_that("Round-trip conversion preserves model", {
-  skip_if_not_installed("openxlsx")
   skip_if_not_installed("jsonlite")
 
   # Create a model with various components
@@ -64,7 +63,7 @@ test_that("Round-trip conversion preserves model", {
 
   # Test JSON round-trip
   json_str <- as_json(original)
-  from_json <- read_model_json(json_str)
+  from_json <- read_model_json(text = json_str)
 
   expect_equal(original$settings$n_cycles, from_json$settings$n_cycles)
   expect_equal(nrow(original$states), nrow(from_json$states))
@@ -78,7 +77,6 @@ test_that("Round-trip conversion preserves model", {
 })
 
 test_that("Convert model function works", {
-  skip_if_not_installed("openxlsx")
   skip_if_not_installed("jsonlite")
 
   # Create a simple model
@@ -106,7 +104,7 @@ test_that("Convert model function works", {
 
 test_that("PSM transitions work correctly", {
   model <- define_model("psm") |>
-    add_psm_transition("death", "years", exp(-0.1 * time))
+    add_transition("death", "years", exp(-0.1 * time))
 
   expect_equal(model$transitions$endpoint[1], "death")
   expect_equal(model$transitions$time_unit[1], "years")
@@ -134,8 +132,8 @@ test_that("Complete PSM model can be built and executed", {
     add_variable("u_prog", 0.6) |>
     add_variable("c_drug", 1000, strategy = "standard") |>
     add_variable("c_drug", 3000, strategy = "intervention") |>
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS", "months", os_dist) |>
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS", "months", os_dist) |>
     add_value("qalys", u_pfs, type = "outcome", state = "pfs") |>
     add_value("qalys", u_prog, type = "outcome", state = "progressed") |>
     add_value("cost", c_drug, type = "cost")
@@ -194,12 +192,6 @@ test_that("Complete PSM model can be built and executed", {
 
 test_that("Path validation works correctly", {
   model <- define_model("markov")
-
-  # Excel format should reject file paths
-  expect_error(
-    write_model(model, "test.xlsx", format = "excel"),
-    "path must be a folder"
-  )
 
   # JSON/R formats should reject folder paths
   expect_error(
@@ -528,12 +520,12 @@ test_that("add_state rejects Markov parameters for custom_psm", {
   )
 })
 
-test_that("add_custom_psm_transition creates correct structure", {
+test_that("add_transition creates correct structure", {
   model <- define_model("custom_psm") |>
     add_state("alive") |>
     add_state("dead") |>
-    add_custom_psm_transition("alive", 0.9) |>
-    add_custom_psm_transition("dead", C)
+    add_transition("alive", 0.9) |>
+    add_transition("dead", C)
 
   expect_equal(nrow(model$transitions), 2)
   expect_true(all(c("state", "formula") %in% colnames(model$transitions)))
@@ -541,34 +533,25 @@ test_that("add_custom_psm_transition creates correct structure", {
   expect_equal(model$transitions$formula, c("0.9", "C"))
 })
 
-test_that("add_custom_psm_transition captures expressions", {
+test_that("add_transition captures expressions", {
   model <- define_model("custom_psm") |>
     add_state("alive") |>
     add_state("dead") |>
-    add_custom_psm_transition("alive", surv_prob(pfs_dist, month))
+    add_transition("alive", surv_prob(pfs_dist, month))
 
   expect_equal(model$transitions$formula[1], "surv_prob(pfs_dist, month)")
 })
 
-test_that("add_custom_psm_transition rejects non-custom_psm models", {
+test_that("add_transition dispatches correctly by model type", {
+  # Markov: requires from_state, to_state, formula
   model_markov <- define_model("markov")
-  expect_error(
-    add_custom_psm_transition(model_markov, "state1", 0.5),
-    "Custom PSM models"
-  )
+  expect_error(add_transition(model_markov, "state1", 0.5))
 
-  model_psm <- define_model("psm")
+  # DT: always errors
+  model_dt <- define_model("decision_tree")
   expect_error(
-    add_custom_psm_transition(model_psm, "state1", 0.5),
-    "Custom PSM models"
-  )
-})
-
-test_that("add_transition rejects custom_psm models", {
-  model <- define_model("custom_psm")
-  expect_error(
-    add_transition(model, "from", "to", 0.5),
-    "Custom PSM"
+    add_transition(model_dt, "a", "b", 0.5),
+    "do not support transitions"
   )
 })
 
@@ -606,8 +589,8 @@ test_that("custom_psm model runs end-to-end via builder", {
     add_state("dead") |>
     add_strategy("default") |>
     add_group("patients") |>
-    add_custom_psm_transition("alive", 0.8) |>
-    add_custom_psm_transition("dead", C) |>
+    add_transition("alive", 0.8) |>
+    add_transition("dead", C) |>
     add_value("qalys", 1, state = "alive", type = "outcome") |>
     add_summary("total_qalys", "qalys", type = "outcome")
 
@@ -651,4 +634,63 @@ test_that("No collision when table and value names differ", {
   expect_no_error(
     normalize_and_validate_model(model)
   )
+})
+
+test_that("Complement (C) keyword works for group weights", {
+  build_model_with_weights <- function(w1, w2) {
+    define_model("markov") |>
+      set_settings(
+        n_cycles = 10,
+        cycle_length = 1,
+        cycle_length_unit = "years"
+      ) |>
+      add_strategy("default") |>
+      add_group("young", weight = w1) |>
+      add_group("old", weight = w2) |>
+      add_state("healthy", initial_prob = 1) |>
+      add_state("sick", initial_prob = 0) |>
+      add_state("dead", initial_prob = 0) |>
+      add_transition("healthy", "sick", 0.1) |>
+      add_transition("healthy", "dead", 0.02) |>
+      add_transition("healthy", "healthy", "1 - 0.1 - 0.02") |>
+      add_transition("sick", "dead", 0.15) |>
+      add_transition("sick", "sick", "1 - 0.15") |>
+      add_transition("dead", "dead", 1) |>
+      add_value("cost", 1000, state = "healthy", type = "cost") |>
+      add_value("qalys", 0.9, state = "healthy", type = "outcome") |>
+      add_summary("total_cost", "cost", type = "cost") |>
+      add_summary("total_qalys", "qalys", type = "outcome")
+  }
+
+  # Run with C and with explicit weights — results should match
+  result_c <- run_model(build_model_with_weights("0.6", "C"))
+  result_explicit <- run_model(build_model_with_weights("0.6", "0.4"))
+
+  expect_equal(
+    result_c$aggregated$summaries,
+    result_explicit$aggregated$summaries
+  )
+})
+
+test_that("Multiple complement (C) group weights produces error", {
+  model <- define_model("markov") |>
+    set_settings(
+      n_cycles = 10,
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) |>
+    add_strategy("default") |>
+    add_group("young", weight = "C") |>
+    add_group("old", weight = "C") |>
+    add_state("healthy", initial_prob = 1) |>
+    add_state("dead", initial_prob = 0) |>
+    add_transition("healthy", "dead", 0.1) |>
+    add_transition("healthy", "healthy", 0.9) |>
+    add_transition("dead", "dead", 1) |>
+    add_value("cost", 1000, state = "healthy", type = "cost") |>
+    add_value("qalys", 0.9, state = "healthy", type = "outcome") |>
+    add_summary("total_cost", "cost", type = "cost") |>
+    add_summary("total_qalys", "qalys", type = "outcome")
+
+  expect_error(run_model(model), "Only one group may use complement")
 })

@@ -26,20 +26,7 @@ validate_twsa_vbp_spec <- function(model,
                                     vbp_intervention,
                                     vbp_outcome_summary,
                                     vbp_cost_summary) {
-
-  # Check price variable exists
-  if (!(vbp_price_variable %in% model$variables$name)) {
-    stop(glue("VBP price variable '{vbp_price_variable}' not found in model variables"),
-         call. = FALSE)
-  }
-
-  # Check intervention strategy exists
-  strategy_names <- model$strategies$name
-  if (!(vbp_intervention %in% strategy_names)) {
-    stop(glue("VBP intervention strategy '{vbp_intervention}' not found. ",
-              "Available strategies: {paste(strategy_names, collapse=', ')}"),
-         call. = FALSE)
-  }
+  resolve_vbp_price_target(model, vbp_price_variable, vbp_intervention)
 
   # Check outcome summary exists
   summary_names <- model$summaries$name
@@ -68,13 +55,19 @@ validate_twsa_vbp_spec <- function(model,
 #' @param vbp_spec VBP specification list
 #' @return Tibble with segments including vbp_price_level column
 #' @keywords internal
-build_twsa_vbp_segments <- function(model, vbp_spec) {
+build_twsa_vbp_segments <- function(model, vbp_spec, progress = NULL) {
   # Build base TWSA segments
-  twsa_segments <- build_twsa_segments(model)
+  twsa_segments <- build_twsa_segments(
+    model, progress = progress
+  )
+  price_target <- resolve_vbp_price_target(
+    model,
+    vbp_spec$price_variable,
+    vbp_spec$intervention_strategy
+  )
 
   # Get VBP parameters
   price_variable <- vbp_spec$price_variable
-  intervention <- vbp_spec$intervention_strategy
   price_values <- vbp_spec$price_values
 
   all_segments <- list()
@@ -94,8 +87,7 @@ build_twsa_vbp_segments <- function(model, vbp_spec) {
       vbp_seg$vbp_price_level <- price_level
       vbp_seg$price_value <- price_value
 
-      # If this is the intervention strategy, add price override
-      if (seg_strategy == intervention) {
+      if (segment_matches_vbp_price_target(seg_strategy, price_target)) {
         # Merge VBP price override into existing parameter overrides
         existing_overrides <- vbp_seg$parameter_overrides[[1]]
         existing_overrides[[price_variable]] <- price_value

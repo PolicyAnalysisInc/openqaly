@@ -8,7 +8,7 @@
 #' When called with results from \code{run_model()}, edge labels show
 #' evaluated conditional probabilities as percentages.
 #'
-#' @param x An \code{oq_model}, \code{oq_model_builder}, or results object
+#' @param x An \code{oq_model} or results object
 #'   from \code{run_model()}.
 #' @param tree_name Character string specifying which tree to plot. If
 #'   \code{NULL}, auto-detects from the model or results.
@@ -34,7 +34,7 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   }
 
   # Detect input type and extract tree_df + edge labels
-  if (inherits(x, c("oq_model", "oq_model_builder"))) {
+  if (inherits(x, "oq_model")) {
     # Model/builder path: formula labels
     tree_info <- .extract_model_tree(x, tree_name)
     tree_df <- tree_info$tree_df
@@ -56,120 +56,12 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
          "plot_decision_tree() on results requires base-case output from run_model().",
          call. = FALSE)
   } else {
-    stop("'x' must be an oq_model, oq_model_builder, or run_model() results object.",
+    stop("'x' must be an oq_model or run_model() results object.",
          call. = FALSE)
   }
 
-  # Build graph and plot (shared for both paths)
-  all_nodes <- tree_df$node
-  root_node <- all_nodes[1]
-  parent_nodes <- unique(tree_df$parent[!is.na(tree_df$parent) &
-                                          tree_df$parent != ""])
-  leaf_nodes <- setdiff(all_nodes, parent_nodes)
-
-  node_type <- ifelse(all_nodes %in% leaf_nodes, "terminal", "chance")
-
-  # Build node labels
-  node_labels <- all_nodes
-
-  # Override root node label if provided
-  if (!is.null(root_label)) {
-    node_labels[1] <- root_label
-  }
-
-  # Append joint probabilities to terminal node labels
-  if (!is.null(joint_probs)) {
-    is_terminal <- node_type == "terminal"
-    prob_pct <- joint_probs[all_nodes[is_terminal]] * 100
-    formatted_pct <- oq_format(prob_pct, decimals = probability_decimals, locale = locale)
-    node_labels[is_terminal] <- paste0(
-      node_labels[is_terminal], " (", formatted_pct, "%)"
-    )
-  }
-
-  nodes_df <- data.frame(
-    node = node_labels,
-    node_type = node_type,
-    stringsAsFactors = FALSE
-  )
-
-  # Build edges (only for non-root nodes)
-  non_root <- tree_df[!is.na(tree_df$parent) & tree_df$parent != "", ]
-  edges_df <- data.frame(
-    from = match(non_root$parent, all_nodes),
-    to = match(non_root$node, all_nodes),
-    label = edge_labels,
-    stringsAsFactors = FALSE
-  )
-
-  the_graph <- tbl_graph(nodes = nodes_df, edges = edges_df)
-
-  # Compute layout to get node positions for edge label placement
-  layout <- create_layout(the_graph, layout = "tree")
-  edge_label_df <- data.frame(
-    x = layout$x[edges_df$from] + (layout$x[edges_df$to] - layout$x[edges_df$from]) * 0.33,
-    y = layout$y[edges_df$from] + (layout$y[edges_df$to] - layout$y[edges_df$from]) * 0.33,
-    label = edge_labels,
-    stringsAsFactors = FALSE
-  )
-
-  # Shape mapping: 21=filled circle, 24=filled triangle
-  shape_map <- c(chance = 21, terminal = 24)
-
-  # Build label data frames
-  is_non_term <- layout$node_type != "terminal"
-  is_term <- layout$node_type == "terminal"
-  non_term_df <- data.frame(
-    x = layout$x[is_non_term], y = layout$y[is_non_term],
-    label = layout$node[is_non_term], stringsAsFactors = FALSE
-  )
-  term_df <- data.frame(
-    x = layout$x[is_term], y = layout$y[is_term],
-    label = layout$node[is_term], stringsAsFactors = FALSE
-  )
-
-  ggraph(layout) +
-    coord_flip(clip = "off") +
-    scale_y_reverse(expand = expansion(mult = c(0.35, 0.25))) +
-    geom_edge_link() +
-    geom_node_point(
-      aes(shape = .data$node_type, fill = .data$node_type),
-      size = 5, colour = "black"
-    ) +
-    scale_shape_manual(values = shape_map) +
-    scale_fill_discrete() +
-    geom_label(
-      data = non_term_df,
-      aes(x = .data$x, y = .data$y, label = .data$label),
-      size = 3, label.padding = unit(1.5, "pt"),
-      fill = "white", linewidth = 0,
-      nudge_y = -0.08, hjust = 1, vjust = 0.15
-    ) +
-    geom_label(
-      data = term_df,
-      aes(x = .data$x, y = .data$y, label = .data$label),
-      size = 3, label.padding = unit(1.5, "pt"),
-      fill = "white", linewidth = 0,
-      nudge_y = 0.08, hjust = 0, vjust = 0.15
-    ) +
-    geom_label(
-      data = edge_label_df,
-      aes(x = .data$x, y = .data$y, label = .data$label),
-      size = 3, label.padding = unit(1.5, "pt"),
-      fill = "white", linewidth = 0,
-      hjust = 0.5, vjust = 0.5
-    ) +
-    theme_bw() +
-    theme(
-      axis.text = element_blank(),
-      axis.title = element_blank(),
-      axis.ticks = element_blank(),
-      panel.grid = element_blank(),
-      panel.border = element_blank(),
-      legend.position = "bottom"
-    ) +
-    scale_x_continuous(expand = expansion(mult = 0.05)) +
-    labs(shape = "Node Type", fill = "Node Type")
+  .render_tree_plot(tree_df, edge_labels, root_label, joint_probs,
+                    probability_decimals, locale)
 }
 
 
@@ -178,7 +70,7 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
 # =============================================================================
 
 #' Extract tree data from a model/builder object
-#' @param model An oq_model or oq_model_builder
+#' @param model An oq_model object
 #' @param tree_name Tree name or NULL for auto-detect
 #' @return List with tree_df, edge_labels, root_label
 #' @keywords internal
@@ -206,7 +98,20 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   }
 
   tree_df <- model$trees[model$trees$name == tree_name, ]
-  non_root <- tree_df[!is.na(tree_df$parent), ]
+
+  # Detect multiple root-level nodes and synthesize an implicit root
+  root_mask <- is.na(tree_df$parent) | tree_df$parent == ""
+  if (sum(root_mask) > 1) {
+    synthetic_root <- tree_df[1, , drop = FALSE]
+    synthetic_root$node <- tree_name
+    synthetic_root$parent <- NA_character_
+    synthetic_root$formula <- "1"
+    tree_df$parent[root_mask] <- tree_name
+    tree_df <- rbind(synthetic_root, tree_df)
+    rownames(tree_df) <- NULL
+  }
+
+  non_root <- tree_df[!is.na(tree_df$parent) & tree_df$parent != "", ]
 
   list(
     tree_df = tree_df,
@@ -288,6 +193,22 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
   tree_df$parent <- ifelse(is.na(tree_df$parent), "", tree_df$parent)
 
   cond_prob <- eval_tree$cond_prob
+
+  # Detect multiple root-level nodes and synthesize an implicit root
+  root_mask <- tree_df$parent == ""
+  if (sum(root_mask) > 1) {
+    synthetic_name <- tree_name
+    synthetic_root <- tree_df[1, , drop = FALSE]
+    synthetic_root$node <- synthetic_name
+    synthetic_root$parent <- ""
+    tree_df$parent[root_mask] <- synthetic_name
+    tree_df <- rbind(synthetic_root, tree_df)
+    rownames(tree_df) <- NULL
+    # Mark root with parent="" so it is recognized as the single root
+    tree_df$parent[tree_df$node == synthetic_name] <- ""
+    cond_prob[[synthetic_name]] <- 1
+  }
+
   non_root <- tree_df[tree_df$parent != "", ]
 
   prob_values <- vapply(non_root$node, function(n) {
@@ -319,4 +240,164 @@ plot_decision_tree <- function(x, tree_name = NULL, strategy = NULL,
     root_label = root_label,
     joint_probs = joint_probs
   )
+}
+
+#' Render a tree plot from prepared data
+#' @param tree_df Data frame with node/parent columns
+#' @param edge_labels Character vector of edge labels
+#' @param root_label Optional label for root node
+#' @param joint_probs Named numeric vector of joint probabilities
+#' @param probability_decimals Fixed decimal places or NULL for auto
+#' @param locale Locale for formatting
+#' @return A ggplot2/ggraph object
+#' @keywords internal
+.render_tree_plot <- function(tree_df, edge_labels, root_label = NULL,
+                               joint_probs = NULL, probability_decimals = NULL,
+                               locale = NULL) {
+  all_nodes <- tree_df$node
+  parent_nodes <- unique(tree_df$parent[!is.na(tree_df$parent) &
+                                          tree_df$parent != ""])
+  leaf_nodes <- setdiff(all_nodes, parent_nodes)
+
+  node_type <- ifelse(all_nodes %in% leaf_nodes, "terminal", "chance")
+
+  node_labels <- all_nodes
+  if (!is.null(root_label)) {
+    node_labels[1] <- root_label
+  }
+
+  if (!is.null(joint_probs)) {
+    if (is.null(locale)) locale <- get_locale("US")
+    is_terminal <- node_type == "terminal"
+    prob_pct <- joint_probs[all_nodes[is_terminal]] * 100
+    formatted_pct <- oq_format(prob_pct, decimals = probability_decimals,
+                                locale = locale)
+    node_labels[is_terminal] <- paste0(
+      node_labels[is_terminal], " (", formatted_pct, "%)"
+    )
+  }
+
+  nodes_df <- data.frame(
+    node = node_labels,
+    node_type = node_type,
+    stringsAsFactors = FALSE
+  )
+
+  non_root <- tree_df[!is.na(tree_df$parent) & tree_df$parent != "", ]
+  edges_df <- data.frame(
+    from = match(non_root$parent, all_nodes),
+    to = match(non_root$node, all_nodes),
+    label = edge_labels,
+    stringsAsFactors = FALSE
+  )
+
+  the_graph <- tbl_graph(nodes = nodes_df, edges = edges_df)
+
+  layout <- create_layout(the_graph, layout = "tree")
+  edge_label_df <- data.frame(
+    x = layout$x[edges_df$from] +
+      (layout$x[edges_df$to] - layout$x[edges_df$from]) * 0.33,
+    y = layout$y[edges_df$from] +
+      (layout$y[edges_df$to] - layout$y[edges_df$from]) * 0.33,
+    label = edge_labels,
+    stringsAsFactors = FALSE
+  )
+
+  shape_map <- c(chance = 21, terminal = 24)
+
+  is_non_term <- layout$node_type != "terminal"
+  is_term <- layout$node_type == "terminal"
+  non_term_df <- data.frame(
+    x = layout$x[is_non_term], y = layout$y[is_non_term],
+    label = layout$node[is_non_term], stringsAsFactors = FALSE
+  )
+  term_df <- data.frame(
+    x = layout$x[is_term], y = layout$y[is_term],
+    label = layout$node[is_term], stringsAsFactors = FALSE
+  )
+
+  ggraph(layout) +
+    coord_flip(clip = "off") +
+    scale_y_reverse(expand = expansion(mult = c(0.35, 0.25))) +
+    geom_edge_link() +
+    geom_node_point(
+      aes(shape = .data$node_type, fill = .data$node_type),
+      size = 5, colour = "black"
+    ) +
+    scale_shape_manual(values = shape_map) +
+    scale_fill_discrete() +
+    geom_label(
+      data = non_term_df,
+      aes(x = .data$x, y = .data$y, label = .data$label),
+      size = 3, label.padding = unit(1.5, "pt"),
+      fill = "white", linewidth = 0,
+      nudge_y = -0.08, hjust = 1, vjust = 0.15
+    ) +
+    geom_label(
+      data = term_df,
+      aes(x = .data$x, y = .data$y, label = .data$label),
+      size = 3, label.padding = unit(1.5, "pt"),
+      fill = "white", linewidth = 0,
+      nudge_y = 0.08, hjust = 0, vjust = 0.15
+    ) +
+    geom_label(
+      data = edge_label_df,
+      aes(x = .data$x, y = .data$y, label = .data$label),
+      size = 3, label.padding = unit(1.5, "pt"),
+      fill = "white", linewidth = 0,
+      hjust = 0.5, vjust = 0.5
+    ) +
+    theme_bw() +
+    theme(
+      axis.text = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      legend.position = "bottom"
+    ) +
+    scale_x_continuous(expand = expansion(mult = 0.05)) +
+    labs(shape = "Node Type", fill = "Node Type")
+}
+
+#' Plot an evaluated decision tree object
+#' @param x An eval_decision_tree object
+#' @param locale Locale for formatting, or NULL for US default
+#' @return A ggplot2/ggraph object
+#' @keywords internal
+.plot_eval_decision_tree <- function(x, locale = NULL) {
+  if (is.null(locale)) locale <- get_locale("US")
+
+  tree_df <- x$df[x$df$name == x$df$name[1], ]
+  tree_df$parent <- ifelse(is.na(tree_df$parent), "", tree_df$parent)
+
+  # Handle synthetic root for multiple root-level nodes
+  root_mask <- tree_df$parent == ""
+  if (sum(root_mask) > 1) {
+    tree_name <- tree_df$name[1]
+    synthetic_root <- tree_df[1, , drop = FALSE]
+    synthetic_root$node <- tree_name
+    synthetic_root$parent <- ""
+    tree_df$parent[root_mask] <- tree_name
+    tree_df <- rbind(synthetic_root, tree_df)
+    rownames(tree_df) <- NULL
+    tree_df$parent[tree_df$node == tree_name] <- ""
+    x$cond_prob[[tree_name]] <- 1
+  }
+
+  # Edge labels from conditional probabilities
+  non_root <- tree_df[tree_df$parent != "", ]
+  prob_values <- vapply(non_root$node, function(n) {
+    x$cond_prob[[n]][1] * 100
+  }, numeric(1), USE.NAMES = FALSE)
+  edge_labels <- paste0(oq_format(prob_values, locale = locale), "%")
+
+  # Joint probabilities from terminal nodes
+  joint_probs <- setNames(
+    sapply(x$terminal_nodes, function(n) n$prob[1]),
+    sapply(x$terminal_nodes, function(n) n$node)
+  )
+
+  .render_tree_plot(tree_df, edge_labels, root_label = NULL,
+                     joint_probs = joint_probs, locale = locale)
 }

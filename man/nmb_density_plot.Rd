@@ -6,8 +6,8 @@
 \usage{
 nmb_density_plot(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   wtp,
   interventions = NULL,
   comparators = NULL,
@@ -25,17 +25,19 @@ nmb_density_plot(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost outcome (e.g., "total_cost")}
 
 \item{wtp}{Willingness-to-pay threshold for NMB calculation}
 
 \item{interventions}{Character vector of intervention strategy name(s).
-Can be combined with comparators for N x M comparisons.}
+Can be combined with comparators for N x M comparisons. At least one of
+interventions or comparators must be provided.}
 
 \item{comparators}{Character vector of comparator strategy name(s).
-Can be combined with interventions for N x M comparisons.}
+Can be combined with interventions for N x M comparisons. At least one of
+interventions or comparators must be provided.}
 
 \item{groups}{Group selection:
 \itemize{

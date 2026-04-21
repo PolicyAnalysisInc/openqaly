@@ -77,11 +77,11 @@ build_heart_failure_model <- function() {
     add_variable("hosp_cost", p(hosp, hosp_tree) * c_hospitalization) |>
 
     # ── Custom PSM Transitions ───────────────────────────────────────────────
-    add_custom_psm_transition("nyha_i_ii", p_mild_adj) |>
-    add_custom_psm_transition("nyha_iii",  p_moderate_adj) |>
-    add_custom_psm_transition("nyha_iv",
+    add_transition("nyha_i_ii", p_mild_adj) |>
+    add_transition("nyha_iii",  p_moderate_adj) |>
+    add_transition("nyha_iv",
                               pmax(0, 1 - p_mild_adj - p_moderate_adj - 0.005 * cycle)) |>
-    add_custom_psm_transition("dead", C) |>
+    add_transition("dead", C) |>
 
     # ── Values ───────────────────────────────────────────────────────────────
     add_value("cost_treat", c_drug + c_mild,

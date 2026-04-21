@@ -161,7 +161,7 @@ The `dsa_outcomes_plot()` function creates tornado plots for outcome summaries.
 ```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys"
+  outcome = "qalys"
 )
 ```
 
@@ -170,7 +170,7 @@ dsa_outcomes_plot(
 ```{r, fig.width=7, fig.height=6}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   strategies = c("seritinib", "volantor")
 )
 ```
@@ -182,7 +182,7 @@ Use `interventions` and `comparators` to show incremental differences.
 ```{r, fig.width=7, fig.height=5}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   interventions = "volantor",
   comparators = "seritinib"
 )
@@ -193,7 +193,7 @@ dsa_outcomes_plot(
 ```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   show_parameter_values = FALSE
 )
 ```
@@ -205,7 +205,7 @@ Use `top_n` to limit the tornado plot to the most impactful parameters. This is 
 ```{r, fig.width=7, fig.height=5}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   top_n = 3
 )
 ```
@@ -217,7 +217,7 @@ By default, parameters with no impact are excluded. Set `drop_zero_impact = FALS
 ```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   drop_zero_impact = FALSE
 )
 ```
@@ -227,7 +227,7 @@ dsa_outcomes_plot(
 ```{r, fig.width=7, fig.height=7}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   discounted = TRUE
 )
 ```
@@ -239,7 +239,7 @@ Use `groups = 'all_groups'` to display results for each population subgroup sepa
 ```{r, fig.width=12, fig.height=10}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   groups = 'all_groups'
 )
 ```
@@ -251,7 +251,7 @@ Use `groups = 'all'` to display results for each subgroup plus the overall popul
 ```{r, fig.width=16, fig.height=12}
 dsa_outcomes_plot(
   dsa_results,
-  summary_name = "qalys",
+  outcome = "qalys",
   groups = 'all'
 )
 ```
@@ -272,7 +272,7 @@ dsa_same_side <- run_dsa(model_same_side)
 ```{r, fig.width=7, fig.height=7, echo = FALSE}
 dsa_outcomes_plot(
   dsa_same_side,
-  summary_name = "qalys"
+  outcome = "qalys"
 )
 ```
 
@@ -285,7 +285,7 @@ The `dsa_costs_plot()` function creates tornado plots for cost summaries with cu
 ```{r, fig.width=7, fig.height=7}
 dsa_costs_plot(
   dsa_results,
-  summary_name = "costs"
+  outcome = "costs"
 )
 ```
 
@@ -294,7 +294,7 @@ dsa_costs_plot(
 ```{r, fig.width=7, fig.height=6}
 dsa_costs_plot(
   dsa_results,
-  summary_name = "costs",
+  outcome = "costs",
   strategies = c("seritinib", "volantor")
 )
 ```
@@ -304,7 +304,7 @@ dsa_costs_plot(
 ```{r, fig.width=7, fig.height=5}
 dsa_costs_plot(
   dsa_results,
-  summary_name = "costs",
+  outcome = "costs",
   interventions = "volantor",
   comparators = "seritinib"
 )
@@ -315,7 +315,7 @@ dsa_costs_plot(
 ```{r, fig.width=7, fig.height=5}
 dsa_costs_plot(
   dsa_results,
-  summary_name = "costs",
+  outcome = "costs",
   top_n = 3
 )
 ```

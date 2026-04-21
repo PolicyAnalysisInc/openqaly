@@ -5,7 +5,7 @@
 #' @importFrom Rcpp sourceCpp
 #' @importFrom purrr map map_chr map_lgl map_dfr map2_dfr set_names flatten_chr flatten keep discard iwalk walk2 reduce transpose map2 map_dbl
 #' @importFrom dplyr select mutate group_by summarize left_join all_of bind_rows rename
-#' @importFrom openxlsx readWorkbook getSheetNames createWorkbook addWorksheet writeData saveWorkbook write.xlsx
+#' @importFrom openxlsx createWorkbook addWorksheet writeData saveWorkbook
 #' @importFrom tidyr separate_rows pivot_longer pivot_wider unnest
 #' @importFrom jsonlite fromJSON toJSON write_json validate
 #' @importFrom tibble rownames_to_column tibble as_tibble tribble

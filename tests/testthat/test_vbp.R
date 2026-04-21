@@ -15,6 +15,31 @@ get_example_model <- function() {
   read_model(model_path)
 }
 
+build_shared_price_vbp_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      timeframe = 1,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("alive", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("drug_price", 500) %>%
+    add_variable("drug_units", 1, strategy = "control") %>%
+    add_variable("drug_units", 3, strategy = "treatment") %>%
+    add_variable("utility", 1, strategy = "control") %>%
+    add_variable("utility", 2, strategy = "treatment") %>%
+    add_transition("alive", "alive", 1) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_value("cost", drug_price * drug_units, state = "alive", type = "cost") %>%
+    add_value("qaly", utility, state = "alive", type = "outcome") %>%
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qaly", type = "outcome")
+}
+
 # ============================================================================
 # 1. Validation Tests (validate_vbp_spec)
 # ============================================================================
@@ -111,6 +136,59 @@ test_that("run_vbp() errors when price variable is group-specific", {
             outcome_summary = "total_qalys",
             cost_summary = "total_cost"),
     "defined for specific group"
+  )
+})
+
+test_that("run_vbp() errors when price variable resolution is ambiguous", {
+  model <- define_model("markov") %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("alive", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("drug_price", 500) %>%
+    add_variable("drug_price", 700, strategy = "treatment") %>%
+    add_transition("alive", "alive", 1) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_value("cost", 0, state = "alive", type = "cost") %>%
+    add_value("qaly", 1, state = "alive", type = "outcome") %>%
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qaly", type = "outcome")
+
+  expect_error(
+    run_vbp(
+      model,
+      price_variable = "drug_price",
+      intervention_strategy = "treatment",
+      outcome_summary = "total_qalys",
+      cost_summary = "total_cost"
+    ),
+    "must resolve to exactly one eligible variable row"
+  )
+})
+
+test_that("run_vbp() errors when strategy-specific price variable lacks intervention row", {
+  model <- define_model("markov") %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("alive", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("drug_price", 500, strategy = "control") %>%
+    add_transition("alive", "alive", 1) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_value("cost", 0, state = "alive", type = "cost") %>%
+    add_value("qaly", 1, state = "alive", type = "outcome") %>%
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qaly", type = "outcome")
+
+  expect_error(
+    run_vbp(
+      model,
+      price_variable = "drug_price",
+      intervention_strategy = "treatment",
+      outcome_summary = "total_qalys",
+      cost_summary = "total_cost"
+    ),
+    "No eligible VBP price variable row found"
   )
 })
 
@@ -214,6 +292,40 @@ test_that("build_vbp_segments() creates correct structure", {
   # Comparator has no c_drug overrides
   comp_segs <- segments[segments$strategy == "chemo", ]
   expect_false("c_drug" %in% names(comp_segs$parameter_overrides[[1]]))
+})
+
+test_that("build_vbp_segments() applies global price variable override to all strategies", {
+  model <- build_shared_price_vbp_model()
+  parsed <- openqaly:::parse_model(model)
+  spec <- list(
+    price_variable = "drug_price",
+    intervention_strategy = "treatment",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost",
+    price_values = c(0, 1000, 2000)
+  )
+
+  segments <- openqaly:::build_vbp_segments(parsed, spec)
+
+  pl1 <- segments[segments$price_level == 1, ]
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) "drug_price" %in% names(x), logical(1))))
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) identical(x$drug_price, 0), logical(1))))
+})
+
+test_that("run_vbp() overrides a global price row across all strategies", {
+  result <- run_vbp(
+    build_shared_price_vbp_model(),
+    price_variable = "drug_price",
+    intervention_strategy = "treatment",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost"
+  )
+
+  eq <- result$vbp_equations[result$vbp_equations$comparator == "control", ]
+
+  expect_equal(nrow(eq), 1)
+  expect_equal(unname(eq$cost_slope), 2)
+  expect_equal(unname(eq$outcome_difference), 1)
 })
 
 test_that("extract_segment_summary_values() extracts values correctly", {

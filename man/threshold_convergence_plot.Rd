@@ -8,7 +8,8 @@ threshold_convergence_plot(
   results,
   analyses = NULL,
   axis_decimals = NULL,
-  abbreviate = FALSE
+  abbreviate = FALSE,
+  use_display_names = TRUE
 )
 }
 \arguments{
@@ -19,6 +20,9 @@ threshold_convergence_plot(
 \item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
 
 \item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
+
+\item{use_display_names}{Logical. Included for API consistency with
+threshold_plot(); currently has no effect on the convergence plot output.}
 }
 \value{
 A ggplot object

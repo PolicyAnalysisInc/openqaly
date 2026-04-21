@@ -6,7 +6,7 @@
 \usage{
 twsa_outcomes_plot(
   results,
-  summary_name,
+  outcome,
   twsa_name = NULL,
   groups = "overall",
   strategies = NULL,
@@ -27,7 +27,7 @@ twsa_outcomes_plot(
 \arguments{
 \item{results}{TWSA results object from run_twsa()}
 
-\item{summary_name}{Name of the summary to display (e.g., "total_qalys")}
+\item{outcome}{Name of the outcome to display (e.g., "total_qalys")}
 
 \item{twsa_name}{Name of specific TWSA analysis to plot (NULL for first/only)}
 
@@ -40,7 +40,7 @@ specific group name(s)}
 
 \item{comparators}{Comparator strategy name(s) for incremental calculation}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{title}{Optional plot title}
 
@@ -48,7 +48,7 @@ specific group name(s)}
 
 \item{ylab}{Optional y-axis label (defaults to Y parameter name)}
 
-\item{legend_title}{Legend title (default: summary_name)}
+\item{legend_title}{Legend title (default: outcome)}
 
 \item{viridis_option}{Viridis color palette: "viridis" (default), "magma",
 "plasma", "inferno", or "cividis"}
@@ -82,8 +82,8 @@ twsa_outcomes_plot(results, "total_qalys",
   comparators = "standard_care")
 
 # With custom styling
-twsa_outcomes_plot(results, "total_cost",
-  title = "Cost Sensitivity",
+twsa_outcomes_plot(results, "total_qalys",
+  title = "Outcome Sensitivity",
   viridis_option = "magma",
   discounted = TRUE)
 }

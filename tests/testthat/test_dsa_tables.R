@@ -404,6 +404,19 @@ test_that("dsa_outcomes_table() respects decimals parameter", {
   expect_true(nchar(val_4) >= nchar(val_2))
 })
 
+test_that("prepare_dsa_summary_table_data() defaults outcome decimals to 2", {
+  results <- get_dsa_test_results()
+
+  prepared_default <- openqaly:::prepare_dsa_summary_table_data(
+    results, "total_qalys", groups = "overall"
+  )
+  prepared_explicit <- openqaly:::prepare_dsa_summary_table_data(
+    results, "total_qalys", groups = "overall", decimals = 2
+  )
+
+  expect_equal(prepared_default$data, prepared_explicit$data)
+})
+
 test_that("dsa_costs_table() works with cost outcomes (kable format)", {
 
   results <- get_dsa_test_results()

@@ -137,7 +137,7 @@ prepare_trace_table_data <- function(results,
 
     # Get columns for this strategy
     strat <- strategies_display[i]
-    strat_cols <- trace_data[, grepl(paste0("^", strat, "_"), names(trace_data)), drop = FALSE]
+    strat_cols <- trace_data[, startsWith(names(trace_data), paste0(strat, "_")), drop = FALSE]
     result_cols <- cbind(result_cols, strat_cols)
 
     col_counter <- col_counter + ncol(strat_cols) - 1

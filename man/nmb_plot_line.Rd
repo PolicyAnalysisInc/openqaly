@@ -25,7 +25,8 @@ nmb_plot_line(
 
 \item{cost_outcome}{Name of the cost summary to use (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{wtp}{Optional override for willingness-to-pay. If NULL, extracts from outcome summary metadata.}
 

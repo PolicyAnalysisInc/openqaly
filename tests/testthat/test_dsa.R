@@ -581,8 +581,8 @@ test_that("DSA timeframe override works for PSM models", {
     add_state("dead", display_name = "Dead") %>%
     add_variable("pfs_dist", define_surv_param(dist = "exp", rate = 0.1)) %>%
     add_variable("os_dist", define_surv_param(dist = "exp", rate = 0.05)) %>%
-    add_psm_transition("PFS", "months", pfs_dist) %>%
-    add_psm_transition("OS", "months", os_dist) %>%
+    add_transition("PFS", "months", pfs_dist) %>%
+    add_transition("OS", "months", os_dist) %>%
     add_value("qaly_pfs", 0.9, state = "pfs") %>%
     add_value("qaly_prog", 0.6, state = "progressed") %>%
     add_value("cost_pfs", 1000, state = "pfs") %>%
@@ -616,4 +616,350 @@ test_that("DSA timeframe override works for PSM models", {
 
   expect_true(low_qalys < base_qalys)
   expect_true(base_qalys < high_qalys)
+})
+
+# ============================================================================
+# edit_dsa_variable tests
+# ============================================================================
+
+test_that("edit_dsa_variable updates low/high with literal values", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    edit_dsa_variable("p_disease", low = 0.02, high = 0.04)
+
+  expect_equal(model$dsa_parameters[[1]]$low$text, "0.02")
+  expect_equal(model$dsa_parameters[[1]]$high$text, "0.04")
+})
+
+test_that("edit_dsa_variable updates low/high with NSE expressions", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    edit_dsa_variable("p_disease", low = bc * 0.8, high = bc * 1.2)
+
+  expect_match(as.character(model$dsa_parameters[[1]]$low), "bc")
+  expect_match(as.character(model$dsa_parameters[[1]]$high), "bc")
+})
+
+test_that("edit_dsa_variable updates low/high with string passthrough", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    edit_dsa_variable("p_disease", low = "bc * 0.5", high = "bc * 1.5")
+
+  expect_equal(model$dsa_parameters[[1]]$low$text, "bc * 0.5")
+  expect_equal(model$dsa_parameters[[1]]$high$text, "bc * 1.5")
+})
+
+test_that("edit_dsa_variable updates display_name and range_label", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    edit_dsa_variable("p_disease", display_name = "Disease Prob", range_label = "±50%")
+
+  expect_equal(model$dsa_parameters[[1]]$display_name, "Disease Prob")
+  expect_equal(model$dsa_parameters[[1]]$range_label, "±50%")
+  # low/high should be unchanged
+  expect_equal(model$dsa_parameters[[1]]$low$text, "0.01")
+  expect_equal(model$dsa_parameters[[1]]$high$text, "0.05")
+})
+
+test_that("edit_dsa_variable edits strategy-targeted variable correctly", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, strategy = "a") %>%
+    add_variable("cost", 2000, strategy = "b") %>%
+    add_dsa_variable("cost", low = 500, high = 1500, strategy = "a") %>%
+    add_dsa_variable("cost", low = 1000, high = 3000, strategy = "b") %>%
+    edit_dsa_variable("cost", strategy = "a", low = 600, high = 1400)
+
+  # Strategy "a" should be updated
+  expect_equal(model$dsa_parameters[[1]]$low$text, "600")
+  expect_equal(model$dsa_parameters[[1]]$high$text, "1400")
+  # Strategy "b" should be unchanged
+  expect_equal(model$dsa_parameters[[2]]$low$text, "1000")
+  expect_equal(model$dsa_parameters[[2]]$high$text, "3000")
+})
+
+test_that("edit_dsa_variable renames via new_variable", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_variable("p_other", 0.05) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    edit_dsa_variable("p_disease", new_variable = "p_other")
+
+  expect_equal(model$dsa_parameters[[1]]$name, "p_other")
+})
+
+test_that("edit_dsa_variable renames strategy and group", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, strategy = "a") %>%
+    add_variable("cost", 2000, strategy = "b") %>%
+    add_dsa_variable("cost", low = 500, high = 1500, strategy = "a") %>%
+    edit_dsa_variable("cost", strategy = "a", new_strategy = "b")
+
+  expect_equal(model$dsa_parameters[[1]]$strategy, "b")
+})
+
+test_that("edit_dsa_variable errors when variable not found", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+
+  expect_error(
+    edit_dsa_variable(model, "nonexistent", low = 0.02),
+    "not found"
+  )
+})
+
+test_that("edit_dsa_variable errors on duplicate after rename", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_variable("p_other", 0.05) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    add_dsa_variable("p_other", low = 0.02, high = 0.08)
+
+  expect_error(
+    edit_dsa_variable(model, "p_disease", new_variable = "p_other"),
+    "already exists"
+  )
+})
+
+test_that("edit_dsa_variable errors on invalid targeting after rename", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, group = "young") %>%
+    add_variable("cost", 2000, group = "old") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+
+  # Renaming to group-specific variable without specifying group should error
+  expect_error(
+    edit_dsa_variable(model, "p_disease", new_variable = "cost"),
+    "defined for specific group"
+  )
+})
+
+# ============================================================================
+# remove_dsa_variable tests
+# ============================================================================
+
+test_that("remove_dsa_variable removes existing param", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_variable("cost", 1000) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    add_dsa_variable("cost", low = 500, high = 1500) %>%
+    remove_dsa_variable("p_disease")
+
+  expect_equal(length(model$dsa_parameters), 1)
+  expect_equal(model$dsa_parameters[[1]]$name, "cost")
+  expect_s3_class(model$dsa_parameters, "dsa_parameters")
+})
+
+test_that("remove_dsa_variable removes correct strategy-targeted param", {
+  model <- define_model("markov") %>%
+    add_variable("cost", 1000, strategy = "a") %>%
+    add_variable("cost", 2000, strategy = "b") %>%
+    add_dsa_variable("cost", low = 500, high = 1500, strategy = "a") %>%
+    add_dsa_variable("cost", low = 1000, high = 3000, strategy = "b") %>%
+    remove_dsa_variable("cost", strategy = "a")
+
+  expect_equal(length(model$dsa_parameters), 1)
+  expect_equal(model$dsa_parameters[[1]]$strategy, "b")
+})
+
+test_that("remove_dsa_variable removes last parameter", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05) %>%
+    remove_dsa_variable("p_disease")
+
+  expect_equal(length(model$dsa_parameters), 0)
+  expect_s3_class(model$dsa_parameters, "dsa_parameters")
+})
+
+test_that("remove_dsa_variable errors when variable not found", {
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+
+  expect_error(
+    remove_dsa_variable(model, "nonexistent"),
+    "not found"
+  )
+})
+
+# ============================================================================
+# edit_dsa_setting tests
+# ============================================================================
+
+test_that("edit_dsa_setting updates low/high values", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    edit_dsa_setting("discount_cost", low = 1, high = 4)
+
+  expect_equal(model$dsa_parameters[[1]]$low, 1)
+  expect_equal(model$dsa_parameters[[1]]$high, 4)
+})
+
+test_that("edit_dsa_setting updates display_name and range_label", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    edit_dsa_setting("discount_cost", display_name = "Discount Rate", range_label = "0-5%")
+
+  expect_equal(model$dsa_parameters[[1]]$display_name, "Discount Rate")
+  expect_equal(model$dsa_parameters[[1]]$range_label, "0-5%")
+  # low/high should be unchanged
+  expect_equal(model$dsa_parameters[[1]]$low, 0)
+  expect_equal(model$dsa_parameters[[1]]$high, 5)
+})
+
+test_that("edit_dsa_setting renames via new_setting with auto display_name update", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
+
+  # display_name defaults to setting name "discount_cost"
+  expect_equal(model$dsa_parameters[[1]]$display_name, "discount_cost")
+
+  model <- edit_dsa_setting(model, "discount_cost", new_setting = "discount_outcomes")
+  expect_equal(model$dsa_parameters[[1]]$name, "discount_outcomes")
+  expect_equal(model$dsa_parameters[[1]]$display_name, "discount_outcomes")
+})
+
+test_that("edit_dsa_setting rename does not auto-update custom display_name", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5, display_name = "Cost Discount") %>%
+    edit_dsa_setting("discount_cost", new_setting = "discount_outcomes")
+
+  expect_equal(model$dsa_parameters[[1]]$name, "discount_outcomes")
+  expect_equal(model$dsa_parameters[[1]]$display_name, "Cost Discount")
+})
+
+test_that("edit_dsa_setting errors when setting not found", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
+
+  expect_error(
+    edit_dsa_setting(model, "nonexistent", low = 1),
+    "not found"
+  )
+})
+
+test_that("edit_dsa_setting errors on duplicate after rename", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    add_dsa_setting("discount_outcomes", low = 0, high = 5)
+
+  expect_error(
+    edit_dsa_setting(model, "discount_cost", new_setting = "discount_outcomes"),
+    "already exists"
+  )
+})
+
+test_that("edit_dsa_setting errors on invalid new_setting", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
+
+  expect_error(
+    edit_dsa_setting(model, "discount_cost", new_setting = "invalid_setting"),
+    "Invalid DSA setting name"
+  )
+})
+
+# ============================================================================
+# remove_dsa_setting tests
+# ============================================================================
+
+test_that("remove_dsa_setting removes existing param", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    add_dsa_setting("discount_outcomes", low = 0, high = 5) %>%
+    remove_dsa_setting("discount_cost")
+
+  expect_equal(length(model$dsa_parameters), 1)
+  expect_equal(model$dsa_parameters[[1]]$name, "discount_outcomes")
+  expect_s3_class(model$dsa_parameters, "dsa_parameters")
+})
+
+test_that("remove_dsa_setting removes last parameter", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5) %>%
+    remove_dsa_setting("discount_cost")
+
+  expect_equal(length(model$dsa_parameters), 0)
+  expect_s3_class(model$dsa_parameters, "dsa_parameters")
+})
+
+test_that("remove_dsa_setting errors when setting not found", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3) %>%
+    add_dsa_setting("discount_cost", low = 0, high = 5)
+
+  expect_error(
+    remove_dsa_setting(model, "nonexistent"),
+    "not found"
+  )
+})
+
+# discount_rate alias tests
+test_that("add_dsa_setting accepts discount_rate alias", {
+  model <- define_model("markov") %>%
+    set_settings(discount_cost = 3, discount_outcomes = 3) %>%
+    add_dsa_setting("discount_rate", low = 0, high = 5)
+
+  expect_equal(length(model$dsa_parameters), 1)
+  expect_equal(model$dsa_parameters[[1]]$name, "discount_rate")
+  expect_equal(model$dsa_parameters[[1]]$low, 0)
+  expect_equal(model$dsa_parameters[[1]]$high, 5)
+})
+
+test_that("run_dsa with discount_rate varies both discount settings", {
+  skip_if(Sys.getenv("QUICK_TEST") == "true")
+
+  model <- define_model("markov") %>%
+    add_variable("p_disease", 0.03) %>%
+    set_settings(
+      timeframe = 10, timeframe_unit = "years",
+      cycle_length = 1, cycle_length_unit = "years",
+      discount_cost = 3, discount_outcomes = 3
+    ) %>%
+    add_state("healthy", initial_prob = 1) %>%
+    add_state("sick", initial_prob = 0) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_transition("healthy", "sick", p_disease) %>%
+    add_transition("healthy", "dead", 0.01) %>%
+    add_transition("sick", "dead", 0.2) %>%
+    add_transition("healthy", "healthy", 1 - p_disease - 0.01) %>%
+    add_transition("sick", "sick", 1 - 0.2) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_strategy("standard") %>%
+    add_value("cost", 100, state = "healthy", type = "cost") %>%
+    add_value("cost", 500, state = "sick", type = "cost") %>%
+    add_value("cost", 0, state = "dead", type = "cost") %>%
+    add_value("qaly", 1, state = "healthy") %>%
+    add_value("qaly", 0.5, state = "sick") %>%
+    add_value("qaly", 0, state = "dead") %>%
+    add_summary("total_cost", "cost") %>%
+    add_summary("total_qalys", "qaly") %>%
+    add_dsa_setting("discount_rate", low = 0, high = 5)
+
+  results <- run_dsa(model)
+
+  # Should have 3 runs: base case + low + high
+  expect_equal(nrow(results$dsa_metadata), 3)
+
+  # Check metadata shows discount_rate as the parameter
+  setting_rows <- results$dsa_metadata %>%
+    dplyr::filter(parameter_type == "setting")
+  expect_equal(nrow(setting_rows), 2)
+  expect_true(all(setting_rows$parameter == "discount_rate"))
 })

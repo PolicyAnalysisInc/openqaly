@@ -63,8 +63,8 @@ build_nsclc_model <- function() {
     add_variable("ae_cost", p(ae, ae_tree) * c_ae) |>
 
     # ── PSM Transitions ──────────────────────────────────────────────────────
-    add_psm_transition("PFS", "months", pfs_dist) |>
-    add_psm_transition("OS",  "months", os_dist)  |>
+    add_transition("PFS", "months", pfs_dist) |>
+    add_transition("OS",  "months", os_dist)  |>
 
     # ── Values ───────────────────────────────────────────────────────────────
     add_value("cost_treat", c_drug + c_admin + ae_cost,

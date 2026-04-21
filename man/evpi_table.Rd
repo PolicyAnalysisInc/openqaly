@@ -6,8 +6,8 @@
 \usage{
 evpi_table(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   wtp_thresholds = c(20000, 50000, 1e+05, 150000),
   groups = "overall",
   strategies = NULL,
@@ -19,9 +19,9 @@ evpi_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
 \item{wtp_thresholds}{Numeric vector of WTP thresholds to show as rows.
 Default is c(20000, 50000, 100000, 150000)}
@@ -42,7 +42,7 @@ Default is c(20000, 50000, 100000, 150000)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
-\item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
 \value{
 A table object (flextable or kable depending on table_format)

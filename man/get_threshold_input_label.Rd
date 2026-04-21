@@ -4,7 +4,7 @@
 \alias{get_threshold_input_label}
 \title{Get Threshold Input Label}
 \usage{
-get_threshold_input_label(analysis, metadata)
+get_threshold_input_label(analysis, metadata, field = "display_name")
 }
 \arguments{
 \item{analysis}{A single threshold analysis spec}

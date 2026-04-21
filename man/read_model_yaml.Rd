@@ -2,17 +2,22 @@
 % Please edit documentation in R/model_converters.R
 \name{read_model_yaml}
 \alias{read_model_yaml}
-\title{Read Model from YAML File}
+\title{Read Model from YAML}
 \usage{
-read_model_yaml(path)
+read_model_yaml(file = NULL, text = NULL)
 }
 \arguments{
-\item{path}{Path to YAML file (.yaml or .yml)}
+\item{file}{Path to YAML file (.yaml or .yml)}
+
+\item{text}{A string containing the model in YAML format.}
 }
 \value{
 A normalized and validated oq_model object
 }
 \description{
-Reads a complete openqaly model from a single YAML file. Tables are embedded
+Reads a complete openqaly model from YAML. Tables are embedded
 as CSV strings, scripts as code blocks, and trees use nested structure.
+}
+\details{
+Supply exactly one of \code{file} or \code{text}.
 }

@@ -6,12 +6,12 @@
 \usage{
 incremental_ce_table(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   groups = "overall",
   strategies = NULL,
   cost_decimals = NULL,
-  outcome_decimals = NULL,
+  outcome_decimals = 2,
   icer_decimals = NULL,
   abbreviate = FALSE,
   font_size = 11,
@@ -21,11 +21,12 @@ incremental_ce_table(
 \arguments{
 \item{results}{A openqaly model results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -39,7 +40,7 @@ incremental_ce_table(
 
 \item{font_size}{Font size for rendering (default: 11)}
 
-\item{table_format}{Character. Backend to use: "kable" (default) or "flextable"}
+\item{table_format}{Character. Backend to use: "flextable" (default) or "kable"}
 }
 \value{
 A table object (flextable or kable depending on table_format)

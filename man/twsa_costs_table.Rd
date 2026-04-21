@@ -6,7 +6,7 @@
 \usage{
 twsa_costs_table(
   results,
-  summary_name,
+  outcome,
   twsa_name = NULL,
   groups = "overall",
   strategies = NULL,
@@ -22,7 +22,7 @@ twsa_costs_table(
 \arguments{
 \item{results}{TWSA results object from run_twsa()}
 
-\item{summary_name}{Name of the cost summary to display (e.g., "total_cost")}
+\item{outcome}{Name of the cost outcome to display (e.g., "total_cost")}
 
 \item{twsa_name}{Name of specific TWSA analysis to show (NULL for first/only)}
 

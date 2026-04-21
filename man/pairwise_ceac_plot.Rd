@@ -6,8 +6,8 @@
 \usage{
 pairwise_ceac_plot(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   interventions = NULL,
   comparators = NULL,
   wtp_range = c(0, 1e+05),
@@ -24,13 +24,17 @@ pairwise_ceac_plot(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
-\item{interventions}{Reference strategies for comparison (intervention perspective: A vs. B, A vs. C).}
+\item{interventions}{Reference strategies for comparison (intervention
+perspective: A vs. B, A vs. C). At least one of interventions or
+comparators must be provided.}
 
-\item{comparators}{Reference strategies for comparison (comparator perspective: B vs. A, C vs. A).}
+\item{comparators}{Reference strategies for comparison (comparator
+perspective: B vs. A, C vs. A). At least one of interventions or
+comparators must be provided.}
 
 \item{wtp_range}{Numeric vector with min and max WTP values for x-axis.
 Default is c(0, 100000)}
@@ -81,11 +85,11 @@ psa_results <- run_psa(model, n_sim = 1000)
 
 # Comparator perspective: Compare strategies to control
 pairwise_ceac_plot(psa_results, "total_qalys", "total_cost",
-                   comparator = "control")
+                   comparators = "control")
 
 # Intervention perspective: Compare new treatment to others
 pairwise_ceac_plot(psa_results, "total_qalys", "total_cost",
-                   intervention = "new_treatment")
+                   interventions = "new_treatment")
 }
 
 }

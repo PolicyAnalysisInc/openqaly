@@ -37,248 +37,102 @@ parse_psm <- function(model) {
     }
   }
 
-  define_object_(model, class = 'psm')
+  class(model) <- c("oq_psm", "oq_model")
+  model
 }
 
 #' @export
-run_segment.psm <- function(segment, model, env, ...) {
+run_segment.oq_psm <- function(segment, model, env, ...) {
 
-  # Capture the extra arguments provided to function
-  dots <- list(...)
-  .progress_callback <- dots$.progress_callback
+  tick <- make_progress(...)
+  diagnostics_policy <- get_diagnostics_policy(...)
 
-  # Apply setting overrides if present (DSA mode)
+  # Segments in analysis modes (DSA, scenarios) can override model settings
+  # like timeframe or discount rates. Apply those before computing anything.
   model <- apply_setting_overrides(segment, model)
 
-  # Calculate n_cycles AFTER apply_setting_overrides to ensure DSA timeframe overrides work correctly
-  model$settings$cycle_length_days <- get_cycle_length_days(model$settings)
-  dt_duration_days <- get_dt_duration_days(model)
-  model$settings$n_cycles <- get_n_cycles(model$settings, dt_duration_days = dt_duration_days)
+  # Derive cycle_length_days, n_cycles, and days_per_year from raw settings.
+  # These are computed once here and passed explicitly to avoid mutating
+  # model$settings with derived values.
+  time_ctx <- compute_time_context(model$settings, dt_duration_days = get_dt_duration_days(model))
 
-  # Parse the specification tables provided for states and variables
-  uneval_states <- parse_states(model$states, model$settings$cycle_length_days, model$settings$days_per_year, model_type = "psm")
+  # --- Parse phase ---
+  # PSMs always have exactly 3 states: progression-free, post-progression, dead.
+  # model_type = "psm" skips initial-probability parsing (PSM state occupancy
+  # comes from survival curves, not user-specified initial probabilities).
+  uneval_states <- parse_states(model$states, time_ctx$cycle_length_days, time_ctx$days_per_year, model_type = "psm")
+  # Variables: filtered to this segment's strategy/group, with formulas parsed
   uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
+  # Values: costs/outcomes per state (residency) or transition, with "All" expanded
   uneval_values <- parse_values(model$values, uneval_states, uneval_vars)
-  
-  # Determine model_value_names safely for parse_summaries
-  model_value_names <- character(0)
-  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
-    valid_names <- model$values$name[!is.na(model$values$name)]
-    if (length(valid_names) > 0) {
-      model_value_names <- unique(valid_names)
-    }
-  }
+  value_names <- get_value_names(model$values)
+  # Summaries: user-defined aggregations (e.g. "Total QALYs" = sum of named values)
+  parsed_summaries <- parse_summaries(model$summaries, value_names)
+  tick()
 
-  # Parse summaries if they exist
-  if (!is.null(model$summaries) && nrow(model$summaries) > 0) {
-    parsed_summaries <- parse_summaries(model$summaries, model_value_names) 
-  } else {
-    parsed_summaries <- tibble(
-      name = character(0),
-      display_name = character(0),
-      description = character(0),
-      values = character(0),
-      type = character(0),
-      wtp = numeric(0),
-      parsed_values = list()
-    )
-  }
+  # --- Namespace + override phase ---
+  # include_cycle_zero = TRUE because survival curves need S(0) = 1 to compute
+  # the full trace from time zero. Markov models exclude cycle zero from the
+  # namespace since initial state is handled separately.
+  ns <- create_namespace(model, segment, include_cycle_zero = TRUE, n_cycles = time_ctx$n_cycles)
 
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Create a namespace which will contain evaluated variables
-  # Include cycle 0 for survival probability calculation at t=0
-  ns <- create_namespace(model, segment, include_cycle_zero = TRUE)
-
-  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
+  # Parameter overrides (from DSA/PSA) inject fixed values into the namespace,
+  # replacing the variable's formula.
   override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
   ns <- override_result$ns
   uneval_vars <- override_result$uneval_vars
 
-  # Evaluate variables
+  # --- Evaluation phase ---
+  # Variables are evaluated first so survival distribution objects (stored as
+  # variables) are available when transition endpoints reference them.
   eval_vars <- eval_variables(uneval_vars, ns)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  tick()
 
-  # PSM doesn't use initial state probabilities (determined by survival functions)
-  # Set to NULL for PSM
+  # PSMs don't use initial state probabilities — state occupancy is fully
+  # determined by the survival curves. Set to NULL for store_segment_diagnostics.
   eval_states <- NULL
 
-  # For PSM, parse and evaluate survival distributions from transitions
+  # Parse and evaluate PFS/OS survival endpoints. Each endpoint's formula
+  # references a variable holding a surv_dist object. The result is a list
+  # with $pfs and $os distribution objects ready for probability computation.
   survival_distributions <- parse_and_eval_psm_transitions(model$transitions, segment, eval_vars)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  tick()
 
-  # Calculate PSM trace and values
-  calculated_trace_and_values <- calculate_psm_trace_and_values(
-    survival_distributions,
-    uneval_values,
-    eval_vars,
-    model_value_names,
-    unique(model$states$name),
-    model$settings$n_cycles,
-    model$settings$half_cycle_method
+  # Core PSM engine: evaluates S_PFS(t) and S_OS(t) at each cycle to derive
+  # the trace (state occupancy over time). State 1 = min(PFS, OS),
+  # State 3 (dead) = 1 - OS, State 2 = remainder. Then evaluates value
+  # formulas weighted by state occupancy or transition flows, and applies
+  # half-cycle correction.
+  calculated <- calculate_psm_trace_and_values(
+    survival_distributions, uneval_values, eval_vars, value_names,
+    unique(model$states$name), time_ctx$n_cycles, model$settings$half_cycle_method
   )
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  tick()
 
-  # Apply discounting to values
-  n_cycles <- model$settings$n_cycles
-  discount_cost <- model$settings$discount_cost
-  discount_outcomes <- model$settings$discount_outcomes
-
-  # Calculate cycle length in years for discounting
-  cycle_length_days <- model$settings$cycle_length_days
-  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
-  cycle_length_years <- cycle_length_days / days_per_year
-
-  # Extract discount timing and method settings
-  discount_timing <- model$settings$discount_timing %||% "start"
-  discount_method <- model$settings$discount_method %||% "by_cycle"
-
-  # Calculate DT offset for discounting
-  dt_offset_years <- evaluate_dt_duration_years(model, eval_vars)
-
-  # Calculate discount factors (with DT offset if applicable)
-  discount_factors_cost <- calculate_discount_factors(n_cycles, discount_cost, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
-  discount_factors_outcomes <- calculate_discount_factors(n_cycles, discount_outcomes, cycle_length_years, discount_timing, discount_method, offset_years = dt_offset_years)
-
-  # Get value types from uneval_values
-  type_mapping <- setNames(uneval_values$type, uneval_values$name)
-  type_mapping <- type_mapping[!is.na(names(type_mapping))]
-
-  # Apply discounting to get discounted values
-  calculated_trace_and_values$values_discounted <- apply_discounting(
-    calculated_trace_and_values$values,
-    discount_factors_cost,
-    discount_factors_outcomes,
-    type_mapping
+  # --- Post-processing: discount and store ---
+  # Apply time-value-of-money discounting with separate cost/outcome rates.
+  calculated$values_discounted <- apply_segment_discounting(
+    model, eval_vars, uneval_values, calculated$values, calculated$corrected_trace,
+    n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
   )
+  tick()
 
-  # Undo discounting for decision tree values (they are never discounted),
-  # but skip DT values that have a discounting_override (those use the formula instead)
-  dt_value_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree"]
-  has_override <- if ("discounting_override" %in% names(uneval_values)) !is.na(uneval_values$discounting_override) & uneval_values$discounting_override != "" else rep(FALSE, nrow(uneval_values))
-  dt_override_names <- uneval_values$name[!is.na(uneval_values$state) & uneval_values$state == "decision_tree" & has_override]
-  for (v in dt_value_names) {
-    if (v %in% dt_override_names) next
-    if (v %in% colnames(calculated_trace_and_values$values_discounted)) {
-      calculated_trace_and_values$values_discounted[, v] <- calculated_trace_and_values$values[, v]
-    }
-  }
-
-  # Apply discounting override formulas
-  calculated_trace_and_values$values_discounted <- apply_discount_weights(
-    calculated_trace_and_values$values,
-    calculated_trace_and_values$values_discounted,
-    calculated_trace_and_values$corrected_trace,
-    discount_factors_cost, discount_factors_outcomes,
-    discount_cost, discount_outcomes,
-    uneval_values, type_mapping, eval_vars
+  # Attach all results to the segment row for downstream aggregation.
+  segment <- clear_segment_diagnostics(segment)
+  segment <- store_segment_diagnostics(
+    segment, calculated, uneval_vars, eval_vars, eval_states,
+    policy = diagnostics_policy
   )
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Create the object to return
-  # In override mode (PSA/DSA), store only parameter overrides instead of full eval_vars
-  if ("parameter_overrides" %in% names(segment)) {
-    # Override mode: parameter_overrides already in segment from resample() or DSA
-    # Don't store heavy objects: eval_vars, uneval_vars, initial_state, trace_and_values
-  } else {
-    # Base case mode: keep current behavior
-    segment$uneval_vars <- list(uneval_vars)
-    segment$eval_vars <- list(eval_vars)
-    segment$inital_state <- list(eval_states)
-    segment$trace_and_values <- list(calculated_trace_and_values)
-  }
-  # Add time variables to the trace
-  # Generate time columns based on the actual cycle numbers from row names
-  n_trace_rows <- nrow(calculated_trace_and_values$trace)
-
-  # The row names indicate the actual cycle numbers (0, 1, 2, ...)
-  cycle_numbers <- as.numeric(rownames(calculated_trace_and_values$trace))
-  if (any(is.na(cycle_numbers))) {
-    # If row names aren't numeric, use sequence
-    cycle_numbers <- seq(0, n_trace_rows - 1)
-  }
-
-  # Get cycle length info from model settings
-  cycle_length_days <- model$settings$cycle_length_days
-  days_per_year <- if (!is.null(model$settings$days_per_year)) model$settings$days_per_year else 365.25
-
-  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
-    # Generate time columns based on cycle numbers and cycle length
-    # Use consistent conversion factors with time.R
-    days_per_month <- days_per_year / 12
-    time_vars_df <- data.frame(
-      cycle = cycle_numbers,
-      day = cycle_numbers * cycle_length_days,
-      week = cycle_numbers * cycle_length_days / 7,
-      month = cycle_numbers * cycle_length_days / days_per_month,
-      year = cycle_numbers * cycle_length_days / days_per_year
-    )
-
-    # Ensure row names match before cbind
-    rownames(time_vars_df) <- rownames(calculated_trace_and_values$trace)
-
-    # Combine time columns with trace matrix
-    trace_with_time <- cbind(time_vars_df, calculated_trace_and_values$trace)
-  } else {
-    # No cycle length info, just add cycle numbers
-    time_vars_df <- data.frame(cycle = cycle_numbers)
-    rownames(time_vars_df) <- rownames(calculated_trace_and_values$trace)
-    trace_with_time <- cbind(time_vars_df, calculated_trace_and_values$trace)
-  }
-
-  segment$collapsed_trace <- list(trace_with_time)
-  # PSM doesn't have expanded states, so expanded_trace is the same as collapsed_trace
-  segment$expanded_trace <- list(trace_with_time)
-
-  # Add corrected trace to segment (n_cycles rows)
-  corrected_trace <- calculated_trace_and_values$corrected_trace
-  corrected_cycle_numbers <- as.numeric(rownames(corrected_trace))
-  if (!is.na(cycle_length_days) && cycle_length_days > 0) {
-    corrected_time_vars_df <- data.frame(
-      cycle = corrected_cycle_numbers,
-      day = corrected_cycle_numbers * cycle_length_days,
-      week = corrected_cycle_numbers * cycle_length_days / 7,
-      month = corrected_cycle_numbers * cycle_length_days / days_per_month,
-      year = corrected_cycle_numbers * cycle_length_days / days_per_year
-    )
-    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
-  } else {
-    corrected_time_vars_df <- data.frame(cycle = corrected_cycle_numbers)
-    rownames(corrected_time_vars_df) <- rownames(corrected_trace)
-  }
-  corrected_trace_with_time <- cbind(corrected_time_vars_df, corrected_trace)
-  segment$corrected_collapsed_trace <- list(corrected_trace_with_time)
-  segment$corrected_expanded_trace <- list(corrected_trace_with_time)
-
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Calculate summaries for both discounted and undiscounted values
-  if (!is.null(parsed_summaries)) {
-    summaries_undiscounted <- calculate_summaries(
-      parsed_summaries,
-      calculated_trace_and_values$values
-    )
-    summaries_discounted <- calculate_summaries(
-      parsed_summaries,
-      calculated_trace_and_values$values_discounted
-    )
-    segment$summaries <- list(summaries_undiscounted)
-    segment$summaries_discounted <- list(summaries_discounted)
-  } else {
-    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
-    segment$summaries <- list(empty_summary)
-    segment$summaries_discounted <- list(empty_summary)
-  }
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Calculate segment weight
-  segment$weight <- calculate_segment_weight(segment, model, eval_vars)
-
-  # Reorder columns to have strategy, group, weight first
-  col_order <- c("strategy", "group", "weight")
-  other_cols <- setdiff(names(segment), col_order)
-  segment <- segment[, c(col_order, other_cols)]
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  # PSMs have no tunnel states, so the same trace is passed for both the
+  # "collapsed" and "expanded" slots (both are identical).
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace, calculated$corrected_trace, calculated$corrected_trace)
+  tick()
+  # Compute user-defined summary totals (e.g. sum of all QALY values)
+  segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
+  tick()
+  # Calculate group weight and reorder columns to standard layout
+  segment <- finalize_segment(segment, model, eval_vars)
+  tick()
 
   segment
 }
@@ -450,7 +304,19 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   # Get survival probabilities
   pfs_surv <- surv_prob(pfs_dist, pfs_times)
   os_surv <- surv_prob(os_dist, os_times)
-  
+
+  # Warn if PFS exceeds OS (before clamping)
+  tol <- 10 * sqrt(.Machine$double.eps)  # ~1.49e-07
+  pfs_exceeds_os <- pfs_surv > os_surv + tol
+  if (any(pfs_exceeds_os)) {
+    first_cycle <- which(pfs_exceeds_os)[1] - 1  # 0-indexed cycles
+    max_diff <- max(pfs_surv - os_surv)
+    warning(sprintf(
+      "PFS survival exceeds OS survival (first at cycle %d, max difference: %.4f). PFS was clamped to OS.",
+      first_cycle, max_diff
+    ), call. = FALSE)
+  }
+
   # Calculate state probabilities
   # State 1 (progression-free): min(PFS(t), OS(t))
   # State 3 (dead): 1 - OS(t)

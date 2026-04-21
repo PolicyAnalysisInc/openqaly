@@ -10,11 +10,22 @@
 #' @return Segment enriched with eval_vars and uneval_vars list columns
 #' @keywords internal
 prepare_segment_for_sampling <- function(model, segment) {
+  # Convert list to proper 1-row tibble (needed when called from rowwise do())
+  if (is.list(segment) && !is.data.frame(segment)) {
+    segment <- as_tibble(lapply(segment, function(x) if (is.list(x)) list(x) else x))
+  }
+
+  model <- apply_setting_overrides(segment, model)
+
   # Parse variables for this segment
   uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
 
   # Create namespace
   ns <- create_namespace(model, segment)
+
+  override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
+  ns <- override_result$ns
+  uneval_vars <- override_result$uneval_vars
 
   # Evaluate ALL variables (including those that will be sampled)
   # This gives us base case values for distribution formulas to reference
@@ -73,130 +84,195 @@ resample <- function(model, n, segments, seed = NULL) {
 
   if (!is.null(seed)) set.seed(seed)
 
+  # Validate cross-segment consistency before any sampling
+  validate_sampling_consistency(model, segments)
+
+  # ============================================================
+  # PRE-DRAW PHASE: Sample everything once before the segment loop
+  # ============================================================
+
+  # Helper: check if a variable row matches a given segment
+  var_matches_segment <- function(var_strategy, var_group, seg_strategy, seg_group) {
+    strat_match <- is.empty(var_strategy) || identical(var_strategy, seg_strategy)
+    group_match <- is.empty(var_group) || identical(var_group, seg_group)
+    strat_match && group_match
+  }
+
+  # Helper: find first segment matching a strategy/group scope
+  find_first_matching_segment <- function(var_strategy, var_group) {
+    for (s in seq_len(nrow(segments))) {
+      if (var_matches_segment(var_strategy, var_group,
+                              segments$strategy[s], segments$group[s])) {
+        return(s)
+      }
+    }
+    return(NULL)
+  }
+
+  # Pre-draw univariate samples (one draw per variable row)
+  pre_draws_univ <- list()
+  univ_rows <- NULL
+
+  if (has_univariate) {
+    univ_vars <- model$variables %>%
+      filter(!is.na(.data$sampling) & .data$sampling != "")
+    univ_rows <- seq_len(nrow(univ_vars))
+
+    for (i in univ_rows) {
+      var_row <- univ_vars[i, ]
+      var_name <- var_row$name
+      var_strat <- if (is.na(var_row$strategy)) "" else var_row$strategy
+      var_group <- if (is.na(var_row$group)) "" else var_row$group
+
+      # Find first matching segment to evaluate dist_fn
+      ref_seg_idx <- find_first_matching_segment(var_strat, var_group)
+      if (is.null(ref_seg_idx)) next
+
+      # Clone namespace, set bc, evaluate dist_fn
+      ref_ns <- clone_namespace(segments$eval_vars[[ref_seg_idx]])
+      ref_ns$env$bc <- ref_ns[var_name]
+
+      formula <- as.oq_formula(var_row$sampling)
+      dist_fn <- eval_formula(formula, ref_ns)
+
+      if (is_oq_error(dist_fn)) {
+        stop(glue("Failed to evaluate sampling distribution for parameter '{var_name}': {dist_fn}"),
+             call. = FALSE)
+      }
+
+      # Draw once
+      u <- runif(n)
+      samples <- safe_eval(dist_fn(u))
+
+      if (is_oq_error(samples)) {
+        stop(glue("Failed to sample parameter '{var_name}': {samples}"), call. = FALSE)
+      }
+
+      pre_draws_univ[[as.character(i)]] <- list(
+        name = var_name,
+        samples = samples,
+        strategy = var_strat,
+        group = var_group
+      )
+    }
+  }
+
+  # Pre-draw multivariate samples (one draw per spec)
+  pre_draws_mv <- list()
+
+  if (has_multivariate) {
+    for (mv_spec in model$multivariate_sampling) {
+      spec_strat <- mv_spec$strategy %||% ""
+      spec_group <- mv_spec$group %||% ""
+      var_names <- mv_spec$variables
+
+      # Find first matching segment
+      ref_seg_idx <- find_first_matching_segment(spec_strat, spec_group)
+      if (is.null(ref_seg_idx)) next
+
+      ref_ns <- clone_namespace(segments$eval_vars[[ref_seg_idx]])
+
+      # Construct distribution function from stored data
+      dist_fn <- switch(mv_spec$type,
+        "dirichlet" = {
+          base_vals <- sapply(var_names, function(v) ref_ns[v])
+          dirichlet(mv_spec$n * base_vals)
+        },
+        "mvnormal" = {
+          mean_vec <- sapply(var_names, function(v) ref_ns[v])
+          cov_data <- eval_formula(mv_spec$covariance, ref_ns)
+          if (is_oq_error(cov_data)) {
+            stop(glue("Failed to evaluate covariance formula for '{mv_spec$name}': {cov_data}"),
+                 call. = FALSE)
+          }
+          cov_matrix <- as.matrix(cov_data)
+          if (!is.numeric(cov_matrix)) {
+            stop(glue("Covariance for '{mv_spec$name}' must contain only numeric values."),
+                 call. = FALSE)
+          }
+          if (nrow(cov_matrix) != ncol(cov_matrix)) {
+            stop(glue("Covariance for '{mv_spec$name}' must be square (got {nrow(cov_matrix)} x {ncol(cov_matrix)})."),
+                 call. = FALSE)
+          }
+          if (nrow(cov_matrix) != length(var_names) || ncol(cov_matrix) != length(var_names)) {
+            stop(glue(
+              "Covariance for '{mv_spec$name}' dimensions ({nrow(cov_matrix)}x{ncol(cov_matrix)}) ",
+              "don't match number of variables ({length(var_names)})."
+            ), call. = FALSE)
+          }
+          mvnormal(mean = mean_vec, cov = cov_matrix)
+        },
+        "multinomial" = {
+          # Base case values are counts; normalize to probabilities for rmultinom
+          count_vec <- sapply(var_names, function(v) ref_ns[v])
+          total <- sum(count_vec)
+          if (total <= 0) {
+            stop(glue("Multinomial spec '{mv_spec$name}': base case counts sum to {total}, must be positive."),
+                 call. = FALSE)
+          }
+          prob_vec <- count_vec / total
+          multinomial(size = as.integer(total), prob = prob_vec)
+        },
+        stop(glue("Unknown multivariate distribution type: {mv_spec$type}"), call. = FALSE)
+      )
+
+      # Draw once
+      samples_matrix <- safe_eval(dist_fn(n))
+
+      if (is_oq_error(samples_matrix)) {
+        stop(glue("Failed to sample multivariate distribution '{mv_spec$name}': {samples_matrix}"),
+             call. = FALSE)
+      }
+
+      if (ncol(samples_matrix) != length(var_names)) {
+        stop(glue(
+          "Distribution '{mv_spec$name}' returned {ncol(samples_matrix)} columns ",
+          "but {length(var_names)} variables specified"
+        ), call. = FALSE)
+      }
+
+      pre_draws_mv[[mv_spec$name]] <- list(
+        var_names = var_names,
+        samples_matrix = samples_matrix,
+        strategy = spec_strat,
+        group = spec_group
+      )
+    }
+  }
+
+  # ============================================================
+  # DISTRIBUTION PHASE: Assign pre-drawn samples to segments
+  # ============================================================
+
   results <- tibble()
 
   for (seg_idx in 1:nrow(segments)) {
     segment <- segments[seg_idx, ]
+    seg_strategy <- segment$strategy[[1]]
+    seg_group <- segment$group[[1]]
 
-    # Clone the evaluated namespace for this segment
-    # This contains ALL evaluated variables (including those being sampled)
-    seg_ns <- clone_namespace(segment$eval_vars[[1]])
-    seg_vars <- segment$uneval_vars[[1]]
-
-    # Parameter overrides generated via probabilistic sampling
     parameter_overrides <- list()
 
-    # PART 1: Univariate sampling from variables.sampling
-    if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
-      univ_vars <- model$variables %>%
-        filter(!is.na(.data$sampling) & .data$sampling != "")
-
-      for (i in seq_len(nrow(univ_vars))) {
-        var_row <- univ_vars[i, ]
-
-        # Safely extract strategy and group from segment (as scalars)
-        seg_strategy <- segment$strategy[[1]]
-        seg_group <- segment$group[[1]]
-
-        # Check if this variable applies to this segment
-        # If variable has specific strategy/group, use it; otherwise use segment's
-        row_strat <- if (!is.na(var_row$strategy) && var_row$strategy != "") {
-          var_row$strategy
-        } else {
-          seg_strategy
-        }
-
-        row_group <- if (!is.na(var_row$group) && var_row$group != "") {
-          var_row$group
-        } else {
-          seg_group
-        }
-
-        # Skip if doesn't match this segment (NA-safe comparison)
-        if (!identical(row_strat, seg_strategy) || !identical(row_group, seg_group)) {
-          next
-        }
-
-        var_name <- var_row$name
-
-        # Set bc (base case) to this variable's evaluated value
-        seg_ns$env$bc <- seg_ns[var_name]
-
-        # Evaluate distribution formula in namespace
-        formula <- as.oq_formula(var_row$sampling)
-        dist_fn <- eval_formula(formula, seg_ns)
-
-        if (is_oq_error(dist_fn)) {
-          stop(glue("Failed to evaluate sampling distribution for parameter '{var_name}': {dist_fn}"), call. = FALSE)
-        }
-
-        # Sample using inverse CDF approach
-        u <- runif(n)
-        samples <- safe_eval(dist_fn(u))
-
-        if (is_oq_error(samples)) {
-          stop(glue("Failed to sample parameter '{var_name}': {samples}"), call. = FALSE)
-        }
-
-        parameter_overrides[[var_name]] <- samples
+    # Assign pre-drawn univariate samples
+    for (key in names(pre_draws_univ)) {
+      draw <- pre_draws_univ[[key]]
+      if (var_matches_segment(draw$strategy, draw$group, seg_strategy, seg_group)) {
+        parameter_overrides[[draw$name]] <- draw$samples
       }
     }
 
-    # PART 2: Multivariate sampling
-    if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
-      # Safely extract strategy and group from segment (as scalars)
-      seg_strategy <- segment$strategy[[1]]
-      seg_group <- segment$group[[1]]
-
-      for (mv_spec in model$multivariate_sampling) {
-        # Filter variables for this segment (NA-safe)
-        relevant_vars <- mv_spec$variables %>%
-          filter(
-            (is.na(.data$strategy) | .data$strategy == "" | .data$strategy == "all" | .data$strategy == seg_strategy) &
-            (is.na(.data$group) | .data$group == "" | .data$group == "all" | .data$group == seg_group)
-          )
-
-        if (nrow(relevant_vars) == 0) next
-
-        # Evaluate distribution formula
-        # The namespace contains ALL evaluated variables, including:
-        # - Variables being sampled (with their base case values)
-        # - Helper variables (alpha parameters, SE, correlations, etc.)
-        formula <- as.oq_formula(mv_spec$distribution)
-        dist_fn <- eval_formula(formula, seg_ns)
-
-        if (is_oq_error(dist_fn)) {
-          stop(glue("Failed to evaluate multivariate distribution '{mv_spec$name}': {dist_fn}"), call. = FALSE)
-        }
-
-        # Sample (returns n × k matrix)
-        samples_matrix <- safe_eval(dist_fn(n))
-
-        if (is_oq_error(samples_matrix)) {
-          stop(glue("Failed to sample multivariate distribution '{mv_spec$name}': {samples_matrix}"), call. = FALSE)
-        }
-
-        # Validate dimensionality
-        if (ncol(samples_matrix) != nrow(relevant_vars)) {
-          stop(glue(
-            "Distribution '{mv_spec$name}' returned {ncol(samples_matrix)} columns ",
-            "but {nrow(relevant_vars)} variables specified"
-          ), call. = FALSE)
-        }
-
-        # Assign columns to variables (row order determines mapping)
-        for (i in 1:nrow(relevant_vars)) {
-          var_name <- relevant_vars$variable[i]
-          parameter_overrides[[var_name]] <- samples_matrix[, i]
+    # Assign pre-drawn multivariate columns
+    for (mv_name in names(pre_draws_mv)) {
+      draw <- pre_draws_mv[[mv_name]]
+      if (var_matches_segment(draw$strategy, draw$group, seg_strategy, seg_group)) {
+        for (i in seq_along(draw$var_names)) {
+          parameter_overrides[[draw$var_names[i]]] <- draw$samples_matrix[, i]
         }
       }
     }
 
     # Build result for this segment
-    # Convert parameter_overrides from list-of-vectors to list-of-named-lists
-    # Each element is one simulation's parameter overrides as a named list
     if (length(parameter_overrides) == 0) {
-      # No sampling for this segment - use empty lists (base case values will be used)
       override_list <- rep(list(list()), n)
     } else {
       override_list <- transpose(parameter_overrides)
@@ -213,7 +289,7 @@ resample <- function(model, n, segments, seed = NULL) {
       ),
       stringsAsFactors = FALSE
     )
-    seg_result$parameter_overrides <- override_list  # List column containing parameter overrides
+    seg_result$parameter_overrides <- override_list
 
     results <- bind_rows(results, seg_result)
   }
@@ -233,33 +309,75 @@ resample <- function(model, n, segments, seed = NULL) {
 validate_sampling_spec <- function(model) {
   errors <- character()
 
-  # Get univariate sampled variables
-  univ_vars <- character()
+  # Build univariate sampling targets as (name, strategy, group) triples
+  univ_triples <- list()
   if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
-    univ_vars <- model$variables %>%
-      filter(!is.na(.data$sampling) & .data$sampling != "") %>%
-      pull("name")
+    univ_sampled <- model$variables %>%
+      filter(!is.na(.data$sampling) & .data$sampling != "")
+    for (i in seq_len(nrow(univ_sampled))) {
+      row <- univ_sampled[i, ]
+      strat <- if (is.na(row$strategy)) "" else row$strategy
+      grp <- if (is.na(row$group)) "" else row$group
+      univ_triples[[length(univ_triples) + 1]] <- list(
+        name = row$name, strategy = strat, group = grp
+      )
+    }
   }
 
-  # Get multivariate sampled variables
-  multi_vars <- character()
+  # Validate and build multivariate sampling targets
+  multi_triples <- list()
   if (!is.null(model$multivariate_sampling)) {
     for (mv_spec in model$multivariate_sampling) {
-      multi_vars <- c(multi_vars, mv_spec$variables$variable)
-    }
-    multi_vars <- unique(multi_vars)
+      # Validate type
+      valid_types <- c("dirichlet", "mvnormal", "multinomial")
+      if (is.null(mv_spec$type) || !mv_spec$type %in% valid_types) {
+        errors <- c(errors, glue(
+          "Multivariate spec '{mv_spec$name}' has invalid type. Must be one of: {paste(valid_types, collapse=', ')}"
+        ))
+      }
 
-    # Check for conflicts
-    conflicts <- intersect(univ_vars, multi_vars)
-    if (length(conflicts) > 0) {
-      errors <- c(errors, glue(
-        "Variables appear in both variables.sampling and multivariate_sampling: {paste(conflicts, collapse=', ')}"
-      ))
+      # Validate type-specific fields
+      if (!is.null(mv_spec$type)) {
+        if (mv_spec$type == "mvnormal" && (is.null(mv_spec$covariance) || !inherits(mv_spec$covariance, "oq_formula"))) {
+          errors <- c(errors, glue("Multivariate spec '{mv_spec$name}' (mvnormal) must have a 'covariance' formula."))
+        }
+        if (mv_spec$type == "dirichlet" && is.null(mv_spec$n)) {
+          errors <- c(errors, glue("Multivariate spec '{mv_spec$name}' (dirichlet) needs 'n' (effective sample size)."))
+        }
+        # multinomial: size is derived from base case counts at runtime, no spec-level field needed
+      }
+
+      spec_strat <- mv_spec$strategy %||% ""
+      spec_group <- mv_spec$group %||% ""
+      for (var_name in mv_spec$variables) {
+        multi_triples[[length(multi_triples) + 1]] <- list(
+          name = var_name, strategy = spec_strat, group = spec_group,
+          spec_name = mv_spec$name
+        )
+      }
+    }
+
+    # Check for conflicts between univariate and multivariate (segment-aware)
+    # Two triples conflict if they share a variable name AND their segment scopes overlap
+    for (ut in univ_triples) {
+      for (mt in multi_triples) {
+        if (ut$name != mt$name) next
+        # Check overlap: "" (global) overlaps with anything
+        strat_overlap <- (ut$strategy == "" || mt$strategy == "" || ut$strategy == mt$strategy)
+        group_overlap <- (ut$group == "" || mt$group == "" || ut$group == mt$group)
+        if (strat_overlap && group_overlap) {
+          errors <- c(errors, glue(
+            "Variable '{ut$name}' appears in both variables.sampling and multivariate_sampling ",
+            "(spec '{mt$spec_name}') with overlapping segment scope."
+          ))
+        }
+      }
     }
 
     # Check variables exist
     all_var_names <- model$variables$name
-    missing_vars <- setdiff(multi_vars, all_var_names)
+    multi_var_names <- unique(sapply(multi_triples, function(t) t$name))
+    missing_vars <- setdiff(multi_var_names, all_var_names)
     if (length(missing_vars) > 0) {
       errors <- c(errors, glue(
         "Variables in multivariate_sampling not found in variables table: {paste(missing_vars, collapse=', ')}"
@@ -269,6 +387,173 @@ validate_sampling_spec <- function(model) {
 
   if (length(errors) > 0) {
     stop(paste(errors, collapse = "\n"), call. = FALSE)
+  }
+
+  return(TRUE)
+}
+
+#' Validate Sampling Consistency Across Segments
+#'
+#' Checks that sampled variables which appear in multiple segments have identical
+#' base case values and sampling distribution parameters across those segments.
+#' A sampled variable must be strategy-specific if its bc varies by strategy,
+#' and group-specific if its bc varies by group.
+#'
+#' @param model Parsed model object
+#' @param segments Enriched segments (with eval_vars from prepare_segment_for_sampling)
+#' @return TRUE if valid, stops with error if inconsistent
+#' @keywords internal
+validate_sampling_consistency <- function(model, segments) {
+  errors <- character()
+
+  # Build segment namespace lookup: key -> cloned namespace
+  seg_ns_list <- list()
+  for (i in seq_len(nrow(segments))) {
+    key <- paste0(segments$strategy[i], "||", segments$group[i])
+    seg_ns_list[[key]] <- clone_namespace(segments$eval_vars[[i]])
+  }
+
+  # Helper: check if a variable's value is identical across segments that
+
+  # differ on the specified axis (strategy or group)
+  check_axis_consistency <- function(var_name, var_strategy, var_group, axis) {
+    # Find all segments this variable appears in
+    matching_keys <- character()
+    for (i in seq_len(nrow(segments))) {
+      seg_s <- segments$strategy[i]
+      seg_g <- segments$group[i]
+      strat_match <- is.empty(var_strategy) || identical(var_strategy, seg_s)
+      group_match <- is.empty(var_group) || identical(var_group, seg_g)
+      if (strat_match && group_match) {
+        matching_keys <- c(matching_keys, paste0(seg_s, "||", seg_g))
+      }
+    }
+
+    if (length(matching_keys) <= 1) return(NULL)
+
+    # Get the reference value from the first matching segment
+    ref_val <- seg_ns_list[[matching_keys[1]]][var_name]
+
+    # Skip non-numeric values (e.g., bootstrap functions, data frames)
+    # These are produced by bootstrap() or table lookups and cannot meaningfully
+    # differ by segment in a way this validation can detect
+    if (!is.numeric(ref_val)) return(NULL)
+
+    for (k in matching_keys[-1]) {
+      other_val <- seg_ns_list[[k]][var_name]
+      if (!identical(ref_val, other_val)) {
+        # Determine which axis differs
+        ref_parts <- strsplit(matching_keys[1], "||", fixed = TRUE)[[1]]
+        other_parts <- strsplit(k, "||", fixed = TRUE)[[1]]
+        # Format values for error message (handle non-scalar types like functions)
+        fmt_ref <- if (is.numeric(ref_val) && length(ref_val) == 1) as.character(ref_val) else class(ref_val)[1]
+        fmt_other <- if (is.numeric(other_val) && length(other_val) == 1) as.character(other_val) else class(other_val)[1]
+        if (axis == "strategy" && ref_parts[1] != other_parts[1]) {
+          return(glue(
+            "Variable '{var_name}' is sampled but its base case value differs across strategies ",
+            "(e.g., {fmt_ref} in '{ref_parts[1]}' vs {fmt_other} in '{other_parts[1]}'). ",
+            "Define strategy-specific versions of '{var_name}' instead."
+          ))
+        }
+        if (axis == "group" && ref_parts[2] != other_parts[2]) {
+          return(glue(
+            "Variable '{var_name}' is sampled but its base case value differs across groups ",
+            "(e.g., {fmt_ref} in '{ref_parts[2]}' vs {fmt_other} in '{other_parts[2]}'). ",
+            "Define group-specific versions of '{var_name}' instead."
+          ))
+        }
+      }
+    }
+    return(NULL)
+  }
+
+  # Helper: check sampling formula dependencies for a univariate variable
+  check_formula_deps <- function(var_name, var_strategy, var_group, sampling_str) {
+    # Parse dependencies from sampling formula
+    deps <- tryCatch(
+      all.vars(parse(text = sampling_str)),
+      error = function(e) character()
+    )
+    # Filter to model variable names only (exclude bc, function names, operators)
+    model_var_names <- model$variables$name
+    deps <- intersect(deps, model_var_names)
+    # Remove bc (already checked via bc consistency)
+    deps <- setdiff(deps, "bc")
+
+    dep_errors <- character()
+    for (dep in deps) {
+      err <- check_axis_consistency(dep, var_strategy, var_group, "strategy")
+      if (!is.null(err)) {
+        dep_errors <- c(dep_errors, glue(
+          "Variable '{var_name}' has sampling formula referencing '{dep}', ",
+          "which varies by strategy. Make '{var_name}' strategy-specific ",
+          "or make '{dep}' global."
+        ))
+      }
+      err <- check_axis_consistency(dep, var_strategy, var_group, "group")
+      if (!is.null(err)) {
+        dep_errors <- c(dep_errors, glue(
+          "Variable '{var_name}' has sampling formula referencing '{dep}', ",
+          "which varies by group. Make '{var_name}' group-specific ",
+          "or make '{dep}' global."
+        ))
+      }
+    }
+    dep_errors
+  }
+
+  # Check univariate sampled variables
+  if (!is.null(model$variables) && "sampling" %in% names(model$variables)) {
+    univ_vars <- model$variables %>%
+      filter(!is.na(.data$sampling) & .data$sampling != "")
+
+    for (i in seq_len(nrow(univ_vars))) {
+      var_row <- univ_vars[i, ]
+      var_name <- var_row$name
+      var_strat <- if (is.na(var_row$strategy)) "" else var_row$strategy
+      var_group <- if (is.na(var_row$group)) "" else var_row$group
+
+      # Check bc consistency on strategy axis if variable is not strategy-specific
+      if (var_strat == "") {
+        err <- check_axis_consistency(var_name, var_strat, var_group, "strategy")
+        if (!is.null(err)) errors <- c(errors, err)
+      }
+
+      # Check bc consistency on group axis if variable is not group-specific
+      if (var_group == "") {
+        err <- check_axis_consistency(var_name, var_strat, var_group, "group")
+        if (!is.null(err)) errors <- c(errors, err)
+      }
+
+      # Check sampling formula dependencies
+      dep_errs <- check_formula_deps(var_name, var_strat, var_group, var_row$sampling)
+      errors <- c(errors, dep_errs)
+    }
+  }
+
+  # Check multivariate sampled variables (bc consistency for their component variables)
+  if (!is.null(model$multivariate_sampling)) {
+    for (mv_spec in model$multivariate_sampling) {
+      spec_strat <- mv_spec$strategy %||% ""
+      spec_group <- mv_spec$group %||% ""
+
+      for (var_name in mv_spec$variables) {
+        # Check bc consistency on strategy axis if spec is not strategy-specific
+        if (spec_strat == "") {
+          err <- check_axis_consistency(var_name, spec_strat, spec_group, "strategy")
+          if (!is.null(err)) errors <- c(errors, err)
+        }
+        # Check bc consistency on group axis if spec is not group-specific
+        if (spec_group == "") {
+          err <- check_axis_consistency(var_name, spec_strat, spec_group, "group")
+          if (!is.null(err)) errors <- c(errors, err)
+        }
+      }
+    }
+  }
+
+  if (length(errors) > 0) {
+    stop(paste(unique(errors), collapse = "\n"), call. = FALSE)
   }
 
   return(TRUE)

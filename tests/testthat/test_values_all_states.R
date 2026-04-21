@@ -297,7 +297,7 @@ test_that("JSON serialization round-trip preserves 'All' and 'All Other'", {
     add_summary("total_qalys", "qalys")
 
   json_str <- write_model_json(model)
-  restored <- read_model_json(json_str)
+  restored <- read_model_json(text = json_str)
 
   # Check "All" is preserved
   cost_vals <- restored$values[restored$values$name == "cost", ]

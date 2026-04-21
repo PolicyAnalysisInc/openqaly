@@ -14,11 +14,8 @@
 #' @param ... Additional arguments passed to run_segment
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
-run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
-  # Finalize builders (convert to oq_model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, keep_diagnostics = FALSE, ...) {
+  model <- normalize_and_validate_model(model)
 
   # Fall back to model$psa defaults if runtime args not provided
   if (is.null(n_sim) && !is.null(model$psa$n_sim)) {
@@ -51,8 +48,7 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
   enriched_segments <- segments %>%
     rowwise() %>%
     do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(parsed_model, as_tibble(seg))
+      prepare_segment_for_sampling(parsed_model, .)
     }) %>%
     ungroup()
 
@@ -76,9 +72,13 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
 
   res$segments <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = if (isTRUE(keep_diagnostics)) "all" else "none"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate by simulation + strategy
@@ -109,9 +109,45 @@ run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, ...) {
 run_model <- function(model, progress = NULL, ...) {
 
   # Base case: existing logic
-  # Finalize builders (convert to oq_model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
+  model <- normalize_and_validate_model(model)
+
+  # Validate settings and structural requirements before running
+  model_type <- tolower(model$settings$model_type %||% "markov")
+  validate_settings(model$settings, model_type)
+
+  if (model_type %in% c("markov", "psm", "custom_psm")) {
+    if (is.null(model$states) || !is.data.frame(model$states) || nrow(model$states) == 0) {
+      stop(sprintf("Model type '%s' requires at least one state.", model_type), call. = FALSE)
+    }
+  }
+  if (model_type != "decision_tree") {
+    if (is.null(model$strategies) || !is.data.frame(model$strategies) || nrow(model$strategies) == 0) {
+      stop("Model must have at least one strategy defined.", call. = FALSE)
+    }
+  }
+
+  # Validate variable strategy/group cross-references
+  if (!is.null(model$variables) && is.data.frame(model$variables) && nrow(model$variables) > 0) {
+    if ("strategy" %in% names(model$variables) &&
+        !is.null(model$strategies) && is.data.frame(model$strategies) && nrow(model$strategies) > 0) {
+      var_strategies <- unique(model$variables$strategy[model$variables$strategy != "" & !is.na(model$variables$strategy)])
+      invalid_strats <- setdiff(var_strategies, model$strategies$name)
+      if (length(invalid_strats) > 0) {
+        stop(sprintf('Variable(s) reference undefined strategy(ies): "%s". Defined strategies are: "%s".',
+                     paste(invalid_strats, collapse = '", "'),
+                     paste(model$strategies$name, collapse = '", "')), call. = FALSE)
+      }
+    }
+    if ("group" %in% names(model$variables) &&
+        !is.null(model$groups) && is.data.frame(model$groups) && nrow(model$groups) > 0) {
+      var_groups <- unique(model$variables$group[model$variables$group != "" & !is.na(model$variables$group)])
+      invalid_groups <- setdiff(var_groups, model$groups$name)
+      if (length(invalid_groups) > 0) {
+        stop(sprintf('Variable(s) reference undefined group(s): "%s". Defined groups are: "%s".',
+                     paste(invalid_groups, collapse = '", "'),
+                     paste(model$groups$name, collapse = '", "')), call. = FALSE)
+      }
+    }
   }
 
   # Capture the extra arguments
@@ -147,9 +183,13 @@ run_model <- function(model, progress = NULL, ...) {
 
   res$segments <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = "all"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate results by strategy
@@ -454,6 +494,16 @@ aggregate_strategy_segments <- function(strat_segments, parsed_model) {
   if (!("weight" %in% colnames(strat_segments))) {
     warning("No weight column found in segments. Using equal weights.")
     strat_segments$weight <- 1
+  }
+
+  # Resolve complement (C) weights
+  complement_mask <- strat_segments$weight == -pi
+  if (any(complement_mask)) {
+    if (sum(complement_mask) > 1) {
+      stop(glue("Only one group may use complement (C) for weight in strategy '{strat}'."), call. = FALSE)
+    }
+    non_complement_sum <- sum(strat_segments$weight[!complement_mask])
+    strat_segments$weight[complement_mask] <- 1 - non_complement_sum
   }
 
   # Check for NA weights

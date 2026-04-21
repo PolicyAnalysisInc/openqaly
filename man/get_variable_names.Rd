@@ -7,7 +7,7 @@
 get_variable_names(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A character vector of unique variable names.

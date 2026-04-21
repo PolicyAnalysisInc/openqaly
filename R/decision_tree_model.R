@@ -6,7 +6,8 @@
 #' @return The model with class set to 'decision_tree'
 #' @keywords internal
 parse_decision_tree_model <- function(model) {
-  define_object_(model, class = 'decision_tree')
+  class(model) <- c("oq_decision_tree", "oq_model")
+  model
 }
 
 #' Run Segment for Decision Tree Model
@@ -20,61 +21,99 @@ parse_decision_tree_model <- function(model) {
 #' @param ... Additional arguments
 #' @return The segment with results
 #' @export
-run_segment.decision_tree <- function(segment, model, env, ...) {
+run_segment.oq_decision_tree <- function(segment, model, env, ...) {
 
-  # Capture the extra arguments provided to function
-  dots <- list(...)
-  .progress_callback <- dots$.progress_callback
+  tick <- make_progress(...)
+  diagnostics_policy <- get_diagnostics_policy(...)
 
-  # Apply setting overrides if present (DSA mode)
+  # Segments in analysis modes (DSA, scenarios) can override model settings
+  # like discount rates. Apply those before computing anything.
   model <- apply_setting_overrides(segment, model)
 
-  # Parse variables (no states/transitions for standalone DT)
+  # --- Parse phase ---
+  # Variables are filtered to this segment's strategy/group. The trees argument
+
+  # triggers parse_tree_vars(), which creates a synthetic variable for each
+  # decision tree (e.g. a tree named "my_tree" becomes a variable whose formula
+  # calls decision_tree(.trees, "my_tree", cycle)). When evaluated later, this
+  # builds the full tree structure with joint probabilities at terminal nodes.
   uneval_vars <- parse_seg_variables(model$variables, segment, trees = model$trees)
+  # States is an empty tibble — DT models have no health states. parse_values
+  # still parses value formulas but skips all state-expansion logic (no "All"/
+  # "All Other" targeting, no tunnel expansion). Values are flat formulas that
+  # reference tree terminal-node probabilities to compute expected costs/outcomes.
   uneval_values <- parse_values(model$values, tibble(), uneval_vars)
+  value_names <- get_value_names(model$values)
+  # Summaries aggregate named values (e.g. "Total Cost" = sum of cost values),
+  # same mechanism as Markov/PSM.
+  parsed_summaries <- parse_summaries(model$summaries, value_names)
+  tick()
 
-  # Determine value_names
-  model_value_names <- character(0)
-  if (nrow(model$values) > 0 && "name" %in% colnames(model$values)) {
-    valid_names <- model$values$name[!is.na(model$values$name)]
-    if (length(valid_names) > 0) {
-      model_value_names <- unique(valid_names)
-    }
-  }
-
-  # Parse summaries
-  if (!is.null(model$summaries) && nrow(model$summaries) > 0) {
-    parsed_summaries <- parse_summaries(model$summaries, model_value_names)
-  } else {
-    parsed_summaries <- tibble(
-      name = character(0),
-      display_name = character(0),
-      description = character(0),
-      values = character(0),
-      type = character(0),
-      wtp = numeric(0),
-      parsed_values = list()
-    )
-  }
-
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Create a namespace (1 cycle at cycle 0)
-  # We need minimal time variables for the namespace
+  # --- Namespace + override phase ---
+  # DT uses a minimal 1-row namespace (cycle=0, all time vars=0, state_time=1)
+  # instead of Markov's n_cycles rows. Everything is evaluated at a single
+  # point in time — there is no temporal progression.
   ns <- create_dt_namespace(model, segment)
-
-  # Apply parameter overrides if present (PSA, DSA, or VBP mode)
+  # Parameter overrides (from DSA/PSA) inject fixed values into the namespace,
+  # replacing the variable's formula. Same mechanism as Markov/PSM.
   override_result <- apply_parameter_overrides(segment, ns, uneval_vars)
   ns <- override_result$ns
   uneval_vars <- override_result$uneval_vars
 
-  # Evaluate variables
+  # --- Evaluation phase ---
+  # Variables are evaluated in dependency order. Tree variables are resolved
+  # here: each tree's decision_tree() call traverses nodes level-by-level,
+  # evaluates conditional probabilities (including complement "C" branches),
+  # and computes joint probabilities at terminal nodes. The result is an
+  # eval_decision_tree object stored in the namespace for value formulas to
+  # reference (e.g. via subtree tag lookups).
   eval_vars <- eval_variables(uneval_vars, ns)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
+  tick()
+  # Extra tick: DT skips steps that Markov/PSM perform (trace computation,
+  # state evaluation) but the progress system expects 8 ticks per segment.
+  # Double-ticks here and below pad the count to 8.
+  tick()
 
-  # Evaluate DT-phase values: each formula -> scalar amount
-  value_names <- model_value_names
+  # DT-specific value evaluation: creates a 1-row matrix (one column per value
+  # name, initialized to zero). Iterates over all value formulas, evaluating
+  # each against the namespace. Multiple value rows with the same name are
+  # accumulated with addition — this is how values from different tree branches
+  # or components sum into a single expected value (e.g. total expected cost =
+  # sum of branch-specific costs weighted by branch probabilities).
+  values_matrix <- evaluate_dt_values(uneval_values, eval_vars, value_names)
+  tick()
+  tick()
+  # Apply discounting. For DT, discount factors are scalar 1 (everything is at
+  # time zero, so 1/(1+r)^0 = 1). However, values with a discounting_override
+  # formula still get evaluated — the override can reference discount_rate but
+  # NOT trace() (which throws an error since DT has no state trace). The trace
+  # argument is NULL and discount factor vectors are just the scalar 1.
+  calculated <- apply_dt_discounting(values_matrix, uneval_values, eval_vars, model)
+
+  # --- Storage phase ---
+  # Store diagnostic data (variables, values) on the segment for debugging.
+  # eval_states is NULL because DT has no health states or initial distribution.
+  segment <- clear_segment_diagnostics(segment)
+  segment <- store_segment_diagnostics(
+    segment, calculated, uneval_vars, eval_vars, NULL,
+    policy = diagnostics_policy
+  )
+  # DT has no real trace — insert a placeholder single-row data.frame(cycle=0)
+  # so the segment structure stays compatible with downstream aggregation code
+  # that expects collapsed_trace and expanded_trace list columns.
+  segment$collapsed_trace <- list(data.frame(cycle = 0))
+  segment$expanded_trace <- segment$collapsed_trace
+  tick()
+  # Compute user-defined summary totals from the 1-row values matrix.
+  segment <- store_segment_summaries(segment, parsed_summaries, values_matrix, calculated$values_discounted)
+  # Calculate group weight and reorder columns to standard layout.
+  segment <- finalize_segment(segment, model, eval_vars)
+  tick()
+
+  segment
+}
+
+evaluate_dt_values <- function(uneval_values, eval_vars, value_names) {
   values_matrix <- matrix(0, nrow = 1, ncol = length(value_names))
   colnames(values_matrix) <- value_names
   rownames(values_matrix) <- "1"
@@ -87,7 +126,6 @@ run_segment.decision_tree <- function(segment, model, env, ...) {
       next
     }
 
-    # Evaluate formula
     evaluated <- eval_formula(value_row$formula[[1]], eval_vars)
 
     if (is_oq_error(evaluated)) {
@@ -101,74 +139,30 @@ run_segment.decision_tree <- function(segment, model, env, ...) {
       evaluated <- 0
     }
 
-    # Use first element (scalar)
     values_matrix[1, value_name] <- values_matrix[1, value_name] + as.numeric(evaluated[1])
   }
 
   oq_error_checkpoint()
+  values_matrix
+}
 
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Build trace_and_values structure compatible with calculate_summaries
-  # No discounting for standalone DT (unless discounting_override is set)
-  calculated_trace_and_values <- list(
-    matrix(1, nrow = 1, ncol = 0),  # empty trace (no states)
+apply_dt_discounting <- function(values_matrix, uneval_values, eval_vars, model) {
+  calculated <- list(
+    matrix(1, nrow = 1, ncol = 0),
     values = values_matrix,
-    values_discounted = values_matrix  # initially identical (no discounting)
+    values_discounted = values_matrix
   )
-
-  # Apply discounting override formulas (if any)
   discount_cost_rate <- model$settings$discount_cost %||% 0
   discount_outcomes_rate <- model$settings$discount_outcomes %||% 0
   type_mapping <- setNames(uneval_values$type, uneval_values$name)
   type_mapping <- type_mapping[!is.na(names(type_mapping))]
-  # For standalone DT, discount factors are just 1 (single cycle)
-  discount_factors_cost <- 1
-  discount_factors_outcomes <- 1
-  calculated_trace_and_values$values_discounted <- apply_discount_weights(
-    calculated_trace_and_values$values,
-    calculated_trace_and_values$values_discounted,
-    NULL,  # no trace matrix for standalone DT
-    discount_factors_cost, discount_factors_outcomes,
+  calculated$values_discounted <- apply_discount_weights(
+    calculated$values, calculated$values_discounted,
+    NULL, 1, 1,
     discount_cost_rate, discount_outcomes_rate,
     uneval_values, type_mapping, eval_vars
   )
-
-  # Store trace_and_values
-  segment$trace_and_values <- list(calculated_trace_and_values)
-  if (!"parameter_overrides" %in% names(segment)) {
-    segment$uneval_vars <- list(uneval_vars)
-    segment$eval_vars <- list(eval_vars)
-  }
-
-  # Build collapsed trace (1-row tibble)
-  collapsed_trace_with_time <- data.frame(cycle = 0)
-  segment$collapsed_trace <- list(collapsed_trace_with_time)
-  segment$expanded_trace <- list(collapsed_trace_with_time)
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  # Calculate summaries (same for discounted and undiscounted)
-  if (!is.null(parsed_summaries) && nrow(parsed_summaries) > 0) {
-    summaries <- calculate_summaries(parsed_summaries, values_matrix)
-    segment$summaries <- list(summaries)
-    segment$summaries_discounted <- list(summaries)
-  } else {
-    empty_summary <- tibble(summary = character(), value = character(), amount = numeric())
-    segment$summaries <- list(empty_summary)
-    segment$summaries_discounted <- list(empty_summary)
-  }
-
-  # Calculate segment weight
-  segment$weight <- calculate_segment_weight(segment, model, eval_vars)
-
-  # Reorder columns
-  col_order <- c("strategy", "group", "weight")
-  other_cols <- setdiff(names(segment), col_order)
-  segment <- segment[, c(col_order, other_cols)]
-  if (!is.null(.progress_callback)) .progress_callback(amount = 1L)
-
-  segment
+  calculated
 }
 
 #' Create Namespace for Decision Tree Model

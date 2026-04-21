@@ -112,8 +112,8 @@ test_that("PSM: discounting_override works for all value types", {
       'define_surv_param("weibull", shape = 1.2, scale = 8)') |>
     add_variable("os_dist",
       'define_surv_param("weibull", shape = 1.1, scale = 14)') |>
-    add_psm_transition("PFS", "years", pfs_dist) |>
-    add_psm_transition("OS", "years", os_dist) |>
+    add_transition("PFS", "years", pfs_dist) |>
+    add_transition("OS", "years", os_dist) |>
     # Residency cost WITH override (= "1" => no discounting)
     add_value("res_cost", 1000, state = "progression_free", type = "cost",
               discounting_override = "1") |>
@@ -197,8 +197,8 @@ test_that("Custom PSM: discounting_override works for residency and model start"
     add_state("alive") |>
     add_state("dead") |>
     add_group("patients") |>
-    add_custom_psm_transition("alive", 0.9^year) |>
-    add_custom_psm_transition("dead", C) |>
+    add_transition("alive", 0.9^year) |>
+    add_transition("dead", C) |>
     # Residency cost WITH override (= "1" => no discounting)
     add_value("res_cost", 1000, state = "alive", type = "cost",
               discounting_override = "1") |>
@@ -292,8 +292,8 @@ test_that("PSM: weighted-average trace() override uses corrected trace (start)",
     add_state("dead") |>
     add_variable("pfs_dist", 'define_surv_param("weibull", shape = 1.2, scale = 8)') |>
     add_variable("os_dist", 'define_surv_param("weibull", shape = 1.1, scale = 14)') |>
-    add_psm_transition("PFS", "years", pfs_dist) |>
-    add_psm_transition("OS", "years", os_dist) |>
+    add_transition("PFS", "years", pfs_dist) |>
+    add_transition("OS", "years", os_dist) |>
     add_value("prog_cost", 500, state = "progression_free",
               destination = "progressed", type = "cost",
               discounting_override = "sum(discount_factors * trace('progressed')) / sum(trace('progressed'))") |>
@@ -330,8 +330,8 @@ test_that("PSM: weighted-average trace() override uses corrected trace (life-tab
     add_state("dead") |>
     add_variable("pfs_dist", 'define_surv_param("weibull", shape = 1.2, scale = 8)') |>
     add_variable("os_dist", 'define_surv_param("weibull", shape = 1.1, scale = 14)') |>
-    add_psm_transition("PFS", "years", pfs_dist) |>
-    add_psm_transition("OS", "years", os_dist) |>
+    add_transition("PFS", "years", pfs_dist) |>
+    add_transition("OS", "years", os_dist) |>
     add_value("prog_cost", 500, state = "progression_free",
               destination = "progressed", type = "cost",
               discounting_override = "sum(discount_factors * trace('progressed')) / sum(trace('progressed'))") |>
@@ -446,8 +446,8 @@ test_that("Custom PSM: weighted-average trace() override uses corrected trace (s
     add_state("alive") |>
     add_state("dead") |>
     add_group("patients") |>
-    add_custom_psm_transition("alive", 0.9^year) |>
-    add_custom_psm_transition("dead", C) |>
+    add_transition("alive", 0.9^year) |>
+    add_transition("dead", C) |>
     add_value("res_cost", 1000, state = "alive", type = "cost",
               discounting_override = "sum(discount_factors * trace('alive')) / sum(trace('alive'))") |>
     add_value("dummy_qaly", 1, state = "alive", type = "outcome") |>
@@ -481,8 +481,8 @@ test_that("Custom PSM: weighted-average trace() override uses corrected trace (l
     add_state("alive") |>
     add_state("dead") |>
     add_group("patients") |>
-    add_custom_psm_transition("alive", 0.9^year) |>
-    add_custom_psm_transition("dead", C) |>
+    add_transition("alive", 0.9^year) |>
+    add_transition("dead", C) |>
     add_value("res_cost", 1000, state = "alive", type = "cost",
               discounting_override = "sum(discount_factors * trace('alive')) / sum(trace('alive'))") |>
     add_value("dummy_qaly", 1, state = "alive", type = "outcome") |>

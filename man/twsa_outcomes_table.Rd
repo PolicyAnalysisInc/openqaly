@@ -6,14 +6,14 @@
 \usage{
 twsa_outcomes_table(
   results,
-  summary_name,
+  outcome,
   twsa_name = NULL,
   groups = "overall",
   strategies = NULL,
   interventions = NULL,
   comparators = NULL,
   discounted = TRUE,
-  decimals = NULL,
+  decimals = 2,
   abbreviate = FALSE,
   font_size = 11,
   backend = c("flextable", "kable")
@@ -22,7 +22,7 @@ twsa_outcomes_table(
 \arguments{
 \item{results}{TWSA results object from run_twsa()}
 
-\item{summary_name}{Name of the summary to display (e.g., "total_qalys")}
+\item{outcome}{Name of the outcome to display (e.g., "total_qalys")}
 
 \item{twsa_name}{Name of specific TWSA analysis to show (NULL for first/only)}
 
@@ -35,7 +35,7 @@ specific group name(s)}
 
 \item{comparators}{Comparator strategy name(s) for incremental calculation}
 
-\item{discounted}{Logical. Use discounted values? (default: FALSE)}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{decimals}{Number of decimal places (default: NULL for auto)}
 

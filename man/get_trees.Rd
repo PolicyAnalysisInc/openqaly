@@ -7,7 +7,7 @@
 get_trees(model)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 }
 \value{
 A data frame of trees, or NULL if none.

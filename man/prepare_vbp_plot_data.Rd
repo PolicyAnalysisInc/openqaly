@@ -22,9 +22,9 @@ If NULL, auto-generates based on outcome metadata.}
 
 \item{comparators}{Comparator selection:
 \itemize{
-  \item \code{"all"} - All comparators plus aggregate (default)
+  \item \code{"all_comparators"} - Individual comparators only (default)
+  \item \code{"all"} - All comparators plus aggregate
   \item \code{"overall"} - Aggregate only ("vs. All Comparators")
-  \item \code{"all_comparators"} - Individual comparators only (no aggregate)
   \item Character vector - Specific comparator name(s)
 }}
 

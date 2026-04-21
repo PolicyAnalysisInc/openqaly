@@ -7,6 +7,285 @@
 #' @importFrom purrr map_chr
 NULL
 
+# =============================================================================
+# Internal Helpers
+# =============================================================================
+
+#' Escape double quotes in a string for code generation
+#' @keywords internal
+escape_quotes <- function(s) gsub('"', '\\"', s)
+
+#' Convert oq_formula to character, pass through other types
+#' @keywords internal
+resolve_val <- function(x) if (inherits(x, "oq_formula")) as.character(x) else x
+
+#' Emit an optional named argument fragment, or NULL if skipped.
+#'
+#' Returns NULL when the value should be skipped (NULL, or matches skip_if),
+#' which is silently dropped by c().
+#'
+#' @param name The argument name to emit
+#' @param val The value to check and emit
+#' @param quoted Whether to quote the value (default TRUE)
+#' @param skip_if Values that should cause the argument to be skipped (default "")
+#' @keywords internal
+opt_str <- function(name, val, quoted = TRUE, skip_if = "") {
+  if (is.null(val)) return(NULL)
+  if (any(!is.na(skip_if) & val == skip_if)) return(NULL)
+  if (isTRUE(quoted)) glue('{name} = "{val}"') else glue('{name} = {val}')
+}
+
+#' Assemble a `model <- func(model, ...)` call, filtering NULLs and
+#' flattening vectors (e.g. from switch() results).
+#'
+#' @param func The function name string
+#' @param ... Argument fragments (strings or NULL)
+#' @keywords internal
+codegen_call <- function(func, ...) {
+  args <- unlist(Filter(Negate(is.null), list(...)))
+  glue('model <- {func}(model, {paste(args, collapse = ", ")})')
+}
+
+#' Append a code section with a blank line separator, only if non-empty
+#' @keywords internal
+append_section <- function(code, section_code) {
+  if (length(section_code) > 0) c(code, "", section_code) else code
+}
+
+#' Emit a description argument for scenarios/TWSA, with escaping and skip logic
+#' @keywords internal
+emit_desc <- function(desc, name) {
+  if (is.null(desc) || desc == "" || desc == name) NULL
+  else glue('description = "{escape_quotes(desc)}"')
+}
+
+#' Render custom values vector, handling oq_formula
+#' @keywords internal
+rv_values <- function(vals, is_var) {
+  if (is_var && inherits(vals, "oq_formula")) as.character(vals)
+  else paste0("c(", paste(vals, collapse = ", "), ")")
+}
+
+#' Emit shared condition fields (discounted, target_value, group) for threshold analysis
+#' @keywords internal
+cond_common <- function(cond, include_target = TRUE) {
+  c(if (!is.null(cond$discounted) && !isTRUE(cond$discounted)) "discounted = FALSE",
+    if (include_target && !is.null(cond$target_value) && cond$target_value != 0)
+      glue('target_value = {cond$target_value}'),
+    opt_str("group", cond$group))
+}
+
+# =============================================================================
+# Spec-Based Code Generation Engine
+# =============================================================================
+
+# Reusable display_name + description field specs
+# display_name is skipped when it matches name
+# description is skipped when it matches name or display_name
+.dn_desc <- list(
+  list(col = "display_name", quoted = TRUE, skip_if_col = "name"),
+  list(col = "description", quoted = TRUE, skip_if_col = c("name", "display_name"))
+)
+
+#' Generate pipe-chain code from a declarative field spec.
+#'
+#' Instead of writing separate loop-and-if-block functions for each model
+#' component, this engine takes a spec describing the function name, positional
+#' arguments, and optional named arguments, and generates the code lines.
+#'
+#' @param data A dataframe to iterate over
+#' @param spec A spec list with: func (string), positional (list of field specs),
+#'   fields (list of optional field specs)
+#' @return Character vector of code lines like '  add_X(...) |>'
+#' @keywords internal
+generate_from_spec <- function(data, spec) {
+  # Defensive check
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0) {
+    return(character(0))
+  }
+
+  code <- character()
+
+  for (i in seq_len(nrow(data))) {
+    row <- data[i, ]
+
+    # Build positional args
+    pos_parts <- vapply(spec$positional, function(p) {
+      val <- row[[p$col]]
+      frag <- if (isTRUE(p$quoted)) glue('"{val}"') else as.character(val)
+      if (!is.null(p$name)) paste0(p$name, " = ", frag) else frag
+    }, character(1))
+    args <- paste(pos_parts, collapse = ", ")
+
+    # Process optional fields
+    for (f in spec$fields %||% list()) {
+      col <- f$col
+      name <- f$name %||% col
+      if (!(col %in% names(row))) next
+      val <- row[[col]]
+      if (is.na(val)) next
+
+      # Bool emit: only emit ', name = TRUE' when truthy
+      if (isTRUE(f$bool_emit)) {
+        if (isTRUE(val)) args <- args %&% glue(', {name} = TRUE')
+        next
+      }
+
+      # Skip if matches a default value
+      if (!is.null(f$skip_if) && val %in% f$skip_if) next
+
+      # Skip if matches another column's value (for display_name/description cascade)
+      skip <- FALSE
+      for (ref_col in f$skip_if_col %||% character(0)) {
+        if (ref_col %in% names(row) && !is.na(row[[ref_col]]) && val == row[[ref_col]]) {
+          skip <- TRUE
+          break
+        }
+      }
+      if (skip) next
+
+      # Skip empty strings (default behavior for optional fields without skip_if_col)
+      if (is.character(val) && val == "" && is.null(f$skip_if_col)) next
+
+      # Escape quotes if requested
+      if (isTRUE(f$escape)) val <- escape_quotes(val)
+
+      # Auto-numeric: decide quoting at runtime (for groups weight)
+      if (isTRUE(f$auto_numeric)) {
+        if (suppressWarnings(!is.na(as.numeric(val)))) {
+          args <- args %&% glue(', {name} = {val}')
+        } else {
+          args <- args %&% glue(', {name} = "{val}"')
+        }
+        next
+      }
+
+      # Standard emit: quoted or unquoted
+      if (isTRUE(f$quoted)) {
+        args <- args %&% glue(', {name} = "{val}"')
+      } else {
+        args <- args %&% glue(', {name} = {val}')
+      }
+    }
+
+    code <- c(code, glue('  {spec$func}({args}) |>'))
+  }
+
+  code
+}
+
+# --- Specs for all pipe-chain generators ---
+
+spec_states_markov <- list(
+  func = "add_state",
+  positional = list(
+    list(col = "name", quoted = TRUE),
+    list(col = "initial_probability", name = "initial_prob", quoted = FALSE)
+  ),
+  fields = c(.dn_desc, list(
+    list(col = "state_group", quoted = TRUE),
+    list(col = "share_state_time", bool_emit = TRUE),
+    list(col = "state_cycle_limit", quoted = FALSE),
+    list(col = "state_cycle_limit_unit", quoted = TRUE, skip_if = "cycles")
+  ))
+)
+
+spec_states_psm <- list(
+  func = "add_state",
+  positional = list(list(col = "name", quoted = TRUE)),
+  fields = .dn_desc)
+
+spec_transitions_markov <- list(
+  func = "add_transition",
+  positional = list(
+    list(col = "from_state", quoted = TRUE),
+    list(col = "to_state", quoted = TRUE),
+    list(col = "formula", quoted = FALSE)
+  ),
+  fields = list()
+)
+
+spec_transitions_psm <- list(
+  func = "add_transition",
+  positional = list(
+    list(col = "endpoint", quoted = TRUE),
+    list(col = "time_unit", quoted = TRUE),
+    list(col = "formula", quoted = FALSE)
+  ),
+  fields = list()
+)
+
+spec_transitions_custom_psm <- list(
+  func = "add_transition",
+  positional = list(
+    list(col = "state", quoted = TRUE),
+    list(col = "formula", quoted = FALSE)
+  ),
+  fields = list()
+)
+
+spec_values <- list(
+  func = "add_value",
+  positional = list(
+    list(col = "name", quoted = TRUE),
+    list(col = "formula", quoted = FALSE)
+  ),
+  fields = c(
+    list(
+      list(col = "state", quoted = TRUE),
+      list(col = "destination", quoted = TRUE)
+    ),
+    .dn_desc,
+    list(
+      list(col = "type", quoted = TRUE, skip_if = "outcome"),
+      list(col = "discounting_override", quoted = TRUE)
+    )
+  )
+)
+
+spec_variables <- list(
+  func = "add_variable",
+  positional = list(
+    list(col = "name", quoted = TRUE),
+    list(col = "formula", quoted = FALSE)
+  ),
+  fields = c(.dn_desc, list(
+    list(col = "strategy", quoted = TRUE),
+    list(col = "group", quoted = TRUE),
+    list(col = "source", quoted = TRUE, escape = TRUE),
+    list(col = "sampling", quoted = FALSE)
+  ))
+)
+
+spec_strategies <- list(
+  func = "add_strategy",
+  positional = list(list(col = "name", quoted = TRUE)),
+  fields = c(.dn_desc, list(
+    list(col = "enabled", quoted = FALSE, skip_if = 1)
+  ))
+)
+
+spec_groups <- list(
+  func = "add_group",
+  positional = list(list(col = "name", quoted = TRUE)),
+  fields = c(.dn_desc, list(
+    list(col = "weight", auto_numeric = TRUE, skip_if = "1"),
+    list(col = "enabled", quoted = FALSE, skip_if = 1)
+  ))
+)
+
+spec_summaries <- list(
+  func = "add_summary",
+  positional = list(
+    list(col = "name", quoted = TRUE),
+    list(col = "values", quoted = TRUE)
+  ),
+  fields = .dn_desc)
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
 #' Convert Model to R Code
 #'
 #' Generate executable R code that recreates a openqaly model.
@@ -43,55 +322,24 @@ model_to_r_code <- function(model, file = NULL) {
     glue('model <- define_model("{model_type}") |>')
   )
 
-  # Add settings
-  if (!is.null(model$settings) && length(model$settings) > 0) {
-    code <- c(code, generate_settings_code(model$settings))
-  }
-
-  # Add strategies
-  if (!is.null(model$strategies) && nrow(model$strategies) > 0) {
-    code <- c(code, generate_strategies_code(model$strategies))
-  }
-
-  # Add groups
-  if (!is.null(model$groups) && nrow(model$groups) > 0) {
-    code <- c(code, generate_groups_code(model$groups))
-  }
-
   # Determine model type once for use by multiple generators
-  is_psm <- tolower(model_type) == "psm"
+  mt <- tolower(model_type)
 
-  # Add states
-  if (!is.null(model$states) && nrow(model$states) > 0) {
-    code <- c(code, generate_states_code(model$states, is_psm))
-  }
-
-  # Add variables
-  if (!is.null(model$variables) && nrow(model$variables) > 0) {
-    code <- c(code, generate_variables_code(model$variables))
-  }
-
-  # Add transitions
-  if (!is.null(model$transitions) && nrow(model$transitions) > 0) {
-    code <- c(code, generate_transitions_code(model$transitions, is_psm))
-  }
-
-  # Add values
-  if (!is.null(model$values) && nrow(model$values) > 0) {
-    code <- c(code, generate_values_code(model$values))
-  }
-
-  # Add summaries
-  if (!is.null(model$summaries) && nrow(model$summaries) > 0) {
-    code <- c(code, generate_summaries_code(model$summaries))
-  }
-
-  # Add multivariate sampling (before removing trailing pipe)
-  if (!is.null(model$multivariate_sampling) && length(model$multivariate_sampling) > 0) {
-    mv_code <- generate_multivariate_sampling_code(model$multivariate_sampling)
-    if (length(mv_code) > 0) {
-      code <- c(code, mv_code)
-    }
+  # Pipe-chain components: settings, strategies, groups, states, variables,
+  # transitions, values, summaries
+  pipe_generators <- list(
+    list(data = model$settings, fn = generate_settings_code),
+    list(data = model$strategies, fn = generate_strategies_code),
+    list(data = model$groups, fn = generate_groups_code),
+    list(data = model$states, fn = generate_states_code, extra = list(mt)),
+    list(data = model$variables, fn = generate_variables_code),
+    list(data = model$transitions, fn = generate_transitions_code, extra = list(mt)),
+    list(data = model$values, fn = generate_values_code),
+    list(data = model$summaries, fn = generate_summaries_code)
+  )
+  for (gen in pipe_generators) {
+    result <- do.call(gen$fn, c(list(gen$data), gen$extra %||% list()))
+    if (length(result) > 0) code <- c(code, result)
   }
 
   # Remove trailing pipe from last line
@@ -100,85 +348,27 @@ model_to_r_code <- function(model, file = NULL) {
     code[last_line] <- gsub(" \\|>$", "", code[last_line])
   }
 
-  # Add tables and scripts (separate from pipe chain)
-  if (!is.null(model$tables) && length(model$tables) > 0) {
-    code <- c(code, "", generate_tables_code(model, model$tables))
-  }
-
-  if (!is.null(model$scripts) && length(model$scripts) > 0) {
-    code <- c(code, "", generate_scripts_code(model, model$scripts))
-  }
-
-  # Add decision trees (if any)
-  if (!is.null(model$trees) && length(model$trees) > 0) {
-    tree_code <- generate_trees_code(model, model$trees)
-    if (length(tree_code) > 0) {
-      code <- c(code, "", tree_code)
-    }
-  }
-
-  # Add decision tree configuration (if any)
-  if (!is.null(model$decision_tree)) {
-    dt_code <- generate_decision_tree_code(model$decision_tree)
-    if (length(dt_code) > 0) {
-      code <- c(code, "", dt_code)
-    }
-  }
-
-  # Add DSA parameters (if any)
-  if (!is.null(model$dsa_parameters) && length(model$dsa_parameters) > 0) {
-    dsa_code <- generate_dsa_code(model$dsa_parameters)
-    if (length(dsa_code) > 0) {
-      code <- c(code, "", dsa_code)
-    }
-  }
-
-  # Add scenarios (if any)
-  if (!is.null(model$scenarios) && length(model$scenarios) > 0) {
-    scenarios_code <- generate_scenarios_code(model$scenarios)
-    if (length(scenarios_code) > 0) {
-      code <- c(code, "", scenarios_code)
-    }
-  }
-
-  # Add TWSA analyses (if any)
-  if (!is.null(model$twsa_analyses) && length(model$twsa_analyses) > 0) {
-    twsa_code <- generate_twsa_code(model$twsa_analyses)
-    if (length(twsa_code) > 0) {
-      code <- c(code, "", twsa_code)
-    }
-  }
-
-  # Add threshold analyses (if any)
-  if (!is.null(model$threshold_analyses) && length(model$threshold_analyses) > 0) {
-    threshold_code <- generate_threshold_code(model$threshold_analyses)
-    if (length(threshold_code) > 0) {
-      code <- c(code, "", threshold_code)
-    }
-  }
-
-  # Add override categories (if any)
-  if (!is.null(model$override_categories) && length(model$override_categories) > 0) {
-    override_code <- generate_override_code(model$override_categories)
-    if (length(override_code) > 0) {
-      code <- c(code, "", override_code)
-    }
-  }
-
-  # Add VBP configuration (if any)
-  if (!is.null(model$vbp)) {
-    vbp_code <- generate_vbp_code(model$vbp)
-    if (length(vbp_code) > 0) {
-      code <- c(code, "", vbp_code)
-    }
-  }
-
-  # Add PSA configuration (if any)
-  if (!is.null(model$psa)) {
-    psa_code <- generate_psa_code(model$psa)
-    if (length(psa_code) > 0) {
-      code <- c(code, "", psa_code)
-    }
+  # Standalone components (separate from pipe chain):
+  # tables, multivariate sampling, scripts, trees, decision tree config,
+  # DSA parameters, scenarios, TWSA analyses, threshold analyses,
+  # override categories, VBP config, PSA config, documentation
+  standalone_sections <- list(
+    generate_tables_code(model, model$tables),
+    generate_multivariate_sampling_code(model$multivariate_sampling),
+    generate_scripts_code(model, model$scripts),
+    generate_trees_code(model, model$trees),
+    generate_decision_tree_code(model$decision_tree),
+    generate_dsa_code(model$dsa_parameters),
+    generate_scenarios_code(model$scenarios),
+    generate_twsa_code(model$twsa_analyses),
+    generate_threshold_code(model$threshold_analyses),
+    generate_override_code(model$override_categories),
+    generate_vbp_code(model$vbp),
+    generate_psa_code(model$psa),
+    generate_documentation_code(model$documentation)
+  )
+  for (section in standalone_sections) {
+    code <- append_section(code, section)
   }
 
   # Write to file if specified
@@ -188,6 +378,10 @@ model_to_r_code <- function(model, file = NULL) {
 
   invisible(code)
 }
+
+# =============================================================================
+# Pipe-Chain Generators (spec-based wrappers)
+# =============================================================================
 
 #' Generate Settings Code
 #' @keywords internal
@@ -228,279 +422,56 @@ generate_settings_code <- function(settings) {
 
 #' Generate States Code
 #' @keywords internal
-generate_states_code <- function(states, is_psm = FALSE) {
-  # Defensive check
-  if (is.null(states) || !is.data.frame(states) || nrow(states) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(states))) {
-    s <- states[i, ]
-
-    # PSM states only have name, display_name, description
-    # Markov states also have initial_probability and other fields
-    if (is_psm) {
-      args <- glue('"{s$name}"')
-    } else {
-      args <- glue('"{s$name}", initial_prob = {s$initial_probability}')
-    }
-
-    # Add optional arguments (display_name and description apply to both model types)
-    if ("display_name" %in% names(s) && !is.na(s$display_name) && s$display_name != s$name) {
-      args <- args %&% glue(', display_name = "{s$display_name}"')
-    }
-    if ("description" %in% names(s) && !is.na(s$description) &&
-        s$description != s$name &&
-        (!("display_name" %in% names(s)) || s$description != s$display_name)) {
-      args <- args %&% glue(', description = "{s$description}"')
-    }
-
-    # Markov-only optional arguments
-    if (!is_psm) {
-      if ("state_group" %in% names(s) && !is.na(s$state_group)) {
-        args <- args %&% glue(', state_group = "{s$state_group}"')
-      }
-      if ("share_state_time" %in% names(s) && !is.na(s$share_state_time) && s$share_state_time) {
-        args <- args %&% glue(', share_state_time = TRUE')
-      }
-      if ("state_cycle_limit" %in% names(s) && !is.na(s$state_cycle_limit)) {
-        args <- args %&% glue(', state_cycle_limit = {s$state_cycle_limit}')
-      }
-      if ("state_cycle_limit_unit" %in% names(s) && !is.na(s$state_cycle_limit_unit) && s$state_cycle_limit_unit != "cycles") {
-        args <- args %&% glue(', state_cycle_limit_unit = "{s$state_cycle_limit_unit}"')
-      }
-    }
-
-    code <- c(code, glue('  add_state({args}) |>'))
-  }
-
-  code
+generate_states_code <- function(states, model_type = "markov") {
+  # Markov states have initial_probability and other fields; all others use simple spec
+  spec <- if (model_type == "markov") spec_states_markov else spec_states_psm
+  generate_from_spec(states, spec)
 }
 
 #' Generate Transitions Code
 #' @keywords internal
-generate_transitions_code <- function(transitions, is_psm = FALSE) {
-  # Defensive check
-  if (is.null(transitions) || !is.data.frame(transitions) || nrow(transitions) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  if (is_psm) {
-    for (i in seq_len(nrow(transitions))) {
-      t <- transitions[i, ]
-      code <- c(code,
-        glue('  add_psm_transition("{t$endpoint}", "{t$time_unit}", {t$formula}) |>')
-      )
-    }
-  } else {
-    for (i in seq_len(nrow(transitions))) {
-      t <- transitions[i, ]
-      # For transitions, formula should be unquoted expression
-      code <- c(code,
-        glue('  add_transition("{t$from_state}", "{t$to_state}", {t$formula}) |>')
-      )
-    }
-  }
-
-  code
+generate_transitions_code <- function(transitions, model_type = "markov") {
+  spec <- switch(model_type,
+    psm = spec_transitions_psm,
+    custom_psm = spec_transitions_custom_psm,
+    spec_transitions_markov
+  )
+  generate_from_spec(transitions, spec)
 }
 
 #' Generate Values Code
 #' @keywords internal
 generate_values_code <- function(values) {
-  # Defensive check
-  if (is.null(values) || !is.data.frame(values) || nrow(values) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(values))) {
-    v <- values[i, ]
-    # Formula should be unquoted expression
-    args <- glue('"{v$name}", {v$formula}')
-
-    # Add optional arguments
-    if ("state" %in% names(v) && !is.na(v$state) && v$state != "") {
-      args <- args %&% glue(', state = "{v$state}"')
-    }
-    if ("destination" %in% names(v) && !is.na(v$destination) && v$destination != "") {
-      args <- args %&% glue(', destination = "{v$destination}"')
-    }
-    if ("display_name" %in% names(v) && !is.na(v$display_name) && v$display_name != v$name) {
-      args <- args %&% glue(', display_name = "{v$display_name}"')
-    }
-    if ("description" %in% names(v) && !is.na(v$description) &&
-        v$description != v$name &&
-        (!("display_name" %in% names(v)) || v$description != v$display_name)) {
-      args <- args %&% glue(', description = "{v$description}"')
-    }
-    if ("type" %in% names(v) && !is.na(v$type) && v$type != "outcome") {
-      args <- args %&% glue(', type = "{v$type}"')
-    }
-    if ("discounting_override" %in% names(v) && !is.na(v$discounting_override) && v$discounting_override != "") {
-      args <- args %&% glue(', discounting_override = "{v$discounting_override}"')
-    }
-
-    code <- c(code, glue('  add_value({args}) |>'))
-  }
-
-  code
+  generate_from_spec(values, spec_values)
 }
 
 #' Generate Variables Code
 #' @keywords internal
 generate_variables_code <- function(variables) {
-  # Defensive check
-  if (is.null(variables) || !is.data.frame(variables) || nrow(variables) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(variables))) {
-    v <- variables[i, ]
-    # Formula should be unquoted expression
-    args <- glue('"{v$name}", {v$formula}')
-
-    # Add optional arguments
-    if ("display_name" %in% names(v) && !is.na(v$display_name) && v$display_name != v$name) {
-      args <- args %&% glue(', display_name = "{v$display_name}"')
-    }
-    if ("description" %in% names(v) && !is.na(v$description) &&
-        v$description != v$name &&
-        (!("display_name" %in% names(v)) || v$description != v$display_name)) {
-      args <- args %&% glue(', description = "{v$description}"')
-    }
-    if ("strategy" %in% names(v) && !is.na(v$strategy) && v$strategy != "") {
-      args <- args %&% glue(', strategy = "{v$strategy}"')
-    }
-    if ("group" %in% names(v) && !is.na(v$group) && v$group != "") {
-      args <- args %&% glue(', group = "{v$group}"')
-    }
-    if ("source" %in% names(v) && !is.na(v$source) && v$source != "") {
-      # Escape quotes in source
-      source_escaped <- gsub('"', '\\"', v$source)
-      args <- args %&% glue(', source = "{source_escaped}"')
-    }
-    if ("sampling" %in% names(v) && !is.na(v$sampling) && v$sampling != "") {
-      # Output sampling as unquoted expression (NSE)
-      args <- args %&% glue(', sampling = {v$sampling}')
-    }
-
-    code <- c(code, glue('  add_variable({args}) |>'))
-  }
-
-  code
+  generate_from_spec(variables, spec_variables)
 }
 
 #' Generate Strategies Code
 #' @keywords internal
 generate_strategies_code <- function(strategies) {
-  # Defensive check
-  if (is.null(strategies) || !is.data.frame(strategies) || nrow(strategies) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(strategies))) {
-    s <- strategies[i, ]
-    args <- glue('"{s$name}"')
-
-    # Add optional arguments
-    if ("display_name" %in% names(s) && !is.na(s$display_name) && s$display_name != s$name) {
-      args <- args %&% glue(', display_name = "{s$display_name}"')
-    }
-    if ("description" %in% names(s) && !is.na(s$description) &&
-        s$description != s$name &&
-        (!("display_name" %in% names(s)) || s$description != s$display_name)) {
-      args <- args %&% glue(', description = "{s$description}"')
-    }
-    if ("enabled" %in% names(s) && !is.na(s$enabled) && s$enabled != 1) {
-      args <- args %&% glue(', enabled = {s$enabled}')
-    }
-
-    code <- c(code, glue('  add_strategy({args}) |>'))
-  }
-
-  code
+  generate_from_spec(strategies, spec_strategies)
 }
 
 #' Generate Groups Code
 #' @keywords internal
 generate_groups_code <- function(groups) {
-  # Defensive check
-  if (is.null(groups) || !is.data.frame(groups) || nrow(groups) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(groups))) {
-    g <- groups[i, ]
-    args <- glue('"{g$name}"')
-
-    # Add optional arguments
-    if ("display_name" %in% names(g) && !is.na(g$display_name) && g$display_name != g$name) {
-      args <- args %&% glue(', display_name = "{g$display_name}"')
-    }
-    if ("description" %in% names(g) && !is.na(g$description) &&
-        g$description != g$name &&
-        (!("display_name" %in% names(g)) || g$description != g$display_name)) {
-      args <- args %&% glue(', description = "{g$description}"')
-    }
-    if ("weight" %in% names(g) && !is.na(g$weight) && g$weight != "1") {
-      # Check if weight is a number or expression
-      if (suppressWarnings(!is.na(as.numeric(g$weight)))) {
-        args <- args %&% glue(', weight = {g$weight}')
-      } else {
-        args <- args %&% glue(', weight = "{g$weight}"')
-      }
-    }
-    if ("enabled" %in% names(g) && !is.na(g$enabled) && g$enabled != 1) {
-      args <- args %&% glue(', enabled = {g$enabled}')
-    }
-
-    code <- c(code, glue('  add_group({args}) |>'))
-  }
-
-  code
+  generate_from_spec(groups, spec_groups)
 }
 
 #' Generate Summaries Code
 #' @keywords internal
 generate_summaries_code <- function(summaries) {
-  # Defensive check
-  if (is.null(summaries) || !is.data.frame(summaries) || nrow(summaries) == 0) {
-    return(character(0))
-  }
-
-  code <- character()
-
-  for (i in seq_len(nrow(summaries))) {
-    s <- summaries[i, ]
-    args <- glue('"{s$name}", "{s$values}"')
-
-    # Add optional arguments
-    if ("display_name" %in% names(s) && !is.na(s$display_name) && s$display_name != s$name) {
-      args <- args %&% glue(', display_name = "{s$display_name}"')
-    }
-    if ("description" %in% names(s) && !is.na(s$description) &&
-        s$description != s$name &&
-        (!("display_name" %in% names(s)) || s$description != s$display_name)) {
-      args <- args %&% glue(', description = "{s$description}"')
-    }
-
-    code <- c(code, glue('  add_summary({args}) |>'))
-  }
-
-  code
+  generate_from_spec(summaries, spec_summaries)
 }
+
+# =============================================================================
+# Standalone Generators
+# =============================================================================
 
 #' Generate Multivariate Sampling Code
 #' @keywords internal
@@ -513,58 +484,35 @@ generate_multivariate_sampling_code <- function(multivariate_sampling) {
   code <- character()
 
   for (mv_spec in multivariate_sampling) {
-    # Build the function call arguments
-    args <- character()
-    args <- c(args, glue('name = "{mv_spec$name}"'))
-    args <- c(args, glue('distribution = {mv_spec$distribution}'))
+    # Build args using opt_str where possible
+    args <- c(
+      glue('name = "{mv_spec[["name"]]}"'),
+      glue('type = "{mv_spec[["type"]]}"'),
+      # Variables as character vector
+      if (!is.null(mv_spec[["variables"]])) {
+        var_names <- paste0('"', mv_spec[["variables"]], '"', collapse = ", ")
+        glue('variables = c({var_names})')
+      },
+      # Strategy/group if non-empty
+      opt_str("strategy", mv_spec[["strategy"]]),
+      opt_str("group", mv_spec[["group"]]),
+      # Type-specific parameters
+      if (!is.null(mv_spec[["covariance"]])) glue('covariance = "{as.character(mv_spec[["covariance"]])}"'),
+      if (!is.null(mv_spec[["n"]])) glue('n = {mv_spec[["n"]]}'),
+      # Description
+      opt_str("description", if (!is.null(mv_spec[["description"]]) && !is.na(mv_spec[["description"]])) escape_quotes(mv_spec[["description"]]))
+    )
+    # Filter NULLs from opt_str calls
+    args <- Filter(Negate(is.null), args)
 
-    # Handle variables - can be a character vector or a tibble
-    if ("variables" %in% names(mv_spec) && !is.null(mv_spec$variables)) {
-      vars_df <- mv_spec$variables
-
-      if (is.data.frame(vars_df)) {
-        # Check if it's a simple case (just variable names, no strategy/group)
-        if (all(is.na(vars_df$strategy) | vars_df$strategy == "") &&
-            all(is.na(vars_df$group) | vars_df$group == "")) {
-          # Simple case - just variable names
-          var_names <- paste0('"', vars_df$variable, '"', collapse = ", ")
-          args <- c(args, glue('variables = c({var_names})'))
-        } else {
-          # Complex case - need to generate tibble
-          tibble_lines <- format_tribble(vars_df)
-          if (length(tibble_lines) == 1) {
-            # Single line tibble
-            args <- c(args, paste0('variables = ', tibble_lines[1]))
-          } else {
-            # Multi-line tibble - need special handling
-            # We'll use a simplified approach for now
-            tibble_str <- paste(tibble_lines, collapse = "\n    ")
-            args <- c(args, paste0('variables = ', tibble_str))
-          }
-        }
-      } else if (is.character(vars_df)) {
-        # Character vector case
-        var_names <- paste0('"', vars_df, '"', collapse = ", ")
-        args <- c(args, glue('variables = c({var_names})'))
-      }
-    }
-
-    # Add description if present
-    if ("description" %in% names(mv_spec) && !is.na(mv_spec$description) &&
-        mv_spec$description != "") {
-      # Escape quotes in description
-      desc_escaped <- gsub('"', '\\"', mv_spec$description)
-      args <- c(args, glue('description = "{desc_escaped}"'))
-    }
-
-    # Build the function call
+    # Build the function call (standalone, not in pipe chain)
     if (length(args) == 1) {
-      code <- c(code, glue('  add_multivariate_sampling({args}) |>'))
+      code <- c(code, glue('model <- add_multivariate_sampling(model, {args})'))
     } else {
       code <- c(code,
-        '  add_multivariate_sampling(',
-        paste0('    ', args, collapse = ',\n'),
-        '  ) |>'
+        'model <- add_multivariate_sampling(model,',
+        paste0('  ', args, collapse = ',\n'),
+        ')'
       )
     }
   }
@@ -579,74 +527,41 @@ format_tribble <- function(df) {
     return("tibble::tibble()")
   }
 
-  # Get column names and prepare them
+  # Get column names and prepare them (backtick special names)
   col_names <- names(df)
-  formatted_names <- vapply(col_names, function(name) {
-    # Use backticks for names with spaces or special characters
-    if (grepl("[^a-zA-Z0-9_.]", name) || grepl("^[0-9]", name)) {
-      paste0("`", name, "`")
-    } else {
-      name
-    }
-  }, character(1))
+  formatted_names <- ifelse(
+    grepl("[^a-zA-Z0-9_.]", col_names) | grepl("^[0-9]", col_names),
+    paste0("`", col_names, "`"), col_names
+  )
 
-  # Prepare values for each column
-  formatted_values <- list()
-  col_widths <- numeric(length(col_names))
-
-  for (i in seq_along(col_names)) {
+  # Format values for each column based on type
+  formatted_values <- lapply(seq_along(col_names), function(i) {
     col <- df[[col_names[i]]]
+    if (is.character(col)) paste0('"', col, '"')
+    else if (is.logical(col)) toupper(as.character(col))
+    else as.character(col)
+  })
 
-    # Format values based on type
-    if (is.character(col)) {
-      vals <- paste0('"', col, '"')
-    } else if (is.logical(col)) {
-      vals <- toupper(as.character(col))
-    } else {
-      vals <- as.character(col)
-    }
+  # Calculate column widths (including ~ for header)
+  headers <- paste0("~", formatted_names)
+  col_widths <- mapply(function(h, v) max(nchar(h), max(nchar(v))),
+                       headers, formatted_values)
 
-    formatted_values[[i]] <- vals
-
-    # Calculate column width (including ~ for header)
-    header_width <- nchar(paste0("~", formatted_names[i]))
-    max_val_width <- max(nchar(vals))
-    col_widths[i] <- max(header_width, max_val_width)
-  }
+  # Helper to pad values to column width
+  pad <- function(val, w) sprintf(paste0("%-", w, "s"), val)
 
   # Build the tribble code
-  lines <- character()
-
-  # Add the opening
-  lines <- c(lines, "tibble::tribble(")
-
-  # Add the header row
-  header_parts <- character(length(col_names))
-  for (i in seq_along(col_names)) {
-    header_parts[i] <- sprintf("%-*s", col_widths[i], paste0("~", formatted_names[i]))
-  }
-  lines <- c(lines, paste0("  ", paste(header_parts, collapse = ", "), ","))
+  header_line <- paste0("  ", paste(mapply(pad, headers, col_widths), collapse = ", "), ",")
 
   # Add data rows
-  for (row_idx in seq_len(nrow(df))) {
-    row_parts <- character(length(col_names))
-    for (col_idx in seq_along(col_names)) {
-      row_parts[col_idx] <- sprintf("%-*s", col_widths[col_idx], formatted_values[[col_idx]][row_idx])
-    }
-    row_line <- paste0("  ", paste(row_parts, collapse = ", "))
-
+  row_lines <- vapply(seq_len(nrow(df)), function(r) {
+    cells <- paste(mapply(function(v, w) pad(v[r], w), formatted_values, col_widths), collapse = ", ")
+    row_line <- paste0("  ", cells)
     # Add comma except for last row
-    if (row_idx < nrow(df)) {
-      row_line <- paste0(row_line, ",")
-    }
+    if (r < nrow(df)) paste0(row_line, ",") else row_line
+  }, character(1))
 
-    lines <- c(lines, row_line)
-  }
-
-  # Add the closing
-  lines <- c(lines, ")")
-
-  return(lines)
+  c("tibble::tribble(", header_line, row_lines, ")")
 }
 
 #' Generate Tables Code
@@ -688,16 +603,12 @@ generate_tables_code <- function(model, tables) {
     }
 
     # Build add_table call with optional description
-    if (!is.null(table_description) && table_description != "") {
-      desc_escaped <- gsub('"', '\\"', table_description)
-      code <- c(code,
-        paste0('model <- add_table(model, "', table_name, '", ', table_name, '_data, description = "', desc_escaped, '")')
-      )
-    } else {
-      code <- c(code,
-        paste0('model <- add_table(model, "', table_name, '", ', table_name, '_data)')
-      )
-    }
+    desc_part <- if (!is.null(table_description) && table_description != "") {
+      paste0(', description = "', escape_quotes(table_description), '"')
+    } else ""
+    code <- c(code,
+      paste0('model <- add_table(model, "', table_name, '", ', table_name, '_data', desc_part, ')')
+    )
   }
 
   code
@@ -739,16 +650,12 @@ generate_scripts_code <- function(model, scripts) {
     )
 
     # Build add_script call with optional description
-    if (!is.null(script_description) && script_description != "") {
-      desc_escaped <- gsub('"', '\\"', script_description)
-      code <- c(code,
-        paste0('model <- add_script(model, "', script_name, '", ', script_name, '_code, description = "', desc_escaped, '")')
-      )
-    } else {
-      code <- c(code,
-        paste0('model <- add_script(model, "', script_name, '", ', script_name, '_code)')
-      )
-    }
+    desc_part <- if (!is.null(script_description) && script_description != "") {
+      paste0(', description = "', escape_quotes(script_description), '"')
+    } else ""
+    code <- c(code,
+      paste0('model <- add_script(model, "', script_name, '", ', script_name, '_code', desc_part, ')')
+    )
   }
 
   code
@@ -758,36 +665,24 @@ generate_scripts_code <- function(model, scripts) {
 #' @keywords internal
 generate_trees_code <- function(model, trees) {
   # Defensive check for NULL, empty, or malformed trees
-  if (is.null(trees)) {
-    return(character(0))
-  }
-
   # Trees can be either a data frame or a list
-  if (is.data.frame(trees)) {
-    if (nrow(trees) == 0) {
-      return(character(0))
-    }
-  } else if (is.list(trees)) {
-    if (length(trees) == 0) {
-      return(character(0))
-    }
-  } else {
-    # Unknown tree format, return empty
-    return(character(0))
-  }
+  is_empty <- is.null(trees) ||
+    (is.data.frame(trees) && nrow(trees) == 0) ||
+    (is.list(trees) && !is.data.frame(trees) && length(trees) == 0) ||
+    (!is.data.frame(trees) && !is.list(trees))
+  if (is_empty) return(character(0))
 
   # Trees in openqaly are typically parsed into variables via decision_tree()
   # rather than being added directly. The tree parsing happens automatically
-  # when the model is read from Excel/JSON. For now, we'll just add a comment
+  # when the model is read from YAML/JSON. For now, we'll just add a comment
   # indicating that trees are present but handled internally.
-
-  code <- c(
-    "# Decision trees are parsed into variables automatically",
-    "# Tree data is embedded in the model structure"
-  )
-
-  return(code)
+  c("# Decision trees are parsed into variables automatically",
+    "# Tree data is embedded in the model structure")
 }
+
+# =============================================================================
+# Analysis Generators
+# =============================================================================
 
 #' Generate DSA Code
 #' @keywords internal
@@ -800,43 +695,24 @@ generate_dsa_code <- function(dsa_parameters) {
   code <- c("# Add DSA parameters")
 
   for (param in dsa_parameters) {
-    if (param$type == "variable") {
-      # Generate add_dsa_variable call
-      args <- glue('"{param$name}"')
+    is_var <- param$type == "variable"
+    func <- if (is_var) "add_dsa_variable" else "add_dsa_setting"
 
-      # Add low and high (convert oq_formula to string)
-      low_str <- if (inherits(param$low, "oq_formula")) as.character(param$low) else param$low
-      high_str <- if (inherits(param$high, "oq_formula")) as.character(param$high) else param$high
-      args <- args %&% glue(', low = {low_str}, high = {high_str}')
+    # Convert oq_formula to string for variable low/high
+    low <- if (is_var) resolve_val(param$low) else param$low
+    high <- if (is_var) resolve_val(param$high) else param$high
 
-      # Add optional strategy/group
-      if (!is.null(param$strategy) && param$strategy != "") {
-        args <- args %&% glue(', strategy = "{param$strategy}"')
-      }
-      if (!is.null(param$group) && param$group != "") {
-        args <- args %&% glue(', group = "{param$group}"')
-      }
-      # Add optional display_name
-      if (!is.null(param$display_name) && param$display_name != "") {
-        args <- args %&% glue(', display_name = "{param$display_name}"')
-      }
+    # display_name: for settings, skip when it matches the name
+    dn_skip <- if (is_var) "" else param$name
 
-      code <- c(code, glue('model <- add_dsa_variable(model, {args})'))
-
-    } else if (param$type == "setting") {
-      # Generate add_dsa_setting call
-      args <- glue('"{param$name}"')
-
-      # Add low and high (literal values for settings)
-      args <- args %&% glue(', low = {param$low}, high = {param$high}')
-
-      # Add optional display_name
-      if (!is.null(param$display_name) && param$display_name != "" && param$display_name != param$name) {
-        args <- args %&% glue(', display_name = "{param$display_name}"')
-      }
-
-      code <- c(code, glue('model <- add_dsa_setting(model, {args})'))
-    }
+    code <- c(code, codegen_call(func,
+      glue('"{param$name}"'),
+      glue('low = {low}'), glue('high = {high}'),
+      # Strategy/group only for variables
+      if (is_var) opt_str("strategy", param$strategy),
+      if (is_var) opt_str("group", param$group),
+      opt_str("display_name", param$display_name, skip_if = dn_skip)
+    ))
   }
 
   code
@@ -854,44 +730,27 @@ generate_scenarios_code <- function(scenarios) {
 
   for (scenario in scenarios) {
     # Generate add_scenario call
-    args <- glue('"{scenario$name}"')
-    if (!is.null(scenario$description) && scenario$description != "" && scenario$description != scenario$name) {
-      desc_escaped <- gsub('"', '\\"', scenario$description)
-      args <- args %&% glue(', description = "{desc_escaped}"')
-    }
-    code <- c(code, glue('model <- add_scenario(model, {args})'))
+    code <- c(code, codegen_call("add_scenario",
+      glue('"{scenario$name}"'),
+      emit_desc(scenario$description, scenario$name)
+    ))
 
     # Generate add_scenario_variable calls
-    if (!is.null(scenario$variable_overrides) && length(scenario$variable_overrides) > 0) {
-      for (override in scenario$variable_overrides) {
-        var_args <- glue('"{scenario$name}", "{override$name}"')
-
-        # Value can be numeric or oq_formula
-        val_str <- if (inherits(override$value, "oq_formula")) {
-          as.character(override$value)
-        } else {
-          override$value
-        }
-        var_args <- var_args %&% glue(', {val_str}')
-
+    for (override in scenario$variable_overrides %||% list()) {
+      # Value can be numeric or oq_formula
+      code <- c(code, codegen_call("add_scenario_variable",
+        glue('"{scenario$name}"'), glue('"{override$name}"'), resolve_val(override$value),
         # Add optional strategy/group
-        if (!is.null(override$strategy) && override$strategy != "") {
-          var_args <- var_args %&% glue(', strategy = "{override$strategy}"')
-        }
-        if (!is.null(override$group) && override$group != "") {
-          var_args <- var_args %&% glue(', group = "{override$group}"')
-        }
-
-        code <- c(code, glue('model <- add_scenario_variable(model, {var_args})'))
-      }
+        opt_str("strategy", override$strategy),
+        opt_str("group", override$group)
+      ))
     }
 
     # Generate add_scenario_setting calls
-    if (!is.null(scenario$setting_overrides) && length(scenario$setting_overrides) > 0) {
-      for (override in scenario$setting_overrides) {
-        setting_args <- glue('"{scenario$name}", "{override$name}", {override$value}')
-        code <- c(code, glue('model <- add_scenario_setting(model, {setting_args})'))
-      }
+    for (override in scenario$setting_overrides %||% list()) {
+      code <- c(code, codegen_call("add_scenario_setting",
+        glue('"{scenario$name}"'), glue('"{override$name}"'), override$value
+      ))
     }
   }
 
@@ -910,77 +769,38 @@ generate_twsa_code <- function(twsa_analyses) {
 
   for (twsa in twsa_analyses) {
     # Generate add_twsa call
-    args <- glue('"{twsa$name}"')
-    if (!is.null(twsa$description) && twsa$description != "" && twsa$description != twsa$name) {
-      desc_escaped <- gsub('"', '\\"', twsa$description)
-      args <- args %&% glue(', description = "{desc_escaped}"')
-    }
-    code <- c(code, glue('model <- add_twsa(model, {args})'))
+    code <- c(code, codegen_call("add_twsa",
+      glue('"{twsa$name}"'),
+      emit_desc(twsa$description, twsa$name)
+    ))
 
     # Generate parameter calls
-    if (!is.null(twsa$parameters) && length(twsa$parameters) > 0) {
-      for (param in twsa$parameters) {
-        if (param$param_type == "variable") {
-          # Generate add_twsa_variable call
-          param_args <- glue('"{twsa$name}", "{param$name}", type = "{param$type}"')
+    for (param in twsa$parameters %||% list()) {
+      is_var <- param$param_type == "variable"
+      rv <- if (is_var) resolve_val else identity
+      func <- if (is_var) "add_twsa_variable" else "add_twsa_setting"
 
-          if (param$type == "range") {
-            min_str <- if (inherits(param$min, "oq_formula")) as.character(param$min) else param$min
-            max_str <- if (inherits(param$max, "oq_formula")) as.character(param$max) else param$max
-            param_args <- param_args %&% glue(', min = {min_str}, max = {max_str}, steps = {param$steps}')
-          } else if (param$type == "radius") {
-            radius_str <- if (inherits(param$radius, "oq_formula")) as.character(param$radius) else param$radius
-            param_args <- param_args %&% glue(', radius = {radius_str}, steps = {param$steps}')
-          } else if (param$type == "custom") {
-            values_str <- if (inherits(param$values, "oq_formula")) as.character(param$values) else {
-              paste0("c(", paste(param$values, collapse = ", "), ")")
-            }
-            param_args <- param_args %&% glue(', values = {values_str}')
-          }
+      # Build type-specific arguments
+      type_args <- switch(param$type,
+        range = c(glue('min = {rv(param$min)}'), glue('max = {rv(param$max)}'),
+                  glue('steps = {param$steps}')),
+        radius = c(glue('radius = {rv(param$radius)}'), glue('steps = {param$steps}')),
+        custom = glue('values = {rv_values(param$values, is_var)}')
+      )
 
-          # Add optional strategy/group
-          if (!is.null(param$strategy) && param$strategy != "") {
-            param_args <- param_args %&% glue(', strategy = "{param$strategy}"')
-          }
-          if (!is.null(param$group) && param$group != "") {
-            param_args <- param_args %&% glue(', group = "{param$group}"')
-          }
-          # Add optional display_name
-          if (!is.null(param$display_name) && param$display_name != "") {
-            param_args <- param_args %&% glue(', display_name = "{param$display_name}"')
-          }
-          # Add include_base_case if FALSE
-          if (!is.null(param$include_base_case) && param$include_base_case == FALSE) {
-            param_args <- param_args %&% ', include_base_case = FALSE'
-          }
+      # display_name: for settings, skip when it matches the name
+      dn_skip <- if (is_var) "" else param$name
 
-          code <- c(code, glue('model <- add_twsa_variable(model, {param_args})'))
-
-        } else if (param$param_type == "setting") {
-          # Generate add_twsa_setting call
-          param_args <- glue('"{twsa$name}", "{param$name}", type = "{param$type}"')
-
-          if (param$type == "range") {
-            param_args <- param_args %&% glue(', min = {param$min}, max = {param$max}, steps = {param$steps}')
-          } else if (param$type == "radius") {
-            param_args <- param_args %&% glue(', radius = {param$radius}, steps = {param$steps}')
-          } else if (param$type == "custom") {
-            values_str <- paste0("c(", paste(param$values, collapse = ", "), ")")
-            param_args <- param_args %&% glue(', values = {values_str}')
-          }
-
-          # Add optional display_name
-          if (!is.null(param$display_name) && param$display_name != "" && param$display_name != param$name) {
-            param_args <- param_args %&% glue(', display_name = "{param$display_name}"')
-          }
-          # Add include_base_case if FALSE
-          if (!is.null(param$include_base_case) && param$include_base_case == FALSE) {
-            param_args <- param_args %&% ', include_base_case = FALSE'
-          }
-
-          code <- c(code, glue('model <- add_twsa_setting(model, {param_args})'))
-        }
-      }
+      code <- c(code, codegen_call(func,
+        glue('"{twsa$name}"'), glue('"{param$name}"'), glue('type = "{param$type}"'),
+        type_args,
+        # Strategy/group only for variables
+        if (is_var) opt_str("strategy", param$strategy),
+        if (is_var) opt_str("group", param$group),
+        opt_str("display_name", param$display_name, skip_if = dn_skip),
+        # Add include_base_case if FALSE
+        if (identical(param$include_base_case, FALSE)) "include_base_case = FALSE"
+      ))
     }
   }
 
@@ -1021,6 +841,17 @@ generate_psa_code <- function(psa) {
   )
 }
 
+#' Generate Documentation Code
+#' @keywords internal
+generate_documentation_code <- function(documentation) {
+  if (is.null(documentation)) return(character(0))
+
+  c(
+    "# Set documentation",
+    paste0("model <- set_documentation(model, ", deparse(documentation), ")")
+  )
+}
+
 #' Generate Decision Tree Code
 #' @keywords internal
 generate_decision_tree_code <- function(decision_tree) {
@@ -1047,32 +878,28 @@ generate_override_code <- function(override_categories) {
 
   for (cat_item in override_categories) {
     # Generate add_override_category call
-    cat_args <- glue('"{cat_item$name}"')
-    if (isTRUE(cat_item$general)) {
-      cat_args <- cat_args %&% ', general = TRUE'
-    }
-    code <- c(code, glue('model <- add_override_category(model, {cat_args})'))
+    code <- c(code, codegen_call("add_override_category",
+      glue('"{cat_item$name}"'),
+      if (isTRUE(cat_item$general)) "general = TRUE"
+    ))
 
     # Generate add_override calls for each override
     for (ovr in cat_item$overrides) {
-      ovr_args <- glue('"{cat_item$name}"')
-      ovr_args <- ovr_args %&% glue(',\n    title = "{ovr$title}"')
-      ovr_args <- ovr_args %&% glue(',\n    name = "{ovr$name}"')
-      ovr_args <- ovr_args %&% glue(',\n    type = "{ovr$type}"')
-      ovr_args <- ovr_args %&% glue(',\n    input_type = "{ovr$input_type}"')
-
       # Expression - output as unquoted if numeric, quoted if string
       expr_val <- suppressWarnings(as.numeric(ovr$overridden_expression))
-      if (!is.na(expr_val)) {
-        ovr_args <- ovr_args %&% glue(',\n    expression = {ovr$overridden_expression}')
-      } else {
-        ovr_args <- ovr_args %&% glue(',\n    expression = "{ovr$overridden_expression}"')
-      }
+      expr_str <- if (!is.na(expr_val)) ovr$overridden_expression
+                  else glue('"{ovr$overridden_expression}"')
+
+      ovr_args <- glue('"{cat_item$name}"') %&%
+        glue(',\n    title = "{ovr$title}"') %&%
+        glue(',\n    name = "{ovr$name}"') %&%
+        glue(',\n    type = "{ovr$type}"') %&%
+        glue(',\n    input_type = "{ovr$input_type}"') %&%
+        glue(',\n    expression = {expr_str}')
 
       # Optional description
       if (!is.null(ovr$description) && ovr$description != "") {
-        desc_escaped <- gsub('"', '\\"', ovr$description)
-        ovr_args <- ovr_args %&% glue(',\n    description = "{desc_escaped}"')
+        ovr_args <- ovr_args %&% glue(',\n    description = "{escape_quotes(ovr$description)}"')
       }
 
       # Optional strategy/group
@@ -1088,15 +915,11 @@ generate_override_code <- function(override_categories) {
         ovr_args <- ovr_args %&% ',\n    general = TRUE'
       }
 
-      # Input config params
-      if (!is.null(ovr$input_config$min)) {
-        ovr_args <- ovr_args %&% glue(',\n    min = {ovr$input_config$min}')
-      }
-      if (!is.null(ovr$input_config$max)) {
-        ovr_args <- ovr_args %&% glue(',\n    max = {ovr$input_config$max}')
-      }
-      if (!is.null(ovr$input_config$step_size)) {
-        ovr_args <- ovr_args %&% glue(',\n    step_size = {ovr$input_config$step_size}')
+      # Input config params (min, max, step_size)
+      for (cfg_param in c("min", "max", "step_size")) {
+        if (!is.null(ovr$input_config[[cfg_param]])) {
+          ovr_args <- ovr_args %&% glue(',\n    {cfg_param} = {ovr$input_config[[cfg_param]]}')
+        }
       }
 
       # Dropdown options
@@ -1132,102 +955,42 @@ generate_threshold_code <- function(threshold_analyses) {
   for (a in threshold_analyses) {
     # Generate condition constructor call
     cond <- a$condition
-    cond_func <- switch(cond$output,
-      "outcomes" = "threshold_condition_outcomes",
-      "costs" = "threshold_condition_costs",
-      "nmb" = "threshold_condition_nmb",
-      "ce" = "threshold_condition_ce",
-      "trace" = "threshold_condition_trace"
-    )
+    cond_func <- paste0("threshold_condition_", cond$output)
 
-    cond_args <- character()
-
-    if (cond$output %in% c("outcomes", "costs")) {
-      if (!is.null(cond$summary) && cond$summary != "") {
-        cond_args <- c(cond_args, glue('summary = "{cond$summary}"'))
-      }
-      if (!is.null(cond$value) && cond$value != "") {
-        cond_args <- c(cond_args, glue('value = "{cond$value}"'))
-      }
-      if (!is.null(cond$type)) {
-        cond_args <- c(cond_args, glue('type = "{cond$type}"'))
-      }
-      if (!is.null(cond$strategy) && cond$strategy != "") {
-        cond_args <- c(cond_args, glue('strategy = "{cond$strategy}"'))
-      }
-      if (!is.null(cond$referent) && cond$referent != "") {
-        cond_args <- c(cond_args, glue('referent = "{cond$referent}"'))
-      }
-      if (!is.null(cond$comparator) && cond$comparator != "") {
-        cond_args <- c(cond_args, glue('comparator = "{cond$comparator}"'))
-      }
-      if (!is.null(cond$discounted) && !isTRUE(cond$discounted)) {
-        cond_args <- c(cond_args, "discounted = FALSE")
-      }
-      if (!is.null(cond$target_value) && cond$target_value != 0) {
-        cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
-      }
-      if (!is.null(cond$group) && cond$group != "") {
-        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
-      }
+    cond_args <- if (cond$output %in% c("outcomes", "costs")) {
+      c(opt_str("summary", cond$summary),
+        opt_str("value", cond$value),
+        opt_str("type", cond$type, skip_if = character(0)),
+        opt_str("strategy", cond$strategy),
+        opt_str("referent", cond$referent),
+        opt_str("comparator", cond$comparator),
+        cond_common(cond))
     } else if (cond$output %in% c("nmb", "ce")) {
-      cond_args <- c(cond_args, glue('"{cond$health_summary}"'))
-      cond_args <- c(cond_args, glue('"{cond$cost_summary}"'))
-      cond_args <- c(cond_args, glue('"{cond$referent}"'))
-      cond_args <- c(cond_args, glue('"{cond$comparator}"'))
-      if (!is.null(cond$discounted) && !isTRUE(cond$discounted)) {
-        cond_args <- c(cond_args, "discounted = FALSE")
-      }
-      if (cond$output == "nmb" && !is.null(cond$target_value) && cond$target_value != 0) {
-        cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
-      }
-      if (!is.null(cond$group) && cond$group != "") {
-        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
-      }
-      if (!is.null(cond$wtp) && !is.na(cond$wtp)) {
-        cond_args <- c(cond_args, glue('wtp = {cond$wtp}'))
-      }
+      c(glue('"{cond$health_summary}"'), glue('"{cond$cost_summary}"'),
+        glue('"{cond$referent}"'), glue('"{cond$comparator}"'),
+        cond_common(cond, include_target = cond$output == "nmb"),
+        opt_str("wtp", cond$wtp, quoted = FALSE, skip_if = NA))
     } else if (cond$output == "trace") {
-      cond_args <- c(cond_args, glue('state = "{cond$state}"'))
-      cond_args <- c(cond_args, glue('time = {cond$time}'))
-      if (!is.null(cond$time_unit) && cond$time_unit != "cycle") {
-        cond_args <- c(cond_args, glue('time_unit = "{cond$time_unit}"'))
-      }
-      if (!is.null(cond$type)) {
-        cond_args <- c(cond_args, glue('type = "{cond$type}"'))
-      }
-      if (!is.null(cond$strategy) && cond$strategy != "") {
-        cond_args <- c(cond_args, glue('strategy = "{cond$strategy}"'))
-      }
-      if (!is.null(cond$referent) && cond$referent != "") {
-        cond_args <- c(cond_args, glue('referent = "{cond$referent}"'))
-      }
-      if (!is.null(cond$comparator) && cond$comparator != "") {
-        cond_args <- c(cond_args, glue('comparator = "{cond$comparator}"'))
-      }
-      cond_args <- c(cond_args, glue('target_value = {cond$target_value}'))
-      if (!is.null(cond$group) && cond$group != "") {
-        cond_args <- c(cond_args, glue('group = "{cond$group}"'))
-      }
+      c(glue('state = "{cond$state}"'), glue('time = {cond$time}'),
+        opt_str("time_unit", cond$time_unit, skip_if = "cycle"),
+        opt_str("type", cond$type, skip_if = character(0)),
+        opt_str("strategy", cond$strategy),
+        opt_str("referent", cond$referent),
+        opt_str("comparator", cond$comparator),
+        glue('target_value = {cond$target_value}'),
+        opt_str("group", cond$group))
     }
 
-    cond_call <- glue('{cond_func}({paste(cond_args, collapse = ", ")})')
+    cond_call <- glue('{cond_func}({paste(Filter(Negate(is.null), cond_args), collapse = ", ")})')
 
     # Generate add_threshold_analysis call
-    args <- glue('"{a$name}", "{a$variable}", {a$lower}, {a$upper}')
-    args <- args %&% ",\n    condition = " %&% cond_call
-
-    if (!is.null(a$variable_strategy) && a$variable_strategy != "") {
-      args <- args %&% glue(',\n    variable_strategy = "{a$variable_strategy}"')
-    }
-    if (!is.null(a$variable_group) && a$variable_group != "") {
-      args <- args %&% glue(',\n    variable_group = "{a$variable_group}"')
-    }
-    if (!is.null(a$active) && !isTRUE(a$active)) {
-      args <- args %&% ',\n    active = FALSE'
-    }
-
-    code <- c(code, glue('model <- add_threshold_analysis(model, {args})'))
+    code <- c(code, codegen_call("add_threshold_analysis",
+      glue('"{a$name}"'), glue('"{a$variable}"'), a$lower, a$upper,
+      glue('condition = {cond_call}'),
+      opt_str("variable_strategy", a$variable_strategy),
+      opt_str("variable_group", a$variable_group),
+      if (!is.null(a$active) && !isTRUE(a$active)) "active = FALSE"
+    ))
   }
 
   code

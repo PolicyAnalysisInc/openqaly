@@ -4,7 +4,14 @@
 \alias{run_psa}
 \title{Run Probabilistic Sensitivity Analysis}
 \usage{
-run_psa(model, n_sim = NULL, seed = NULL, progress = NULL, ...)
+run_psa(
+  model,
+  n_sim = NULL,
+  seed = NULL,
+  progress = NULL,
+  keep_diagnostics = FALSE,
+  ...
+)
 }
 \arguments{
 \item{model}{A oq_model object with sampling specifications}

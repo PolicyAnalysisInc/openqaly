@@ -13,13 +13,80 @@
 #' @importFrom furrr future_map furrr_options
 NULL
 
+resolve_vbp_price_target <- function(model, price_variable, intervention_strategy) {
+  if (!intervention_strategy %in% model$strategies$name) {
+    stop(sprintf("Intervention strategy '%s' not found in model strategies",
+                 intervention_strategy), call. = FALSE)
+  }
+
+  matching_vars <- model$variables[model$variables$name == price_variable, , drop = FALSE]
+  if (nrow(matching_vars) == 0) {
+    stop(sprintf("Price variable '%s' not found in model variables",
+                 price_variable), call. = FALSE)
+  }
+
+  non_empty_groups <- matching_vars$group[!is.na(matching_vars$group) & matching_vars$group != ""]
+  if (length(non_empty_groups) > 0) {
+    defined_groups <- unique(non_empty_groups)
+    stop(sprintf(
+      paste0(
+        "Price variable '%s' is defined for specific group(s): %s\n",
+        "VBP analysis does not support group-specific price variables."
+      ),
+      price_variable,
+      paste(defined_groups, collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  row_strategy <- ifelse(is.na(matching_vars$strategy), "", matching_vars$strategy)
+  eligible <- matching_vars[row_strategy %in% c("", intervention_strategy), , drop = FALSE]
+
+  if (nrow(eligible) == 0) {
+    stop(sprintf(
+      paste0(
+        "No eligible VBP price variable row found for '%s' and intervention '%s'.\n",
+        "Expected exactly one row with either empty strategy or strategy = '%s'."
+      ),
+      price_variable,
+      intervention_strategy,
+      intervention_strategy
+    ), call. = FALSE)
+  }
+
+  if (nrow(eligible) != 1) {
+    eligible_strategies <- ifelse(is.na(eligible$strategy) | eligible$strategy == "", "<global>", eligible$strategy)
+    stop(sprintf(
+      paste0(
+        "Price variable '%s' must resolve to exactly one eligible variable row for intervention '%s'.\n",
+        "Found %d eligible rows: %s"
+      ),
+      price_variable,
+      intervention_strategy,
+      nrow(eligible),
+      paste(eligible_strategies, collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  resolved_strategy <- ifelse(is.na(eligible$strategy[[1]]), "", eligible$strategy[[1]])
+
+  list(
+    variable = price_variable,
+    strategy = resolved_strategy,
+    scope = if (resolved_strategy == "") "global" else "strategy_specific"
+  )
+}
+
+segment_matches_vbp_price_target <- function(segment_strategy, price_target) {
+  identical(price_target$scope, "global") || identical(segment_strategy, price_target$strategy)
+}
+
 #' Run Value-Based Pricing Analysis
 #'
 #' Performs value-based pricing analysis by varying the price of an intervention
 #' across three test values and calculating the linear relationship between WTP
 #' and the price that maintains cost-effectiveness versus each comparator.
 #'
-#' @param model An openqaly model object or oq_model_builder object
+#' @param model An oq_model object
 #' @param price_variable Name of the variable representing the intervention's price
 #' @param intervention_strategy Name of the intervention strategy
 #' @param outcome_summary Name of the outcome summary to use (default: "total_qalys")
@@ -82,10 +149,7 @@ run_vbp <- function(model,
   # Using larger values to ensure meaningful cost differences
   price_values <- c(0, 1000, 2000)
 
-  # Parse and validate model
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
   parsed_model <- parse_model(model, ...)
 
   # Fall back to model$vbp for any NULL parameters
@@ -136,9 +200,13 @@ run_vbp <- function(model,
 
   segment_results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) run_segment(
+      segment, parsed_model, ...,
+      .progress_callback = progress,
+      .diagnostics_policy = "none"
+    ),
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(seed = 1, packages = .packages())
   ) %>% bind_rows()
 
   # Aggregate by price_level + strategy
@@ -180,6 +248,11 @@ run_vbp <- function(model,
 #' @keywords internal
 build_vbp_segments <- function(model, vbp_spec) {
   base_segments <- get_segments(model)
+  price_target <- resolve_vbp_price_target(
+    model,
+    vbp_spec$price_variable,
+    vbp_spec$intervention_strategy
+  )
 
   vbp_segments <- list()
 
@@ -190,11 +263,7 @@ build_vbp_segments <- function(model, vbp_spec) {
         price_level = i,
         price_value = vbp_spec$price_values[i],
         parameter_overrides = map2(.data$strategy, .data$group, function(s, g) {
-          # Check if this is the intervention strategy
-          # Note: price applies to all groups of the intervention strategy
-          is_intervention <- (s == vbp_spec$intervention_strategy)
-
-          if (is_intervention) {
+          if (segment_matches_vbp_price_target(s, price_target)) {
             setNames(list(vbp_spec$price_values[i]),
                      vbp_spec$price_variable)
           } else {
@@ -461,37 +530,11 @@ calculate_vbp_price <- function(vbp_results, wtp, comparator = NULL, group = "ov
 #' @return TRUE if valid, stops with error if invalid
 #' @keywords internal
 validate_vbp_spec <- function(model, vbp_spec) {
-  # Check intervention strategy exists
-  if (!vbp_spec$intervention_strategy %in% model$strategies$name) {
-    stop(sprintf("Intervention strategy '%s' not found in model strategies",
-                vbp_spec$intervention_strategy))
-  }
-
-  # Check price variable exists
-  if (!vbp_spec$price_variable %in% model$variables$name) {
-    stop(sprintf("Price variable '%s' not found in model variables",
-                vbp_spec$price_variable))
-  }
-
-  # Check if price variable is group-specific and error if so
-  # VBP applies price to all groups - no way to target specific group
-  matching_vars <- model$variables[model$variables$name == vbp_spec$price_variable, ]
-  if (nrow(matching_vars) > 0) {
-    non_na_groups <- matching_vars$group[!is.na(matching_vars$group)]
-    has_group_specific <- length(non_na_groups) > 0 && any(non_na_groups != "")
-    if (has_group_specific) {
-      defined_groups <- unique(non_na_groups[non_na_groups != ""])
-      stop(sprintf(
-        paste0(
-          "Price variable '%s' is defined for specific group(s): %s\n",
-          "VBP analysis does not currently support group-specific price variables.\n",
-          "The price variable must be defined without group specification."
-        ),
-        vbp_spec$price_variable,
-        paste(defined_groups, collapse = ", ")
-      ), call. = FALSE)
-    }
-  }
+  resolve_vbp_price_target(
+    model,
+    vbp_spec$price_variable,
+    vbp_spec$intervention_strategy
+  )
 
   # Check summaries exist using validation helper
   # Note: Using model$summaries as metadata since this is during model building

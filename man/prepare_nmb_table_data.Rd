@@ -25,13 +25,16 @@ prepare_nmb_table_data(
 
 \item{cost_summary}{Name of the cost summary}
 
-\item{groups}{Group selection: "overall" (default), specific group, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{wtp}{Optional override for willingness-to-pay}
 
-\item{interventions}{Character vector of reference strategies for intervention perspective}
+\item{interventions}{Character vector of reference strategies for intervention
+perspective. At least one of interventions or comparators must be provided.}
 
-\item{comparators}{Character vector of reference strategies for comparator perspective}
+\item{comparators}{Character vector of reference strategies for comparator
+perspective. At least one of interventions or comparators must be provided.}
 
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 

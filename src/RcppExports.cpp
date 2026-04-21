@@ -30,6 +30,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cppSortVariables
+List cppSortVariables(CharacterVector names, List dep_lists, List fo_dep_lists, CharacterVector extra_names, List extra_dep_lists);
+RcppExport SEXP _openqaly_cppSortVariables(SEXP namesSEXP, SEXP dep_listsSEXP, SEXP fo_dep_listsSEXP, SEXP extra_namesSEXP, SEXP extra_dep_listsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< CharacterVector >::type names(namesSEXP);
+    Rcpp::traits::input_parameter< List >::type dep_lists(dep_listsSEXP);
+    Rcpp::traits::input_parameter< List >::type fo_dep_lists(fo_dep_listsSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type extra_names(extra_namesSEXP);
+    Rcpp::traits::input_parameter< List >::type extra_dep_lists(extra_dep_listsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cppSortVariables(names, dep_lists, fo_dep_lists, extra_names, extra_dep_lists));
+    return rcpp_result_gen;
+END_RCPP
+}
 // cppCalculateTraceAndValues
 List cppCalculateTraceAndValues(NumericVector init, NumericMatrix transitions, DataFrame values, CharacterVector value_names, CharacterVector state_names, DataFrame expanded_state_map, std::string half_cycle_method);
 RcppExport SEXP _openqaly_cppCalculateTraceAndValues(SEXP initSEXP, SEXP transitionsSEXP, SEXP valuesSEXP, SEXP value_namesSEXP, SEXP state_namesSEXP, SEXP expanded_state_mapSEXP, SEXP half_cycle_methodSEXP) {
@@ -50,6 +65,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_openqaly_cppMarkovTransitionsAndTrace", (DL_FUNC) &_openqaly_cppMarkovTransitionsAndTrace, 10},
+    {"_openqaly_cppSortVariables", (DL_FUNC) &_openqaly_cppSortVariables, 5},
     {"_openqaly_cppCalculateTraceAndValues", (DL_FUNC) &_openqaly_cppCalculateTraceAndValues, 7},
     {NULL, NULL, 0}
 };

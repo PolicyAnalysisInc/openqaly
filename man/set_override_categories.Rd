@@ -7,7 +7,7 @@
 set_override_categories(model, categories)
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 
 \item{categories}{A list of override categories.}
 }

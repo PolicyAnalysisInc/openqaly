@@ -1,5 +1,31 @@
 context("DSA+VBP")
 
+build_shared_price_dsa_vbp_model <- function() {
+  define_model("markov") %>%
+    set_settings(
+      timeframe = 1,
+      timeframe_unit = "years",
+      cycle_length = 1,
+      cycle_length_unit = "years"
+    ) %>%
+    add_strategy("control") %>%
+    add_strategy("treatment") %>%
+    add_state("alive", initial_prob = 1) %>%
+    add_state("dead", initial_prob = 0) %>%
+    add_variable("drug_price", 500) %>%
+    add_variable("drug_units", 1, strategy = "control") %>%
+    add_variable("drug_units", 3, strategy = "treatment") %>%
+    add_variable("utility", 1, strategy = "control") %>%
+    add_variable("utility", 2, strategy = "treatment") %>%
+    add_transition("alive", "alive", 1) %>%
+    add_transition("dead", "dead", 1) %>%
+    add_value("cost", drug_price * drug_units, state = "alive", type = "cost") %>%
+    add_value("qaly", utility, state = "alive", type = "outcome") %>%
+    add_summary("total_cost", "cost", type = "cost") %>%
+    add_summary("total_qalys", "qaly", type = "outcome") %>%
+    add_dsa_variable("utility", low = 1.5, high = 2.5, strategy = "treatment")
+}
+
 # Uses cached fixtures from setup.R:
 # - get_cached_dsa_vbp_results() for test results
 # - get_cached_dsa_vbp_model() for fresh model (NMB test)
@@ -158,6 +184,24 @@ test_that("DSA+VBP comparator segments have no price overrides", {
       info = sprintf("Comparator segment %d should not have c_drug override from VBP", i)
     )
   }
+})
+
+test_that("DSA+VBP applies a global price row override to all strategies", {
+  model <- build_shared_price_dsa_vbp_model()
+  parsed <- openqaly:::parse_model(model)
+  spec <- list(
+    price_variable = "drug_price",
+    intervention_strategy = "treatment",
+    outcome_summary = "total_qalys",
+    cost_summary = "total_cost",
+    price_values = c(0, 1000, 2000)
+  )
+
+  segments <- openqaly:::build_dsa_vbp_segments(parsed, spec)
+  pl1 <- segments[segments$vbp_price_level == 1, ]
+
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) "drug_price" %in% names(x), logical(1))))
+  expect_true(all(vapply(pl1$parameter_overrides, function(x) identical(x$drug_price, 0), logical(1))))
 })
 
 # ============================================================================

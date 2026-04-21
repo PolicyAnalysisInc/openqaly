@@ -7,7 +7,7 @@
 run_threshold(model, progress = NULL, ...)
 }
 \arguments{
-\item{model}{An oq_model_builder or oq_model object with threshold analyses defined}
+\item{model}{An oq_model object with threshold analyses defined}
 
 \item{progress}{Optional progress callback function. Called with
 \code{progress(total = N)} to declare total units, then

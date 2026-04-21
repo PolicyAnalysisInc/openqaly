@@ -371,11 +371,23 @@ calculate_incremental_ce <- function(results,
 #'
 #' @export
 calculate_pairwise_ce <- function(results,
-                                  outcome_summary,
-                                  cost_summary,
+                                  outcome_summary = NULL,
+                                  cost_summary = NULL,
                                   groups = "overall",
                                   interventions = NULL,
-                                  comparators = NULL) {
+                                  comparators = NULL,
+                                  health_outcome = NULL,
+                                  cost_outcome = NULL) {
+
+  if (is.null(outcome_summary)) {
+    outcome_summary <- health_outcome
+  }
+  if (is.null(cost_summary)) {
+    cost_summary <- cost_outcome
+  }
+  if (is.null(outcome_summary) || is.null(cost_summary)) {
+    stop("Both outcome_summary and cost_summary must be provided")
+  }
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {

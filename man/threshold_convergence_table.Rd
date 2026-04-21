@@ -10,6 +10,7 @@ threshold_convergence_table(
   decimals = NULL,
   abbreviate = FALSE,
   font_size = 11,
+  use_display_names = TRUE,
   table_format = c("flextable", "kable")
 )
 }
@@ -23,6 +24,9 @@ threshold_convergence_table(
 \item{abbreviate}{Whether to abbreviate large numbers (default: FALSE)}
 
 \item{font_size}{Font size in points (default: 11)}
+
+\item{use_display_names}{Logical. If TRUE (default), use display names for
+threshold input variables where available.}
 
 \item{table_format}{Output format: "flextable" or "kable" (default: "flextable")}
 }

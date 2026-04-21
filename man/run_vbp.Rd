@@ -15,7 +15,7 @@ run_vbp(
 )
 }
 \arguments{
-\item{model}{An openqaly model object or oq_model_builder object}
+\item{model}{An oq_model object}
 
 \item{price_variable}{Name of the variable representing the intervention's price}
 

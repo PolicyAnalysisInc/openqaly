@@ -35,7 +35,8 @@ validate_twsa_spec <- function(model) {
   valid_settings <- c(
     "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
     "discount_cost", "discount_outcomes", "half_cycle_method",
-    "reduce_state_cycle", "days_per_year"
+    "reduce_state_cycle", "days_per_year",
+    "discount_rate"
   )
 
   all_var_names <- model$variables$name
@@ -85,6 +86,26 @@ validate_twsa_spec <- function(model) {
   }
 
   return(TRUE)
+}
+
+#' Estimate TWSA Parameter Grid Size
+#'
+#' Returns an upper-bound estimate of the number of values
+#' for one TWSA parameter dimension. Used to compute progress
+#' totals before the actual build begins.
+#'
+#' @param param Parameter specification from TWSA
+#' @return Integer estimate of value count
+#' @keywords internal
+estimate_twsa_param_size <- function(param) {
+  if (param$type == "radius") {
+    param$steps * 2L + 1L
+  } else if (param$type == "range") {
+    param$steps + 1L
+  } else {
+    # custom: conservative fallback
+    (param$steps %||% 4L) + 1L
+  }
 }
 
 #' Generate Values for TWSA Parameter
@@ -224,21 +245,24 @@ generate_twsa_values <- function(param, namespace = NULL, settings = NULL,
 #' @return Tibble with all segments for all TWSA runs, with run_id,
 #'   parameter_overrides, setting_overrides, and twsa metadata columns
 #' @keywords internal
-build_twsa_segments <- function(model) {
+build_twsa_segments <- function(model, progress = NULL) {
   # Get base segments (strategy x group combinations)
   base_segments <- get_segments(model)
+  base_segments <- apply_override_categories(
+    model, base_segments
+  )
 
   # Enrich with evaluated variables for bc context
-  enriched_segments <- base_segments %>%
-    rowwise() %>%
-    do({
-      seg <- as.list(.)
-      prepare_segment_for_sampling(model, as_tibble(seg))
-    }) %>%
-    ungroup()
-
-  # Apply override categories as baseline overrides
-  enriched_segments <- apply_override_categories(model, enriched_segments)
+  # (per-segment ticks for progress)
+  n_base <- nrow(base_segments)
+  enriched_list <- vector("list", n_base)
+  for (i in seq_len(n_base)) {
+    enriched_list[[i]] <- prepare_segment_for_sampling(
+      model, base_segments[i, ]
+    )
+    if (!is.null(progress)) progress(amount = 8L)
+  }
+  enriched_segments <- bind_rows(enriched_list)
 
   n_segments <- nrow(enriched_segments)
   all_segments <- list()
@@ -288,6 +312,7 @@ build_twsa_segments <- function(model) {
 
     for (seg_idx in seq_len(n_segments)) {
       segment <- enriched_segments[seg_idx, ]
+      seg_model <- apply_setting_overrides(segment, model)
       seg_strategy <- segment$strategy[[1]]
       seg_group <- segment$group[[1]]
       seg_ns <- segment$eval_vars[[1]]
@@ -317,27 +342,28 @@ build_twsa_segments <- function(model) {
       # Generate values using this segment's namespace (for correct bc reference)
       if (x_applies) {
         x_values_per_segment[[seg_idx]] <- generate_twsa_values(
-          x_param, seg_ns, model$settings,
+          x_param, seg_ns, seg_model$settings,
           include_base_case = x_param$include_base_case %||% TRUE
         )
         x_bc_per_segment[[seg_idx]] <- if (x_param$param_type == "variable") {
           seg_ns[x_param$name]
         } else {
-          model$settings[[x_param$name]]
+          seg_model$settings[[x_param$name]]
         }
       }
 
       if (y_applies) {
         y_values_per_segment[[seg_idx]] <- generate_twsa_values(
-          y_param, seg_ns, model$settings,
+          y_param, seg_ns, seg_model$settings,
           include_base_case = y_param$include_base_case %||% TRUE
         )
         y_bc_per_segment[[seg_idx]] <- if (y_param$param_type == "variable") {
           seg_ns[y_param$name]
         } else {
-          model$settings[[y_param$name]]
+          seg_model$settings[[y_param$name]]
         }
       }
+      if (!is.null(progress)) progress(amount = 8L)
     }
 
     # For grid creation, use the first applicable segment's values
@@ -353,92 +379,126 @@ build_twsa_segments <- function(model) {
       }
     }
 
-    # Create grid indices (not actual values, since values may differ per segment)
+    # Create grid indices
     n_x <- length(x_values_for_grid)
     n_y <- length(y_values_for_grid)
-    grid_indices <- expand_grid(x_idx = seq_len(n_x), y_idx = seq_len(n_y))
+    grid_indices <- expand_grid(
+      x_idx = seq_len(n_x),
+      y_idx = seq_len(n_y)
+    )
+    n_grid <- nrow(grid_indices)
 
-    # Create segments for each grid point - same run_id for all strategies at each grid point
-    for (grid_row in seq_len(nrow(grid_indices))) {
-      x_idx <- grid_indices$x_idx[grid_row]
-      y_idx <- grid_indices$y_idx[grid_row]
+    # Pre-compute fallback bc values (once per TWSA)
+    x_bc_fallback <- x_bc_per_segment[[
+      which(!sapply(x_bc_per_segment, is.null))[1]
+    ]]
+    y_bc_fallback <- y_bc_per_segment[[
+      which(!sapply(y_bc_per_segment, is.null))[1]
+    ]]
 
-      # For each segment (strategy x group), create overrides
-      for (seg_idx in seq_len(n_segments)) {
-        segment <- enriched_segments[seg_idx, ]
-        seg_strategy <- segment$strategy[[1]]
-        seg_group <- segment$group[[1]]
-
-        # Start with baseline overrides from override categories
-        param_overrides <- if ("parameter_overrides" %in% names(enriched_segments)) {
-          enriched_segments$parameter_overrides[[seg_idx]]
-        } else {
-          list()
-        }
-        setting_overrides <- if ("setting_overrides" %in% names(enriched_segments)) {
-          enriched_segments$setting_overrides[[seg_idx]]
-        } else {
-          list()
-        }
-
-        # Get segment-specific values and bc (or NULL if doesn't apply)
-        x_values <- x_values_per_segment[[seg_idx]]
-        y_values <- y_values_per_segment[[seg_idx]]
-        x_bc_value <- x_bc_per_segment[[seg_idx]]
-        y_bc_value <- y_bc_per_segment[[seg_idx]]
-
-        # X parameter override
-        x_val <- NA_real_
-        if (x_param$param_type == "variable") {
-          if (!is.null(x_values)) {
-            x_val <- x_values[x_idx]
-            param_overrides[[x_param$name]] <- x_val
-          }
-        } else {
-          x_val <- x_values_for_grid[x_idx]
-          setting_overrides[[x_param$name]] <- x_val
-          x_bc_value <- model$settings[[x_param$name]]
-        }
-
-        # Y parameter override
-        y_val <- NA_real_
-        if (y_param$param_type == "variable") {
-          if (!is.null(y_values)) {
-            y_val <- y_values[y_idx]
-            param_overrides[[y_param$name]] <- y_val
-          }
-        } else {
-          y_val <- y_values_for_grid[y_idx]
-          setting_overrides[[y_param$name]] <- y_val
-          y_bc_value <- model$settings[[y_param$name]]
-        }
-
-        # Use grid values for metadata if segment-specific not available
-        if (is.na(x_val)) x_val <- x_values_for_grid[x_idx]
-        if (is.na(y_val)) y_val <- y_values_for_grid[y_idx]
-        if (is.null(x_bc_value)) x_bc_value <- x_bc_per_segment[[which(!sapply(x_bc_per_segment, is.null))[1]]]
-        if (is.null(y_bc_value)) y_bc_value <- y_bc_per_segment[[which(!sapply(y_bc_per_segment, is.null))[1]]]
-
-        # Create segment with overrides (same run_id for all strategies at this grid point)
-        twsa_seg <- segment %>%
-          mutate(
-            run_id = !!run_id,
-            twsa_name = twsa$name,
-            x_param_name = x_param$name,
-            y_param_name = y_param$name,
-            x_value = x_val,
-            y_value = y_val,
-            x_bc_value = x_bc_value,
-            y_bc_value = y_bc_value,
-            parameter_overrides = list(param_overrides),
-            setting_overrides = list(setting_overrides)
-          )
-
-        all_segments[[length(all_segments) + 1]] <- twsa_seg
-      }
-      # Increment run_id after processing all segments for this grid point
-      run_id <- run_id + 1
+    # Build value lookup matrices [seg_idx, value_idx]
+    x_val_lookup <- matrix(
+      NA_real_, nrow = n_segments, ncol = n_x
+    )
+    y_val_lookup <- matrix(
+      NA_real_, nrow = n_segments, ncol = n_y
+    )
+    x_bc_vec <- numeric(n_segments)
+    y_bc_vec <- numeric(n_segments)
+    x_has_vals <- logical(n_segments)
+    y_has_vals <- logical(n_segments)
+    for (si in seq_len(n_segments)) {
+      xv <- x_values_per_segment[[si]]
+      x_has_vals[si] <- !is.null(xv)
+      x_val_lookup[si, ] <- if (
+        !is.null(xv) && x_param$param_type == "variable"
+      ) xv else x_values_for_grid
+      yv <- y_values_per_segment[[si]]
+      y_has_vals[si] <- !is.null(yv)
+      y_val_lookup[si, ] <- if (
+        !is.null(yv) && y_param$param_type == "variable"
+      ) yv else y_values_for_grid
+      x_bc_vec[si] <- x_bc_per_segment[[si]] %||%
+        x_bc_fallback
+      y_bc_vec[si] <- y_bc_per_segment[[si]] %||%
+        y_bc_fallback
     }
+
+    # Full expansion: grid_row x seg_idx
+    expansion <- expand_grid(
+      .grid_row = seq_len(n_grid),
+      .seg_idx = seq_len(n_segments)
+    )
+    n_total <- nrow(expansion)
+    x_idx_vec <- grid_indices$x_idx[expansion$.grid_row]
+    y_idx_vec <- grid_indices$y_idx[expansion$.grid_row]
+    seg_idx_vec <- expansion$.seg_idx
+
+    # Scalar columns via matrix indexing
+    run_id_vec <- run_id - 1L + expansion$.grid_row
+    x_value_vec <- x_val_lookup[
+      cbind(seg_idx_vec, x_idx_vec)
+    ]
+    y_value_vec <- y_val_lookup[
+      cbind(seg_idx_vec, y_idx_vec)
+    ]
+    x_bc_value_vec <- x_bc_vec[seg_idx_vec]
+    y_bc_value_vec <- y_bc_vec[seg_idx_vec]
+
+    # Build override lists
+    has_po <- "parameter_overrides" %in%
+      names(enriched_segments)
+    has_so <- "setting_overrides" %in%
+      names(enriched_segments)
+    x_is_var <- x_param$param_type == "variable"
+    y_is_var <- y_param$param_type == "variable"
+    x_is_set <- x_param$param_type == "setting"
+    y_is_set <- y_param$param_type == "setting"
+
+    po_list <- vector("list", n_total)
+    so_list <- vector("list", n_total)
+    for (i in seq_len(n_total)) {
+      si <- seg_idx_vec[i]
+      po <- if (has_po) {
+        enriched_segments$parameter_overrides[[si]]
+      } else {
+        list()
+      }
+      so <- if (has_so) {
+        enriched_segments$setting_overrides[[si]]
+      } else {
+        list()
+      }
+      if (x_is_var && x_has_vals[si]) {
+        po[[x_param$name]] <- x_value_vec[i]
+      } else if (x_is_set) {
+        so[[x_param$name]] <- x_value_vec[i]
+      }
+      if (y_is_var && y_has_vals[si]) {
+        po[[y_param$name]] <- y_value_vec[i]
+      } else if (y_is_set) {
+        so[[y_param$name]] <- y_value_vec[i]
+      }
+      po_list[[i]] <- po
+      so_list[[i]] <- so
+    }
+
+    # Single tibble construction for this TWSA
+    twsa_segs <- enriched_segments[seg_idx_vec, ]
+    twsa_segs$run_id <- run_id_vec
+    twsa_segs$twsa_name <- twsa$name
+    twsa_segs$x_param_name <- x_param$name
+    twsa_segs$y_param_name <- y_param$name
+    twsa_segs$x_value <- x_value_vec
+    twsa_segs$y_value <- y_value_vec
+    twsa_segs$x_bc_value <- x_bc_value_vec
+    twsa_segs$y_bc_value <- y_bc_value_vec
+    twsa_segs$parameter_overrides <- po_list
+    twsa_segs$setting_overrides <- so_list
+
+    all_segments[[length(all_segments) + 1]] <- twsa_segs
+    run_id <- run_id + n_grid
+    if (!is.null(progress)) progress(amount = 8L)
   }
 
   bind_rows(all_segments)
@@ -561,11 +621,9 @@ run_twsa <- function(model,
                      vbp_outcome_summary = NULL,
                      vbp_cost_summary = NULL,
                      progress = NULL,
+                     keep_diagnostics = FALSE,
                      ...) {
-  # Finalize builders (convert to openqaly model)
-  if ("oq_model_builder" %in% class(model)) {
-    model <- normalize_and_validate_model(model, preserve_builder = FALSE)
-  }
+  model <- normalize_and_validate_model(model)
 
   # Parse model
   parsed_model <- parse_model(model, ...)
@@ -628,47 +686,99 @@ run_twsa <- function(model,
     )
   }
 
-  # Build segments based on mode
-  if (vbp_enabled) {
-    # Build TWSA+VBP segments (includes vbp_price_level)
-    all_segments <- build_twsa_vbp_segments(parsed_model, vbp_spec)
-  } else {
-    # Build standard TWSA segments
-    all_segments <- build_twsa_segments(parsed_model)
+  # Estimate segment count and compute progress total
+  n_base <- nrow(get_segments(parsed_model))
+  n_twsa <- length(parsed_model$twsa_analyses)
+  est_segments <- n_base
+  for (ts in parsed_model$twsa_analyses) {
+    if (length(ts$parameters) == 2) {
+      est_nx <- estimate_twsa_param_size(
+        ts$parameters[[1]]
+      )
+      est_ny <- estimate_twsa_param_size(
+        ts$parameters[[2]]
+      )
+      est_segments <- est_segments +
+        est_nx * est_ny * n_base
+    }
+  }
+  if (vbp_enabled) est_segments <- est_segments * 3L
+
+  # Build ticks weighted at 8 each (same as a segment)
+  # so build phase is visible in the progress bar
+  build_steps <- 1L + n_base +
+    n_twsa * n_base + n_twsa
+  build_ticks <- build_steps * 8L
+
+  if (!is.null(progress)) {
+    progress(
+      total = build_ticks + est_segments * 8L + 2L
+    )
+    progress(amount = 8L)
   }
 
-  # Run all segments in parallel with progress bar
+  # Build segments (ticks fire inside build)
+  if (vbp_enabled) {
+    all_segments <- build_twsa_vbp_segments(
+      parsed_model, vbp_spec, progress = progress
+    )
+  } else {
+    all_segments <- build_twsa_segments(
+      parsed_model, progress = progress
+    )
+  }
+
+  # Correction if estimate was over actual
+  actual_segments <- nrow(all_segments)
+  if (!is.null(progress) &&
+      est_segments > actual_segments) {
+    progress(
+      amount = (est_segments - actual_segments) * 8L
+    )
+  }
+
+  # Drop build-only columns before execution
+  # (run_segment recreates namespace and variables)
+  all_segments$eval_vars <- NULL
+  all_segments$uneval_vars <- NULL
+
   segment_list <- all_segments %>%
     rowwise() %>%
     group_split()
 
-  # Declare progress total and fire pre-segment checkpoints
-  if (!is.null(progress)) {
-    progress(total = get_progress_total(length(segment_list)))
-    progress(amount = 1L)  # parsed & validated
-    progress(amount = 1L)  # segments prepared
-  }
-
   results <- future_map(
     segment_list,
-    function(segment) run_segment(segment, parsed_model, ..., .progress_callback = progress),
+    function(segment) {
+      run_segment(
+        segment, parsed_model, ...,
+        .progress_callback = progress,
+        .diagnostics_policy = if (
+          isTRUE(keep_diagnostics)
+        ) "all" else "base_case"
+      )
+    },
     .progress = is.null(progress),
-    .options = furrr_options(seed = 1)
+    .options = furrr_options(
+      seed = 1, packages = .packages()
+    )
   ) %>% bind_rows()
 
   # Generate TWSA metadata
-  # Use only base TWSA segments (before VBP expansion) for metadata
   if (vbp_enabled) {
     twsa_segments_for_meta <- all_segments %>%
       filter(.data$vbp_price_level == 1)
   } else {
     twsa_segments_for_meta <- all_segments
   }
-  twsa_metadata <- generate_twsa_metadata(parsed_model, twsa_segments_for_meta)
+  twsa_metadata <- generate_twsa_metadata(
+    parsed_model, twsa_segments_for_meta
+  )
 
-  # Aggregate by run_id + strategy (and vbp_price_level if present)
-  aggregated <- aggregate_segments(results, parsed_model)
-  if (!is.null(progress)) progress(amount = 1L)  # aggregation complete
+  # Aggregate
+  aggregated <- aggregate_segments(
+    results, parsed_model
+  )
+  if (!is.null(progress)) progress(amount = 1L)
 
   # Return results
   res <- list()
@@ -677,7 +787,6 @@ run_twsa <- function(model,
   res$metadata <- parsed_model$metadata
   res$twsa_metadata <- twsa_metadata
 
-  # Add VBP analysis if enabled
   if (vbp_enabled) {
     res$twsa_vbp_equations <- analyze_twsa_vbp_results(
       results,
@@ -689,9 +798,9 @@ run_twsa <- function(model,
     res$vbp_spec <- vbp_spec
   }
 
-  if (!is.null(progress)) progress(amount = 1L)  # complete
+  if (!is.null(progress)) progress(amount = 1L)
   class(res) <- c("twsa_results", "list")
-  return(res)
+  res
 }
 
 #' Extract TWSA Summary Values

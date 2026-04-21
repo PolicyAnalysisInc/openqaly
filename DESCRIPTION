@@ -34,7 +34,8 @@ Imports:
     methods,
     flextable,
     tools,
-    yaml
+    yaml,
+    ggridges
 Depends:
     R (>= 4.1.0),
     openqalysurv
@@ -42,16 +43,23 @@ License: AGPL-3
 Encoding: UTF-8
 LazyData: true
 Suggests:
+    openqalyregimen,
+    renv,
     testthat,
     withr,
+    commonmark,
     covr,
     knitr,
     rmarkdown,
     officer,
     GGally,
     kableExtra,
-    MASS
+    MASS,
+    patchwork
 VignetteBuilder: knitr
+Remotes:
+    PolicyAnalysisInc/openqalysurv,
+    PolicyAnalysisInc/openqalyregimen
 RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp

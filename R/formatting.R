@@ -128,10 +128,15 @@ auto_precision <- function(values, base_precision = 2, exact = FALSE,
   }
 
   if (require_unique) {
-    # Find minimum precision that makes all distinct values unique
-    # Start from 0 and increase until all distinct values format differently
+    # Start from exact inherent precision if exact mode, otherwise from 0
+    start_decimals <- if (exact) {
+      compute_precision_single(finite_vals, base_precision, exact = TRUE)
+    } else {
+      0
+    }
+    # Increase precision until all distinct values format differently
     n_unique <- length(unique(round(finite_vals, 10)))
-    decimals <- 0
+    decimals <- start_decimals
     max_decimals <- 10
     while (decimals <= max_decimals) {
       formatted <- format_plain(finite_vals, decimals)
@@ -155,8 +160,19 @@ compute_precision_single <- function(vals, base_precision, exact) {
   if (length(vals) == 0) return(base_precision)
 
   if (exact) {
-    # Significant figures mode
-    return(base_precision)
+    # Compute inherent decimal places needed to represent each value exactly
+    # Use tolerance-based comparison to handle floating point imprecision
+    # (e.g. 0.1 is not exactly representable in binary)
+    # Cap at base_precision
+    tol <- sqrt(.Machine$double.eps)
+    inherent <- max(sapply(vals, function(v) {
+      d <- 0
+      while (d < base_precision && abs(v - round(v, d)) > tol) {
+        d <- d + 1
+      }
+      d
+    }))
+    return(inherent)
   }
 
   # Adaptive fixed-point: digits = max(0, base_precision - oom)

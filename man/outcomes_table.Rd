@@ -12,7 +12,7 @@ outcomes_table(
   interventions = NULL,
   comparators = NULL,
   show_total = TRUE,
-  decimals = NULL,
+  decimals = 2,
   abbreviate = FALSE,
   discounted = TRUE,
   font_size = 11,
@@ -24,21 +24,26 @@ outcomes_table(
 
 \item{outcome}{Name of outcome to display (e.g., "total_qalys")}
 
-\item{groups}{Group selection: "overall" (default), specific group, or NULL (all groups)}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
-\item{strategies}{Character vector of strategies to include (NULL for all)}
+\item{strategies}{Character vector of strategies to include when showing
+absolute values (NULL for all). Cannot be combined with interventions or
+comparators.}
 
-\item{interventions}{Character vector of reference strategies for intervention perspective}
+\item{interventions}{Character vector of reference strategies for intervention
+perspective. Use for differences; cannot be combined with strategies.}
 
-\item{comparators}{Character vector of reference strategies for comparator perspective}
+\item{comparators}{Character vector of reference strategies for comparator
+perspective. Use for differences; cannot be combined with strategies.}
 
 \item{show_total}{Logical. Show TOTAL row? (default: TRUE)}
 
-\item{decimals}{Number of decimal places (default: 2)}
+\item{decimals}{Number of decimal places (default: NULL for auto-precision)}
 
 \item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
 
-\item{discounted}{Logical. Use discounted values?}
+\item{discounted}{Logical. Use discounted values? (default: TRUE)}
 
 \item{font_size}{Font size for rendering (default: 11)}
 
@@ -60,7 +65,7 @@ results <- run_model(model)
 ft <- outcomes_table(results, "total_qalys")
 
 # Compare across groups
-ft <- outcomes_table(results, "total_qalys", groups = NULL)
+ft <- outcomes_table(results, "total_qalys", groups = "all")
 }
 
 }

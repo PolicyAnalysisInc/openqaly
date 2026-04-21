@@ -282,9 +282,9 @@ prepare_scenario_bar_data <- function(results,
 #' Internal helper that implements the scenario bar chart for both outcomes and costs.
 #'
 #' @param results A openqaly scenario results object (output from run_scenario)
-#' @param summary_name Name of the summary to plot (e.g., "total_qalys", "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups,
-#'   or NULL (all groups plus aggregated)
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s).
@@ -292,7 +292,7 @@ prepare_scenario_bar_data <- function(results,
 #'   differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
 #'   Can be combined with interventions for N×M comparisons.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
 #' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
@@ -369,9 +369,9 @@ scenario_summary_plot_impl <- function(results,
 #' The Base Case is always shown first and highlighted.
 #'
 #' @param results A openqaly scenario results object (output from run_scenario)
-#' @param summary_name Name of the summary to plot (e.g., "total_qalys", "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups,
-#'   or NULL (all groups plus aggregated)
+#' @param outcome Name of the outcome to plot (e.g., "total_qalys")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s).
@@ -379,7 +379,7 @@ scenario_summary_plot_impl <- function(results,
 #'   differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
 #'   Can be combined with interventions for N×M comparisons.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
 #' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
@@ -402,7 +402,7 @@ scenario_summary_plot_impl <- function(results,
 #'
 #' @export
 scenario_outcomes_plot <- function(results,
-                                    summary_name,
+                                    outcome,
                                     groups = "overall",
                                     strategies = NULL,
                                     interventions = NULL,
@@ -414,7 +414,7 @@ scenario_outcomes_plot <- function(results,
 
   scenario_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,
@@ -436,9 +436,9 @@ scenario_outcomes_plot <- function(results,
 #' The Base Case is always shown first and highlighted.
 #'
 #' @param results A openqaly scenario results object (output from run_scenario)
-#' @param summary_name Name of the summary to plot (e.g., "total_cost")
-#' @param groups Group selection: "overall" (default), specific group name, vector of groups,
-#'   or NULL (all groups plus aggregated)
+#' @param outcome Name of the cost outcome to plot (e.g., "total_cost")
+#' @param groups Group selection: "overall" (default), "all", "all_groups", or
+#'   specific group name(s)
 #' @param strategies Character vector of strategy names to include (NULL for all).
 #'   Mutually exclusive with interventions/comparators.
 #' @param interventions Character vector of intervention strategy name(s).
@@ -446,7 +446,7 @@ scenario_outcomes_plot <- function(results,
 #'   differences (intervention - comparator).
 #' @param comparators Character vector of comparator strategy name(s).
 #'   Can be combined with interventions for N×M comparisons.
-#' @param discounted Logical. Use discounted values? (default: FALSE)
+#' @param discounted Logical. Use discounted values? (default: TRUE)
 #' @param axis_decimals Fixed decimal places for axis labels, or NULL for auto-precision
 #' @param label_decimals Fixed decimal places for value labels, or NULL for auto-precision
 #' @param abbreviate Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)
@@ -469,7 +469,7 @@ scenario_outcomes_plot <- function(results,
 #'
 #' @export
 scenario_costs_plot <- function(results,
-                                 summary_name,
+                                 outcome,
                                  groups = "overall",
                                  strategies = NULL,
                                  interventions = NULL,
@@ -481,7 +481,7 @@ scenario_costs_plot <- function(results,
 
   scenario_summary_plot_impl(
     results = results,
-    summary_name = summary_name,
+    summary_name = outcome,
     groups = groups,
     strategies = strategies,
     interventions = interventions,

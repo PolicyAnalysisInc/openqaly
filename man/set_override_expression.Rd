@@ -7,7 +7,7 @@
 set_override_expression(model, name, expression, strategy = "", group = "")
 }
 \arguments{
-\item{model}{An oq_model or oq_model_builder object.}
+\item{model}{An oq_model object.}
 
 \item{name}{The name of the override.}
 

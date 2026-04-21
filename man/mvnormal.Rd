@@ -4,19 +4,15 @@
 \alias{mvnormal}
 \title{Multivariate Normal distribution}
 \usage{
-mvnormal(mean, sd = NULL, cor = NULL, cov = NULL)
+mvnormal(mean, cov)
 }
 \arguments{
 \item{mean}{Mean vector (length k for k variables)}
 
-\item{sd}{Standard deviation vector (for correlation parameterization)}
-
-\item{cor}{Correlation (scalar for bivariate, matrix for multivariate)}
-
-\item{cov}{Covariance matrix (alternative to sd/cor)}
+\item{cov}{Covariance matrix (k x k)}
 }
 \value{
-Function that takes n (number of samples) and returns n × k matrix
+Function that takes n (number of samples) and returns n x k matrix
 }
 \description{
 The `mvnormal` function can be used to sample correlated normal random variables.
@@ -24,12 +20,8 @@ Useful when parameters are known to be correlated (e.g., cost and effectiveness)
 }
 \examples{
 \dontrun{
-# Bivariate with correlation
-dist_fn <- mvnormal(mean = c(0.5, 1000), sd = c(0.1, 100), cor = 0.5)
-samples <- dist_fn(1000)  # 1000 × 2 matrix
-
-# With full covariance matrix
 cov_mat <- matrix(c(0.01, 5, 5, 10000), nrow = 2)
 dist_fn <- mvnormal(mean = c(0.5, 1000), cov = cov_mat)
+samples <- dist_fn(1000)  # 1000 x 2 matrix
 }
 }

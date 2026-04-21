@@ -4,7 +4,7 @@
 \alias{generate_transitions_code}
 \title{Generate Transitions Code}
 \usage{
-generate_transitions_code(transitions, is_psm = FALSE)
+generate_transitions_code(transitions, model_type = "markov")
 }
 \description{
 Generate Transitions Code

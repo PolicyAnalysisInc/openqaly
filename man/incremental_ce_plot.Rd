@@ -6,8 +6,8 @@
 \usage{
 incremental_ce_plot(
   res,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   groups = "overall",
   strategies = NULL,
   cost_axis_decimals = NULL,
@@ -18,11 +18,12 @@ incremental_ce_plot(
 \arguments{
 \item{res}{A openqaly model results object (output from run_model)}
 
-\item{outcome_summary}{Name of the outcome summary to use (e.g., "total_qalys")}
+\item{health_outcome}{Name of the health outcome to use (e.g., "total_qalys")}
 
-\item{cost_summary}{Name of the cost summary to use (e.g., "total_cost")}
+\item{cost_outcome}{Name of the cost outcome to use (e.g., "total_cost")}
 
-\item{groups}{Group selection: "overall" (default), specific group name, vector of groups, or NULL}
+\item{groups}{Group selection: "overall" (default), "all", "all_groups", or
+specific group name(s)}
 
 \item{strategies}{Character vector of strategies to include (NULL for all)}
 
@@ -44,7 +45,8 @@ The cost-effectiveness plane plots outcome (x-axis) vs. cost (y-axis).
 Strategies on the efficiency frontier are connected with line segments.
 Dominated and extended dominated strategies are shown with different styling.
 
-When \code{group = NULL}, creates faceted plots for each group and aggregated results.
+When \code{groups = NULL} or \code{groups = "all"}, creates faceted plots for
+each group and aggregated results.
 
 CE calculations always use discounted values as this is a cost-effectiveness measure.
 }
@@ -57,7 +59,7 @@ results <- run_model(model)
 incremental_ce_plot(results, "total_qalys", "total_cost")
 
 # For all groups with faceting
-incremental_ce_plot(results, "total_qalys", "total_cost", group = NULL)
+incremental_ce_plot(results, "total_qalys", "total_cost", groups = "all")
 }
 
 }

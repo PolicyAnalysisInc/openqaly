@@ -6,8 +6,8 @@
 \usage{
 ce_quadrant_table(
   results,
-  outcome_summary,
-  cost_summary,
+  health_outcome,
+  cost_outcome,
   comparator,
   groups = "overall",
   strategies = NULL,
@@ -19,9 +19,9 @@ ce_quadrant_table(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
-\item{outcome_summary}{Name of the outcome summary}
+\item{health_outcome}{Name of the health outcome}
 
-\item{cost_summary}{Name of the cost summary}
+\item{cost_outcome}{Name of the cost outcome}
 
 \item{comparator}{Name of the comparator strategy}
 

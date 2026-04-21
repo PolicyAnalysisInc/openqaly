@@ -2,16 +2,18 @@
 % Please edit documentation in R/misc.R
 \name{read_model_json}
 \alias{read_model_json}
-\title{Takes a JSON string and parses it into a oq_model object.}
+\title{Read a model from JSON.}
 \usage{
-read_model_json(json_string)
+read_model_json(file = NULL, text = NULL)
 }
 \arguments{
-\item{json_string}{A string containing the model in JSON format.}
+\item{file}{Path to a JSON file containing the model.}
+
+\item{text}{A string containing the model in JSON format.}
 }
 \value{
-A oq_model object
+An oq_model object
 }
 \description{
-Takes a JSON string and parses it into a oq_model object.
+Supply exactly one of \code{file} or \code{text}.
 }

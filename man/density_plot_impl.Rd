@@ -26,8 +26,6 @@ density_plot_impl(
 \arguments{
 \item{results}{A openqaly PSA results object (from run_psa)}
 
-\item{outcome_summary}{Name of the summary to plot (e.g., "total_qalys", "total_cost")}
-
 \item{interventions}{Reference strategies for comparison (intervention perspective).
 Cannot be used with \code{strategies}.}
 
@@ -59,6 +57,8 @@ values. Cannot be used with \code{interventions} or \code{comparators}.}
 \item{axis_decimals}{Fixed decimal places for axis labels, or NULL for auto-precision}
 
 \item{abbreviate}{Logical. Use abbreviated number format (K/M/B/T)? (default: FALSE)}
+
+\item{outcome}{Name of the outcome to plot (e.g., "total_qalys", "total_cost")}
 }
 \value{
 A ggplot object
