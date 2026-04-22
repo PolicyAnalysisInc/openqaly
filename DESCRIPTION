@@ -3,7 +3,7 @@ Type: Package
 Title: Reproducible Health Economic Modeling
 Version: 0.1.3
 Authors@R: c(
-  person("Jordan", "Amdahl", email = "jrdnmdhl@gmail.com", role = c("aut", "cre")),
+  person("Jordan", "Amdahl", email = "jordan.amdahl@avalerehealth.com", role = c("aut", "cre")),
   person("Avalere Health", role = "cph"))
 Description: An R package for creating and running reproducible and
   transparent health economic models. Models of various types are
