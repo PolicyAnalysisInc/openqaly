@@ -11,14 +11,14 @@ make_model <- function(type = "markov") {
 test_that("add_dsa_variable rejects empty variable name", {
   m <- make_model() |>
     add_variable("v1", 100)
-  expect_error(add_dsa_variable(m, "", low = 1, high = 2), "variable must be a non-empty character string")
-  expect_error(add_dsa_variable(m, "   ", low = 1, high = 2), "variable must be a non-empty character string")
+  expect_error(add_dsa_variable(m, "", low = 1, high = 2), "Variable name must be a non-empty character string")
+  expect_error(add_dsa_variable(m, "   ", low = 1, high = 2), "Variable name must be a non-empty character string")
 })
 
 test_that("add_dsa_variable rejects NA variable name", {
   m <- make_model() |>
     add_variable("v1", 100)
-  expect_error(add_dsa_variable(m, NA_character_, low = 1, high = 2), "variable must be a non-empty character string")
+  expect_error(add_dsa_variable(m, NA_character_, low = 1, high = 2), "Variable name must be a non-empty character string")
 })
 
 test_that("markov model with valid transitions runs successfully", {

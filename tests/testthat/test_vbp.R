@@ -126,6 +126,8 @@ test_that("run_vbp() errors when price variable is group-specific", {
     add_state("sick", initial_prob = 0) %>%
     add_variable("cost_tx", 1000, strategy = "treatment", group = "young") %>%
     add_variable("cost_tx", 2000, strategy = "treatment", group = "old") %>%
+    add_value("qaly", 1, state = "healthy", type = "outcome") %>%
+    add_value("cost", 100, state = "healthy", type = "cost") %>%
     add_summary("total_qalys", "qaly") %>%
     add_summary("total_cost", "cost")
 

@@ -142,7 +142,9 @@ test_that("remove_group cascades to variables", {
 })
 
 test_that("add_summary adds a summary", {
-  m <- define_model() |> add_summary("total_cost", "cost", type = "cost")
+  m <- define_model() |>
+    add_value("cost", 100, type = "cost") |>
+    add_summary("total_cost", "cost", type = "cost")
   expect_equal(nrow(m$summaries), 1)
   expect_equal(m$summaries$name, "total_cost")
   expect_equal(m$summaries$type, "cost")
@@ -789,6 +791,7 @@ test_that("remove_summary errors on dependencies when flagged", {
                   timeframe_unit = "years", cycle_length_unit = "years") |>
     add_strategy("A") |>
     add_variable("cost", 100) |>
+    add_value("cost", 100, type = "cost") |>
     add_summary("total", "cost", type = "cost") |>
     add_threshold_analysis("ta1", "cost", 0, 500,
       threshold_condition_costs(summary = "total", type = "absolute",

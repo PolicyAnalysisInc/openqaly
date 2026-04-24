@@ -1008,6 +1008,7 @@ test_that("tree name collides with state name (state added first)", {
 test_that("tree name collides with summary name (tree added first)", {
   expect_error(
     define_model("markov") |>
+      add_value("some_val", formula = 1, type = "cost") |>
       add_tree_node("total_cost", "root", parent = NA, formula = 1) |>
       add_summary("total_cost", type = "cost", values = "some_val"),
     'Name collision.*"total_cost".*decision tree'
@@ -1017,6 +1018,7 @@ test_that("tree name collides with summary name (tree added first)", {
 test_that("tree name collides with summary name (summary added first)", {
   expect_error(
     define_model("markov") |>
+      add_value("some_val", formula = 1, type = "cost") |>
       add_summary("total_cost", type = "cost", values = "some_val") |>
       add_tree_node("total_cost", "root", parent = NA, formula = 1),
     "Name collision.*decision trees and summaries"

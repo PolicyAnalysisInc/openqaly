@@ -190,6 +190,7 @@ test_that("edit_value updates summaries when last row moved from old name", {
   m <- define_model("markov") |>
     add_state("healthy", initial_prob = 1) |>
     add_value("solo_val", 42, state = "healthy", type = "cost") |>
+    add_value("other_val", 24, state = "healthy", type = "cost") |>
     add_summary("s1", "solo_val, other_val", type = "cost")
   m2 <- edit_value(m, "solo_val", state = "healthy", new_name = "new_val")
   tokens <- trimws(strsplit(m2$summaries$values[1], ",")[[1]])

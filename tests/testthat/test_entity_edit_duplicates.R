@@ -40,6 +40,8 @@ test_that("edit_state rejects rename to duplicate name", {
 
 test_that("edit_summary rejects rename to duplicate name", {
   m <- define_model("markov") |>
+    add_value("v1", 1, type = "cost") |>
+    add_value("v2", 2, type = "cost") |>
     add_summary("s1", values = "v1", type = "cost") |>
     add_summary("s2", values = "v2", type = "cost")
   expect_error(edit_summary(m, "s2", new_name = "s1"), "already exists")

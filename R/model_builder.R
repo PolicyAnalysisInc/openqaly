@@ -162,11 +162,61 @@ remove_group <- function(model, name, error_on_dependencies = FALSE) {
 
 # --- Summary -----------------------------------------------------------------
 
+summary_values_are_blank <- function(values) {
+  !is.character(values) || length(values) != 1 || is.na(values) || trimws(values) == ""
+}
+
+summary_value_tokens <- function(values) {
+  tokens <- trimws(strsplit(values, ",")[[1]])
+  tokens[nzchar(tokens)]
+}
+
+validate_summary_values_for_builder <- function(model, item) {
+  available_values <- if (!is.null(model$values) && is.data.frame(model$values) && nrow(model$values) > 0) {
+    unique(model$values$name)
+  } else {
+    character(0)
+  }
+
+  if (summary_values_are_blank(item$values)) {
+    if (length(available_values) == 0) {
+      stop(sprintf(
+        "Cannot add summary '%s': no values are defined in this model. Add values first using add_value().",
+        item$name
+      ), call. = FALSE)
+    }
+    stop(sprintf(
+      "Summary 'values' must be a comma-separated list of value names. Available values: %s",
+      paste0("'", available_values, "'", collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  ref_vals <- summary_value_tokens(item$values)
+  if (length(available_values) == 0) {
+    stop(sprintf(
+      "Cannot add summary '%s': no values are defined in this model. Add values first using add_value().",
+      item$name
+    ), call. = FALSE)
+  }
+
+  missing_vals <- setdiff(ref_vals, available_values)
+  if (length(missing_vals) > 0) {
+    stop(sprintf(
+      "Summary '%s' references value(s) not defined in the model: %s. Available values: %s",
+      item$name,
+      paste0("'", missing_vals, "'", collapse = ", "),
+      paste0("'", available_values, "'", collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
 #' @export
 add_summary <- function(model, name, values, display_name = NULL,
                          description = NULL, type = "outcome", wtp = NULL) {
   validate_string(name, "Summary name")
-  validate_string(values, "Summary values")
+  if (missing(values)) values <- NA_character_
   new_row <- fast_tibble(
     name = name,
     values = values,
@@ -300,7 +350,7 @@ remove_multivariate_sampling <- function(model, name) {
 add_dsa_variable <- function(model, variable, low, high,
                               strategy = "", group = "",
                               display_name = NULL, range_label = NULL) {
-  validate_string(variable, "variable")
+  validate_string(variable, "Variable name")
   validate_variable_targeting(model, variable, strategy, group,
                               "DSA", "add_dsa_variable")
   low_f <- capture_nse_formula(rlang::enquo(low))
@@ -317,7 +367,7 @@ add_dsa_variable <- function(model, variable, low, high,
 #' @export
 add_dsa_setting <- function(model, setting, low, high,
                              display_name = NULL, range_label = NULL) {
-  validate_string(setting, "setting")
+  validate_string(setting, "Setting name")
   new_item <- list(
     type = "setting", name = setting,
     low = low, high = high,
@@ -2487,4 +2537,3 @@ validate_threshold_condition <- function(condition) {
     }
   }
 }
-

@@ -138,9 +138,10 @@
 .callbacks_add_summary <- list(
   pre_add = function(model, item) {
     if (item$type == "cost" && !is.null(item$wtp) && !is.na(item$wtp)) {
-      stop(sprintf("WTP cannot be specified for cost summary '%s'.", item$name),
+      stop(sprintf("WTP cannot be specified for cost summary '%s'. WTP is only valid for outcome summaries.", item$name),
            call. = FALSE)
     }
+    validate_summary_values_for_builder(model, item)
     model
   }
 )
