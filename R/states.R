@@ -47,6 +47,10 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
     states$share_state_time <- FALSE
   }
 
+  # Validate the shared-state-time spec on the raw user-supplied groups, before
+  # NA state_group is replaced with a synthetic per-state group below.
+  check_shared_state_time(states)
+
   # Parse initial probability formulas, calculate maximum tunnel states
   parsed_states <- states %>%
     mutate(
@@ -57,6 +61,12 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
       state_group = ifelse(is.na(.data$state_group), glue(".{name}"), .data$state_group),
       share_state_time = ifelse(is.na(.data$share_state_time), F, .data$share_state_time)
     )
+
+  # A state_cycle_limit of 0 means "unlimited" (handled as Inf downstream). Normalize
+  # it here so the shared-group conflict/propagation logic below does not treat 0 as a
+  # finite ceiling (is.finite(0) is TRUE).
+  parsed_states <- parsed_states %>%
+    mutate(max_state_time = ifelse(.data$max_state_time == 0, Inf, .data$max_state_time))
 
   # For shared state time groups, validate and propagate the group's cycle limit
   shared_groups <- parsed_states %>%
@@ -125,6 +135,49 @@ check_states <- function(x) {
     stop(glue("Reserved state name(s) found: {paste(reserved, collapse = ', ')}. ",
               "'All' and 'All Other' cannot be used as state names."), call. = FALSE)
   }
+}
+
+# Validate the shared-state-time specification.
+#
+# Operates on the raw user-supplied state_group / share_state_time columns
+# (before NA state_group is replaced with a synthetic per-state group), so a
+# lone state is never mistaken for a real group. A per-row NA share_state_time
+# is treated as FALSE, matching the column default.
+check_shared_state_time <- function(states) {
+  sst <- ifelse(is.na(states$share_state_time), FALSE, as.logical(states$share_state_time))
+  grp <- states$state_group  # raw; NA means "no group"
+
+  # share_state_time = TRUE requires an explicit group.
+  no_group <- which(sst & is.na(grp))
+  if (length(no_group) > 0) {
+    stop(glue(
+      "State(s) {err_name_string(states$name[no_group])} set share_state_time = TRUE but have ",
+      "no state_group. Sharing state time requires an explicit state_group with at least 2 members."
+    ), call. = FALSE)
+  }
+
+  # Per real group: members must agree on share_state_time, and a shared group
+  # needs at least 2 members.
+  real_groups <- unique(grp[!is.na(grp)])
+  for (g in real_groups) {
+    idx <- which(!is.na(grp) & grp == g)
+    flags <- sst[idx]
+    if (length(unique(flags)) > 1) {
+      stop(glue(
+        "States in group '{g}' disagree on share_state_time ",
+        "({paste(states$name[idx], '=', flags, collapse = ', ')}). ",
+        "All members of a state_group must use the same share_state_time."
+      ), call. = FALSE)
+    }
+    if (isTRUE(flags[1]) && length(idx) < 2) {
+      stop(glue(
+        "State group '{g}' has share_state_time = TRUE with only one member ",
+        "({err_name_string(states$name[idx])}). Sharing state time requires at least 2 members."
+      ), call. = FALSE)
+    }
+  }
+
+  invisible(TRUE)
 }
 
 eval_states <- function(x, ns) {

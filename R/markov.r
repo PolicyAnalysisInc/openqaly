@@ -281,6 +281,51 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
   segment
 }
 
+# Equalize tunnel depth across shared state-time groups.
+#
+# A shared state-time group is one clock, so all members must expand to the same
+# tunnel depth. Each member's depth is computed normally (respecting reduce
+# trimming and explicit limits); this then raises every shared member to the
+# group maximum so a within-group transition can never resolve to a tunnel copy
+# that doesn't exist. Non-shared states are left untouched. The bumped tail
+# tunnels are safe because the underlying transition/value rows are evaluated over
+# the full state_cycle grid and the group shares one ceiling, so those rows
+# already exist and carry the constant tail.
+equalize_shared_group_depth <- function(st_maxes, transitions) {
+
+  # Per-state -> (group, shared) map. These columns are carried per transition row;
+  # decision_tree is excluded (it never expands).
+  group_map <- transitions %>%
+    filter(.data$from_state != "decision_tree") %>%
+    distinct(
+      state = .data$from_state,
+      state_group = .data$from_state_group,
+      share_state_time = .data$share_state_time
+    )
+
+  joined <- left_join(st_maxes, group_map, by = "state")
+
+  shared <- filter(joined, .data$share_state_time %in% TRUE)
+  if (nrow(shared) == 0) {
+    return(select(st_maxes, "state", "max_st"))
+  }
+
+  group_max <- shared %>%
+    group_by(.data$state_group) %>%
+    summarize(group_max_st = max(.data$max_st), .groups = "drop")
+
+  joined %>%
+    left_join(group_max, by = "state_group") %>%
+    mutate(
+      max_st = ifelse(
+        .data$share_state_time %in% TRUE & !is.na(.data$group_max_st),
+        .data$group_max_st,
+        .data$max_st
+      )
+    ) %>%
+    select("state", "max_st")
+}
+
 handle_state_expansion <- function(init, transitions, values, state_time_use) {
 
   # Determine number of cycles
@@ -296,6 +341,11 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
       max_st = ifelse(is.na(.data$uses_st) | !.data$uses_st, 1, .data$max_st)
     ) %>%
     select("state", "max_st")
+
+  # States that share a time-in-state clock must expand to a single depth (the
+  # deepest any member needs); otherwise a within-group transition can target a
+  # tunnel copy the destination state doesn't have.
+  st_maxes <- equalize_shared_group_depth(st_maxes, transitions)
 
   # Expand initial state probabilities to include tunnel states
   expand_init <- expand_init_states(init, st_maxes)
@@ -651,12 +701,28 @@ eval_trans_markov_lf <- function(df, ns, simplify = FALSE) {
 #' @keywords internal
 lf_to_lf_mat <- function(df, state_names) {
 
+  df <- mutate(
+    df,
+    from = as.integer(factor(.data$.from_e, levels = state_names)),
+    to = as.integer(factor(.data$.to_e, levels  = state_names))
+  )
+
+  # Fail fast if any expanded tunnel name did not resolve to a real state, rather
+  # than letting an NA flow into the transition matrix and surface downstream as an
+  # opaque row-index error.
+  unresolved <- which(is.na(df$from) | is.na(df$to))
+  if (length(unresolved) > 0) {
+    i <- unresolved[1]
+    missing_name <- if (is.na(df$from[i])) df$.from_e[i] else df$.to_e[i]
+    stop(glue(
+      "Transition '{df$from_state[i]}\u2192{df$to_state[i]}' resolves to tunnel state ",
+      "'{missing_name}', which does not exist (cycle {df$cycle[i]}, state_cycle {df$state_cycle[i]}). ",
+      "This usually means members of a shared state-time group have mismatched tunnel depths."
+    ), call. = FALSE)
+  }
+
   df <- arrange(
-    mutate(
-      df,
-      from = as.integer(factor(.data$.from_e, levels = state_names)),
-      to = as.integer(factor(.data$.to_e, levels  = state_names))
-    ),
+    df,
     .data$cycle,
     .data$from,
     -.data$value

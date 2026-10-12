@@ -125,10 +125,29 @@ validate_cpp_inputs <- function(init, transitions, values, value_names,
     stop("Transitions matrix contains non-numeric values", call. = FALSE)
   }
   if (anyNA(trans_matrix)) {
-    # Find which transitions have NA values for better error message
     na_rows <- which(rowSums(is.na(trans_matrix)) > 0)
-    stop(glue("Transitions matrix contains NA values in rows: {paste(na_rows, collapse=', ')}"),
-         call. = FALSE)
+    cols <- colnames(trans_matrix)
+    # trans_matrix is longform (cycle, from, to, value), one row per transition entry.
+    # Map the offending rows to state names via the integer from/to columns rather
+    # than reporting raw row indices.
+    if (all(c("from", "to") %in% cols)) {
+      nm <- function(i) {
+        if (!is.na(i) && i >= 1 && i <= length(state_names)) state_names[i] else "<unresolved tunnel>"
+      }
+      descs <- vapply(na_rows, function(r) {
+        cyc <- if ("cycle" %in% cols) trans_matrix[r, "cycle"] else NA_real_
+        glue("{nm(trans_matrix[r, 'from'])}\u2192{nm(trans_matrix[r, 'to'])} (cycle {cyc})")
+      }, character(1))
+      descs <- unique(descs)
+      if (length(descs) > 20) {
+        descs <- c(descs[1:20], glue("... and {length(descs) - 20} more"))
+      }
+      stop(glue("Transitions matrix contains NA values for: {paste(descs, collapse='; ')}"),
+           call. = FALSE)
+    } else {
+      stop(glue("Transitions matrix contains NA values in rows: {paste(na_rows, collapse=', ')}"),
+           call. = FALSE)
+    }
   }
   if (any(!is.finite(trans_matrix))) {
     stop("Transitions matrix contains non-finite values", call. = FALSE)
