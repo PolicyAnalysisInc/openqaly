@@ -238,7 +238,8 @@ spec_values <- list(
     .dn_desc,
     list(
       list(col = "type", quoted = TRUE, skip_if = "outcome"),
-      list(col = "discounting_override", quoted = TRUE)
+      list(col = "discounting_override", quoted = TRUE),
+      list(col = "half_cycle_method", quoted = TRUE)
     )
   )
 )

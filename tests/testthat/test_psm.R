@@ -617,8 +617,8 @@ test_that("PSM model runs without time conversion warnings", {
 # =============================================================================
 
 test_that("calculate_psm_values applies residency values correctly", {
-  # Fixed trace where state probabilities are known at each cycle
-  n_cycles <- 3
+  # Fixed trace where state probabilities are known at each time point 0..2
+  n_cycles <- 2
   trace <- matrix(c(
     1.0, 0.0, 0.0,  # cycle 0: 100% in PFS
     0.8, 0.1, 0.1,  # cycle 1: 80% PFS, 10% progressed, 10% dead
@@ -641,12 +641,12 @@ test_that("calculate_psm_values applies residency values correctly", {
   )
 
   namespace <- list(
-    df = data.frame(cycle = 1:n_cycles),
+    df = data.frame(cycle = 0:n_cycles),
     env = new.env()
   )
 
-  trans_pfs_to_pp <- rep(0, n_cycles)
-  trans_pp_to_dead <- rep(0, n_cycles)
+  trans_pfs_to_pp <- rep(0, n_cycles + 1)
+  trans_pp_to_dead <- rep(0, n_cycles + 1)
   value_names <- c("utility_pfs", "utility_prog")
   state_names <- c("pfs", "progressed", "dead")
 
@@ -670,7 +670,7 @@ test_that("calculate_psm_values applies residency values correctly", {
 })
 
 test_that("calculate_psm_values applies transitional values correctly", {
-  n_cycles <- 3
+  n_cycles <- 2
   trace <- matrix(c(
     1.0, 0.0, 0.0,
     0.7, 0.2, 0.1,
@@ -690,13 +690,12 @@ test_that("calculate_psm_values applies transitional values correctly", {
   uneval_values$formula <- list(openqaly:::as.oq_formula("1000"))
 
   namespace <- list(
-    df = data.frame(cycle = 1:n_cycles),
+    df = data.frame(cycle = 0:n_cycles),
     env = new.env()
   )
 
-  # Transition probabilities: PFS to progressed
-  # At cycle 1: 0.2 transition (1.0 - 0.7 - 0.1 = 0.2 but we track decrease in PFS)
-  trans_pfs_to_pp <- c(0, 0.3, 0.2)  # Calculated as diff in PFS
+  # Flows observed at time points 0..2 (decrease in PFS; none at time point 0)
+  trans_pfs_to_pp <- c(0, 0.3, 0.2)
   trans_pp_to_dead <- c(0, 0.1, 0.1)
   value_names <- c("prog_cost")
   state_names <- c("pfs", "progressed", "dead")
@@ -708,13 +707,18 @@ test_that("calculate_psm_values applies transitional values correctly", {
     "start"
   )
 
-  # Transitional cost = formula_value * transition_probability
-  # Cycle 1: 1000 * 0 = 0 (no transition at cycle 0)
-  expect_equal(result[1, "prog_cost"], 0)
-  # Cycle 2: 1000 * 0.3 = 300
-  expect_equal(result[2, "prog_cost"], 300)
-  # Cycle 3: 1000 * 0.2 = 200
-  expect_equal(result[3, "prog_cost"], 200)
+  # Point values = 1000 x flow at each time point: 0, 300, 200
+  # "start" allocates time point k-1 to cycle k
+  expect_equal(unname(result[, "prog_cost"]), c(0, 300))
+
+  result_end <- openqaly:::calculate_psm_values(
+    uneval_values, namespace, trace,
+    trans_pfs_to_pp, trans_pp_to_dead,
+    value_names, state_names, n_cycles,
+    "end"
+  )
+  # "end" allocates time point k to cycle k
+  expect_equal(unname(result_end[, "prog_cost"]), c(300, 200))
 })
 
 test_that("calculate_psm_values applies model start values correctly", {
@@ -2037,14 +2041,14 @@ test_that("calculate_psm_values handles vector evaluation result", {
     type = "outcome",
     stringsAsFactors = FALSE
   )
-  uneval_values$formula <- list(openqaly:::as.oq_formula("c(1, 2, 3)"))
+  uneval_values$formula <- list(openqaly:::as.oq_formula("c(1, 2, 3, 4)"))
 
   namespace <- list(
     df = data.frame(cycle = 1:n_cycles, state_cycle = rep(1, n_cycles)),
     env = new.env()
   )
 
-  # Should error due to vector result (not single value)
+  # Should error: length 4 is neither 1 nor n_cycles + 1 time points
   expect_error(
     openqaly:::calculate_psm_values(
       uneval_values, namespace, trace,

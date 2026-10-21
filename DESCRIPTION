@@ -1,7 +1,7 @@
 Package: openqaly
 Type: Package
 Title: Reproducible Health Economic Modeling
-Version: 0.1.3
+Version: 0.1.3.9000
 Authors@R: c(
   person("Jordan", "Amdahl", email = "jordan.amdahl@avalerehealth.com", role = c("aut", "cre")),
   person("Avalere Health", role = "cph"))
@@ -39,7 +39,7 @@ Imports:
     ggridges
 Depends:
     R (>= 4.1.0),
-    openqalysurv
+    openqalysurv (>= 1.0.0.9000)
 License: GPL-3
 URL: https://PolicyAnalysisInc.github.io/openqaly/, https://github.com/PolicyAnalysisInc/openqaly
 BugReports: https://github.com/PolicyAnalysisInc/openqaly/issues

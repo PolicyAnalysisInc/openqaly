@@ -86,8 +86,8 @@ run_segment.oq_decision_tree <- function(segment, model, env, ...) {
   # Apply discounting. For DT, discount factors are scalar 1 (everything is at
   # time zero, so 1/(1+r)^0 = 1). However, values with a discounting_override
   # formula still get evaluated — the override can reference discount_rate but
-  # NOT trace() (which throws an error since DT has no state trace). The trace
-  # argument is NULL and discount factor vectors are just the scalar 1.
+  # NOT trace() (which throws an error since DT has no state trace), and must
+  # return a single number.
   calculated <- apply_dt_discounting(values_matrix, uneval_values, eval_vars, model)
 
   # --- Storage phase ---
@@ -147,22 +147,11 @@ evaluate_dt_values <- function(uneval_values, eval_vars, value_names) {
 }
 
 apply_dt_discounting <- function(values_matrix, uneval_values, eval_vars, model) {
-  calculated <- list(
+  list(
     matrix(1, nrow = 1, ncol = 0),
     values = values_matrix,
-    values_discounted = values_matrix
+    values_discounted = apply_dt_discount_overrides(values_matrix, uneval_values, eval_vars, model)
   )
-  discount_cost_rate <- model$settings$discount_cost %||% 0
-  discount_outcomes_rate <- model$settings$discount_outcomes %||% 0
-  type_mapping <- setNames(uneval_values$type, uneval_values$name)
-  type_mapping <- type_mapping[!is.na(names(type_mapping))]
-  calculated$values_discounted <- apply_discount_weights(
-    calculated$values, calculated$values_discounted,
-    NULL, 1, 1,
-    discount_cost_rate, discount_outcomes_rate,
-    uneval_values, type_mapping, eval_vars
-  )
-  calculated
 }
 
 #' Create Namespace for Decision Tree Model

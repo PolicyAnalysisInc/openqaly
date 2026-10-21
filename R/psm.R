@@ -111,10 +111,13 @@ run_segment.oq_psm <- function(segment, model, env, ...) {
 
   # --- Post-processing: discount and store ---
   # Apply time-value-of-money discounting with separate cost/outcome rates.
-  calculated$values_discounted <- apply_segment_discounting(
-    model, eval_vars, uneval_values, calculated$values, calculated$corrected_trace,
+  value_results <- calculate_segment_values(
+    model, eval_vars, uneval_values, calculated$value_parts, calculated$trace,
     n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
   )
+  calculated$value_parts <- NULL
+  calculated$values <- value_results$values
+  calculated$values_discounted <- value_results$values_discounted
   tick()
 
   # Attach all results to the segment row for downstream aggregation.
@@ -125,7 +128,7 @@ run_segment.oq_psm <- function(segment, model, env, ...) {
   )
   # PSMs have no tunnel states, so the same trace is passed for both the
   # "collapsed" and "expanded" slots (both are identical).
-  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace, calculated$corrected_trace, calculated$corrected_trace)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
   segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
@@ -228,8 +231,9 @@ evaluate_psm_endpoint <- function(endpoint_def, endpoint_name, namespace) {
     return(NULL)
   }
   
-  # Validate the result is a survival distribution
-  if (!inherits(dist, "surv_dist")) {
+  # Validate the result is a survival distribution (anything openqalysurv can
+  # evaluate, e.g. surv_dist objects or raw flexsurvreg / survfit fits)
+  if (!is_surv_dist(dist)) {
     error_msg <- glue("{endpoint_name} formula must evaluate to a survival distribution object (got {class(dist)[1]}).")
     accumulate_oq_error(define_error(error_msg), context_msg = "PSM endpoint validation")
     return(NULL)
@@ -255,7 +259,7 @@ evaluate_psm_endpoint <- function(endpoint_def, endpoint_name, namespace) {
 #'
 #' @return A list containing trace matrix and values matrix
 #' @keywords internal
-calculate_psm_trace_and_values <- function(survival_distributions, uneval_values, namespace, value_names, state_names, n_cycles, half_cycle_method = "start") {
+calculate_psm_trace_and_values <- function(survival_distributions, uneval_values, namespace, value_names, state_names, n_cycles, half_cycle_method = "life-table") {
 
   # Validate we have exactly 3 states
   if (length(state_names) != 3) {
@@ -278,7 +282,14 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
     colnames(empty_values) <- value_names
     rownames(empty_values) <- 1:n_cycles
     
-    return(list(trace = empty_trace, values = empty_values))
+    empty_parts <- list(
+      point_values = matrix(0, nrow = n_cycles + 1, ncol = length(value_names),
+                            dimnames = list(0:n_cycles, value_names)),
+      model_start = setNames(rep(0, length(value_names)), value_names),
+      dt = setNames(rep(0, length(value_names)), value_names)
+    )
+
+    return(list(trace = empty_trace, values = empty_values, value_parts = empty_parts))
   }
   
   # Calculate survival probabilities for each cycle
@@ -304,6 +315,11 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   # Get survival probabilities
   pfs_surv <- surv_prob(pfs_dist, pfs_times)
   os_surv <- surv_prob(os_dist, os_times)
+
+  # Survival must be defined over the whole horizon (e.g. a survival table that
+  # ends before the horizon without reaching 0 returns NA beyond its last time)
+  check_psm_survival_defined(pfs_surv, "PFS", pfs_times, pfs_time_unit)
+  check_psm_survival_defined(os_surv, "OS", os_times, os_time_unit)
 
   # Warn if PFS exceeds OS (before clamping)
   tol <- 10 * sqrt(.Machine$double.eps)  # ~1.49e-07
@@ -358,14 +374,14 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
   }
   oq_error_checkpoint()
 
-  # Calculate transition probabilities for transitional values
-  # Transitions: PFS -> Post-prog, Post-prog -> Dead
+  # Flows observed at each time point t = 0..n (arrivals between t-1 and t;
+  # 0 at t = 0) for transitional values: PFS -> Post-prog, Post-prog -> Dead
   trans_pfs_to_pp <- c(0, diff(-prob_pfs))  # Decrease in PFS
   trans_pp_to_dead <- c(0, diff(prob_dead))  # Increase in dead
-  
-  # Values are for cycles 1:n_cycles, so prune cycle 0 from namespace
+
+  # Values are evaluated per cycle (cycles 1..n), so prune cycle 0 from namespace
   values_ns <- prune_namespace_cycle_zero(namespace)
-  values_matrix <- calculate_psm_values(
+  value_parts <- calculate_psm_value_parts(
     uneval_values,
     values_ns,
     trace,
@@ -373,38 +389,61 @@ calculate_psm_trace_and_values <- function(survival_distributions, uneval_values
     trans_pp_to_dead,
     value_names,
     state_names,
-    n_cycles,
-    half_cycle_method
+    n_cycles
   )
-  
-  # Pre-compute corrected trace for discounting_override trace() function
-  corrected_trace <- switch(half_cycle_method,
-    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
-    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
-    trace[1:n_cycles, , drop = FALSE]  # "start" default
-  )
-  rownames(corrected_trace) <- 1:n_cycles
 
-  list(trace = trace, values = values_matrix, corrected_trace = corrected_trace)
+  list(
+    trace = trace,
+    values = combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method)),
+    value_parts = value_parts
+  )
 }
 
-calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles, half_cycle_method = "start") {
+check_psm_survival_defined <- function(surv, endpoint_name, times, time_unit) {
+  missing <- which(is.na(surv))
+  if (length(missing) == 0) return(invisible(TRUE))
+  first <- missing[1]
+  unit_txt <- if (is.null(time_unit)) "" else paste0(" ", tolower(time_unit))
+  error_msg <- glue(
+    "{endpoint_name} survival is missing (NA) from cycle {first - 1} (time {times[first]}{unit_txt}) onward. ",
+    "The survival distribution does not cover the model horizon: a survival table must extend to the ",
+    "horizon or end with survival 0."
+  )
+  accumulate_oq_error(define_error(error_msg), context_msg = "PSM survival evaluation")
+  oq_error_checkpoint()
+}
 
-  # Initialize values matrix
-  values_matrix <- matrix(0, nrow = n_cycles, ncol = length(value_names))
-  colnames(values_matrix) <- value_names
-  rownames(values_matrix) <- 1:n_cycles
+calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles, half_cycle_method = "life-table") {
+  value_parts <- calculate_psm_value_parts(
+    uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead,
+    value_names, state_names, n_cycles
+  )
+  combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method))
+}
+
+#' Calculate PSM Value Parts at Time Points
+#'
+#' Evaluates PSM values per cycle and builds point values at time points 0..n:
+#' time point t is priced with cycle t's value and time point 0 with cycle 1's.
+#' Residency values give value x occupancy at each time point; transitional
+#' values give value x flow observed at each time point (0 at time point 0).
+#' Model start and decision tree values are cycle 1 amounts.
+#'
+#' @return List with `point_values` ((n+1) x values matrix), `model_start` and
+#'   `dt` (named vectors).
+#' @keywords internal
+calculate_psm_value_parts <- function(uneval_values, namespace, trace, trans_pfs_to_pp, trans_pp_to_dead, value_names, state_names, n_cycles) {
+
+  n_points <- n_cycles + 1
+  point_values <- matrix(0, nrow = n_points, ncol = length(value_names),
+                         dimnames = list(0:n_cycles, value_names))
+  model_start <- setNames(rep(0, length(value_names)), value_names)
+  dt <- model_start
+  parts <- list(point_values = point_values, model_start = model_start, dt = dt)
 
   if (length(value_names) == 0 || nrow(uneval_values) == 0) {
-    return(values_matrix)
+    return(parts)
   }
-
-  # Pre-compute corrected trace (half-cycle corrected state probs, n_cycles rows)
-  corrected_trace <- switch(half_cycle_method,
-    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
-    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
-    trace[1:n_cycles, , drop = FALSE]  # "start" default
-  )
 
   # Process each value (vectorized evaluation)
   for (i in 1:nrow(uneval_values)) {
@@ -415,7 +454,7 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
       next
     }
 
-    # Evaluate formula once (returns vector of length n_cycles)
+    # Evaluate formula once (returns vector of length n_cycles: one value per cycle)
     evaluated <- eval_formula(value_row$formula[[1]], namespace)
 
     if (is_oq_error(evaluated)) {
@@ -446,38 +485,72 @@ calculate_psm_values <- function(uneval_values, namespace, trace, trans_pfs_to_p
     # Apply value based on type (decision_tree vs residency vs transitional)
     if (!is.na(value_row$state) && value_row$state == "decision_tree") {
       # Decision tree value - first cycle only, no state multiplication
-      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+      dt[value_name] <- dt[value_name] + evaluated[1]
     } else if (!is.na(value_row$state) && is.na(value_row$destination)) {
-      # Residency value - multiply by pre-computed corrected state probs
+      # Residency value - value x occupancy at each time point
       state_idx <- which(state_names == value_row$state)
       if (length(state_idx) == 1) {
-        state_probs <- corrected_trace[, state_idx]
-        values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * state_probs
+        point_values[, value_name] <- point_values[, value_name] + point_prices(evaluated) * trace[, state_idx]
       }
     } else if (!is.na(value_row$state) && !is.na(value_row$destination)) {
-      # Transitional value
+      # Transitional value - value x flow observed at each time point
       from_state <- value_row$state
       to_state <- value_row$destination
 
-      # Determine transition probability vector
-      trans_probs <- rep(0, n_cycles)
       if (from_state == state_names[1] && to_state == state_names[2]) {
         # PFS to post-progression
-        trans_probs <- trans_pfs_to_pp[1:n_cycles]
+        flows <- trans_pfs_to_pp
       } else if (from_state == state_names[2] && to_state == state_names[3]) {
         # Post-progression to dead
-        trans_probs <- trans_pp_to_dead[1:n_cycles]
+        flows <- trans_pp_to_dead
+      } else {
+        accumulate_oq_error(
+          define_error(glue(
+            "Transitional value '{value_name}' uses {from_state} -> {to_state}. A PSM only supports ",
+            "{state_names[1]} -> {state_names[2]} (PFS events) and {state_names[2]} -> {state_names[3]} (deaths)."
+          )),
+          context_msg = "PSM value validation"
+        )
+        next
       }
-      # Note: PFS to dead transition is assumed to be 0 as per specification
 
-      values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * trans_probs
+      flow_values <- point_prices(evaluated) * flows
+      flow_values[1] <- 0
+      point_values[, value_name] <- point_values[, value_name] + flow_values
     } else if (is.na(value_row$state) && is.na(value_row$destination)) {
       # model start value
-      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+      model_start[value_name] <- model_start[value_name] + evaluated[1]
     }
   }
 
   oq_error_checkpoint()
 
-  values_matrix
+  list(point_values = point_values, model_start = model_start, dt = dt)
+}
+
+# Price of each time point 0..n from per-cycle values: time point t takes the
+# value of cycle t (the cycle ending at t), time point 0 the value of cycle 1.
+point_prices <- function(cycle_values) {
+  c(cycle_values[1], cycle_values)
+}
+
+# Undiscounted cycle values from value parts: allocate point values with each
+# value's half-cycle method, then add model start and decision tree amounts to
+# cycle 1.
+combine_value_parts <- function(value_parts, methods) {
+  values <- allocate_point_values(value_parts$point_values, methods)
+  values[1, ] <- values[1, ] + value_parts$model_start[colnames(values)] + value_parts$dt[colnames(values)]
+  values
+}
+
+# Effective half-cycle method of each value from a values table (a value's own
+# half_cycle_method if set, otherwise the default).
+value_half_cycle_methods <- function(uneval_values, value_names, default_method) {
+  methods <- setNames(rep(default_method %||% "life-table", length(value_names)), value_names)
+  if (!is.null(uneval_values) && "half_cycle_method" %in% names(uneval_values)) {
+    own <- as.character(uneval_values$half_cycle_method)
+    set <- !is.na(own) & own != "" & own != "NA" & uneval_values$name %in% value_names
+    for (k in which(set)) methods[[uneval_values$name[k]]] <- own[k]
+  }
+  methods
 }

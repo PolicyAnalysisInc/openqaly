@@ -10,7 +10,6 @@ settings:
   discount_outcomes: 3.5
   reduce_state_cycle: no
   half_cycle_method: start
-  discount_timing: start
   discount_method: by_cycle
 strategies:
   - name: seritinib

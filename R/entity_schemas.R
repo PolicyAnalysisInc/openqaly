@@ -677,6 +677,21 @@
         stop("Custom PSM models do not support transitional values (both state and destination). Use residency values (state only) or model start values (no state/destination).")
       }
     }
+    # psm: only state 1 -> 2 (PFS events) and state 2 -> 3 (deaths)
+    if (model_type == "psm") {
+      has_state <- !is.na(item$state) && item$state != "NA" && item$state != ""
+      has_dest <- !is.na(item$destination) && item$destination != "NA" && item$destination != ""
+      sn <- model$states$name
+      if (has_state && has_dest && length(sn) == 3) {
+        ok <- (item$state == sn[1] && item$destination == sn[2]) ||
+          (item$state == sn[2] && item$destination == sn[3])
+        if (!ok) {
+          stop(sprintf(paste0("Transitional value '%s' uses %s -> %s. A PSM only supports %s -> %s (PFS events) ",
+                              "and %s -> %s (deaths)."),
+                       item$name, item$state, item$destination, sn[1], sn[2], sn[2], sn[3]), call. = FALSE)
+        }
+      }
+    }
     # decision_tree: no destination
     if (!is.na(item$state) && item$state == "decision_tree") {
       if (!is.na(item$destination) && item$destination != "NA" && item$destination != "") {
@@ -711,9 +726,35 @@
     if (length(model$tables) > 0 && item$name %in% names(model$tables)) {
       stop(sprintf("Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.", item$name))
     }
+    # All rows of a value share one half-cycle method
+    if ("half_cycle_method" %in% names(item) && !is.null(model$values) &&
+        "half_cycle_method" %in% names(model$values)) {
+      existing <- model$values$half_cycle_method[model$values$name == item$name]
+      if (length(existing) > 0) {
+        norm <- function(x) { x <- as.character(x); x[is.na(x) | x == "NA"] <- ""; x }
+        current <- norm(existing[1])
+        given <- norm(item$half_cycle_method)
+        if (given == "") {
+          # Adopted in post_add (the new row is appended after pre_add)
+          attr(model, ".hcm_adopt") <- existing[1]
+        } else if (given != current) {
+          stop(sprintf(paste0("Value '%s' already uses half_cycle_method '%s'. All rows of a value share one setting; ",
+                              "change it for all rows with edit_value(..., half_cycle_method = ...)."),
+                       item$name, if (current == "") "NA (model setting)" else current), call. = FALSE)
+        }
+      }
+    }
+    # Variable collision check
+    if (!is.null(model$variables) && item$name %in% model$variables$name) {
+      stop(sprintf("Name collision detected: the following names are used as both variables and values: %s. Please rename the variable(s) or value(s) to avoid this conflict.", item$name), call. = FALSE)
+    }
     model
   },
   post_add = function(model, item) {
+    if (!is.null(attr(model, ".hcm_adopt"))) {
+      model$values$half_cycle_method[model$values$name == item$name] <- attr(model, ".hcm_adopt")
+      attr(model, ".hcm_adopt") <- NULL
+    }
     values_with_same_name <- model$values[model$values$name == item$name, ]
     if (nrow(values_with_same_name) > 1) {
       error_msg <- validate_value_display_names_for_builder(values_with_same_name, item$name)
@@ -742,6 +783,10 @@
     if (length(model$tables) > 0 && new_name %in% names(model$tables)) {
       stop(sprintf("Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.", new_name), call. = FALSE)
     }
+    # Variable collision
+    if (!is.null(model$variables) && new_name %in% model$variables$name) {
+      stop(sprintf("Name collision detected: the following names are used as both variables and values: %s. Please rename the variable(s) or value(s) to avoid this conflict.", new_name), call. = FALSE)
+    }
     # Merge detection and field adoption
     target_rows <- which(model$values$name == new_name)
     if (length(target_rows) > 0) {
@@ -760,6 +805,10 @@
       # Auto-adopt target fields unless explicitly provided
       if (is.null(updates$display_name)) model$values$display_name[match_info$idx] <- target_display
       if (is.null(updates$description)) model$values$description[match_info$idx] <- target_desc
+      # All rows of a value share one half-cycle method: adopt the target's
+      if ("half_cycle_method" %in% names(model$values)) {
+        attr(model, ".hcm_target") <- model$values$half_cycle_method[target_rows[1]]
+      }
     }
     model
   },
@@ -771,7 +820,13 @@
       model$values$name[model$values$name == old_name] <- new_name
       model$summaries <- update_summary_value_refs(model$summaries, old_name, new_name)
       attr(model, ".rename_all_flag") <- NULL
-    } else {
+    }
+    # Merged into an existing value: its half-cycle method applies to all rows
+    if (!is.null(attr(model, ".hcm_target"))) {
+      model$values$half_cycle_method[model$values$name == new_name] <- attr(model, ".hcm_target")
+      attr(model, ".hcm_target") <- NULL
+    }
+    if (!rename_all) {
       # Orphan detection: if old name no longer exists, cascade to summaries
       if (!any(model$values$name == old_name)) {
         model$summaries <- update_summary_value_refs(model$summaries, old_name, new_name)
@@ -851,6 +906,10 @@
 
 .callbacks_add_variable <- list(
   pre_add = function(model, item) {
+    # Value collision check
+    if (!is.null(model$values) && item$name %in% model$values$name) {
+      stop(sprintf("Name collision detected: the following names are used as both variables and values: %s. Please rename the variable(s) or value(s) to avoid this conflict.", item$name), call. = FALSE)
+    }
     # Sampling targeting validation
     if (!is.null(item$sampling) && item$sampling != "") {
       existing_vars <- model$variables[model$variables$name == item$name, ]
@@ -892,7 +951,7 @@
 .valid_settings <- c(
   "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
   "discount_cost", "discount_outcomes", "half_cycle_method",
-  "discount_timing", "discount_method",
+  "discount_method",
   "reduce_state_cycle", "days_per_year", "discount_rate"
 )
 

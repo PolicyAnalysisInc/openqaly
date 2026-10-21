@@ -53,25 +53,39 @@ parse_variables <- function(x, formula_column = 'formula', context = 'Variables'
     return(as.variables(empty_vars))
   }
 
-  # Parse formulas, and sort
-  vars <- x %>%
-    rowwise() %>%
-    group_split() %>%
-    map(function(var) {
-      formula <- as.oq_formula(var[[formula_column]])
-      if (('.is_ss' %in% colnames(var)) && var$.is_ss) {
-        formula$depends <- c(formula$depends, 'strategy')
-        formula$fo_depends <- c(formula$fo_depends, 'strategy')
-      }
-      if (('.is_gs' %in% colnames(var)) && var$.is_gs) {
-        formula$depends <- c(formula$depends, 'group')
-        formula$fo_depends <- c(formula$fo_depends, 'group')
-      }
-      var$formula <- list(formula)
-      var
-    }) %>%
-    bind_rows() %>%
-    select("name", "display_name", "description", !!enquo(formula_column)) %>%
+  # Parse formulas. With no variable rows (only extras such as decision tree
+  # variables), start from an empty table with the same columns.
+  if (nrow(x) == 0) {
+    parsed <- tibble(
+      name = character(0),
+      display_name = character(0),
+      description = character(0),
+      formula = list()
+    )
+    names(parsed)[4] <- formula_column
+  } else {
+    parsed <- x %>%
+      rowwise() %>%
+      group_split() %>%
+      map(function(var) {
+        formula <- as.oq_formula(var[[formula_column]])
+        if (('.is_ss' %in% colnames(var)) && var$.is_ss) {
+          formula$depends <- c(formula$depends, 'strategy')
+          formula$fo_depends <- c(formula$fo_depends, 'strategy')
+        }
+        if (('.is_gs' %in% colnames(var)) && var$.is_gs) {
+          formula$depends <- c(formula$depends, 'group')
+          formula$fo_depends <- c(formula$fo_depends, 'group')
+        }
+        var$formula <- list(formula)
+        var
+      }) %>%
+      bind_rows() %>%
+      select("name", "display_name", "description", !!enquo(formula_column))
+  }
+
+  # Combine with extras and sort
+  vars <- parsed %>%
     rbind(extras) %>%
     {try({sort_variables(.)}, silent = TRUE)}
   

@@ -11,7 +11,7 @@ calculate_psm_custom_values(
   value_names,
   state_names,
   n_cycles,
-  half_cycle_method = "start"
+  half_cycle_method = "life-table"
 )
 }
 \arguments{

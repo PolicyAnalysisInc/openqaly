@@ -30,7 +30,8 @@ create_markov_with_dt <- function() {
       cycle_length = 1,
       cycle_length_unit = "years",
       discount_cost = 3.5,
-      discount_outcomes = 3.5
+      discount_outcomes = 3.5,
+      half_cycle_method = "start"
     ) |>
     add_strategy("surgery") |>
     add_tree_node("surgery", "root", parent = NA, formula = 1) |>
@@ -221,21 +222,21 @@ test_that("DT values are not discounted in Markov + DT model", {
 
 test_that("calculate_discount_factors respects offset_years", {
   # Without offset
-  factors_no_offset <- calculate_discount_factors(5, 3.5, 1, "start", "by_cycle", offset_years = 0)
+  factors_no_offset <- calculate_discount_factors(5, 3.5, 1, "by_cycle", offset_years = 0)
   # With 1-year offset
-  factors_with_offset <- calculate_discount_factors(5, 3.5, 1, "start", "by_cycle", offset_years = 1)
+  factors_with_offset <- calculate_discount_factors(5, 3.5, 1, "by_cycle", offset_years = 1)
 
   # With offset, all factors should be smaller (more discounting)
   expect_true(all(factors_with_offset < factors_no_offset))
 
-  # Factor at cycle 1 with 1-year offset should equal factor at cycle 2 without offset
-  # Because cycle 1 with offset=1 means time=0+1=1 year, same as cycle 2 with offset=0 means time=1+0=1 year
+  # Time point 0 with a 1-year offset is at 0 + 1 = 1 year, the same time as
+  # time point 1 without an offset
   expect_equal(factors_with_offset[1], factors_no_offset[2], tolerance = 1e-10)
 })
 
 test_that("calculate_discount_factors with offset_years = 0 matches default", {
-  factors_default <- calculate_discount_factors(10, 3.5, 1, "start", "by_cycle")
-  factors_explicit <- calculate_discount_factors(10, 3.5, 1, "start", "by_cycle", offset_years = 0)
+  factors_default <- calculate_discount_factors(10, 3.5, 1, "by_cycle")
+  factors_explicit <- calculate_discount_factors(10, 3.5, 1, "by_cycle", offset_years = 0)
 
   expect_equal(factors_default, factors_explicit)
 })
@@ -510,7 +511,8 @@ test_that("PSM + DT: DT values undiscounted, state values discounted with offset
       cycle_length = 1,
       cycle_length_unit = "years",
       discount_cost = 3.5,
-      discount_outcomes = 3.5
+      discount_outcomes = 3.5,
+      half_cycle_method = "start"
     ) |>
     add_strategy("s") |>
     add_tree_node("t", "root", parent = NA, formula = 1) |>
@@ -813,7 +815,8 @@ test_that("discounting_override with discount_factors vector works in Markov", {
       cycle_length = 1,
       cycle_length_unit = "years",
       discount_cost = 3.5,
-      discount_outcomes = 3.5
+      discount_outcomes = 3.5,
+      half_cycle_method = "start"
     ) |>
     add_strategy("s") |>
     add_state("healthy", initial_prob = 1) |>
@@ -832,9 +835,9 @@ test_that("discounting_override with discount_factors vector works in Markov", {
   tv <- result$segments$trace_and_values[[1]]
 
   # Using "discount_factors" as override should produce same result as standard discounting
-  # (since it just replaces with the same per-cycle factors)
+  # (it returns the same factors at time points 0..n; under "start" cycle c uses time point c - 1)
   n <- nrow(tv$values)
-  expected_factors <- calculate_discount_factors(n, 3.5, 1, "start", "by_cycle")
+  expected_factors <- calculate_discount_factors(n, 3.5, 1, "by_cycle")
   for (c in seq_len(n)) {
     actual_ratio <- tv$values_discounted[c, "cost"] / tv$values[c, "cost"]
     expect_equal(actual_ratio, expected_factors[c], tolerance = 1e-8)

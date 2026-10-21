@@ -4,12 +4,6 @@
 # Tests discounting_override across all value types and model types.
 # Value types: residency, transition, model start, decision tree (DT)
 # Model types: Markov, PSM, Custom PSM, standalone Decision Tree
-#
-# Pre-existing limitations (not related to discounting_override):
-# - DT tree + transition values in Markov causes a select() error
-# - DT tree + custom PSM causes a select() error
-# These combinations are avoided below; DT values are fully tested in PSM
-# and standalone DT tests.
 
 # =============================================================================
 # Test 1: Markov — residency, transition, model start
@@ -180,8 +174,6 @@ test_that("PSM: discounting_override works for all value types", {
 # Test 3: Custom PSM — residency, model start (no transition or DT values)
 # =============================================================================
 # Note: Custom PSM does not support transition values (by design).
-# DT tree integration with custom PSM has a known issue, so DT values are
-# tested in the PSM and standalone DT tests above.
 
 test_that("Custom PSM: discounting_override works for residency and model start", {
   model <- define_model("custom_psm") |>
@@ -274,11 +266,12 @@ test_that("Standalone DT: override applies formula, blank means no discounting",
 # =============================================================================
 # Tests 5-10: Weighted-average trace()/discount_factors override pattern
 # =============================================================================
-# Tests that discounting_override with trace() correctly uses half-cycle-corrected
-# state probabilities, and that different half_cycle_methods produce different results.
+# Tests that discounting_override with trace() uses person-time at each time point
+# (occupancy x half-cycle weight), and that different half_cycle_methods produce
+# different results.
 
 # --- PSM: weighted-average override with "start" half-cycle ---
-test_that("PSM: weighted-average trace() override uses corrected trace (start)", {
+test_that("PSM: weighted-average trace() override uses person-time weights (start)", {
   model <- define_model("psm") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -306,17 +299,17 @@ test_that("PSM: weighted-average trace() override uses corrected trace (start)",
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # Manually compute expected factor using corrected trace (start = raw_trace[1:n,])
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
-  raw_trace <- tv$trace
-  corrected_pps <- raw_trace[1:n_cycles, "progressed"]
+  occ <- tv$trace[, "progressed"]
+  w <- openqaly:::point_weights(n_cycles, "start")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_pps) / sum(corrected_pps)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "prog_cost"], vals[, "prog_cost"] * expected_factor)
 })
 
 # --- PSM: weighted-average override with "life-table" half-cycle ---
-test_that("PSM: weighted-average trace() override uses corrected trace (life-table)", {
+test_that("PSM: weighted-average trace() override uses person-time weights (life-table)", {
   model <- define_model("psm") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -344,17 +337,17 @@ test_that("PSM: weighted-average trace() override uses corrected trace (life-tab
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # Manually compute expected factor using corrected trace (life-table = midpoint)
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
-  raw_trace <- tv$trace
-  corrected_pps <- (raw_trace[1:n_cycles, "progressed"] + raw_trace[2:(n_cycles + 1), "progressed"]) / 2
+  occ <- tv$trace[, "progressed"]
+  w <- openqaly:::point_weights(n_cycles, "life-table")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_pps) / sum(corrected_pps)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "prog_cost"], vals[, "prog_cost"] * expected_factor)
 })
 
 # --- Markov: weighted-average override with "start" half-cycle ---
-test_that("Markov: weighted-average trace() override uses corrected trace (start)", {
+test_that("Markov: weighted-average trace() override uses person-time weights (start)", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -383,19 +376,17 @@ test_that("Markov: weighted-average trace() override uses corrected trace (start
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # For Markov "start", corrected trace = collapsed trace rows 0..(n-1) = raw trace[1:n,]
-  # The collapsed_trace has rows 0..n (n+1 rows). Corrected = rows for cycles 1..n using "start" = row 0..n-1
-  # Access corrected trace from segment
-  corrected_trace <- result$segments$corrected_collapsed_trace[[1]]
-  corrected_sick <- corrected_trace[, "sick"]
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
+  occ <- result$segments$collapsed_trace[[1]][, "sick"]
+  w <- openqaly:::point_weights(n_cycles, "start")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_sick) / sum(corrected_sick)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "trans_cost"], vals[, "trans_cost"] * expected_factor)
 })
 
 # --- Markov: weighted-average override with "life-table" half-cycle ---
-test_that("Markov: weighted-average trace() override uses corrected trace (life-table)", {
+test_that("Markov: weighted-average trace() override uses person-time weights (life-table)", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -424,17 +415,17 @@ test_that("Markov: weighted-average trace() override uses corrected trace (life-
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # Access corrected trace from segment (life-table corrected)
-  corrected_trace <- result$segments$corrected_collapsed_trace[[1]]
-  corrected_sick <- corrected_trace[, "sick"]
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
+  occ <- result$segments$collapsed_trace[[1]][, "sick"]
+  w <- openqaly:::point_weights(n_cycles, "life-table")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_sick) / sum(corrected_sick)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "trans_cost"], vals[, "trans_cost"] * expected_factor)
 })
 
 # --- Custom PSM: weighted-average override with "start" half-cycle ---
-test_that("Custom PSM: weighted-average trace() override uses corrected trace (start)", {
+test_that("Custom PSM: weighted-average trace() override uses person-time weights (start)", {
   model <- define_model("custom_psm") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -459,17 +450,17 @@ test_that("Custom PSM: weighted-average trace() override uses corrected trace (s
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # For "start", corrected alive = raw_trace[1:n, "alive"]
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
-  raw_trace <- tv$trace
-  corrected_alive <- raw_trace[1:n_cycles, "alive"]
+  occ <- tv$trace[, "alive"]
+  w <- openqaly:::point_weights(n_cycles, "start")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_alive) / sum(corrected_alive)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "res_cost"], vals[, "res_cost"] * expected_factor)
 })
 
 # --- Custom PSM: weighted-average override with "life-table" half-cycle ---
-test_that("Custom PSM: weighted-average trace() override uses corrected trace (life-table)", {
+test_that("Custom PSM: weighted-average trace() override uses person-time weights (life-table)", {
   model <- define_model("custom_psm") |>
     set_settings(
       timeframe = 5, timeframe_unit = "years",
@@ -494,11 +485,11 @@ test_that("Custom PSM: weighted-average trace() override uses corrected trace (l
   vals <- tv$values
   disc <- tv$values_discounted
 
-  # For "life-table", corrected alive = midpoint of raw trace
+  # trace() is person-time at time points 0..n: occupancy x half-cycle weight
   n_cycles <- 5
-  raw_trace <- tv$trace
-  corrected_alive <- (raw_trace[1:n_cycles, "alive"] + raw_trace[2:(n_cycles + 1), "alive"]) / 2
+  occ <- tv$trace[, "alive"]
+  w <- openqaly:::point_weights(n_cycles, "life-table")
   discount_factors <- calculate_discount_factors(n_cycles, 3.5, 1)
-  expected_factor <- sum(discount_factors * corrected_alive) / sum(corrected_alive)
+  expected_factor <- sum(discount_factors * occ * w) / sum(occ * w)
   expect_equal(disc[, "res_cost"], vals[, "res_cost"] * expected_factor)
 })

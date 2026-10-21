@@ -13,7 +13,8 @@ prune_namespace_cycle_zero(namespace)
 A namespace object with cycle 0 removed from df
 }
 \description{
-Removes the first row (cycle 0) from the namespace data frame.
-Used to prepare namespace for values calculation which only uses cycles 1:n_cycles.
+Removes every cycle 0 row (in every state_cycle block) from the namespace
+data frame. Used where formulas describe cycles 1:n_cycles (transitions,
+initial probabilities, group weights, discounting overrides).
 }
 \keyword{internal}

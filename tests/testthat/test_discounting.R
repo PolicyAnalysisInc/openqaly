@@ -7,40 +7,37 @@ library(jsonlite)
 # =============================================================================
 
 test_that("calculate_discount_factors generates correct factors", {
-  # Test with 5% discount rate for 5 annual cycles
+  # Test with 5% discount rate for 5 annual cycles (time points 0..5)
   factors <- calculate_discount_factors(5, 5, cycle_length_years = 1)
-  expected <- c(1, 1/1.05, 1/1.05^2, 1/1.05^3, 1/1.05^4)
+  expected <- c(1, 1/1.05, 1/1.05^2, 1/1.05^3, 1/1.05^4, 1/1.05^5)
   expect_equal(factors, expected, tolerance = 1e-10)
 
   # Test with 0% discount rate (no discounting)
   factors_zero <- calculate_discount_factors(5, 0, cycle_length_years = 1)
-  expect_equal(factors_zero, rep(1, 5))
+  expect_equal(factors_zero, rep(1, 6))
 
   # Test with 3.5% discount rate (standard health economics rate)
   factors_35 <- calculate_discount_factors(3, 3.5, cycle_length_years = 1)
-  expected_35 <- c(1, 1/1.035, 1/1.035^2)
+  expected_35 <- c(1, 1/1.035, 1/1.035^2, 1/1.035^3)
   expect_equal(factors_35, expected_35, tolerance = 1e-10)
 
   # Test edge case: 0 cycles
   factors_empty <- calculate_discount_factors(0, 5, cycle_length_years = 1)
   expect_equal(length(factors_empty), 0)
 
-  # Test edge case: 1 cycle (should be 1)
+  # Test edge case: 1 cycle (time points 0 and 1)
   factors_one <- calculate_discount_factors(1, 5, cycle_length_years = 1)
-  expect_equal(factors_one, 1)
+  expect_equal(factors_one, c(1, 1/1.05))
 
   # Test with monthly cycles (cycle_length_years = 1/12)
   factors_monthly <- calculate_discount_factors(12, 5, cycle_length_years = 1 / 12)
-  # Month 1 is at time 0, Month 12 is at time 11/12
-  expected_monthly <- c(1, 1/1.05^(1/12), 1/1.05^(2/12), 1/1.05^(3/12),
-                       1/1.05^(4/12), 1/1.05^(5/12), 1/1.05^(6/12),
-                       1/1.05^(7/12), 1/1.05^(8/12), 1/1.05^(9/12),
-                       1/1.05^(10/12), 1/1.05^(11/12))
+  # Time point 0 is at time 0, time point 12 is at 1 year
+  expected_monthly <- 1/1.05^((0:12)/12)
   expect_equal(factors_monthly, expected_monthly, tolerance = 1e-10)
 
   # Test with weekly cycles (cycle_length_years = 1/52)
   factors_weekly <- calculate_discount_factors(4, 5, cycle_length_years = 1/52)
-  expected_weekly <- c(1, 1/1.05^(1/52), 1/1.05^(2/52), 1/1.05^(3/52))
+  expected_weekly <- 1/1.05^((0:4)/52)
   expect_equal(factors_weekly, expected_weekly, tolerance = 1e-10)
 })
 
@@ -147,9 +144,9 @@ test_that("apply_discounting handles mismatched discount factor lengths", {
 
   types <- c(cost1 = "cost")
 
-  # Only 3 discount factors for 5 cycles
-  discount_factors_cost <- calculate_discount_factors(3, 3)
-  discount_factors_outcomes <- calculate_discount_factors(3, 1.5)
+  # Only 3 discount factors (time points 0..2) for 5 cycles
+  discount_factors_cost <- calculate_discount_factors(2, 3)
+  discount_factors_outcomes <- calculate_discount_factors(2, 1.5)
 
   expect_warning(
     discounted <- apply_discounting(
@@ -251,7 +248,7 @@ test_that("Discounting with different cycle lengths produces consistent present 
 
   # Annual: $100 at start of each year for 2 years
   annual_factors <- calculate_discount_factors(2, annual_rate, cycle_length_years = 1)
-  annual_pv <- sum(annual_total * annual_factors)
+  annual_pv <- sum(annual_total * annual_factors[1:2])
 
   # Monthly: $100/12 at start of each month for 24 months
   # This gives the same total annual cashflow
@@ -557,66 +554,21 @@ test_that("High discount rate (50%) works correctly", {
 })
 
 # =============================================================================
-# Unit Tests: discount_timing and discount_method parameters
+# Unit Tests: discount factors at time points and discount_method
 # =============================================================================
 
-test_that("discount_timing = 'end' shifts time by one full cycle", {
-  factors <- calculate_discount_factors(5, 5, cycle_length_years = 1,
-                                        discount_timing = "end")
-  # end timing: time = cycle * cycle_length_years (cycles 1..5 => times 1,2,3,4,5)
-  expected <- 1 / 1.05^(1:5)
-  expect_equal(factors, expected, tolerance = 1e-10)
+test_that("discount factors are given at time points 0..n", {
+  factors <- calculate_discount_factors(5, 5, cycle_length_years = 1)
+  # time point t is at t * cycle_length_years
+  expect_equal(factors, 1 / 1.05^(0:5), tolerance = 1e-10)
 })
 
-test_that("discount_timing = 'midpoint' uses half-cycle offset", {
-  factors <- calculate_discount_factors(5, 5, cycle_length_years = 1,
-                                        discount_timing = "midpoint")
-  # midpoint timing: time = (cycle - 0.5) * cycle_length_years
-  expected <- 1 / 1.05^(c(0.5, 1.5, 2.5, 3.5, 4.5))
-  expect_equal(factors, expected, tolerance = 1e-10)
-})
-
-test_that("discount_method = 'by_year' with monthly cycles floors to whole years (start timing)", {
-  # 24 monthly cycles, start timing
+test_that("discount_method = 'by_year' with monthly cycles floors time points to whole years", {
   factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
-                                        discount_timing = "start",
                                         discount_method = "by_year")
-  # start timing: time = (cycle - 1) / 12, floored to whole years
-  # Cycles 1-12: floor((0..11)/12) = 0  => factor = 1
-  # Cycles 13-24: floor((12..23)/12) = 1 => factor = 1/1.05
-  expected <- c(rep(1, 12), rep(1/1.05, 12))
+  # time points 0..11 => year 0; 12..23 => year 1; 24 => year 2
+  expected <- c(rep(1, 12), rep(1/1.05, 12), 1/1.05^2)
   expect_equal(factors, expected, tolerance = 1e-10)
-})
-
-test_that("discount_method = 'by_year' with midpoint timing", {
-  factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
-                                        discount_timing = "midpoint",
-                                        discount_method = "by_year")
-  # midpoint timing: time = (cycle - 0.5) / 12, floored
-  # Cycles 1-12: floor((0.5..11.5)/12) = floor(0.0417..0.9583) = 0 => factor = 1
-  # Cycles 13-24: floor((12.5..23.5)/12) = floor(1.0417..1.9583) = 1 => factor = 1/1.05
-  expected <- c(rep(1, 12), rep(1/1.05, 12))
-  expect_equal(factors, expected, tolerance = 1e-10)
-})
-
-test_that("discount_method = 'by_year' with end timing", {
-  factors <- calculate_discount_factors(24, 5, cycle_length_years = 1/12,
-                                        discount_timing = "end",
-                                        discount_method = "by_year")
-  # end timing: time = cycle / 12, floored
-  # Cycles 1-11: floor((1..11)/12) = 0 => factor = 1
-  # Cycle 12: floor(12/12) = 1 => factor = 1/1.05
-  # Cycles 13-23: floor((13..23)/12) = 1 => factor = 1/1.05
-  # Cycle 24: floor(24/12) = 2 => factor = 1/1.05^2
-  expected <- c(rep(1, 11), rep(1/1.05, 12), 1/1.05^2)
-  expect_equal(factors, expected, tolerance = 1e-10)
-})
-
-test_that("invalid discount_timing raises error", {
-  expect_error(
-    calculate_discount_factors(5, 5, discount_timing = "invalid"),
-    "Invalid discount_timing"
-  )
 })
 
 test_that("invalid discount_method raises error", {
@@ -626,20 +578,20 @@ test_that("invalid discount_method raises error", {
   )
 })
 
-test_that("default parameters produce identical results to no-arg call (backward compat)", {
+test_that("default parameters equal explicit by_cycle", {
   factors_default <- calculate_discount_factors(12, 5, cycle_length_years = 1/12)
   factors_explicit <- calculate_discount_factors(12, 5, cycle_length_years = 1/12,
-                                                  discount_timing = "start",
                                                   discount_method = "by_cycle")
   expect_identical(factors_default, factors_explicit)
 })
 
 # =============================================================================
-# Integration Test: discount_timing and discount_method via run_model()
+# Integration Test: each time point is discounted at its own time, then
+# allocated to cycles with the half-cycle method
 # =============================================================================
 
-test_that("discount_timing = 'end' produces correct discounted values via run_model()", {
-  json_model <- '
+run_discount_json_model <- function(half_cycle_method) {
+  json_model <- paste0('
 {
   "settings": [
     {"setting": "model_type", "value": "markov"},
@@ -649,8 +601,7 @@ test_that("discount_timing = 'end' produces correct discounted values via run_mo
     {"setting": "discount_outcomes", "value": "1.5"},
     {"setting": "cycle_length", "value": "1"},
     {"setting": "cycle_length_unit", "value": "years"},
-    {"setting": "half_cycle_method", "value": "start"},
-    {"setting": "discount_timing", "value": "end"},
+    {"setting": "half_cycle_method", "value": "' , half_cycle_method, '"},
     {"setting": "discount_method", "value": "by_cycle"},
     {"setting": "days_per_year", "value": "365"},
     {"setting": "reduce_state_cycle", "value": "false"}
@@ -682,7 +633,7 @@ test_that("discount_timing = 'end' produces correct discounted values via run_mo
   "tables": [],
   "scripts": []
 }
-'
+')
 
   temp_file <- tempfile(fileext = ".json")
   writeLines(json_model, temp_file)
@@ -690,25 +641,29 @@ test_that("discount_timing = 'end' produces correct discounted values via run_mo
   unlink(temp_file)
 
   results <- run_model(model)
+  results$aggregated$trace_and_values[[1]]$values_discounted
+}
 
-  alive_probs <- c(1.0, 0.9, 0.81, 0.729, 0.6561)
+test_that("time-point discounting via run_model() under start, end and life-table", {
+  # Alive at time points 0..5
+  alive <- 0.9^(0:5)
+  # Point values discounted at their own time (times 0..5)
+  cost_points <- alive * 1000 * 1.03^-(0:5)
+  utility_points <- alive * 0.8 * 1.015^-(0:5)
 
-  # end timing: time = cycle * cycle_length_years => times 1,2,3,4,5
-  cost_factors <- (1.03)^(-(1:5))
-  utility_factors <- (1.015)^(-(1:5))
+  expected <- list(
+    "start" = list(cost = cost_points[1:5], utility = utility_points[1:5]),
+    "end" = list(cost = cost_points[2:6], utility = utility_points[2:6]),
+    "life-table" = list(
+      cost = (cost_points[1:5] + cost_points[2:6]) / 2,
+      utility = (utility_points[1:5] + utility_points[2:6]) / 2
+    )
+  )
 
-  expected_costs <- alive_probs * 1000 * cost_factors
-  expected_utilities <- alive_probs * 0.8 * utility_factors
-
-  values_disc <- results$aggregated$trace_and_values[[1]]$values_discounted
-
-  for(i in 1:5) {
-    expect_equal(values_disc[i, "cost"], expected_costs[i],
-                tolerance = 1e-10,
-                label = paste("Cycle", i, "cost with end timing"))
-    expect_equal(values_disc[i, "utility"], expected_utilities[i],
-                tolerance = 1e-10,
-                label = paste("Cycle", i, "utility with end timing"))
+  for (hcm in names(expected)) {
+    values_disc <- run_discount_json_model(hcm)
+    expect_equal(unname(values_disc[, "cost"]), expected[[hcm]]$cost, tolerance = 1e-10, label = paste(hcm, "cost"))
+    expect_equal(unname(values_disc[, "utility"]), expected[[hcm]]$utility, tolerance = 1e-10, label = paste(hcm, "utility"))
   }
 })
 
@@ -716,8 +671,8 @@ test_that("discount_timing = 'end' produces correct discounted values via run_mo
 # Deserialization Defaults Test
 # =============================================================================
 
-test_that("model without new settings defaults correctly and matches explicit start/by_cycle", {
-  # Model WITHOUT discount_timing and discount_method (simulating old model)
+test_that("model without discount_method defaults to by_cycle", {
+  # Model WITHOUT discount_method
   json_old <- '
 {
   "settings": [
@@ -761,7 +716,7 @@ test_that("model without new settings defaults correctly and matches explicit st
 }
 '
 
-  # Model WITH explicit start/by_cycle
+  # Model WITH explicit by_cycle
   json_new <- '
 {
   "settings": [
@@ -773,7 +728,6 @@ test_that("model without new settings defaults correctly and matches explicit st
     {"setting": "cycle_length", "value": "1"},
     {"setting": "cycle_length_unit", "value": "years"},
     {"setting": "half_cycle_method", "value": "start"},
-    {"setting": "discount_timing", "value": "start"},
     {"setting": "discount_method", "value": "by_cycle"},
     {"setting": "days_per_year", "value": "365"},
     {"setting": "reduce_state_cycle", "value": "false"}
@@ -818,7 +772,6 @@ test_that("model without new settings defaults correctly and matches explicit st
   unlink(temp_new)
 
   # Settings should default correctly
-  expect_equal(model_old$settings$discount_timing, "start")
   expect_equal(model_old$settings$discount_method, "by_cycle")
 
   # Run both models and compare discounted values

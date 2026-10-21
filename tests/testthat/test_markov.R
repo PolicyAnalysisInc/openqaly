@@ -460,21 +460,19 @@ test_that("transitional values are calculated correctly", {
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"
+    -pi
   )
 
-  # Cycle 1: init[A]=1.0, A->B prob=0.3, A->C prob=0.2
-  # Transitional cost = 1.0 * 0.3 * 100 + 1.0 * 0.2 * 50 = 30 + 10 = 40
-  expect_equal(res$transitionalValues[1, "cost"], 40)
+  # Flows observed at time points 1..3 (arrivals between t-1 and t):
+  # t=1: 1.0 * 0.3 * 100 + 1.0 * 0.2 * 50 = 40
+  # t=2: 0.5 * 0.3 * 100 + 0.5 * 0.2 * 50 = 20
+  # t=3: 0.25 * 0.3 * 100 + 0.25 * 0.2 * 50 = 10
+  expect_equal(unname(res$transitionalPointValues[, "cost"]), c(0, 40, 20, 10))
 
-  # Cycle 2: trace[A]=0.5, A->B prob=0.3, A->C prob=0.2
-  # Transitional cost = 0.5 * 0.3 * 100 + 0.5 * 0.2 * 50 = 15 + 5 = 20
-  expect_equal(res$transitionalValues[2, "cost"], 20)
-
-  # Cycle 3: trace[A]=0.25, A->B prob=0.3, A->C prob=0.2
-  # Transitional cost = 0.25 * 0.3 * 100 + 0.25 * 0.2 * 50 = 7.5 + 2.5 = 10
-  expect_equal(res$transitionalValues[3, "cost"], 10)
+  # "start" allocates time point k-1 to cycle k; "end" allocates time point k
+  points <- res$transitionalPointValues
+  expect_equal(unname(openqaly:::allocate_point_values(points, "start")[, "cost"]), c(0, 40, 20))
+  expect_equal(unname(openqaly:::allocate_point_values(points, "end")[, "cost"]), c(40, 20, 10))
 })
 
 test_that("time-varying values use correct cycle values", {
@@ -526,17 +524,15 @@ test_that("time-varying values use correct cycle values", {
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"  # Use start method: uses prev trace row
+    -pi
   )
 
-  # With start method, cycle N uses trace[N-1] which is 1.0 for all cycles
-  # Each cycle should use its corresponding utility value
-  expect_equal(res$residencyValues[1, "utility"], 1.0)  # Cycle 1: utility=1.0
-  expect_equal(res$residencyValues[2, "utility"], 0.9)  # Cycle 2: utility=0.9
-  expect_equal(res$residencyValues[3, "utility"], 0.8)  # Cycle 3: utility=0.8
-  expect_equal(res$residencyValues[4, "utility"], 0.7)  # Cycle 4: utility=0.7
-  expect_equal(res$residencyValues[5, "utility"], 0.6)  # Cycle 5: utility=0.6
+  # Time point t is priced with cycle t's utility, time point 0 with cycle 1's
+  # (trace is 1.0 throughout)
+  expect_equal(unname(res$residencyPointValues[, "utility"]), c(1.0, 1.0, 0.9, 0.8, 0.7, 0.6))
+  # With end method, cycle N uses time point N, i.e. cycle N's utility
+  values <- openqaly:::allocate_point_values(res$residencyPointValues, "end")
+  expect_equal(unname(values[, "utility"]), c(1.0, 0.9, 0.8, 0.7, 0.6))
 })
 
 test_that("model start values apply only to first cycle", {
@@ -583,8 +579,7 @@ test_that("model start values apply only to first cycle", {
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"
+    -pi
   )
 
   # Model start value should only appear in cycle 1
@@ -592,10 +587,8 @@ test_that("model start values apply only to first cycle", {
   expect_equal(res$modelStartValues[2, "initial_cost"], 0)
   expect_equal(res$modelStartValues[3, "initial_cost"], 0)
 
-  # Total values should include model start only in cycle 1
-  expect_equal(res$values[1, "initial_cost"], 1000)
-  expect_equal(res$values[2, "initial_cost"], 0)
-  expect_equal(res$values[3, "initial_cost"], 0)
+  # Model start values are not part of the time-point values
+  expect_equal(unname(res$residencyPointValues[, "initial_cost"]), rep(0, 4))
 })
 
 test_that("invalid state names in transitional values produce warnings", {
@@ -642,8 +635,7 @@ test_that("invalid state names in transitional values produce warnings", {
       state_names,
       value_names,
       n_cycles,
-      -pi,
-      "start"
+      -pi
     ),
     "not found in state index"
   )
@@ -693,8 +685,7 @@ test_that("invalid state names in residency values produce warnings", {
       state_names,
       value_names,
       n_cycles,
-      -pi,
-      "start"
+      -pi
     ),
     "not found in state index"
   )
@@ -745,17 +736,16 @@ test_that("transitional values work on complement transitions", {
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"
+    -pi
   )
 
-  # Cycle 1: init[A]=1.0, A->A complement prob = 1 - 0.3 = 0.7
-  # Transitional cost = 1.0 * 0.7 * 10 = 7
-  expect_equal(res$transitionalValues[1, "stay_cost"], 7)
+  # Flows on the complement transition observed at time points 1..2:
+  # t=1: 1.0 * 0.7 * 10 = 7; t=2: 0.7 * 0.7 * 10 = 4.9
+  expect_equal(unname(res$transitionalPointValues[, "stay_cost"]), c(0, 7, 4.9))
 
-  # Cycle 2: trace[A]=0.7, A->A complement prob = 0.7
-  # Transitional cost = 0.7 * 0.7 * 10 = 4.9
-  expect_equal(res$transitionalValues[2, "stay_cost"], 4.9)
+  points <- res$transitionalPointValues
+  expect_equal(unname(openqaly:::allocate_point_values(points, "start")[, "stay_cost"]), c(0, 7))
+  expect_equal(unname(openqaly:::allocate_point_values(points, "end")[, "stay_cost"]), c(7, 4.9))
 })
 
 test_that("error reporting works with expanded state names", {
@@ -801,8 +791,7 @@ test_that("error reporting works with expanded state names", {
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"
+    -pi
   )
 
   # Check that errors are detected
@@ -848,8 +837,7 @@ test_that("checkpoint error mode stops execution instead of warning", {
       values,
       value_names,
       state_names,
-      expanded_state_map,
-      "start"
+      expanded_state_map
     ),
     "Transition probability errors detected"
   )
@@ -888,8 +876,7 @@ test_that("cppMarkovTransitionsAndTrace validates nStates == 0", {
       character(0),         # empty stateNames - nStates == 0
       character(0),
       1,
-      -pi,
-      "start"
+      -pi
     ),
     "No states provided"
   )
@@ -928,8 +915,7 @@ test_that("cppMarkovTransitionsAndTrace validates initialProbs length", {
       c("A", "B"),          # 2 states - mismatch!
       character(0),
       1,
-      -pi,
-      "start"
+      -pi
     ),
     "initialProbs length does not match"
   )
@@ -968,8 +954,7 @@ test_that("cppMarkovTransitionsAndTrace validates nCycles positive", {
       c("A", "B"),
       character(0),
       0,                    # nCycles = 0
-      -pi,
-      "start"
+      -pi
     ),
     "nCycles must be positive"
   )
@@ -1013,8 +998,7 @@ test_that("invalid destination in transitional values produces warning", {
       c("A", "B"),
       c("cost"),
       1,
-      -pi,
-      "start"
+      -pi
     ),
     "Transitional value destination 'Z' not found"
   )
@@ -1057,8 +1041,7 @@ test_that("complement > 1 is flagged as probGreaterThanOne error", {
     c("A", "B"),
     character(0),
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # The complement (1.5) should be flagged as probGreaterThanOne
@@ -1098,8 +1081,7 @@ test_that("NaN in transition is flagged as NaOrNaN error", {
     c("A", "B"),
     character(0),
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # NaN should be flagged
@@ -1139,8 +1121,7 @@ test_that("NaN complement from NaN input is flagged as error", {
     c("A", "B"),
     character(0),
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # NaN should be flagged (both the input NaN and computed complement NaN)
@@ -1187,16 +1168,16 @@ test_that("extra value names in values_list are silently ignored", {
     c("A", "B"),
     c("cost"),  # Only request "cost", not "extra_cost"
     1,
-    -pi,
-    "start"
+    -pi
   )
 
-  # Should have values output with only "cost" column
-  expect_true("cost" %in% colnames(res$values))
-  expect_false("extra_cost" %in% colnames(res$values))
+  # Should have point values output with only "cost" column
+  points <- res$residencyPointValues
+  expect_true("cost" %in% colnames(points))
+  expect_false("extra_cost" %in% colnames(points))
 
   # The cost value should be calculated correctly (A=10, B=5, weighted by trace)
-  expect_equal(res$values[1, "cost"], 10)  # 100% in A at cycle 1 start
+  expect_equal(points[1, "cost"], 10)  # 100% in A at time point 0
 })
 
 # ==============================================================================
@@ -1255,8 +1236,7 @@ test_that("error table truncates at 40 rows with message", {
       values,
       value_names,
       state_names,
-      expanded_state_map,
-      "start"
+      expanded_state_map
     ),
     "showing top 40 of"
   )
@@ -1309,8 +1289,7 @@ test_that("state names with non-numeric suffix after dot are not parsed as expan
     state_names,
     value_names,
     n_cycles,
-    -pi,
-    "start"
+    -pi
   )
 
   # The model should run successfully
@@ -1358,8 +1337,7 @@ test_that("multiple complements in same state/cycle triggers complement error", 
     state_names,
     value_names,
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # Check that complement error is flagged
@@ -1402,8 +1380,7 @@ test_that("negative probability triggers probLessThanZero error", {
     state_names,
     value_names,
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # Check that probLessThanZero error is flagged on the row with -0.1
@@ -1446,8 +1423,7 @@ test_that("probability greater than 1 triggers probGreaterThanOne error", {
     state_names,
     value_names,
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # Check that probGreaterThanOne error is flagged
@@ -1490,8 +1466,7 @@ test_that("NaN in complement calculation triggers NaOrNaN error on complement ro
     state_names,
     value_names,
     1,
-    -pi,
-    "start"
+    -pi
   )
 
   # Check that NaOrNaN error is flagged
@@ -1535,8 +1510,7 @@ test_that("error table shows State Time column for expanded states", {
       values,
       value_names,
       state_names,
-      expanded_state_map,
-      "start"
+      expanded_state_map
     ),
     "State Time"
   )

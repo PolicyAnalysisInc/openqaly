@@ -58,35 +58,16 @@ convert_settings_from_df <- function(settings_df) {
       if (val_lower %in% c("start", "end", "life-table")) {
         settings[["half_cycle_method"]] <- val_lower
       } else {
-        warning(glue("Invalid half_cycle_method: {val} - must be 'start', 'end', or 'life-table'. Defaulting to 'start'"))
-        settings[["half_cycle_method"]] <- "start"
+        warning(glue("Invalid half_cycle_method: {val} - must be 'start', 'end', or 'life-table'. Defaulting to 'life-table'"))
+        settings[["half_cycle_method"]] <- "life-table"
       }
     } else {
-      warning(glue("half_cycle_method must be a string, got: {class(val)} - defaulting to 'start'"))
-      settings[["half_cycle_method"]] <- "start"
+      warning(glue("half_cycle_method must be a string, got: {class(val)} - defaulting to 'life-table'"))
+      settings[["half_cycle_method"]] <- "life-table"
     }
   } else {
-    # Default to "start" if not specified (maintains backward compatibility)
-    settings[["half_cycle_method"]] <- "start"
-  }
-
-  # Handle discount_timing setting
-  if ("discount_timing" %in% names(settings)) {
-    val <- settings[["discount_timing"]]
-    if (is.character(val)) {
-      val_lower <- tolower(val)
-      if (val_lower %in% c("start", "end", "midpoint")) {
-        settings[["discount_timing"]] <- val_lower
-      } else {
-        warning(glue("Invalid discount_timing: {val} - must be 'start', 'end', or 'midpoint'. Defaulting to 'start'"))
-        settings[["discount_timing"]] <- "start"
-      }
-    } else {
-      warning(glue("discount_timing must be a string, got: {class(val)} - defaulting to 'start'"))
-      settings[["discount_timing"]] <- "start"
-    }
-  } else {
-    settings[["discount_timing"]] <- "start"
+    # Default to "life-table" if not specified
+    settings[["half_cycle_method"]] <- "life-table"
   }
 
   # Handle discount_method setting
@@ -1252,6 +1233,18 @@ normalize_and_validate_model <- function(model) {
         "Name collision detected: the following names are used as both tables and values: %s. Please rename the table(s) or value(s) to avoid this conflict.",
         paste(collisions, collapse = ", ")
       ))
+    }
+  }
+
+  # Validate no name collisions between variables and values
+  if (is.data.frame(model$variables) && nrow(model$variables) > 0 &&
+      is.data.frame(model$values) && nrow(model$values) > 0) {
+    collisions <- intersect(unique(model$variables$name), unique(model$values$name[!is.na(model$values$name)]))
+    if (length(collisions) > 0) {
+      stop(sprintf(
+        "Name collision detected: the following names are used as both variables and values: %s. Please rename the variable(s) or value(s) to avoid this conflict.",
+        paste(collisions, collapse = ", ")
+      ), call. = FALSE)
     }
   }
 

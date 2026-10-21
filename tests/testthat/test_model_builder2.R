@@ -790,10 +790,10 @@ test_that("remove_summary errors on dependencies when flagged", {
     set_settings(timeframe = 10, cycle_length = 1,
                   timeframe_unit = "years", cycle_length_unit = "years") |>
     add_strategy("A") |>
-    add_variable("cost", 100) |>
+    add_variable("c_cost", 100) |>
     add_value("cost", 100, type = "cost") |>
     add_summary("total", "cost", type = "cost") |>
-    add_threshold_analysis("ta1", "cost", 0, 500,
+    add_threshold_analysis("ta1", "c_cost", 0, 500,
       threshold_condition_costs(summary = "total", type = "absolute",
                                   strategy = "A", target_value = 1000))
   expect_error(

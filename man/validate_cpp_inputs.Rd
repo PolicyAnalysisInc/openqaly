@@ -11,7 +11,7 @@ validate_cpp_inputs(
   value_names,
   state_names,
   expanded_state_map,
-  half_cycle_method = "start"
+  half_cycle_method = "life-table"
 )
 }
 \arguments{

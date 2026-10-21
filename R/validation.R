@@ -72,7 +72,7 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
 #' @export
 validate_cpp_inputs <- function(init, transitions, values, value_names,
                                state_names, expanded_state_map,
-                               half_cycle_method = "start") {
+                               half_cycle_method = "life-table") {
 
   # Validate init (initial state probabilities)
   if (!is.numeric(init)) {

@@ -1438,17 +1438,16 @@ test_that("model without PSA has NULL psa field", {
 })
 
 # ==============================================================================
-# discount_timing and discount_method Round-Trip Tests
+# discount_method Round-Trip Tests
 # ==============================================================================
 
-test_that("discount_timing and discount_method survive JSON round-trip", {
+test_that("discount_method survives JSON round-trip", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 10,
       cycle_length = 1,
       discount_cost = 3,
       discount_outcomes = 3.5,
-      discount_timing = "midpoint",
       discount_method = "by_year"
     ) |>
     add_strategy("base") |>
@@ -1465,18 +1464,16 @@ test_that("discount_timing and discount_method survive JSON round-trip", {
   json <- write_model_json(model)
   model_back <- read_model_json(text = json)
 
-  expect_equal(model_back$settings$discount_timing, "midpoint")
   expect_equal(model_back$settings$discount_method, "by_year")
 })
 
-test_that("discount_timing and discount_method survive YAML round-trip", {
+test_that("discount_method survives YAML round-trip", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 10,
       cycle_length = 1,
       discount_cost = 3,
       discount_outcomes = 3.5,
-      discount_timing = "end",
       discount_method = "by_year"
     ) |>
     add_strategy("base") |>
@@ -1494,20 +1491,18 @@ test_that("discount_timing and discount_method survive YAML round-trip", {
   write_model_yaml(model, yaml_path)
   model_back <- read_model_yaml(yaml_path)
 
-  expect_equal(model_back$settings$discount_timing, "end")
   expect_equal(model_back$settings$discount_method, "by_year")
 
   unlink(yaml_path)
 })
 
-test_that("discount_timing and discount_method survive R code generation round-trip", {
+test_that("discount_method survives R code generation round-trip", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 10,
       cycle_length = 1,
       discount_cost = 3,
       discount_outcomes = 3.5,
-      discount_timing = "end",
       discount_method = "by_cycle"
     ) |>
     add_strategy("base") |>
@@ -1525,18 +1520,16 @@ test_that("discount_timing and discount_method survive R code generation round-t
   # Evaluate the generated R code to reconstruct the model
   model_back <- eval(parse(text = code))
 
-  expect_equal(model_back$settings$discount_timing, "end")
   expect_equal(model_back$settings$discount_method, "by_cycle")
 })
 
-test_that("discount_timing and discount_method survive JSON -> YAML cross-format", {
+test_that("discount_method survives JSON -> YAML cross-format", {
   model <- define_model("markov") |>
     set_settings(
       timeframe = 10,
       cycle_length = 1,
       discount_cost = 3,
       discount_outcomes = 3.5,
-      discount_timing = "midpoint",
       discount_method = "by_year"
     ) |>
     add_strategy("base") |>
@@ -1561,7 +1554,6 @@ test_that("discount_timing and discount_method survive JSON -> YAML cross-format
   json2 <- write_model_json(model_from_yaml)
   model_final <- read_model_json(text = json2)
 
-  expect_equal(model_final$settings$discount_timing, "midpoint")
   expect_equal(model_final$settings$discount_method, "by_year")
 
   unlink(yaml_path)

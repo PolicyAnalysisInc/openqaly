@@ -42,9 +42,9 @@ define_model <- function(type = "markov") {
 
   model <- list(
     settings = list(
-      model_type = type, days_per_year = 365, half_cycle_method = "start",
+      model_type = type, days_per_year = 365, half_cycle_method = "life-table",
       discount_cost = 0, discount_outcomes = 0,
-      discount_timing = "start", discount_method = "by_cycle",
+      discount_method = "by_cycle",
       reduce_state_cycle = FALSE
     ),
     states = states_init,
@@ -555,12 +555,32 @@ remove_transition <- function(model, ...) UseMethod("remove_transition")
 
 # --- Value (via engine) ------------------------------------------------------
 
+#' Add a Value
+#'
+#' @param model A model object.
+#' @param name Value name.
+#' @param formula Value formula.
+#' @param state State (residency value), origin state (transitional value),
+#'   `"decision_tree"`, or `NA` (model start value).
+#' @param destination Destination state for transitional values, otherwise `NA`.
+#' @param display_name,description Optional labels.
+#' @param type `"outcome"` or `"cost"`.
+#' @param discounting_override Optional formula replacing the value's discount
+#'   factors (see the discounting documentation).
+#' @param half_cycle_method Optional half-cycle method for this value
+#'   (`"start"`, `"end"` or `"life-table"`). If `NA`, the model's
+#'   `half_cycle_method` setting applies. All rows of a value name must use the
+#'   same setting.
+#'
+#' @return The modified model.
 #' @export
 add_value <- function(model, name, formula, state = NA, destination = NA,
                        display_name = NULL, description = NULL,
-                       type = "outcome", discounting_override = NA) {
+                       type = "outcome", discounting_override = NA,
+                       half_cycle_method = NA) {
   validate_string(name, "Value name", "string")
   if (!type %in% c("outcome", "cost")) stop("Value type must be 'outcome' or 'cost'.", call. = FALSE)
+  validate_value_half_cycle_method(half_cycle_method)
   formula_str <- capture_nse(rlang::enquo(formula))
   if (!nzchar(trimws(formula_str))) stop("Value formula must be a non-empty expression.", call. = FALSE)
   new_value <- fast_tibble(
@@ -568,15 +588,25 @@ add_value <- function(model, name, formula, state = NA, destination = NA,
     state = as.character(state), destination = as.character(destination),
     display_name = display_name %||% name,
     description = description %||% display_name %||% name,
-    type = type, discounting_override = as.character(discounting_override)
+    type = type, discounting_override = as.character(discounting_override),
+    half_cycle_method = as.character(half_cycle_method)
   )
   entity_add_tibble(model, .schema_value, new_value, .callbacks_add_value)
+}
+
+validate_value_half_cycle_method <- function(half_cycle_method) {
+  if (length(half_cycle_method) != 1 || (!is.na(half_cycle_method) &&
+      !as.character(half_cycle_method) %in% c(valid_half_cycle_methods, "", "NA"))) {
+    stop("Value half_cycle_method must be NA or one of: ",
+         paste0("'", valid_half_cycle_methods, "'", collapse = ", "), ".", call. = FALSE)
+  }
+  invisible(TRUE)
 }
 
 #' @export
 edit_value <- function(model, name, state = NA, destination = NA,
                         formula, display_name, description, type,
-                        discounting_override, new_name,
+                        discounting_override, half_cycle_method, new_name,
                         rename_all = FALSE,
                         error_on_field_changes = FALSE,
                         error_on_name_sharing = FALSE) {
@@ -602,6 +632,9 @@ edit_value <- function(model, name, state = NA, destination = NA,
     if (!type %in% c("outcome", "cost")) stop("Value type must be 'outcome' or 'cost'.", call. = FALSE)
     updates$type <- type
   }
+  if (!missing(half_cycle_method)) {
+    validate_value_half_cycle_method(half_cycle_method)
+  }
   if (!missing(display_name)) updates$display_name <- display_name
   if (!missing(description)) updates$description <- description
   if (!missing(new_name)) {
@@ -610,7 +643,14 @@ edit_value <- function(model, name, state = NA, destination = NA,
     updates$.error_on_field_changes <- error_on_field_changes
     updates$.error_on_name_sharing <- error_on_name_sharing
   }
-  entity_edit_tibble(model, .schema_value, match_idx, updates, .callbacks_edit_value)
+  model <- entity_edit_tibble(model, .schema_value, match_idx, updates, .callbacks_edit_value)
+  # All rows of a value share one half-cycle method, so it is set on every row
+  if (!missing(half_cycle_method)) {
+    final_name <- if (!missing(new_name)) new_name else name
+    if (!"half_cycle_method" %in% names(model$values)) model$values$half_cycle_method <- NA_character_
+    model$values$half_cycle_method[model$values$name == final_name] <- as.character(half_cycle_method)
+  }
+  model
 }
 
 #' @export
@@ -657,6 +697,30 @@ add_variable <- function(model, name, formula, display_name = NULL,
 
 # --- Settings (copied from original — not CRUD) -----------------------------
 
+#' Set Model Settings
+#'
+#' @param model A model object.
+#' @param ... Named settings, e.g. `n_cycles`, `cycle_length`,
+#'   `cycle_length_unit`, `discount_cost`, `discount_outcomes`,
+#'   `half_cycle_method`.
+#'
+#' @details
+#' `half_cycle_method` is one of `"start"`, `"end"` or
+#' `"life-table"` (default). Formulas are evaluated per cycle (in cycle k, `cycle_lag` is
+#' the start and `cycle` the end of the cycle). Cycle k's value prices time
+#' point k, and time point 0 takes cycle 1's value. At each time point the
+#' engine computes occupancy x value for residency values and arrivals x value
+#' for transitional values. These point values are allocated to cycle k as the
+#' amount at time point k-1 (`"start"`), at k (`"end"`), or the average of the
+#' two (`"life-table"`). Model start values are charged in cycle 1 with no
+#' correction. Individual values can override the method (see [add_value()]).
+#'
+#' Discounting follows the same rule: each time point is discounted at its own
+#' time and the discounted amounts are allocated to cycles with the half-cycle
+#' method. `discount_method` is `"by_cycle"` (continuous time, default) or
+#' `"by_year"` (time floored to whole years).
+#'
+#' @return The modified model.
 #' @export
 set_settings <- function(model, ...) {
   dots <- list(...)
@@ -669,7 +733,7 @@ set_settings <- function(model, ...) {
     timeframe_unit = "timeframe_unit", cycle_length_unit = "cycle_length_unit",
     cycle_length = "cycle_length", discount_cost = "discount_cost",
     discount_outcomes = "discount_outcomes", half_cycle_method = "half_cycle_method",
-    discount_timing = "discount_timing", discount_method = "discount_method",
+    discount_method = "discount_method",
     reduce_state_cycle = "reduce_state_cycle", days_per_year = "days_per_year",
     country = "country", number_country = "number_country"
   )
@@ -681,7 +745,7 @@ set_settings <- function(model, ...) {
     model$settings$timeframe_unit <- "cycles"
   }
   if (is.null(model$settings$days_per_year)) model$settings$days_per_year <- 365
-  if (is.null(model$settings$half_cycle_method)) model$settings$half_cycle_method <- "start"
+  if (is.null(model$settings$half_cycle_method)) model$settings$half_cycle_method <- "life-table"
   if (is.null(model$settings$discount_cost)) model$settings$discount_cost <- 0
   if (is.null(model$settings$discount_outcomes)) model$settings$discount_outcomes <- 0
   model
@@ -911,6 +975,12 @@ edit_variable <- function(model, name, formula, display_name, description,
   if (!missing(source)) updates$source <- source
   if (!missing(new_name)) updates$new_name <- new_name
   .cbs <- list(
+    pre_rename = function(model, match_info, new_name, updates) {
+      if (!is.null(model$values) && new_name %in% model$values$name) {
+        stop(sprintf("Name collision detected: the following names are used as both variables and values: %s. Please rename the variable(s) or value(s) to avoid this conflict.", new_name), call. = FALSE)
+      }
+      model
+    },
     post_rename = function(model, old_name, new_name) {
       vs <- model$variables[model$variables$name == new_name, ]
       if (nrow(vs) > 1) {

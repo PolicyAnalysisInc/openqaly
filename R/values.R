@@ -18,6 +18,7 @@ parse_values <- function(x, states, extra_vars) {
       formula = list(), # Formulas are parsed to oq_formula objects, so list() for empty case
       type = character(0),
       discounting_override = character(0),
+      half_cycle_method = character(0),
       max_st = numeric(0),
       .rows = 0
     )
@@ -51,7 +52,7 @@ parse_values <- function(x, states, extra_vars) {
     group_by(.data$state, .data$destination) %>%
     do({
       as.data.frame(.) %>%
-        select("name", "display_name", "description", "state", "destination", "formula", "type", any_of("discounting_override")) %>%
+        select("name", "display_name", "description", "state", "destination", "formula", "type", any_of(c("discounting_override", "half_cycle_method"))) %>%
         mutate(formula = map(.data$formula, as.oq_formula)) %>%
         sort_variables(extra_vars)
     }) %>%
@@ -91,6 +92,24 @@ check_values_df <- function(x) {
     }, error = function(e) {
       stop(glue("Invalid formula syntax for value '{x$name[i]}': {e$message}"))
     })
+  }
+
+  # Per-value half-cycle method: valid, and the same on every row of a value name
+  if ("half_cycle_method" %in% names(x)) {
+    hcm <- as.character(x$half_cycle_method)
+    set <- !is.na(hcm) & hcm != "" & hcm != "NA"
+    bad <- set & !hcm %in% valid_half_cycle_methods
+    if (any(bad)) {
+      stop(glue("Invalid half_cycle_method for value(s) {err_name_string(unique(x$name[bad]))}. ",
+                "Must be one of: {paste(valid_half_cycle_methods, collapse = ', ')}."), call. = FALSE)
+    }
+    hcm[!set] <- ""
+    per_name <- tapply(hcm, x$name, function(v) length(unique(v)))
+    conflicting <- names(per_name)[per_name > 1]
+    if (length(conflicting) > 0) {
+      stop(glue("Value(s) {err_name_string(conflicting)} have different half_cycle_method settings on ",
+                "different rows. All rows of a value must use the same setting."), call. = FALSE)
+    }
   }
 
   # Transitional values require both state and destination

@@ -113,6 +113,12 @@ parse_states <- function(states, cycle_length_days, days_per_year, model_type = 
     }
   }
 
+  # A state_cycle_limit of L tracks state cycles 1..L exactly, plus one final
+  # tunnel (state_cycle = L + 1) that holds everyone with more than L cycles in
+  # the state. Tunnel depth is therefore L + 1 (capped at n_cycles downstream).
+  parsed_states <- parsed_states %>%
+    mutate(max_state_time = ifelse(is.finite(.data$max_state_time), .data$max_state_time + 1, .data$max_state_time))
+
   parsed_states <- parsed_states %>%
     select(
       "name",

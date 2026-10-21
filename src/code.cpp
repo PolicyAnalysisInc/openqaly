@@ -66,7 +66,7 @@ static CharacterVector make_cycle_rownames(int from, int to) {
 // Optimized ValEntry with precomputed constant flag and value
 struct ValEntry {
   int valueIndex;
-  NumericVector series;   // length 1 (const) or nCycles (time-varying); shallow SEXP ref
+  NumericVector series;   // length 1 (const) or nCycles (one value per cycle); shallow SEXP ref
   bool isConst;
   double constVal;
 };
@@ -155,8 +155,7 @@ List cppMarkovTransitionsAndTrace(
     CharacterVector stateNames,
     CharacterVector valueNames,
     int nCycles,
-    double complementConstant,
-    std::string halfCycleMethod = "start"
+    double complementConstant
 ) {
   DebugPrintText("=== cppMarkovTransitionsAndTrace START ===");
   const int nValues = valueNames.size();
@@ -225,6 +224,11 @@ List cppMarkovTransitionsAndTrace(
         if (itV == valueIndex.end()) continue;
         NumericVector s = lst[j];
         const bool isConst = (s.size() == 1);
+        if (!isConst && s.size() != nCycles) {
+          stop("Transitional value '" + as<std::string>(nm[j]) + "' has " +
+               std::to_string(s.size()) + " entries; expected 1 or " +
+               std::to_string(nCycles) + " (one per cycle).");
+        }
         const double cval = isConst ? s[0] : 0.0;
         entries.push_back(ValEntry{itV->second, s, isConst, cval});
       }
@@ -258,6 +262,11 @@ List cppMarkovTransitionsAndTrace(
         if (itV == valueIndex.end()) continue;
         NumericVector q = lst[j];
         const bool isConst = (q.size() == 1);
+        if (!isConst && q.size() != nCycles) {
+          stop("Residency value '" + as<std::string>(nm[j]) + "' has " +
+               std::to_string(q.size()) + " entries; expected 1 or " +
+               std::to_string(nCycles) + " (one per cycle).");
+        }
         const double cval = isConst ? q[0] : 0.0;
         entries.push_back(ValEntry{itV->second, q, isConst, cval});
       }
@@ -265,17 +274,19 @@ List cppMarkovTransitionsAndTrace(
     }
   }
 
-  // Model start values: last row wins
+  // Model start values: rows are summed, using the cycle 1 value
   std::vector<double> modelStartVec(static_cast<size_t>(nValues), 0.0);
   if (modelStartValues.nrow() > 0) {
     List ms_vals_col = modelStartValues["values_list"];
-    List last = ms_vals_col[modelStartValues.nrow() - 1];
-    CharacterVector nm = last.names();
-    for (int j = 0; j < last.size(); ++j) {
-      auto itV = valueIndex.find(as<std::string>(nm[j]));
-      if (itV == valueIndex.end()) continue;
-      NumericVector v = last[j];
-      if (v.size() > 0) modelStartVec[static_cast<size_t>(itV->second)] = v[0];
+    for (int r = 0; r < modelStartValues.nrow(); ++r) {
+      List row = ms_vals_col[r];
+      CharacterVector nm = row.names();
+      for (int j = 0; j < row.size(); ++j) {
+        auto itV = valueIndex.find(as<std::string>(nm[j]));
+        if (itV == valueIndex.end()) continue;
+        NumericVector v = row[j];
+        if (v.size() > 0) modelStartVec[static_cast<size_t>(itV->second)] += v[0];
+      }
     }
   }
 
@@ -285,9 +296,9 @@ List cppMarkovTransitionsAndTrace(
   colnames(trace) = stateNames;
   rownames(trace) = make_cycle_rownames(0, nCycles);
 
-  NumericMatrix transitionalValueResults(nCycles, nValues);
-  colnames(transitionalValueResults) = valueNames;
-  rownames(transitionalValueResults) = make_cycle_rownames(1, nCycles);
+  // Transitional values at time points 0..nCycles: the flow observed at time
+  // point t (arrivals during cycle t) priced with cycle t's value. Row 0 is 0.
+  NumericMatrix transitionalPointValues(nCycles + 1, nValues);
 
   NumericMatrix uncondTransProbs(transRows, 4);
   colnames(uncondTransProbs) = CharacterVector::create("cycle", "from", "to", "value");
@@ -374,7 +385,7 @@ List cppMarkovTransitionsAndTrace(
           if (const std::vector<ValEntry>* tv = tvPtr[currentRow]) {
             for (const ValEntry& ve : *tv) {
               const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
-              transitionalValueResults(cycle - 1, ve.valueIndex) += uncond * vv;
+              transitionalPointValues(cycle, ve.valueIndex) += uncond * vv;
             }
           }
 
@@ -417,7 +428,7 @@ List cppMarkovTransitionsAndTrace(
         if (const std::vector<ValEntry>* tv = tvPtr[complementRowIndex]) {
           for (const ValEntry& ve : *tv) {
             const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
-            transitionalValueResults(cycle - 1, ve.valueIndex) += uncond * vv;
+            transitionalPointValues(cycle, ve.valueIndex) += uncond * vv;
           }
         }
 
@@ -432,43 +443,27 @@ List cppMarkovTransitionsAndTrace(
   }
 
   // ---------- Residency values ----------
-  NumericMatrix residencyResults(nCycles, nValues);
-  colnames(residencyResults) = valueNames;
-  rownames(residencyResults) = make_cycle_rownames(1, nCycles);
-
-  // Corrected trace: half-cycle-corrected state probabilities (nCycles x nStates)
-  NumericMatrix correctedTrace(nCycles, nStates);
-  colnames(correctedTrace) = stateNames;
-  rownames(correctedTrace) = make_cycle_rownames(1, nCycles);
-
-  enum { HCM_START, HCM_END, HCM_LIFE_TABLE } hcm = HCM_START;
-  if (halfCycleMethod == "end") hcm = HCM_END;
-  else if (halfCycleMethod == "life-table") hcm = HCM_LIFE_TABLE;
-
-  for (int cycle = 1; cycle <= nCycles; ++cycle) {
-    NumericMatrix::Row prevTrace = trace.row(cycle - 1);
-    NumericMatrix::Row currTrace = trace.row(cycle);
-
+  // Values are returned at time points t = 0..nCycles; allocation to cycles
+  // (half-cycle correction) and discounting are applied in R.
+  // Residency: V(t) = sum_s trace(t, s) * value_s(t), where time point t is
+  // priced with the value of cycle t (the cycle ending at t) and time point 0
+  // with the value of cycle 1 (the cycle starting at 0).
+  NumericMatrix residencyPointValues(nCycles + 1, nValues);
+  colnames(residencyPointValues) = valueNames;
+  rownames(residencyPointValues) = make_cycle_rownames(0, nCycles);
+  for (int t = 0; t <= nCycles; ++t) {
+    NumericMatrix::Row pointTrace = trace.row(t);
     for (int s = 0; s < nStates; ++s) {
-      double stateProb;
-      if (hcm == HCM_END) {
-        stateProb = currTrace[s];
-      } else if (hcm == HCM_LIFE_TABLE) {
-        stateProb = 0.5 * (prevTrace[s] + currTrace[s]);
-      } else { // start
-        stateProb = prevTrace[s];
-      }
-
-      correctedTrace(cycle - 1, s) = stateProb;
-
       if (const std::vector<ValEntry>* rv = residPtr[s]) {
         for (const ValEntry& ve : *rv) {
-          const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
-          residencyResults(cycle - 1, ve.valueIndex) += stateProb * vv;
+          const double vv = ve.isConst ? ve.constVal : ve.series[t > 0 ? t - 1 : 0];
+          residencyPointValues(t, ve.valueIndex) += pointTrace[s] * vv;
         }
       }
     }
   }
+  colnames(transitionalPointValues) = valueNames;
+  rownames(transitionalPointValues) = make_cycle_rownames(0, nCycles);
 
   // ---------- Model start values (first cycle only) ----------
   NumericMatrix modelStartResults(nCycles, nValues);
@@ -478,29 +473,14 @@ List cppMarkovTransitionsAndTrace(
     modelStartResults(0, j) = modelStartVec[static_cast<size_t>(j)];
   }
 
-  // ---------- Total values ----------
-  NumericMatrix totalValues(nCycles, nValues);
-  colnames(totalValues) = valueNames;
-  rownames(totalValues) = make_cycle_rownames(1, nCycles);
-  for (int i = 0; i < nCycles; ++i) {
-    for (int j = 0; j < nValues; ++j) {
-      totalValues(i, j) =
-        transitionalValueResults(i, j) +
-        residencyResults(i, j) +
-        modelStartResults(i, j);
-    }
-  }
-
   return List::create(
     Named("trace") = trace,
     Named("uncondtransprod") = uncondTransProbs,
     Named("transitions") = transitions,
     Named("errors") = transitionErrors,
-    Named("transitionalValues") = transitionalValueResults,
-    Named("residencyValues") = residencyResults,
-    Named("modelStartValues") = modelStartResults,
-    Named("values") = totalValues,
-    Named("correctedTrace") = correctedTrace
+    Named("transitionalPointValues") = transitionalPointValues,
+    Named("residencyPointValues") = residencyPointValues,
+    Named("modelStartValues") = modelStartResults
   );
 }
 
@@ -537,11 +517,21 @@ List cppSortVariables(
   combined_to_idx.reserve(static_cast<size_t>(n + n_extra) * 3);
 
   for (int i = 0; i < n; ++i) {
-    combined_to_idx.emplace(names_cached[i], i);
+    if (!combined_to_idx.emplace(names_cached[i], i).second) {
+      stop("Duplicate name '" + names_cached[i] + "' in dependency sort.");
+    }
   }
   for (int i = 0; i < n_extra; ++i) {
-    combined_to_idx.emplace(extra_cached[i], n + i);
+    auto ins = combined_to_idx.emplace(extra_cached[i], n + i);
+    if (!ins.second && ins.first->second < n) {
+      stop("Name '" + extra_cached[i] + "' is used both by a variable and by an item being " +
+           "sorted (e.g. a value with the same name as a variable). Names must be unique.");
+    }
   }
+
+  // "Other" dep names get indices after all variables and extras, so every
+  // slot below n + n_extra is reserved even if an extra name repeats.
+  int next_idx = n + n_extra;
 
   // Pre-parse all dep lists as strings and discover "other" dep names
   std::vector<std::vector<std::string>> fo_dep_strings(n);
@@ -551,7 +541,7 @@ List cppSortVariables(
     for (int j = 0; j < d.size(); ++j) {
       std::string s = as<std::string>(d[j]);
       if (combined_to_idx.find(s) == combined_to_idx.end()) {
-        combined_to_idx.emplace(s, static_cast<int>(combined_to_idx.size()));
+        combined_to_idx.emplace(s, next_idx++);
       }
       fo_dep_strings[i].push_back(std::move(s));
     }
@@ -564,13 +554,13 @@ List cppSortVariables(
     for (int j = 0; j < d.size(); ++j) {
       std::string s = as<std::string>(d[j]);
       if (combined_to_idx.find(s) == combined_to_idx.end()) {
-        combined_to_idx.emplace(s, static_cast<int>(combined_to_idx.size()));
+        combined_to_idx.emplace(s, next_idx++);
       }
       extra_dep_strings[i].push_back(std::move(s));
     }
   }
 
-  const int n_combined = static_cast<int>(combined_to_idx.size());
+  const int n_combined = next_idx;
 
   // Build reverse lookup for output conversion
   std::vector<std::string> idx_to_name(n_combined);
@@ -991,8 +981,7 @@ List cppCalculateTraceAndValues(
     DataFrame values,
     CharacterVector value_names,
     CharacterVector state_names,  // Add expanded state names parameter
-    DataFrame expanded_state_map,
-    std::string half_cycle_method = "start"
+    DataFrame expanded_state_map
 ) {
   // Extract number of cycles
   int n_cycles = 0;
@@ -1099,10 +1088,7 @@ List cppCalculateTraceAndValues(
             }
           }
           // Copy all attributes (for factors, etc.)
-          SEXP orig_attribs = ATTRIB(col);
-          if (orig_attribs != R_NilValue) {
-            SET_ATTRIB(filtered, orig_attribs);
-          }
+          DUPLICATE_ATTRIB(filtered, col);
           cols.push_back(filtered);
           break;
         }
@@ -1160,8 +1146,7 @@ List cppCalculateTraceAndValues(
     state_names,
     value_names,
     n_cycles,
-    -M_PI, // complementConstant
-    half_cycle_method
+    -M_PI // complementConstant
   );
 
   // Process errors and issue warnings if needed

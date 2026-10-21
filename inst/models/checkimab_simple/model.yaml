@@ -10,7 +10,6 @@ settings:
   half_cycle_method: life-table
   reduce_state_cycle: yes
   days_per_year: 365.25
-  discount_timing: start
   discount_method: by_cycle
 strategies:
   - name: chemo
@@ -63,60 +62,12 @@ variables:
     group: male_age_lt_35
     source: ~
     sampling: normal(bc, bc * 0.25)
-  - name: start_age
-    display_name: Starting Age
-    description: Age of patient at start of model
-    formula: '45'
-    strategy: ~
-    group: male_age_ge_35
-    source: ~
-    sampling: normal(bc, bc * 0.25)
-  - name: start_age
-    display_name: Starting Age
-    description: Age of patient at start of model
-    formula: '27'
-    strategy: ~
-    group: female_age_lt_35
-    source: ~
-    sampling: normal(bc, bc * 0.25)
-  - name: start_age
-    display_name: Starting Age
-    description: Age of patient at start of model
-    formula: '48'
-    strategy: ~
-    group: female_age_ge_35
-    source: ~
-    sampling: normal(bc, bc * 0.25)
   - name: sex
     display_name: Sex
     description: Sex of patient
     formula: '"male"'
     strategy: ~
     group: male_age_lt_35
-    source: ~
-    sampling: ~
-  - name: sex
-    display_name: Sex
-    description: Sex of patient
-    formula: '"male"'
-    strategy: ~
-    group: male_age_ge_35
-    source: ~
-    sampling: ~
-  - name: sex
-    display_name: Sex
-    description: Sex of patient
-    formula: '"female"'
-    strategy: ~
-    group: female_age_lt_35
-    source: ~
-    sampling: ~
-  - name: sex
-    display_name: Sex
-    description: Sex of patient
-    formula: '"female"'
-    strategy: ~
-    group: female_age_ge_35
     source: ~
     sampling: ~
   - name: age
@@ -140,14 +91,6 @@ variables:
     description: Probability of a fatal AE while on-treatment, per week
     formula: 1E-3
     strategy: chemo
-    group: ~
-    source: ~
-    sampling: normal(bc, bc * 0.25)
-  - name: p_death_ae
-    display_name: Probability of fatal AE
-    description: Probability of a fatal AE while on-treatment, per week
-    formula: '5.0000000000000001E-4'
-    strategy: target
     group: ~
     source: ~
     sampling: normal(bc, bc * 0.25)
@@ -178,14 +121,6 @@ variables:
   - name: p_relapse
     display_name: Probability of relapse
     description: Probability of experiencing a relapse, per week
-    formula: 0.025/state_cycle
-    strategy: target
-    group: ~
-    source: ~
-    sampling: ~
-  - name: p_relapse
-    display_name: Probability of relapse
-    description: Probability of experiencing a relapse, per week
     formula: 0.02/state_cycle
     strategy: check
     group: ~
@@ -196,14 +131,6 @@ variables:
     description: Probability of discontinuation of treatment, per week
     formula: ifelse(cycle == 12, 1, 0.01)
     strategy: chemo
-    group: ~
-    source: ~
-    sampling: ~
-  - name: p_disc
-    display_name: Probability of discontinuation
-    description: Probability of discontinuation of treatment, per week
-    formula: ifelse(cycle == 16, 1, 0.005)
-    strategy: target
     group: ~
     source: ~
     sampling: ~

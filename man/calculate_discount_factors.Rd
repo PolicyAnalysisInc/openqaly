@@ -8,7 +8,6 @@ calculate_discount_factors(
   n_cycles,
   discount_rate,
   cycle_length_years = 1,
-  discount_timing = "start",
   discount_method = "by_cycle",
   offset_years = 0
 )
@@ -20,21 +19,21 @@ calculate_discount_factors(
 
 \item{cycle_length_years}{Length of each cycle in years (e.g., 1/12 for monthly, 1/52 for weekly)}
 
-\item{discount_timing}{Which point in the cycle to use for the discount formula:
-\code{"start"} (default, cycle start), \code{"end"} (cycle end), or \code{"midpoint"} (cycle midpoint).}
-
 \item{discount_method}{Whether discounting steps annually or continuously:
-\code{"by_cycle"} (default, continuous per-cycle time) or \code{"by_year"} (floor to whole years).}
+\code{"by_cycle"} (default, continuous time) or \code{"by_year"} (floor to whole years).}
 
 \item{offset_years}{Offset in years added to all time points before applying
 discounting. Used when a decision tree phase precedes the model, shifting
 all discounting forward. Default is 0.}
 }
 \value{
-Vector of discount factors for each cycle
+Vector of n_cycles + 1 discount factors, for time points 0..n_cycles
 }
 \description{
-Calculate discount factors for each cycle using the formula 1/(1+r)^t,
-where t is the time in years from the start of the model.
-The first cycle (t=0) has a discount factor of 1 (no discounting).
+Calculate discount factors at each time point t = 0..n using
+1/(1+r)^tau(t), where tau(t) is the time in years from the start of the
+model: t times the cycle length in years, plus `offset_years`. Values are
+discounted at their time points and then allocated to cycles with the
+half-cycle method, so time point 0 has a discount factor of 1 (no
+discounting) when there is no offset.
 }

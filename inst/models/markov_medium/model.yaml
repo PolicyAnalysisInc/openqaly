@@ -10,7 +10,6 @@ settings:
   half_cycle_method: life-table
   reduce_state_cycle: yes
   days_per_year: 365.0
-  discount_timing: start
   discount_method: by_cycle
 strategies:
   - name: checkimab

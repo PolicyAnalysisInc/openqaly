@@ -148,14 +148,11 @@ store_segment_diagnostics <- function(segment, trace_and_values, uneval_vars, ev
 }
 
 store_segment_traces <- function(segment, cycle_length_days, days_per_year,
-                                  collapsed, expanded,
-                                  corrected_collapsed, corrected_expanded) {
+                                  collapsed, expanded) {
   cld <- cycle_length_days
   dpy <- days_per_year
   segment$collapsed_trace <- list(add_time_variables_to_trace(collapsed, cld, dpy))
   segment$expanded_trace <- list(add_time_variables_to_trace(expanded, cld, dpy))
-  segment$corrected_collapsed_trace <- list(add_time_variables_to_trace(corrected_collapsed, cld, dpy))
-  segment$corrected_expanded_trace <- list(add_time_variables_to_trace(corrected_expanded, cld, dpy))
   segment
 }
 
@@ -204,7 +201,12 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
   # A namespace is the evaluation context: a dataframe of per-cycle vectors
   # (cycle, day, month, year, state_cycle, ...) plus an environment for
   # non-vector objects. All formula evaluation resolves names against this.
-  ns <- create_namespace(model, segment, n_cycles = time_ctx$n_cycles)
+  # Only states that use state time need tunnel rows in the namespace; the
+  # others are limited to one, so memory does not grow with n_cycles^2.
+  ns <- create_namespace(
+    model, segment, n_cycles = time_ctx$n_cycles,
+    st_cycles = namespace_state_cycle_depth(uneval_states, state_time_use, time_ctx$n_cycles)
+  )
 
   # Parameter overrides (from DSA/PSA) inject fixed values into the namespace,
   # replacing the variable's formula. This is distinct from setting overrides
@@ -243,26 +245,34 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
 
   # Core Markov engine (C++): multiplies the cohort vector by the transition
   # matrix each cycle to produce the trace (state occupancy over time) and
-  # accumulates weighted values. Also applies half-cycle correction.
+  # accumulates values at each time point 0..n (time point t is priced with
+  # cycle t's value; time point 0 with cycle 1's).
   calculated <- calculate_trace_and_values(
     expanded$init, expanded$transitions, expanded$values,
-    value_names, expanded$expanded_state_map, model$settings$half_cycle_method
+    value_names, expanded$expanded_state_map
   )
   tick()
 
-  # --- Post-processing: collapse, discount, store ---
+  # --- Post-processing: collapse, allocate, discount, store ---
   # The trace from C++ uses expanded tunnel state names. Collapse back to
   # original state names by summing tunnel variants (e.g. sick[1]+sick[2] -> sick).
   expanded_trace <- calculated[[1]]
   collapsed_trace <- calculate_collapsed_trace(expanded_trace, expanded$expanded_state_map)
-  corrected_collapsed <- calculate_collapsed_trace(calculated$correctedTrace, expanded$expanded_state_map)
 
-  # Apply time-value-of-money discounting: costs and outcomes get separate
-  # discount rates. Decision tree values are skipped (already at time zero).
-  calculated$values_discounted <- apply_segment_discounting(
-    model, eval_vars, uneval_values, calculated$values, corrected_collapsed,
+  # Allocate point values to cycles (half-cycle correction) and discount them
+  # at their time points.
+  value_parts <- list(
+    point_values = calculated$residencyPointValues + calculated$transitionalPointValues,
+    model_start = expanded$model_start_values,
+    dt = expanded$dt_values
+  )
+  calculated[c("residencyPointValues", "transitionalPointValues", "modelStartValues")] <- NULL
+  value_results <- calculate_segment_values(
+    model, eval_vars, uneval_values, value_parts, collapsed_trace,
     n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
   )
+  calculated$values <- value_results$values
+  calculated$values_discounted <- value_results$values_discounted
 
   # Attach all results to the segment row for downstream aggregation
   segment <- clear_segment_diagnostics(segment)
@@ -270,7 +280,7 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
     segment, calculated, uneval_vars, eval_vars, eval_states,
     policy = diagnostics_policy
   )
-  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace, corrected_collapsed, calculated$correctedTrace)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
   segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
@@ -279,6 +289,20 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
   tick()
 
   segment
+}
+
+# Number of state-cycle blocks the namespace needs: the deepest tunnel of any
+# state that uses state time (its max_state_time, capped at n_cycles), or 1 if
+# none does. Members of a shared state-time group count as using state time if
+# any member does (see equalize_shared_group_depth).
+namespace_state_cycle_depth <- function(uneval_states, state_time_use, n_cycles) {
+  uses <- state_time_use$uses_st[match(uneval_states$name, state_time_use$state)] %in% TRUE
+  shared <- uneval_states$share_state_time %in% TRUE
+  for (g in unique(uneval_states$state_group[shared & uses])) {
+    uses[shared & uneval_states$state_group %in% g] <- TRUE
+  }
+  if (!any(uses)) return(1)
+  max(1, min(n_cycles, max(uneval_states$max_state_time[uses])))
 }
 
 # Equalize tunnel depth across shared state-time groups.
@@ -418,19 +442,32 @@ handle_state_expansion <- function(init, transitions, values, state_time_use) {
       destination = .data$.to_e,
       max_st = .data$max_st,
       values_list = .data$values_list
-    ) %>%
-    bind_rows(model_start_values) %>%
-    bind_rows(dt_phase_values)
+    )
 
   list(
     init = expand_init,
     transitions = expanded_trans_matrix,
     values = values_expanded,
+    model_start_values = cycle_one_value_totals(model_start_values),
+    dt_values = cycle_one_value_totals(dt_phase_values),
     expanded_state_map = expanded_state_map
   )
 }
 
-calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map, half_cycle_method = "start") {
+# Sum model start / decision-tree value rows into one total per value name,
+# using the cycle 1 value.
+cycle_one_value_totals <- function(rows) {
+  totals <- numeric(0)
+  for (lst in rows$values_list) {
+    for (nm in names(lst)) {
+      v1 <- lst[[nm]][1]
+      totals[nm] <- (if (nm %in% names(totals)) totals[nm] else 0) + v1
+    }
+  }
+  totals
+}
+
+calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map) {
   # Extract expanded state names from init columns (critical!)
   state_names <- colnames(init)  # These are the expanded state names
 
@@ -445,8 +482,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     values,
     value_names,
     state_names,
-    expanded_state_map,
-    half_cycle_method
+    expanded_state_map
   )
 
   # All processing now happens in optimized C++
@@ -456,8 +492,7 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     values,
     value_names,
     state_names,  # Pass expanded state names separately
-    expanded_state_map,
-    half_cycle_method
+    expanded_state_map
   )
 }
 
@@ -518,7 +553,7 @@ get_st_max <- function(trans, values, n_cycles) {
   st_maxes <- combined_transitions_and_values %>%
     group_by(.data$state) %>%
     summarize(max_st = max(.data$max_st)) %>%
-    mutate(max_st = ifelse(is.infinite(.data$max_st), n_cycles, .data$max_st))
+    mutate(max_st = pmin(.data$max_st, n_cycles))
 
   st_maxes
 }

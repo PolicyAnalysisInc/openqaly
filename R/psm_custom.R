@@ -159,10 +159,13 @@ run_segment.oq_custom_psm <- function(segment, model, env, ...) {
 
   # --- Post-processing: discount and store ---
   # Apply time-value-of-money discounting with separate cost/outcome rates.
-  calculated$values_discounted <- apply_segment_discounting(
-    model, eval_vars, uneval_values, calculated$values, calculated$corrected_trace,
+  value_results <- calculate_segment_values(
+    model, eval_vars, uneval_values, calculated$value_parts, calculated$trace,
     n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
   )
+  calculated$value_parts <- NULL
+  calculated$values <- value_results$values
+  calculated$values_discounted <- value_results$values_discounted
   tick()
 
   # Attach all results to the segment row for downstream aggregation.
@@ -173,7 +176,7 @@ run_segment.oq_custom_psm <- function(segment, model, env, ...) {
   )
   # Custom PSMs have no tunnel states, so the same trace is passed for both
   # the "collapsed" and "expanded" slots (both are identical).
-  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace, calculated$corrected_trace, calculated$corrected_trace)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
   segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
@@ -231,7 +234,7 @@ calculate_psm_custom_trace_and_values <- function(
   value_names,
   state_names,
   n_cycles,
-  half_cycle_method = "start"
+  half_cycle_method = "life-table"
 ) {
   tol <- 10 * sqrt(.Machine$double.eps)
   n_rows <- n_cycles + 1  # cycles 0 to n_cycles
@@ -316,40 +319,36 @@ calculate_psm_custom_trace_and_values <- function(
   oq_error_checkpoint()
 
   # Calculate values (residency and model start only)
-  # Values are for cycles 1:n_cycles, so prune cycle 0 from namespace
+  # Values are evaluated per cycle (cycles 1..n), so prune cycle 0 from namespace
   values_ns <- prune_namespace_cycle_zero(namespace)
-  values_matrix <- calculate_psm_custom_values(
+  value_parts <- calculate_psm_custom_value_parts(
     uneval_values,
     values_ns,
     trace,
     value_names,
     state_names,
-    n_cycles,
-    half_cycle_method
+    n_cycles
   )
 
-  # Pre-compute corrected trace for discounting_override trace() function
-  corrected_trace <- switch(half_cycle_method,
-    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
-    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
-    trace[1:n_cycles, , drop = FALSE]  # "start" default
+  list(
+    trace = trace,
+    values = combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method)),
+    value_parts = value_parts
   )
-  rownames(corrected_trace) <- 1:n_cycles
-
-  list(trace = trace, values = values_matrix, corrected_trace = corrected_trace)
 }
 
 #' Prune Cycle Zero from Namespace
 #'
-#' Removes the first row (cycle 0) from the namespace data frame.
-#' Used to prepare namespace for values calculation which only uses cycles 1:n_cycles.
+#' Removes every cycle 0 row (in every state_cycle block) from the namespace
+#' data frame. Used where formulas describe cycles 1:n_cycles (transitions,
+#' initial probabilities, group weights, discounting overrides).
 #'
 #' @param namespace A namespace object containing cycle 0
 #' @return A namespace object with cycle 0 removed from df
 #' @keywords internal
 prune_namespace_cycle_zero <- function(namespace) {
   pruned <- clone_namespace(namespace)
-  pruned$df <- pruned$df[-1, , drop = FALSE]
+  pruned$df <- pruned$df[pruned$df$cycle != 0, , drop = FALSE]
   pruned
 }
 
@@ -374,23 +373,41 @@ calculate_psm_custom_values <- function(
   value_names,
   state_names,
   n_cycles,
-  half_cycle_method = "start"
+  half_cycle_method = "life-table"
 ) {
-  # Initialize values matrix
-  values_matrix <- matrix(0, nrow = n_cycles, ncol = length(value_names))
-  colnames(values_matrix) <- value_names
-  rownames(values_matrix) <- 1:n_cycles
+  value_parts <- calculate_psm_custom_value_parts(
+    uneval_values, namespace, trace, value_names, state_names, n_cycles
+  )
+  combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method))
+}
+
+#' Calculate Custom PSM Value Parts at Time Points
+#'
+#' Residency values give value x occupancy at each time point 0..n (time point t
+#' priced with cycle t's value, time point 0 with cycle 1's); model start and
+#' decision tree values are cycle 1 amounts. Transitional values are not
+#' supported.
+#'
+#' @return List with `point_values` ((n+1) x values matrix), `model_start` and
+#'   `dt` (named vectors).
+#' @keywords internal
+calculate_psm_custom_value_parts <- function(
+  uneval_values,
+  namespace,
+  trace,
+  value_names,
+  state_names,
+  n_cycles
+) {
+  n_points <- n_cycles + 1
+  point_values <- matrix(0, nrow = n_points, ncol = length(value_names),
+                         dimnames = list(0:n_cycles, value_names))
+  model_start <- setNames(rep(0, length(value_names)), value_names)
+  dt <- model_start
 
   if (length(value_names) == 0 || nrow(uneval_values) == 0) {
-    return(values_matrix)
+    return(list(point_values = point_values, model_start = model_start, dt = dt))
   }
-
-  # Pre-compute corrected trace (half-cycle corrected state probs, n_cycles rows)
-  corrected_trace <- switch(half_cycle_method,
-    "end" = trace[2:(n_cycles + 1), , drop = FALSE],
-    "life-table" = (trace[1:n_cycles, , drop = FALSE] + trace[2:(n_cycles + 1), , drop = FALSE]) / 2,
-    trace[1:n_cycles, , drop = FALSE]  # "start" default
-  )
 
   # Process each value (vectorized evaluation)
   for (i in 1:nrow(uneval_values)) {
@@ -410,7 +427,7 @@ calculate_psm_custom_values <- function(
       next
     }
 
-    # Evaluate formula once (returns vector)
+    # Evaluate formula once (returns vector of length n_cycles: one value per cycle)
     evaluated <- eval_formula(value_row$formula[[1]], namespace)
 
     if (is_oq_error(evaluated)) {
@@ -440,21 +457,20 @@ calculate_psm_custom_values <- function(
 
     if (!is.na(value_row$state) && value_row$state == "decision_tree") {
       # Decision tree value - first cycle only, no state multiplication
-      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+      dt[value_name] <- dt[value_name] + evaluated[1]
     } else if (!is.na(value_row$state)) {
-      # Residency value - multiply by pre-computed corrected state probs
+      # Residency value - value x occupancy at each time point
       state_idx <- which(state_names == value_row$state)
       if (length(state_idx) == 1) {
-        state_probs <- corrected_trace[, state_idx]
-        values_matrix[, value_name] <- values_matrix[, value_name] + evaluated * state_probs
+        point_values[, value_name] <- point_values[, value_name] + point_prices(evaluated) * trace[, state_idx]
       }
     } else {
       # model start value
-      values_matrix[1, value_name] <- values_matrix[1, value_name] + evaluated[1]
+      model_start[value_name] <- model_start[value_name] + evaluated[1]
     }
   }
 
   oq_error_checkpoint()
 
-  values_matrix
+  list(point_values = point_values, model_start = model_start, dt = dt)
 }

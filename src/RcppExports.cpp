@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cppMarkovTransitionsAndTrace
-List cppMarkovTransitionsAndTrace(NumericMatrix transitions, DataFrame valuesTransitional, DataFrame valuesResidency, DataFrame modelStartValues, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant, std::string halfCycleMethod);
-RcppExport SEXP _openqaly_cppMarkovTransitionsAndTrace(SEXP transitionsSEXP, SEXP valuesTransitionalSEXP, SEXP valuesResidencySEXP, SEXP modelStartValuesSEXP, SEXP initialProbsSEXP, SEXP stateNamesSEXP, SEXP valueNamesSEXP, SEXP nCyclesSEXP, SEXP complementConstantSEXP, SEXP halfCycleMethodSEXP) {
+List cppMarkovTransitionsAndTrace(NumericMatrix transitions, DataFrame valuesTransitional, DataFrame valuesResidency, DataFrame modelStartValues, NumericVector initialProbs, CharacterVector stateNames, CharacterVector valueNames, int nCycles, double complementConstant);
+RcppExport SEXP _openqaly_cppMarkovTransitionsAndTrace(SEXP transitionsSEXP, SEXP valuesTransitionalSEXP, SEXP valuesResidencySEXP, SEXP modelStartValuesSEXP, SEXP initialProbsSEXP, SEXP stateNamesSEXP, SEXP valueNamesSEXP, SEXP nCyclesSEXP, SEXP complementConstantSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -25,8 +25,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< CharacterVector >::type valueNames(valueNamesSEXP);
     Rcpp::traits::input_parameter< int >::type nCycles(nCyclesSEXP);
     Rcpp::traits::input_parameter< double >::type complementConstant(complementConstantSEXP);
-    Rcpp::traits::input_parameter< std::string >::type halfCycleMethod(halfCycleMethodSEXP);
-    rcpp_result_gen = Rcpp::wrap(cppMarkovTransitionsAndTrace(transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant, halfCycleMethod));
+    rcpp_result_gen = Rcpp::wrap(cppMarkovTransitionsAndTrace(transitions, valuesTransitional, valuesResidency, modelStartValues, initialProbs, stateNames, valueNames, nCycles, complementConstant));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -46,8 +45,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cppCalculateTraceAndValues
-List cppCalculateTraceAndValues(NumericVector init, NumericMatrix transitions, DataFrame values, CharacterVector value_names, CharacterVector state_names, DataFrame expanded_state_map, std::string half_cycle_method);
-RcppExport SEXP _openqaly_cppCalculateTraceAndValues(SEXP initSEXP, SEXP transitionsSEXP, SEXP valuesSEXP, SEXP value_namesSEXP, SEXP state_namesSEXP, SEXP expanded_state_mapSEXP, SEXP half_cycle_methodSEXP) {
+List cppCalculateTraceAndValues(NumericVector init, NumericMatrix transitions, DataFrame values, CharacterVector value_names, CharacterVector state_names, DataFrame expanded_state_map);
+RcppExport SEXP _openqaly_cppCalculateTraceAndValues(SEXP initSEXP, SEXP transitionsSEXP, SEXP valuesSEXP, SEXP value_namesSEXP, SEXP state_namesSEXP, SEXP expanded_state_mapSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -57,16 +56,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< CharacterVector >::type value_names(value_namesSEXP);
     Rcpp::traits::input_parameter< CharacterVector >::type state_names(state_namesSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type expanded_state_map(expanded_state_mapSEXP);
-    Rcpp::traits::input_parameter< std::string >::type half_cycle_method(half_cycle_methodSEXP);
-    rcpp_result_gen = Rcpp::wrap(cppCalculateTraceAndValues(init, transitions, values, value_names, state_names, expanded_state_map, half_cycle_method));
+    rcpp_result_gen = Rcpp::wrap(cppCalculateTraceAndValues(init, transitions, values, value_names, state_names, expanded_state_map));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_openqaly_cppMarkovTransitionsAndTrace", (DL_FUNC) &_openqaly_cppMarkovTransitionsAndTrace, 10},
+    {"_openqaly_cppMarkovTransitionsAndTrace", (DL_FUNC) &_openqaly_cppMarkovTransitionsAndTrace, 9},
     {"_openqaly_cppSortVariables", (DL_FUNC) &_openqaly_cppSortVariables, 5},
-    {"_openqaly_cppCalculateTraceAndValues", (DL_FUNC) &_openqaly_cppCalculateTraceAndValues, 7},
+    {"_openqaly_cppCalculateTraceAndValues", (DL_FUNC) &_openqaly_cppCalculateTraceAndValues, 6},
     {NULL, NULL, 0}
 };
 
