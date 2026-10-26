@@ -707,9 +707,9 @@ test_that("calculate_psm_values applies transitional values correctly", {
     "start"
   )
 
-  # Point values = 1000 x flow at each time point: 0, 300, 200
-  # "start" allocates time point k-1 to cycle k
-  expect_equal(unname(result[, "prog_cost"]), c(0, 300))
+  # Events during cycles 1..2 are those observed at time points 1..2: 300, 200,
+  # charged in their own cycle under every method
+  expect_equal(unname(result[, "prog_cost"]), c(300, 200))
 
   result_end <- openqaly:::calculate_psm_values(
     uneval_values, namespace, trace,
@@ -717,7 +717,6 @@ test_that("calculate_psm_values applies transitional values correctly", {
     value_names, state_names, n_cycles,
     "end"
   )
-  # "end" allocates time point k to cycle k
   expect_equal(unname(result_end[, "prog_cost"]), c(300, 200))
 })
 

@@ -20,6 +20,10 @@ prepare_incremental_ce_table_data(
 \arguments{
 \item{results}{A openqaly model results object}
 
+\item{outcome_summary}{Name of the health outcome}
+
+\item{cost_summary}{Name of the cost outcome}
+
 \item{groups}{Group selection: "overall" (default), "all", "all_groups", or
 specific group name(s)}
 
@@ -34,10 +38,6 @@ specific group name(s)}
 \item{abbreviate}{Logical. Use abbreviated formatting? (default: FALSE)}
 
 \item{font_size}{Font size for rendering}
-
-\item{health_outcome}{Name of the health outcome}
-
-\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

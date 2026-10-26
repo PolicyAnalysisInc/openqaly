@@ -32,12 +32,7 @@ validate_twsa_spec <- function(model) {
   }
 
   # Valid setting names (same as DSA)
-  valid_settings <- c(
-    "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
-    "discount_cost", "discount_outcomes", "half_cycle_method",
-    "reduce_state_cycle", "days_per_year",
-    "discount_rate"
-  )
+  valid_settings <- .valid_settings
 
   all_var_names <- model$variables$name
 
@@ -547,8 +542,8 @@ generate_twsa_metadata <- function(model, segments) {
           }
         }
         # Fall back to variable display name
-        var_row <- model$variables %>% filter(.data$name == name) %>% slice(1)
-        if (nrow(var_row) > 0 && !is.na(var_row$display_name)) {
+        var_row <- model$variables[which(model$variables$name == name)[1], , drop = FALSE]
+        if (nrow(var_row) > 0 && !is.na(var_row$name) && !is.na(var_row$display_name)) {
           return(var_row$display_name)
         }
         return(name)
@@ -564,8 +559,8 @@ generate_twsa_metadata <- function(model, segments) {
           }
         }
         # Fall back to variable display name
-        var_row <- model$variables %>% filter(.data$name == name) %>% slice(1)
-        if (nrow(var_row) > 0 && !is.na(var_row$display_name)) {
+        var_row <- model$variables[which(model$variables$name == name)[1], , drop = FALSE]
+        if (nrow(var_row) > 0 && !is.na(var_row$name) && !is.na(var_row$display_name)) {
           return(var_row$display_name)
         }
         return(name)
@@ -598,6 +593,8 @@ generate_twsa_metadata <- function(model, segments) {
 #'   \code{progress(total = N)} to declare total units, then
 #'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
+#' @param keep_diagnostics Logical. If `TRUE`, keep the evaluated variables and other
+#'   diagnostics for every run; if `FALSE` (default), only for the base case.
 #' @return Results list with segments and aggregated results (includes run_id dimension).
 #'   When VBP is enabled, also includes twsa_vbp_equations tibble.
 #' @export

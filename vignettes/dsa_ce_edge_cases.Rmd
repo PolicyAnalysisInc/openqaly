@@ -9,9 +9,10 @@ vignette: >
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>",
-  dpi = 150
+  dpi = 72
 )
 ```
 

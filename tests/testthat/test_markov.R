@@ -463,16 +463,11 @@ test_that("transitional values are calculated correctly", {
     -pi
   )
 
-  # Flows observed at time points 1..3 (arrivals between t-1 and t):
-  # t=1: 1.0 * 0.3 * 100 + 1.0 * 0.2 * 50 = 40
-  # t=2: 0.5 * 0.3 * 100 + 0.5 * 0.2 * 50 = 20
-  # t=3: 0.25 * 0.3 * 100 + 0.25 * 0.2 * 50 = 10
-  expect_equal(unname(res$transitionalPointValues[, "cost"]), c(0, 40, 20, 10))
-
-  # "start" allocates time point k-1 to cycle k; "end" allocates time point k
-  points <- res$transitionalPointValues
-  expect_equal(unname(openqaly:::allocate_point_values(points, "start")[, "cost"]), c(0, 40, 20))
-  expect_equal(unname(openqaly:::allocate_point_values(points, "end")[, "cost"]), c(40, 20, 10))
+  # Transitions during each cycle, charged in that cycle:
+  # Cycle 1: 1.0 * 0.3 * 100 + 1.0 * 0.2 * 50 = 40
+  # Cycle 2: 0.5 * 0.3 * 100 + 0.5 * 0.2 * 50 = 20
+  # Cycle 3: 0.25 * 0.3 * 100 + 0.25 * 0.2 * 50 = 10
+  expect_equal(unname(res$transitionalValues[, "cost"]), c(40, 20, 10))
 })
 
 test_that("time-varying values use correct cycle values", {
@@ -527,12 +522,10 @@ test_that("time-varying values use correct cycle values", {
     -pi
   )
 
-  # Time point t is priced with cycle t's utility, time point 0 with cycle 1's
-  # (trace is 1.0 throughout)
-  expect_equal(unname(res$residencyPointValues[, "utility"]), c(1.0, 1.0, 0.9, 0.8, 0.7, 0.6))
-  # With end method, cycle N uses time point N, i.e. cycle N's utility
-  values <- openqaly:::allocate_point_values(res$residencyPointValues, "end")
-  expect_equal(unname(values[, "utility"]), c(1.0, 0.9, 0.8, 0.7, 0.6))
+  # Each cycle uses its own utility at both its start and end (trace is 1.0
+  # throughout)
+  expect_equal(unname(res$residencyStartValues[, "utility"]), c(1.0, 0.9, 0.8, 0.7, 0.6))
+  expect_equal(unname(res$residencyEndValues[, "utility"]), c(1.0, 0.9, 0.8, 0.7, 0.6))
 })
 
 test_that("model start values apply only to first cycle", {
@@ -587,8 +580,9 @@ test_that("model start values apply only to first cycle", {
   expect_equal(res$modelStartValues[2, "initial_cost"], 0)
   expect_equal(res$modelStartValues[3, "initial_cost"], 0)
 
-  # Model start values are not part of the time-point values
-  expect_equal(unname(res$residencyPointValues[, "initial_cost"]), rep(0, 4))
+  # Model start values are not part of the residency values
+  expect_equal(unname(res$residencyStartValues[, "initial_cost"]), rep(0, 3))
+  expect_equal(unname(res$residencyEndValues[, "initial_cost"]), rep(0, 3))
 })
 
 test_that("invalid state names in transitional values produce warnings", {
@@ -739,13 +733,9 @@ test_that("transitional values work on complement transitions", {
     -pi
   )
 
-  # Flows on the complement transition observed at time points 1..2:
-  # t=1: 1.0 * 0.7 * 10 = 7; t=2: 0.7 * 0.7 * 10 = 4.9
-  expect_equal(unname(res$transitionalPointValues[, "stay_cost"]), c(0, 7, 4.9))
-
-  points <- res$transitionalPointValues
-  expect_equal(unname(openqaly:::allocate_point_values(points, "start")[, "stay_cost"]), c(0, 7))
-  expect_equal(unname(openqaly:::allocate_point_values(points, "end")[, "stay_cost"]), c(7, 4.9))
+  # Flows on the complement transition during each cycle:
+  # Cycle 1: 1.0 * 0.7 * 10 = 7; Cycle 2: 0.7 * 0.7 * 10 = 4.9
+  expect_equal(unname(res$transitionalValues[, "stay_cost"]), c(7, 4.9))
 })
 
 test_that("error reporting works with expanded state names", {
@@ -1171,13 +1161,13 @@ test_that("extra value names in values_list are silently ignored", {
     -pi
   )
 
-  # Should have point values output with only "cost" column
-  points <- res$residencyPointValues
+  # Should have residency values output with only "cost" column
+  points <- res$residencyStartValues
   expect_true("cost" %in% colnames(points))
   expect_false("extra_cost" %in% colnames(points))
 
   # The cost value should be calculated correctly (A=10, B=5, weighted by trace)
-  expect_equal(points[1, "cost"], 10)  # 100% in A at time point 0
+  expect_equal(points[1, "cost"], 10)  # 100% in A at the start of cycle 1
 })
 
 # ==============================================================================

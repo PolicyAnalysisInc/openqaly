@@ -58,3 +58,8 @@ results <- run_model(model)
 - Comprehensive logging of model evaluation
 - Decision-tree functionality
 - Cleaner code
+
+## License
+
+Copyright (C) 2026 Avalere Health. Licensed under the GNU General Public
+License v3.0; see `LICENSE.md`.

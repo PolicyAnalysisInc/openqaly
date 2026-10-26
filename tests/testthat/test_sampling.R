@@ -56,14 +56,16 @@ test_that("parameter sampling yields correct averages", {
   expect_equal(0.5, mean(volantor_high$u_severe), tolerance = 0.02)
 
   # c_severe: gamma(mean = 8000, sd = 1600) - same across all segments
-  expect_equal(8000, mean(seritinib_low$c_severe), tolerance = 200)
-  expect_equal(8000, mean(volantor_high$c_severe), tolerance = 200)
+  # bounds are 4 standard errors on the absolute deviation of the mean,
+  # SE = sd / sqrt(n) with n = 1000 draws per strategy/group (sd from the model).
+  expect_lt(abs(mean(seritinib_low$c_severe) - 8000), 4 * 1600 / sqrt(1000))
+  expect_lt(abs(mean(volantor_high$c_severe) - 8000), 4 * 1600 / sqrt(1000))
 
   # c_treatment by strategy: gamma distributions
-  expect_equal(500, mean(seritinib_low$c_treatment), tolerance = 20)
-  expect_equal(500, mean(seritinib_high$c_treatment), tolerance = 20)
-  expect_equal(3000, mean(volantor_low$c_treatment), tolerance = 100)
-  expect_equal(3000, mean(volantor_high$c_treatment), tolerance = 100)
+  expect_lt(abs(mean(seritinib_low$c_treatment) - 500), 4 * 100 / sqrt(1000))
+  expect_lt(abs(mean(seritinib_high$c_treatment) - 500), 4 * 100 / sqrt(1000))
+  expect_lt(abs(mean(volantor_low$c_treatment) - 3000), 4 * 600 / sqrt(1000))
+  expect_lt(abs(mean(volantor_high$c_treatment) - 3000), 4 * 600 / sqrt(1000))
 
   # hr_progression: lognormal(mean = 0.6, sd = 0.1) for volantor only
   # seritinib strategy doesn't have sampling for hr_progression, so it returns NA
@@ -94,7 +96,8 @@ test_that("parameter sampling yields correct averages", {
   # Check multivariate distribution - u_mild and c_mild should have expected means
   # mvnormal(mean = c(0.8, 2000), sd = c(0.05, 400), cor = -0.3)
   expect_equal(0.8, mean(seritinib_low$u_mild), tolerance = 0.02)
-  expect_equal(2000, mean(seritinib_low$c_mild), tolerance = 50)
+  # 4 SE on the absolute deviation (sd = 400, n = 1000)
+  expect_lt(abs(mean(seritinib_low$c_mild) - 2000), 4 * 400 / sqrt(1000))
 
   # Check negative correlation between u_mild and c_mild
   cor_u_c <- cor(seritinib_low$u_mild, seritinib_low$c_mild)

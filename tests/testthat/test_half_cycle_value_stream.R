@@ -1,8 +1,7 @@
-# Half-cycle correction applied to value x trace at time points 0..n.
-# Values are evaluated per cycle; time point t is priced with cycle t's value
-# (the cycle ending at t) and time point 0 with cycle 1's. Point values X(t)
-# are allocated to cycle k as start X(k-1), end X(k), life-table
-# (X(k-1) + X(k)) / 2, for residency and transitional values alike.
+# Half-cycle correction applied to occupancy. Values are evaluated per cycle and
+# cycle k is priced with cycle k's value: start occ(k-1) x v(k), end
+# occ(k) x v(k), life-table the average of the two. Transitional values are
+# charged in the cycle the transitions occur under every method.
 
 build_issue10_markov <- function(hcm, n_cycles = 3) {
   define_model("markov") |>
@@ -31,21 +30,22 @@ values_wide <- function(model) {
   as.data.frame(get_values(run_model(model), format = "wide", discounted = FALSE))
 }
 
-test_that("explicit transitional values equal implicit state_cycle == 1 values under every method", {
-  # Arrivals into sick observed at t = 1, 2, 3: 0.5, 0.25, 0.125
-  expected <- list(
+test_that("explicit transitional values are charged in the cycle of arrival; state_cycle == 1 equals them under end", {
+  # Arrivals into sick during cycles 1..3: 0.5, 0.25, 0.125
+  # sick[1] occupancy at t = 0..3: 0, 0.5, 0.25, 0.125
+  implicit <- list(
     "start" = c(0, 500, 250),
     "end" = c(500, 250, 125),
     "life-table" = c(250, 375, 187.5)
   )
-  for (hcm in names(expected)) {
+  for (hcm in names(implicit)) {
     v <- values_wide(build_issue10_markov(hcm))
-    expect_equal(v$explicit, expected[[hcm]], info = hcm)
-    expect_equal(v$implicit, v$explicit, info = hcm)
+    expect_equal(v$explicit, c(500, 250, 125), info = hcm)
+    expect_equal(v$implicit, implicit[[hcm]], info = hcm)
   }
 })
 
-test_that("constant residency values are unchanged by the value-stream correction", {
+test_that("constant residency values use corrected occupancy", {
   # Sick occupancy at t = 0..3: 0, 0.5, 0.6, 0.545
   expected <- list(
     "start" = c(0, 500, 600),
@@ -58,13 +58,12 @@ test_that("constant residency values are unchanged by the value-stream correctio
   }
 })
 
-test_that("a value that varies with model time is priced at time points", {
-  # 1000 * (cycle == 1) on well: cycle 1's value prices time points 0 and 1
-  # (well = 1 and 0.5); later time points are priced 0
+test_that("a value that varies with model time is charged only in its own cycle", {
+  # 1000 * (cycle == 1) on well (well = 1, 0.5 at t = 0, 1): only cycle 1
   expected <- list(
-    "start" = c(1000, 500, 0),
+    "start" = c(1000, 0, 0),
     "end" = c(500, 0, 0),
-    "life-table" = c(750, 250, 0)
+    "life-table" = c(750, 0, 0)
   )
   for (hcm in names(expected)) {
     v <- values_wide(build_issue10_markov(hcm))
@@ -79,9 +78,8 @@ test_that("model start values stay in cycle 1 without correction", {
   }
 })
 
-test_that("custom PSM allocates value x occupancy at time points", {
-  # alive(t) = 1 - 0.1 t, value(t) = 100 - 10 t, t = 0..4
-  # Point values: 100, 81, 64, 49, 36
+test_that("custom PSM prices each cycle with its own value", {
+  # alive(t) = 1 - 0.1 t at t = 0..4; cycle values 90, 80, 70, 60
   model_for <- function(hcm) {
     define_model("custom_psm") |>
       set_settings(n_cycles = 4, cycle_length = 1, cycle_length_unit = "years",
@@ -93,16 +91,16 @@ test_that("custom PSM allocates value x occupancy at time points", {
       add_transition("dead", C) |>
       add_value("smooth", "100 - 10 * cycle", state = "alive", type = "cost")
   }
-  # Cycle values 90, 80, 70, 60 price time points 1..4; time point 0 takes 90.
-  # Point values: 90, 81, 64, 49, 36
-  expect_equal(values_wide(model_for("start"))$smooth, c(90, 81, 64, 49))
+  # start: 1 x 90, 0.9 x 80, 0.8 x 70, 0.7 x 60
+  # end: 0.9 x 90, 0.8 x 80, 0.7 x 70, 0.6 x 60
+  expect_equal(values_wide(model_for("start"))$smooth, c(90, 72, 56, 42))
   expect_equal(values_wide(model_for("end"))$smooth, c(81, 64, 49, 36))
-  expect_equal(values_wide(model_for("life-table"))$smooth, c(85.5, 72.5, 56.5, 42.5))
+  expect_equal(values_wide(model_for("life-table"))$smooth, c(85.5, 68, 52.5, 39))
 })
 
-test_that("PSM transitional values are priced on flows observed at each time point", {
+test_that("PSM transitional values are charged in the cycle the events occur", {
   skip_if_not_installed("openqalysurv")
-  # PFS(t) = 0.25^t, OS(t) = 0.5^t; flows at t = 1..3:
+  # PFS(t) = 0.25^t, OS(t) = 0.5^t; events during cycles 1..3:
   # PFS decline 0.75, 0.1875, 0.046875; OS decline 0.5, 0.25, 0.125
   model_for <- function(hcm) {
     define_model("psm") |>
@@ -123,9 +121,9 @@ test_that("PSM transitional values are priced on flows observed at each time poi
   expect_equal(v_end$prog_cost, c(75, 18.75, 4.6875))
   expect_equal(v_end$death_cost, c(50, 25, 12.5))
   v_start <- values_wide(model_for("start"))
-  expect_equal(v_start$prog_cost, c(0, 75, 18.75))
+  expect_equal(v_start$prog_cost, c(75, 18.75, 4.6875))
   v_lt <- values_wide(model_for("life-table"))
-  expect_equal(v_lt$death_cost, c(25, 37.5, 18.75))
+  expect_equal(v_lt$death_cost, c(50, 25, 12.5))
 })
 
 test_that("variables built on lag time variables work (cycle 1 starts at 0, ends at 1)", {
@@ -158,9 +156,9 @@ test_that("time variables with cycle 0 keep each block's state_cycle", {
   expect_equal(tv$state_cycle, rep(1:3, each = 4))
 })
 
-test_that("the default half-cycle method is life-table", {
-  m <- build_issue10_markov("life-table")
+test_that("the default half-cycle method is start", {
+  m <- build_issue10_markov("start")
   m$settings$half_cycle_method <- NULL
-  expect_equal(values_wide(m), values_wide(build_issue10_markov("life-table")))
-  expect_equal(define_model("markov")$settings$half_cycle_method, "life-table")
+  expect_equal(values_wide(m), values_wide(build_issue10_markov("start")))
+  expect_equal(define_model("markov")$settings$half_cycle_method, "start")
 })

@@ -1,47 +1,64 @@
-# openqaly (development version)
+# openqaly 1.0.0
 
-## Values, half-cycle correction and discounting at time points
+## Half-cycle correction and discounting
 
-Half-cycle correction is applied to the values calculated from the trace, not
-to the trace. Formulas are still evaluated per cycle: in cycle k the lag time
-variables (`cycle_lag`, `year_lag`, ...) are the start of the cycle and the
-others (`cycle`, `year`, ...) its end, so cycle 1 has `cycle_lag = 0` and
-`cycle = 1`. Cycle k's value prices time point k (its end); time point 0, the
-start of cycle 1, takes cycle 1's value. At each time point t = 0..n:
+The half-cycle correction is applied to occupancy, as in 0.1.3. Cycle k (from
+time k-1 to time k) is priced with cycle k's value:
 
-- residency values: X(t) = occupancy(t) x value(t)
-- transitional values: X(t) = arrivals at t (during cycle t) x value(t), with X(0) = 0
+| Method | Residency, cycle k | Transitional, cycle k | Discounted at |
+|---|---|---|---|
+| `"start"` (default) | occupancy(k-1) x value(k) | flow(k) x value(k) | d(k-1) |
+| `"end"` | occupancy(k) x value(k) | flow(k) x value(k) | d(k) |
+| `"life-table"` | average of the two | flow(k) x value(k) | each half at its own end |
 
-Point values are allocated to cycle k as:
+- The half-cycle method now also sets when values are discounted, because both
+  describe when a value accrues: at the start of the cycle, at its end, or
+  spread over it. Under `"life-table"`, cycle k's amount is
+  value(k) x [occupancy(k-1) x d(k-1) + occupancy(k) x d(k)] / 2, and a
+  transitional value is discounted at [d(k-1) + d(k)] / 2.
+- d(t) = 1 / (1 + r)^(t x cycle length in years + decision tree offset),
+  floored to whole years under `discount_method = "by_year"`.
+- Transitional values are charged in the cycle the transitions occur under
+  every method; the method only sets when they are discounted.
+- Undiscounted results are unchanged from 0.1.3 for Markov and custom PSM
+  models. Discounted results are unchanged where 0.1.3's `discount_timing`
+  matched the half-cycle method (`"start"` with `"start"`, `"end"` with
+  `"end"`), except that model start values are now discounted at time 0 under
+  `"end"`. Models that combined `"life-table"` with `discount_timing =
+  "start"` (or `"midpoint"`) give different discounted results.
+- Model start values are charged in cycle 1 at time 0. Decision tree values
+  are not discounted.
+- The corrected traces (`corrected_collapsed_trace`,
+  `corrected_expanded_trace`, the engine's `correctedTrace`) use the model's
+  half-cycle method.
 
-- `"start"`: X(k-1)
-- `"end"`: X(k)
-- `"life-table"`: (X(k-1) + X(k)) / 2
+### New
 
-Each time point has one price, so the half removed at a time point and the half
-added back there always cancel.
+- Values can set their own `half_cycle_method` (`add_value(...,
+  half_cycle_method = "end")`), overriding the model setting for that value's
+  occupancy and discounting. All rows of a value share one setting: a new row
+  takes the value's setting, `edit_value(..., half_cycle_method = )` changes
+  every row, and renaming a row into an existing value adopts that value's
+  setting.
+- One-off amounts written as residency values can use this: a one-off cost
+  written as `ifelse(cycle == 1, cost, 0)` is charged in full with `"start"`,
+  and an entry cost written as `cost * (state_cycle == 1)` equals the
+  transitional value on entry with `"end"`.
 
-Discounting uses the same rule: each time point is discounted at its own time,
-d(t) = 1 / (1 + r)^(t x cycle length in years + decision tree offset), floored
-to whole years under `discount_method = "by_year"`, and the discounted point
-values are allocated to cycles in the same way.
+### Removed
 
-- `"end"` gives the same undiscounted results as before for every value.
-- Constant values give the same undiscounted results as before under every
-  method.
-- Under `"start"` and `"life-table"`, cycle k uses time point k - 1, priced
-  with cycle k - 1's value (cycle 1's value at time point 0): values that vary
-  over time move one cycle later under `"start"`.
-- An explicit transitional value into a state gives exactly the same per-cycle
-  result as `value * (state_cycle == 1)` on that state, under every method.
-  Under `"start"` the last cycle's arrivals fall outside the horizon, and under
-  `"life-table"` half of them.
-- PSM transitional values are priced on the decline in progression-free and
-  overall survival observed at each time point.
-- Model start values are charged in cycle 1 without correction and discounted
-  at time point 0. Decision tree values are not discounted.
-- `"start"` and `"end"` discounting matches the former `discount_timing` of
-  the same name; `"life-table"` discounts each half at its own time point.
+- The `discount_timing` setting. When a value is discounted is now set by its
+  half-cycle method.
+- `apply_discounting()`, which was no longer used.
+- The `strategies` argument of `nmb_density_plot()`, `nmb_ridgeline_plot()`
+  and `pairwise_psa_scatter_plot()`. These plots compare strategies, so they
+  take `interventions` and/or `comparators`; every call using `strategies`
+  failed.
+
+### Changed
+
+- `calculate_discount_factors()` returns n + 1 factors (time points 0..n) and
+  no longer has a `discount_timing` argument.
 
 ## `state_cycle_limit`
 
@@ -51,29 +68,6 @@ state. Previously the last tunnel was labelled L, so a formula such as
 `cost * (state_cycle <= L)` never stopped charging. Formulas should compare
 `state_cycle` with values up to L; tables looked up by `state_cycle` need a row
 for L + 1.
-
-### Removed
-
-- The `discount_timing` setting. When a cycle's amount is discounted is now
-  set by the half-cycle method.
-- The half-cycle-corrected trace outputs (`corrected_collapsed_trace`,
-  `corrected_expanded_trace`, the engine's `correctedTrace`).
-
-### Changed
-
-- The default `half_cycle_method` is now `"life-table"` (was `"start"`). Models
-  that do not set it give different results; set `half_cycle_method = "start"`
-  to keep the old behaviour.
-- `calculate_discount_factors()` returns n + 1 factors (time points 0..n) and
-  no longer has a `discount_timing` argument.
-
-### New
-
-- Values can set their own `half_cycle_method` (`add_value(...,
-  half_cycle_method = "end")`), overriding the model setting for that value.
-  All rows of a value share one setting: a new row takes the value's setting,
-  `edit_value(..., half_cycle_method = )` changes every row, and renaming a row
-  into an existing value adopts that value's setting.
 
 ## `discounting_override`
 
@@ -98,6 +92,35 @@ decision trees accept length 1 only.
 
 ## Fixes
 
+- `calculate_incremental_ce()`: of two equally costly strategies the less
+  effective one is strictly dominated, and extended dominance is resolved by
+  walking the frontier, so chains of extendedly dominated strategies are all
+  removed and ICERs are against the right comparator.
+- `calculate_nmb()` works with display names (the default), and accepts
+  strategies by technical or display name.
+- Incremental and pairwise CEAC tables put every column under its own header
+  when there are several groups.
+- `incremental_ceac_plot()` with `strategies` no longer returns an empty plot.
+- PSA functions stop with an error for an unknown summary name instead of
+  returning results based on zeros.
+- DSA tornado plots with several facets label each facet's parameters
+  correctly.
+- `drop_zero_impact = TRUE` drops parameters with no impact.
+- TWSA: ICERs in the south-west quadrant are negative and marked with an
+  asterisk, tables show every strategy and group, VBP equations are calculated
+  for every group, and each axis shows its own parameter's display name.
+- `set_settings()` rejects an invalid `half_cycle_method` or
+  `discount_method`, and `n_cycles` always sets the timeframe unit to cycles.
+- `discount_method` can be used as a scenario and TWSA setting.
+- `model_to_r_code()` generates the decision tree nodes and keeps DSA range
+  labels.
+- Clearer errors for a blank transition formula, a missing custom PSM state
+  probability, a missing group weight, an override's minimum not below its
+  maximum, and a non-numeric value without formula text.
+- PSM transitional values are charged in the cycle the events occur (the
+  decline in progression-free or overall survival during cycle k) under every
+  half-cycle method. Previously each cycle's events were charged in the next
+  cycle, so cycle 1 was charged nothing and the last cycle's events were lost.
 - A value with the same name as a variable is rejected with a "Name collision
   detected" error, instead of crashing R in the dependency sort.
 - PSM endpoints accept any survival distribution openqalysurv can evaluate,

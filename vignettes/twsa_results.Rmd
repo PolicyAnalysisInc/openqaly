@@ -14,9 +14,10 @@ combinations of parameter changes affect model results.
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>",
-  dpi = 150
+  dpi = 72
 )
 ```
 
@@ -155,7 +156,7 @@ twsa_outcomes_plot(results, "qalys",
 
 ### Different color palettes
 
-```{r, fig.width = 7, fig.height = 5}
+```{r, fig.width = 7, fig.height = 5, dev = "png"}
 twsa_outcomes_plot(results, "qalys",
   viridis_option = "magma")
 ```

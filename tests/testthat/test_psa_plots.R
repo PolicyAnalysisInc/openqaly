@@ -571,11 +571,11 @@ test_that("nmb_density_plot() requires interventions or comparators", {
   )
 })
 
-test_that("nmb_density_plot() rejects strategies with interventions/comparators", {
+test_that("nmb_density_plot() takes interventions/comparators, not strategies", {
   results <- get_cached_psa_results()
   strategies <- results$metadata$strategies$name
 
-  # Should error when both strategies and comparators provided
+  # NMB compares strategies, so it has no strategies argument
   expect_error(
     nmb_density_plot(
       results, "total_qalys", "total_cost",
@@ -583,7 +583,7 @@ test_that("nmb_density_plot() rejects strategies with interventions/comparators"
       strategies = strategies[1],
       comparators = strategies[2]
     ),
-    "'strategies' parameter cannot be used with 'interventions' or 'comparators'"
+    "unused argument"
   )
 })
 

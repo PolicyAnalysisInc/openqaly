@@ -11,6 +11,7 @@ This vignette demonstrates how to visualize and summarize base case model result
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -107,7 +108,7 @@ The `outcomes_plot_line()` function displays outcomes as line charts over the mo
 
 By default, cumulative values are shown.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 outcomes_plot_line(
   results,
   outcome = "qalys"
@@ -118,7 +119,7 @@ outcomes_plot_line(
 
 Set `cumulative = FALSE` to show per-cycle values instead.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 outcomes_plot_line(
   results,
   outcome = "qalys",

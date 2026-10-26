@@ -384,26 +384,56 @@ render_twsa_grid_table <- function(prepared, font_size, backend) {
     stop("No data available for table", call. = FALSE)
   }
 
-  # For simplicity, render first table (single strategy/group)
-  table_info <- prepared$tables[[1]]
+  tables <- prepared$tables
+  first <- tables[[1]]
+  x_param_name <- first$x_param_name
+  y_param_name <- first$y_param_name
 
-  # Build headers
-  x_param_name <- table_info$x_param_name
-  x_values <- table_info$x_values
+  # Columns for every x value used by any table, so all tables stack into one
+  x_values <- sort(unique(unlist(lapply(tables, function(t) t$x_values))))
+  x_cols <- paste0("x_", x_values)
 
-  # Create header structure
+  # One block per strategy/group, each with a title row when there is more
+  # than one block
+  show_titles <- prepared$n_strategies > 1 || prepared$n_groups > 1
+  blocks <- list()
+  title_rows <- integer()
+  current_row <- 0
+  for (table_info in tables) {
+    block <- table_info$data
+    names(block)[1] <- y_param_name
+    for (col in setdiff(x_cols, names(block))) block[[col]] <- ""
+    block <- block[, c(y_param_name, x_cols), drop = FALSE]
+    block[[y_param_name]] <- as.character(block[[y_param_name]])
+
+    if (show_titles) {
+      title_text <- table_info$strategy
+      if (prepared$n_groups > 1) {
+        title_text <- paste0(title_text, " - ", table_info$group)
+      }
+      title <- as.data.frame(
+        setNames(as.list(c(title_text, rep("", length(x_cols)))), c(y_param_name, x_cols)),
+        stringsAsFactors = FALSE, check.names = FALSE
+      )
+      current_row <- current_row + 1
+      title_rows <- c(title_rows, current_row)
+      block <- bind_rows(title, block)
+    }
+    current_row <- current_row + nrow(block) - if (show_titles) 1 else 0
+    blocks[[length(blocks) + 1]] <- block
+  }
+  table_data <- bind_rows(blocks)
+
+  # Header rows: X parameter name, then the Y parameter name and X values
+  locale <- prepared$locale
   headers <- list()
-
-  # Level 1: X parameter name
   row1 <- list()
   row1[[1]] <- list(span = 1, text = "", borders = c(1, 0, 1, 0))
   row1[[2]] <- list(span = length(x_values), text = x_param_name, borders = c(1, 0, 1, 0))
   headers[[1]] <- row1
 
-  # Level 2: X values
-  locale <- prepared$locale
   row2 <- list()
-  row2[[1]] <- list(span = 1, text = table_info$y_param_name, borders = c(0, 0, 1, 1))
+  row2[[1]] <- list(span = 1, text = y_param_name, borders = c(0, 0, 1, 1))
   for (i in seq_along(x_values)) {
     row2[[i + 1]] <- list(
       span = 1,
@@ -413,31 +443,24 @@ render_twsa_grid_table <- function(prepared, font_size, backend) {
   }
   headers[[2]] <- row2
 
-  # Add strategy/group header if multiple
-  if (prepared$n_strategies > 1 || prepared$n_groups > 1) {
-    title_text <- table_info$strategy
-    if (prepared$n_groups > 1) {
-      title_text <- paste0(title_text, " - ", table_info$group)
-    }
-    title_row <- list()
-    title_row[[1]] <- list(
-      span = length(x_values) + 1,
-      text = title_text,
-      borders = c(1, 0, 0, 0)
+  special_rows <- list()
+  if (show_titles) {
+    special_rows <- list(
+      group_header_rows = title_rows,
+      group_boundary_rows = title_rows[-1]
     )
-    headers <- c(list(title_row), headers)
   }
 
   # Create column alignments
-  n_cols <- ncol(table_info$data)
-  column_alignments <- c("left", rep("right", n_cols - 1))
+  column_alignments <- c("left", rep("right", length(x_cols)))
 
   # Create table spec
   spec <- create_simple_table_spec(
     headers = headers,
-    data = table_info$data,
+    data = table_data,
     column_alignments = column_alignments,
-    font_size = font_size
+    font_size = font_size,
+    special_rows = special_rows
   )
 
   # Render table

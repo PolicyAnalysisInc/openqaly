@@ -155,12 +155,14 @@ test_that("Multivariate normal generates correlated parameters", {
     unnest(params)
 
   # Check means
-  expect_equal(mean(sampled$treatment_cost), 1000, tolerance = 10)
-  expect_equal(mean(sampled$treatment_qaly), 5, tolerance = 0.05)
-  expect_equal(mean(sampled$treatment_util), 0.8, tolerance = 0.01)
+  # bounds are 4 standard errors on the absolute deviation, n = 1000 draws.
+  # Mean SE = sd / sqrt(n); SD SE ~ sd / sqrt(2n) for normal draws.
+  expect_lt(abs(mean(sampled$treatment_cost) - 1000), 4 * 100 / sqrt(1000))
+  expect_lt(abs(mean(sampled$treatment_qaly) - 5), 4 * 0.5 / sqrt(1000))
+  expect_lt(abs(mean(sampled$treatment_util) - 0.8), 4 * 0.05 / sqrt(1000))
 
   # Check standard deviations
-  expect_equal(sd(sampled$treatment_cost), 100, tolerance = 10)
+  expect_lt(abs(sd(sampled$treatment_cost) - 100), 4 * 100 / sqrt(2 * 1000))
   expect_equal(sd(sampled$treatment_qaly), 0.5, tolerance = 0.05)
   expect_equal(sd(sampled$treatment_util), 0.05, tolerance = 0.005)
 
@@ -224,9 +226,11 @@ test_that("Multinomial distribution generates valid count outcomes", {
     mutate(params = map(parameter_overrides, as_tibble)) %>%
     select(-parameter_overrides) %>%
     unnest(params)
-  expect_equal(mean(sampled_large$n_state1), 50, tolerance = 3)
-  expect_equal(mean(sampled_large$n_state2), 30, tolerance = 3)
-  expect_equal(mean(sampled_large$n_state3), 20, tolerance = 3)
+  # 4 standard errors on the absolute deviation, n = 1000 draws.
+  # Multinomial(100, p) count SD: sqrt(100 p (1 - p)) = 5, 4.58, 4.
+  expect_lt(abs(mean(sampled_large$n_state1) - 50), 4 * sqrt(100 * 0.5 * 0.5) / sqrt(1000))
+  expect_lt(abs(mean(sampled_large$n_state2) - 30), 4 * sqrt(100 * 0.3 * 0.7) / sqrt(1000))
+  expect_lt(abs(mean(sampled_large$n_state3) - 20), 4 * sqrt(100 * 0.2 * 0.8) / sqrt(1000))
 })
 
 test_that("Strategy-specific multivariate sampling works correctly", {
@@ -292,7 +296,8 @@ test_that("Strategy-specific multivariate sampling works correctly", {
   expect_true(length(unique(intervention_samples$qaly_param)) > 1)
 
   # Means for intervention (base case: cost=200, qaly=2)
-  expect_equal(mean(intervention_samples$cost_param), 200, tolerance = 3)
+  # 4 standard errors on the absolute deviation (sd = 10 from cov 100, n = 500)
+  expect_lt(abs(mean(intervention_samples$cost_param) - 200), 4 * 10 / sqrt(500))
   expect_equal(mean(intervention_samples$qaly_param), 2, tolerance = 0.03)
 })
 

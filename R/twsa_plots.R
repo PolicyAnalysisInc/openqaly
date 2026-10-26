@@ -913,25 +913,9 @@ prepare_twsa_ce_data <- function(results,
       by = c("x_value", "y_value", "strategy", "group")
     ) %>%
     mutate(
-      # Calculate ICER with special case handling
-      # Match the logic in icer() function for consistency
-      icer = case_when(
-        # Equivalent: no differences at all
-        abs(.data$delta_outcome) < .Machine$double.eps &
-          abs(.data$delta_cost) < .Machine$double.eps ~ NaN,
-        # Dominated (weakly): worse or equal effects at higher or equal cost
-        # with at least one strict detriment
-        (.data$delta_outcome < 0 & .data$delta_cost > 0) |
-          (.data$delta_outcome < 0 & abs(.data$delta_cost) < .Machine$double.eps) |
-          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost > 0) ~ Inf,
-        # Dominant (weakly): better or equal effects at lower or equal cost
-        # with at least one strict improvement
-        (.data$delta_outcome > 0 & .data$delta_cost < 0) |
-          (.data$delta_outcome > 0 & abs(.data$delta_cost) < .Machine$double.eps) |
-          (abs(.data$delta_outcome) < .Machine$double.eps & .data$delta_cost < 0) ~ 0,
-        # Normal ICER for remaining cases
-        TRUE ~ .data$delta_cost / .data$delta_outcome
-      ),
+      # ICER with the same conventions as icer() (dominated, dominant,
+      # equivalent, and negative in the SW quadrant)
+      icer = as.numeric(icer(.data$delta_cost, .data$delta_outcome)),
       # Classify for display
       ce_class = case_when(
         is.nan(.data$icer) ~ "equivalent",

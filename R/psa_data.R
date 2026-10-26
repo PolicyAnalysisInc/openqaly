@@ -13,6 +13,10 @@ get_psa_simulations <- function(results,
                                 groups = "overall",
                                 strategies = NULL) {
 
+  # An unknown summary would otherwise sum to 0 and give misleading results
+  check_summary_exists(outcome_summary, results$metadata)
+  check_summary_exists(cost_summary, results$metadata)
+
   source_data <- select_source_data(groups, results)
 
   # Filter strategies if specified

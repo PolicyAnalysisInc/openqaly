@@ -149,11 +149,11 @@ run_segment.oq_custom_psm <- function(segment, model, env, ...) {
   # Core Custom PSM engine: evaluates each state's formula at every cycle to
   # build the trace. Complement states are resolved after all other formulas
   # are evaluated. Then evaluates value formulas weighted by state occupancy
-  # (residency values only — no transition flows) and applies half-cycle
-  # correction.
+  # (residency values only — no transition flows) at the start and end of each
+  # cycle, and builds the corrected trace.
   calculated <- calculate_psm_custom_trace_and_values(
     state_prob_formulas, uneval_values, eval_vars, value_names,
-    unique(model$states$name), time_ctx$n_cycles, model$settings$half_cycle_method
+    unique(model$states$name), time_ctx$n_cycles, model$settings$half_cycle_method %||% "start"
   )
   tick()
 
@@ -176,7 +176,7 @@ run_segment.oq_custom_psm <- function(segment, model, env, ...) {
   )
   # Custom PSMs have no tunnel states, so the same trace is passed for both
   # the "collapsed" and "expanded" slots (both are identical).
-  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, calculated$trace, calculated$trace, calculated$corrected_trace, calculated$corrected_trace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
   segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
@@ -234,7 +234,7 @@ calculate_psm_custom_trace_and_values <- function(
   value_names,
   state_names,
   n_cycles,
-  half_cycle_method = "life-table"
+  half_cycle_method = "start"
 ) {
   tol <- 10 * sqrt(.Machine$double.eps)
   n_rows <- n_cycles + 1  # cycles 0 to n_cycles
@@ -270,6 +270,22 @@ calculate_psm_custom_trace_and_values <- function(
     }
 
     trace[, i] <- result
+  }
+
+  # A missing state probability would make the complement and bounds checks
+  # fail with an unhelpful message, so report each one by state and cycle
+  na_cells <- which(is.na(trace), arr.ind = TRUE)
+  if (nrow(na_cells) > 0) {
+    for (state_col in unique(na_cells[, "col"])) {
+      na_cycles <- sort(na_cells[na_cells[, "col"] == state_col, "row"]) - 1
+      accumulate_oq_error(
+        define_error(glue(
+          "State probability for '{colnames(trace)[state_col]}' is missing (NA) at cycle{if (length(na_cycles) > 1) 's' else ''} {paste(na_cycles, collapse = ', ')}"
+        )),
+        context_msg = "Custom PSM trace validation"
+      )
+    }
+    oq_error_checkpoint()
   }
 
   # Find complement cells (where value == -pi)
@@ -333,7 +349,8 @@ calculate_psm_custom_trace_and_values <- function(
   list(
     trace = trace,
     values = combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method)),
-    value_parts = value_parts
+    value_parts = value_parts,
+    corrected_trace = correct_trace(trace, half_cycle_method)
   )
 }
 
@@ -373,7 +390,7 @@ calculate_psm_custom_values <- function(
   value_names,
   state_names,
   n_cycles,
-  half_cycle_method = "life-table"
+  half_cycle_method = "start"
 ) {
   value_parts <- calculate_psm_custom_value_parts(
     uneval_values, namespace, trace, value_names, state_names, n_cycles
@@ -381,15 +398,15 @@ calculate_psm_custom_values <- function(
   combine_value_parts(value_parts, value_half_cycle_methods(uneval_values, value_names, half_cycle_method))
 }
 
-#' Calculate Custom PSM Value Parts at Time Points
+#' Calculate Custom PSM Value Parts
 #'
-#' Residency values give value x occupancy at each time point 0..n (time point t
-#' priced with cycle t's value, time point 0 with cycle 1's); model start and
+#' Residency values give value x occupancy at the start (`start`) and end
+#' (`end`) of each cycle, priced with that cycle's value; model start and
 #' decision tree values are cycle 1 amounts. Transitional values are not
-#' supported.
+#' supported (`transitional` is all zero).
 #'
-#' @return List with `point_values` ((n+1) x values matrix), `model_start` and
-#'   `dt` (named vectors).
+#' @return List with `start`, `end` and `transitional` (cycles x values
+#'   matrices), `model_start` and `dt` (named vectors).
 #' @keywords internal
 calculate_psm_custom_value_parts <- function(
   uneval_values,
@@ -399,14 +416,14 @@ calculate_psm_custom_value_parts <- function(
   state_names,
   n_cycles
 ) {
-  n_points <- n_cycles + 1
-  point_values <- matrix(0, nrow = n_points, ncol = length(value_names),
-                         dimnames = list(0:n_cycles, value_names))
-  model_start <- setNames(rep(0, length(value_names)), value_names)
-  dt <- model_start
+  parts <- empty_value_parts(value_names, n_cycles)
+  start <- parts$start
+  end <- parts$end
+  model_start <- parts$model_start
+  dt <- parts$dt
 
   if (length(value_names) == 0 || nrow(uneval_values) == 0) {
-    return(list(point_values = point_values, model_start = model_start, dt = dt))
+    return(parts)
   }
 
   # Process each value (vectorized evaluation)
@@ -459,10 +476,11 @@ calculate_psm_custom_value_parts <- function(
       # Decision tree value - first cycle only, no state multiplication
       dt[value_name] <- dt[value_name] + evaluated[1]
     } else if (!is.na(value_row$state)) {
-      # Residency value - value x occupancy at each time point
+      # Residency value - value x occupancy at the start and end of each cycle
       state_idx <- which(state_names == value_row$state)
       if (length(state_idx) == 1) {
-        point_values[, value_name] <- point_values[, value_name] + point_prices(evaluated) * trace[, state_idx]
+        start[, value_name] <- start[, value_name] + evaluated * trace[1:n_cycles, state_idx]
+        end[, value_name] <- end[, value_name] + evaluated * trace[2:(n_cycles + 1), state_idx]
       }
     } else {
       # model start value
@@ -472,5 +490,5 @@ calculate_psm_custom_value_parts <- function(
 
   oq_error_checkpoint()
 
-  list(point_values = point_values, model_start = model_start, dt = dt)
+  list(start = start, end = end, transitional = parts$transitional, model_start = model_start, dt = dt)
 }

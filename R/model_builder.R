@@ -7,6 +7,18 @@
 
 # --- Model Initialization (copied from original — not CRUD) -----------------
 
+#' Define a New Model
+#'
+#' Initialize a new openqaly model object with the specified type.
+#'
+#' @param type Character string specifying the model type ("markov", "psm", or "custom_psm")
+#'
+#' @return An oq_model object that can be piped to other builder functions
+#'
+#' @examples
+#' model <- define_model("markov")
+#' model <- define_model("psm")
+#' model <- define_model("custom_psm")
 #' @export
 define_model <- function(type = "markov") {
   type <- match.arg(tolower(type), c("markov", "psm", "custom_psm", "decision_tree"))
@@ -42,7 +54,7 @@ define_model <- function(type = "markov") {
 
   model <- list(
     settings = list(
-      model_type = type, days_per_year = 365, half_cycle_method = "life-table",
+      model_type = type, days_per_year = 365, half_cycle_method = "start",
       discount_cost = 0, discount_outcomes = 0,
       discount_method = "by_cycle",
       reduce_state_cycle = FALSE
@@ -92,6 +104,21 @@ define_model <- function(type = "markov") {
 
 # --- Strategy ----------------------------------------------------------------
 
+#' Add Strategies to Model
+#'
+#' Add one or more strategies to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the strategy name
+#' @param display_name Optional display name
+#' @param description Optional description
+#' @param enabled Numeric indicating if strategy is enabled (default: 1)
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_strategy("treatment_a", "Treatment A")
 #' @export
 add_strategy <- function(model, name, display_name = NULL,
                           description = NULL, enabled = 1) {
@@ -105,6 +132,23 @@ add_strategy <- function(model, name, display_name = NULL,
   entity_add_tibble(model, .schema_strategy, new_row)
 }
 
+#' Edit a Strategy in the Model
+#'
+#' Modify an existing strategy's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the strategy are updated (variables, DSA parameters,
+#' scenarios, TWSA analyses, override categories, threshold analyses, and
+#' multivariate sampling specifications).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the strategy to edit
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param enabled Optional new enabled flag (will be coerced to numeric)
+#' @param new_name Optional new name for the strategy. If provided, the strategy
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
 #' @export
 edit_strategy <- function(model, name, display_name, description,
                            enabled, new_name) {
@@ -117,6 +161,22 @@ edit_strategy <- function(model, name, display_name, description,
   entity_edit_tibble(model, .schema_strategy, match_idx, updates)
 }
 
+#' Remove a Strategy from the Model
+#'
+#' Remove an existing strategy and optionally cascade-remove all downstream
+#' references (variables, DSA parameters, scenario overrides, TWSA analyses,
+#' override categories, threshold analyses, and multivariate sampling specs).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the strategy to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the strategy has
+#'   downstream dependencies, an error of class \code{"strategy_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the strategy and all
+#'   downstream references.
+#'
+#' @return The modified model object
 #' @export
 remove_strategy <- function(model, name, error_on_dependencies = FALSE) {
   match_idx <- find_in_tibble(model$strategies, "name", list(name), "Strategy")
@@ -126,6 +186,22 @@ remove_strategy <- function(model, name, error_on_dependencies = FALSE) {
 
 # --- Group -------------------------------------------------------------------
 
+#' Add Groups to Model
+#'
+#' Add one or more groups to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the group name
+#' @param display_name Optional display name
+#' @param description Optional description
+#' @param weight Weight expression (default: "1")
+#' @param enabled Whether group is enabled (default: 1)
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_group("moderate", weight = "w_moderate")
 #' @export
 add_group <- function(model, name, display_name = NULL,
                        description = NULL, weight = "1", enabled = 1) {
@@ -140,6 +216,24 @@ add_group <- function(model, name, display_name = NULL,
   entity_add_tibble(model, .schema_group, new_row)
 }
 
+#' Edit a Group in the Model
+#'
+#' Modify an existing group's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the group are updated (variables, DSA parameters,
+#' scenarios, TWSA analyses, override categories, threshold analyses, and
+#' multivariate sampling specifications).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the group to edit
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param weight Optional new weight expression (will be coerced to character)
+#' @param enabled Optional new enabled flag (will be coerced to numeric)
+#' @param new_name Optional new name for the group. If provided, the group
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
 #' @export
 edit_group <- function(model, name, display_name, description,
                         weight, enabled, new_name) {
@@ -153,6 +247,22 @@ edit_group <- function(model, name, display_name, description,
   entity_edit_tibble(model, .schema_group, match_idx, updates)
 }
 
+#' Remove a Group from the Model
+#'
+#' Remove an existing group and optionally cascade-remove all downstream
+#' references (variables, DSA parameters, scenario overrides, TWSA analyses,
+#' override categories, threshold analyses, and multivariate sampling specs).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the group to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the group has
+#'   downstream dependencies, an error of class \code{"group_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the group and all
+#'   downstream references.
+#'
+#' @return The modified model object
 #' @export
 remove_group <- function(model, name, error_on_dependencies = FALSE) {
   match_idx <- find_in_tibble(model$groups, "name", list(name), "Group")
@@ -212,6 +322,31 @@ validate_summary_values_for_builder <- function(model, item) {
   invisible(TRUE)
 }
 
+#' Add Summaries to Model
+#'
+#' Add one or more summaries to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the summary name
+#' @param values Comma-separated string of value names to include
+#' @param display_name Optional display name
+#' @param description Optional description
+#' @param type Summary type: "outcome" (default) for health outcomes or "cost" for costs.
+#'   WTP can only be specified for outcome summaries.
+#' @param wtp Optional willingness-to-pay value (numeric). Only valid for outcome summaries
+#'   in net monetary benefit calculations. Must be NULL for cost summaries.
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_strategy("standard") |>
+#'   add_state("well", initial_prob = 1) |>
+#'   add_value("drug_cost", 100, state = "well", type = "cost") |>
+#'   add_value("care_cost", 50, state = "well", type = "cost") |>
+#'   add_value("qaly", 0.8, state = "well", type = "outcome") |>
+#'   add_summary("total_cost", "drug_cost,care_cost", type = "cost") |>
+#'   add_summary("total_qalys", "qaly", type = "outcome", wtp = 50000)
 #' @export
 add_summary <- function(model, name, values, display_name = NULL,
                          description = NULL, type = "outcome", wtp = NULL) {
@@ -230,6 +365,36 @@ add_summary <- function(model, name, values, display_name = NULL,
 
 # --- Scenario ----------------------------------------------------------------
 
+#' Add a Scenario to Model
+#'
+#' Define a named scenario for scenario analysis. Scenarios allow you to define
+#' alternate sets of parameter values and model settings to test different
+#' assumptions. Each scenario is given a name and optional description, and
+#' variable/setting overrides can be added using `add_scenario_variable()` and
+#' `add_scenario_setting()`.
+#'
+#' A "Base Case" scenario is automatically created when running scenario analysis,
+#' representing the model with default parameters. User-defined scenarios are
+#' compared against this base case.
+#'
+#' @param model An oq_model object
+#' @param name Unique name for the scenario (e.g., "Optimistic", "Pessimistic")
+#' @param description Optional description explaining the scenario assumptions
+#'
+#' @param enabled Whether the scenario is enabled (default `TRUE`). Stored with the
+#'   scenario.
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic", description = "Best case assumptions") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   add_scenario_variable("Optimistic", "cost", 4000) |>
+#'   add_scenario("Pessimistic", description = "Conservative assumptions") |>
+#'   add_scenario_variable("Pessimistic", "efficacy", 0.70)
+#' }
 #' @export
 add_scenario <- function(model, name, description = NULL, enabled = TRUE) {
   validate_string(name, "Scenario name")
@@ -243,6 +408,26 @@ add_scenario <- function(model, name, description = NULL, enabled = TRUE) {
   entity_add_list(model, .schema_scenario, new_item)
 }
 
+#' Edit a Scenario
+#'
+#' Modify an existing scenario's name and/or description. Use \code{new_name}
+#' to rename the scenario.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the scenario to edit
+#' @param description Optional new description
+#'
+#' @param enabled New enabled flag for the scenario.
+#' @param new_name Optional new name for the scenario
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic") |>
+#'   edit_scenario("Optimistic", new_name = "Best Case")
+#' }
 #' @export
 edit_scenario <- function(model, name, description, enabled, new_name) {
   item_idx <- find_in_list(model$scenarios, "name", list(name), "Scenario")
@@ -253,6 +438,21 @@ edit_scenario <- function(model, name, description, enabled, new_name) {
   entity_edit_list(model, .schema_scenario, item_idx, updates)
 }
 
+#' Remove a Scenario
+#'
+#' Remove an existing scenario from the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the scenario to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_scenario("Optimistic") |>
+#'   remove_scenario("Optimistic")
+#' }
 #' @export
 remove_scenario <- function(model, name) {
   item_idx <- find_in_list(model$scenarios, "name", list(name), "Scenario")
@@ -261,6 +461,34 @@ remove_scenario <- function(model, name) {
 
 # --- Scenario Variable Override (nested) ------------------------------------
 
+#' Add Variable Override to Scenario
+#'
+#' Add a variable value override for a specific scenario. When the scenario
+#' analysis runs this scenario, the specified variable will use the override
+#' value instead of its default formula.
+#'
+#' Values can be specified as:
+#' - Literal numeric values (e.g., 0.95, 5000)
+#' - Expressions using NSE (e.g., base_efficacy * 1.2)
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario to add the override to (must exist)
+#' @param variable Name of the variable to override (must exist in model$variables)
+#' @param value Value expression for the override (uses NSE)
+#' @param strategy Optional strategy name to limit override to specific strategy
+#' @param group Optional group name to limit override to specific group
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_variable("cost", 5000) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   add_scenario_variable("Optimistic", "cost", 4000)
+#' }
 #' @export
 add_scenario_variable <- function(model, scenario, variable, value,
                                    strategy = "", group = "") {
@@ -287,6 +515,35 @@ add_scenario_variable <- function(model, scenario, variable, value,
 
 # --- Scenario Setting Override (nested) -------------------------------------
 
+#' Add Setting Override to Scenario
+#'
+#' Add a model setting override for a specific scenario. When the scenario
+#' analysis runs this scenario, the specified setting will use the override
+#' value instead of its default.
+#'
+#' Common settings that can be overridden include:
+#' - `timeframe`: Model time horizon
+#' - `discount_cost`: Discount rate for costs (percentage, e.g. 3 for 3%)
+#' - `discount_outcomes`: Discount rate for outcomes (percentage, e.g. 3 for 3%)
+#' - `cycle_length`: Length of each model cycle
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario to add the override to (must exist)
+#' @param setting Name of the setting to override
+#' @param value Value for the setting override
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_scenario("Extended Horizon") |>
+#'   add_scenario_setting("Extended Horizon", "timeframe", 30) |>
+#'   add_scenario("No Discounting") |>
+#'   add_scenario_setting("No Discounting", "discount_cost", 0) |>
+#'   add_scenario_setting("No Discounting", "discount_outcomes", 0)
+#' }
 #' @export
 add_scenario_setting <- function(model, scenario, setting, value) {
   validate_string(scenario, "Scenario name")
@@ -298,6 +555,65 @@ add_scenario_setting <- function(model, scenario, setting, value) {
 
 # --- Multivariate Sampling --------------------------------------------------
 
+#' Add Multivariate Sampling Specification to Model
+#'
+#' Define a multivariate distribution for sampling correlated parameters.
+#' This is used for Probabilistic Sensitivity Analysis (PSA) when multiple
+#' parameters need to be sampled together with a specified correlation structure.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming this sampling specification
+#' @param type Distribution type: `"dirichlet"`, `"mvnormal"` or `"multinomial"`.
+#' @param variables Character vector of variable names to be sampled together,
+#'   or a tibble with columns: variable, strategy, group (for segment-specific sampling)
+#' @param strategy Strategy the sampling applies to; empty string (default) for all
+#'   strategies.
+#' @param group Group the sampling applies to; empty string (default) for all groups.
+#' @param covariance For `"mvnormal"`: a formula giving the covariance matrix of the
+#'   variables (for example the name of a model table). Required for that type.
+#' @param n For `"dirichlet"`: the effective sample size. The base-case values
+#'   multiplied by `n` are the Dirichlet parameters. Required for that type.
+#'   For `"multinomial"`, the size comes from the base-case counts instead.
+#' @param description Optional description of this sampling specification
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' # Dirichlet distribution for transition probabilities
+#' model <- define_model("markov") |>
+#'   add_variable("p_stable", 0.7) |>
+#'   add_variable("p_progression", 0.2) |>
+#'   add_variable("p_death", 0.1) |>
+#'   add_multivariate_sampling(
+#'     name = "transition_probs",
+#'     type = "dirichlet",
+#'     variables = c("p_stable", "p_progression", "p_death"),
+#'     n = 100
+#'   )
+#'
+#' # Multivariate normal with covariance from a model table
+#' model <- model |>
+#'   add_variable("shape", 1.5) |>
+#'   add_variable("scale", 0.02) |>
+#'   add_table("surv_vcov", as.data.frame(vcov(fit))) |>
+#'   add_multivariate_sampling(
+#'     name = "survival_params",
+#'     type = "mvnormal",
+#'     variables = c("shape", "scale"),
+#'     covariance = "surv_vcov"
+#'   )
+#'
+#' # Strategy-specific sampling
+#' model <- model |>
+#'   add_multivariate_sampling(
+#'     name = "strategy_specific",
+#'     type = "mvnormal",
+#'     variables = c("treatment_cost", "treatment_qaly"),
+#'     strategy = "intervention",
+#'     covariance = "cost_qaly_cov"
+#'   )
+#' }
 #' @export
 add_multivariate_sampling <- function(model, name, type, variables,
                                        strategy = "", group = "",
@@ -319,6 +635,32 @@ add_multivariate_sampling <- function(model, name, type, variables,
                   .callbacks_add_mv_sampling)
 }
 
+#' Edit a Multivariate Sampling Specification
+#'
+#' Modify an existing multivariate sampling specification. Any parameter not
+#' provided will retain its current value. Use \code{new_name} to rename.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the specification to edit
+#' @param new_name Optional new name for renaming
+#' @param type Optional new type ("dirichlet", "mvnormal", "multinomial")
+#' @param variables Optional new variables (character vector)
+#' @param strategy Optional new strategy targeting
+#' @param group Optional new group targeting
+#' @param covariance Optional new covariance table name (for mvnormal)
+#' @param n Optional new effective sample size (for dirichlet)
+#' @param description Optional new description
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- model |>
+#'   edit_multivariate_sampling(
+#'     name = "transition_probs",
+#'     n = 200
+#'   )
+#' }
 #' @export
 edit_multivariate_sampling <- function(model, name, new_name, type, variables,
                                         strategy, group, covariance, n,
@@ -337,6 +679,20 @@ edit_multivariate_sampling <- function(model, name, new_name, type, variables,
   entity_edit_list(model, .schema_multivariate_sampling, item_idx, updates)
 }
 
+#' Remove a Multivariate Sampling Specification
+#'
+#' Remove an existing multivariate sampling specification from the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the specification to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- model |>
+#'   remove_multivariate_sampling("transition_probs")
+#' }
 #' @export
 remove_multivariate_sampling <- function(model, name) {
   item_idx <- find_in_list(model$multivariate_sampling, "name", list(name),
@@ -346,6 +702,77 @@ remove_multivariate_sampling <- function(model, name) {
 
 # --- DSA Variable -----------------------------------------------------------
 
+#' Add Deterministic Sensitivity Analysis Variable to Model
+#'
+#' Define a variable to include in deterministic sensitivity analysis (DSA).
+#' DSA will run the model with this variable set to its low and high values
+#' to assess parameter sensitivity.
+#'
+#' The low and high bounds can be specified as:
+#' - Literal numeric values (e.g., 0.01, 0.05)
+#' - Expressions using the `bc` keyword to reference the base case value (e.g., bc * 0.5)
+#' - Expressions referencing other model variables (e.g., bc - 2 * cost_se)
+#'
+#' **Display Names**: DSA parameters automatically inherit display names from their variables.
+#' Since variables auto-generate unique display names for strategy/group combinations
+#' (e.g., "cost, treatment_a"), DSA parameters will also have unique names. You can optionally
+#' override with custom `display_name` values in either `add_variable()` or `add_dsa_variable()`.
+#'
+#' @param model An oq_model object
+#' @param variable Character string naming the variable to vary (must exist in model$variables)
+#' @param low Expression or numeric value for the low bound of the sensitivity range.
+#'   Can use `bc` keyword to reference the base case value and other model variables.
+#' @param high Expression or numeric value for the high bound of the sensitivity range.
+#'   Can use `bc` keyword to reference the base case value and other model variables.
+#' @param strategy Optional strategy name to limit DSA to specific strategy
+#' @param group Optional group name to limit DSA to specific group
+#' @param display_name Optional display name for plots and tables. If not provided,
+#'   inherits from the variable definition. Required to be unique across all DSA parameters.
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' # Example 1: Literal values (backward compatible)
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05)
+#'
+#' # Example 2: Relative to base case using bc keyword
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease",
+#'                    low = bc * 0.5,    # 50% of base case
+#'                    high = bc * 1.5)   # 150% of base case
+#'
+#' # Example 3: Using other variables (standard error pattern)
+#' model <- define_model("markov") |>
+#'   add_variable("cost_tx", 1000) |>
+#'   add_variable("cost_tx_se", 100) |>
+#'   add_dsa_variable("cost_tx",
+#'                    low = bc - 2 * cost_tx_se,  # Base - 2 SE
+#'                    high = bc + 2 * cost_tx_se) # Base + 2 SE
+#'
+#' # Example 4: Strategy-specific DSA with auto-generated display names
+#' model <- define_model("markov") |>
+#'   add_variable("p_prog", strategy = "treatment_a", formula = 0.3) |>
+#'   add_variable("p_prog", strategy = "treatment_b", formula = 0.2) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_a", low = 0.2, high = 0.4) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_b", low = 0.1, high = 0.3)
+#' # Auto-generates: "p_prog, treatment_a" and "p_prog, treatment_b"
+#'
+#' # Example 5: Override auto-generated names with custom display names
+#' model <- define_model("markov") |>
+#'   add_variable("p_prog", display_name = "Treatment A Progression",
+#'                strategy = "treatment_a", formula = 0.3) |>
+#'   add_variable("p_prog", display_name = "Treatment B Progression",
+#'                strategy = "treatment_b", formula = 0.2) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_a", low = 0.2, high = 0.4) |>
+#'   add_dsa_variable("p_prog", strategy = "treatment_b", low = 0.1, high = 0.3)
+#' }
 #' @export
 add_dsa_variable <- function(model, variable, low, high,
                               strategy = "", group = "",
@@ -364,6 +791,31 @@ add_dsa_variable <- function(model, variable, low, high,
   entity_add_list(model, .schema_dsa_param, new_item)
 }
 
+#' Add Deterministic Sensitivity Analysis Setting to Model
+#'
+#' Define a model setting to include in deterministic sensitivity analysis (DSA).
+#' Settings include parameters like discount rates, timeframe, and other global
+#' model configuration values that are not part of the variables table.
+#'
+#' @param model An oq_model object
+#' @param setting Character string naming the setting to vary
+#'   (e.g., "discount_cost", "discount_outcomes", "timeframe")
+#' @param low Value for the low bound (numeric or character depending on setting)
+#' @param high Value for the high bound (numeric or character depending on setting)
+#' @param display_name Optional display name for plots and tables
+#' @param range_label Optional custom text for the input range portion of tornado labels.
+#'   When provided, labels show "Parameter Name (range_label)" instead of auto-generated
+#'   "Parameter Name (low - high)". For example, use "Base Case ± 20\%" or "±50\%".
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   add_dsa_setting("timeframe", low = 10, high = 30)
+#' }
 #' @export
 add_dsa_setting <- function(model, setting, low, high,
                              display_name = NULL, range_label = NULL) {
@@ -379,6 +831,22 @@ add_dsa_setting <- function(model, setting, low, high,
 
 # --- Threshold Analysis -----------------------------------------------------
 
+#' Add Threshold Analysis to Model
+#'
+#' Define a threshold analysis that finds the input parameter value producing
+#' a desired output condition using iterative root-finding.
+#'
+#' @param model An oq_model object
+#' @param name Unique name for this threshold analysis
+#' @param variable Variable to solve for
+#' @param lower Lower bound for search range
+#' @param upper Upper bound for search range
+#' @param condition A condition list created by \code{threshold_condition_*} functions
+#' @param variable_strategy Strategy targeting for the variable (empty string = all)
+#' @param variable_group Group targeting for the variable (empty string = all)
+#' @param active Whether this analysis is active
+#'
+#' @return The modified model object
 #' @export
 add_threshold_analysis <- function(model, name, variable, lower, upper,
                                     condition, variable_strategy = "",
@@ -414,6 +882,33 @@ add_threshold_analysis <- function(model, name, variable, lower, upper,
   entity_add_list(model, .schema_threshold_analysis, new_item)
 }
 
+#' Edit a Threshold Analysis
+#'
+#' Modify an existing threshold analysis. Only specified parameters are updated;
+#' all others remain unchanged.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the threshold analysis to edit
+#' @param new_name Optional new name for the analysis
+#' @param variable Optional new variable to solve for
+#' @param variable_strategy Optional new strategy targeting for the variable
+#' @param variable_group Optional new group targeting for the variable
+#' @param lower Optional new lower bound for search range
+#' @param upper Optional new upper bound for search range
+#' @param condition Optional new condition list created by \code{threshold_condition_*} functions
+#' @param active Optional new active flag
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost", 100) |>
+#'   add_threshold_analysis("ta1", "cost", 0, 200,
+#'     condition = threshold_condition_outcomes(
+#'       summary = "total_qalys", type = "absolute", strategy = "A")) |>
+#'   edit_threshold_analysis("ta1", new_name = "ta1_renamed", lower = 10)
+#' }
 #' @export
 edit_threshold_analysis <- function(model, name, new_name, variable,
                                      variable_strategy, variable_group,
@@ -467,6 +962,24 @@ edit_threshold_analysis <- function(model, name, new_name, variable,
   entity_edit_list(model, .schema_threshold_analysis, item_idx, updates)
 }
 
+#' Remove a Threshold Analysis
+#'
+#' Remove an existing threshold analysis from the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the threshold analysis to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost", 100) |>
+#'   add_threshold_analysis("ta1", "cost", 0, 200,
+#'     condition = threshold_condition_outcomes(
+#'       summary = "total_qalys", type = "absolute", strategy = "A")) |>
+#'   remove_threshold_analysis("ta1")
+#' }
 #' @export
 remove_threshold_analysis <- function(model, name) {
   item_idx <- find_in_list(model$threshold_analyses, "name", list(name),
@@ -476,6 +989,17 @@ remove_threshold_analysis <- function(model, name) {
 
 # --- Override Category -------------------------------------------------------
 
+#' Add an Override Category to Model
+#'
+#' Create a named category for grouping related override controls.
+#' Override categories organize UI controls that allow users to modify
+#' model variables and settings at runtime.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the category name (must be unique, case-insensitive)
+#' @param general Logical indicating if this is a system category (default: FALSE)
+#'
+#' @return The modified model object
 #' @export
 add_override_category <- function(model, name, general = FALSE) {
   validate_string(name, "Override category name")
@@ -485,6 +1009,19 @@ add_override_category <- function(model, name, general = FALSE) {
 
 # --- Threshold Condition Constructors (pure helpers, not CRUD) ---------------
 
+#' Create Threshold Condition for Outcomes
+#'
+#' @param summary Target a summary (e.g., "total_qalys"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "qaly_sick"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#'
+#' @return A condition list for use in \code{add_threshold_analysis()}
 #' @export
 threshold_condition_outcomes <- function(summary = NULL, value = NULL,
                                           type = c("absolute", "difference"),
@@ -497,6 +1034,19 @@ threshold_condition_outcomes <- function(summary = NULL, value = NULL,
        discounted = discounted, target_value = target_value, group = group)
 }
 
+#' Create Threshold Condition for Costs
+#'
+#' @param summary Target a summary (e.g., "total_cost"). Mutually exclusive with \code{value}.
+#' @param value Target an individual value (e.g., "cost_drug"). Mutually exclusive with \code{summary}.
+#' @param type Either "absolute" (single strategy) or "difference" (referent minus comparator)
+#' @param strategy Strategy name for absolute type
+#' @param referent Referent strategy for difference type
+#' @param comparator Comparator strategy for difference type
+#' @param discounted Whether to use discounted results
+#' @param target_value Target value to find threshold for
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#'
+#' @return A condition list for use in \code{add_threshold_analysis()}
 #' @export
 threshold_condition_costs <- function(summary = NULL, value = NULL,
                                        type = c("absolute", "difference"),
@@ -509,6 +1059,18 @@ threshold_condition_costs <- function(summary = NULL, value = NULL,
        discounted = discounted, target_value = target_value, group = group)
 }
 
+#' Create Threshold Condition for NMB
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param target_value Target NMB value
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#'
+#' @return A condition list for use in \code{add_threshold_analysis()}
 #' @export
 threshold_condition_nmb <- function(health_summary, cost_summary,
                                      referent, comparator,
@@ -520,6 +1082,19 @@ threshold_condition_nmb <- function(health_summary, cost_summary,
        target_value = target_value, group = group, wtp = wtp)
 }
 
+#' Create Threshold Condition for CE
+#'
+#' @param health_summary Health outcome summary name
+#' @param cost_summary Cost outcome summary name
+#' @param referent Referent strategy
+#' @param comparator Comparator strategy
+#' @param discounted Whether to use discounted results
+#' @param target_value Not used for CE conditions: the threshold is always where the
+#'   referent and comparator are equally cost-effective at the WTP.
+#' @param group Group name to target for results extraction. Empty string (default) uses aggregated results.
+#' @param wtp Willingness-to-pay value. If NULL (default), the WTP from the health summary is used.
+#'
+#' @return A condition list for use in \code{add_threshold_analysis()}
 #' @export
 threshold_condition_ce <- function(health_summary, cost_summary,
                                     referent, comparator,
@@ -533,23 +1108,118 @@ threshold_condition_ce <- function(health_summary, cost_summary,
 
 # --- State (S3 generic) -----------------------------------------------------
 
+#' Add States to Model
+#'
+#' Add one or more states to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the state name
+#' @param ... Arguments for the model type:
+#'   \describe{
+#'     \item{Markov}{`display_name`, `description` (optional labels),
+#'       `state_group` (optional state group for grouping related states),
+#'       `share_state_time` (whether to share state time with other states in
+#'       the group, default `FALSE`), `state_cycle_limit` (optional limit on the
+#'       number of cycles tracked in this state), `state_cycle_limit_unit`
+#'       (unit of the limit, default `"cycles"`) and `initial_prob`
+#'       (required initial probability).}
+#'     \item{PSM, custom PSM}{`display_name`, `description`. `initial_prob`
+#'       is not used and is an error.}
+#'     \item{Decision tree}{States are not supported.}
+#'   }
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_state("healthy", initial_prob = 1) |>
+#'   add_state("sick", initial_prob = 0)
 #' @export
 add_state <- function(model, name, ...) UseMethod("add_state")
 
+#' Edit a State in the Model
+#'
+#' Modify an existing state's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the state are updated (transitions, values,
+#' and threshold analyses).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the state to edit
+#' @param ... Fields to update: `display_name`, `description`, and
+#'   `new_name` (a new name for the state; the state and all references to it
+#'   are renamed). Markov models also accept `state_group`,
+#'   `share_state_time`, `state_cycle_limit`, `state_cycle_limit_unit` and
+#'   `initial_prob`.
+#'
+#' @return The modified model object
 #' @export
 edit_state <- function(model, name, ...) UseMethod("edit_state")
 
+#' Remove a State from the Model
+#'
+#' Remove an existing state and optionally cascade-remove all downstream
+#' references (transitions, values, and threshold analyses).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the state to remove
+#' @param ... `error_on_dependencies`: logical. If `TRUE` and the state has
+#'   downstream dependencies, an error of class `"state_has_dependencies"` is
+#'   thrown instead of removing anything (default `FALSE`).
+#'
+#' @return The modified model object
 #' @export
 remove_state <- function(model, name, ...) UseMethod("remove_state")
 
 # --- Transitions (S3 generic) ------------------------------------------------
 
+#' Add Transitions to Model
+#'
+#' Add one or more transitions to the model. Uses NSE to capture formula expressions.
+#'
+#' @param model An oq_model object
+#' @param ... Arguments for the model type:
+#'   \describe{
+#'     \item{Markov}{`from_state`, `to_state` and `formula` (an unquoted R
+#'       expression for the transition probability).}
+#'     \item{PSM}{`endpoint` (`"PFS"` or `"OS"`), `time_unit` and `formula`
+#'       (an unquoted R expression for the survival distribution).}
+#'     \item{Custom PSM}{`state` and `formula` (an unquoted R expression for
+#'       the state probability).}
+#'     \item{Decision tree}{Transitions are not supported.}
+#'   }
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_transition("healthy", "sick", p_disease * 0.1) |>
+#'   add_transition("sick", "dead", 0.2)
 #' @export
 add_transition <- function(model, ...) UseMethod("add_transition")
 
+#' Edit a Markov Transition
+#'
+#' Edit the formula of an existing Markov transition.
+#'
+#' @param model An oq_model object
+#' @param ... The transition to edit and its new formula: `from_state`,
+#'   `to_state` and `formula` (Markov); `endpoint`, and `formula` and/or
+#'   `time_unit` (PSM); `state` and `formula` (custom PSM).
+#'
+#' @return The modified model object
 #' @export
 edit_transition <- function(model, ...) UseMethod("edit_transition")
 
+#' Remove a Markov Transition
+#'
+#' Remove an existing Markov transition.
+#'
+#' @param model An oq_model object
+#' @param ... The transition to remove: `from_state` and `to_state`
+#'   (Markov), `endpoint` (PSM) or `state` (custom PSM).
+#'
+#' @return The modified model object
 #' @export
 remove_transition <- function(model, ...) UseMethod("remove_transition")
 
@@ -569,8 +1239,9 @@ remove_transition <- function(model, ...) UseMethod("remove_transition")
 #'   factors (see the discounting documentation).
 #' @param half_cycle_method Optional half-cycle method for this value
 #'   (`"start"`, `"end"` or `"life-table"`). If `NA`, the model's
-#'   `half_cycle_method` setting applies. All rows of a value name must use the
-#'   same setting.
+#'   `half_cycle_method` setting applies. It sets both the occupancy the value
+#'   is charged on and when it is discounted; for transitional values only when
+#'   it is discounted. All rows of a value name must use the same setting.
 #'
 #' @return The modified model.
 #' @export
@@ -603,6 +1274,37 @@ validate_value_half_cycle_method <- function(half_cycle_method) {
   invisible(TRUE)
 }
 
+#' Edit a Value in the Model
+#'
+#' Modify an existing value's properties. The value is identified by its
+#' \code{name}, \code{state}, and \code{destination} combination. Only the
+#' fields that are explicitly provided will be updated.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the value to edit
+#' @param state State used for lookup (default NA)
+#' @param destination Destination used for lookup (default NA)
+#' @param formula An unquoted R expression for the value calculation
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param type Optional new type ("outcome" or "cost")
+#' @param discounting_override Optional discounting override formula
+#' @param half_cycle_method New half-cycle method for this value
+#'   (`"start"`, `"end"` or `"life-table"`). If `NA`, the model's
+#'   `half_cycle_method` setting applies. It sets both the occupancy the value
+#'   is charged on and when it is discounted; for transitional values only when
+#'   it is discounted. All rows of a value name must use the same setting.
+#' @param new_name Optional new name for the value row(s)
+#' @param rename_all Logical. When TRUE and \code{new_name} is provided, renames
+#'   ALL rows with the old name and cascades to summaries. Default FALSE.
+#' @param error_on_field_changes Logical. When TRUE and merging into an existing
+#'   name, throws error class \code{"value_field_changes"} if display_name or
+#'   description would change. Default FALSE.
+#' @param error_on_name_sharing Logical. When TRUE and \code{new_name} is provided,
+#'   throws error class \code{"value_name_shared"} if the old name has multiple
+#'   rows. Default FALSE.
+#'
+#' @return The modified model object
 #' @export
 edit_value <- function(model, name, state = NA, destination = NA,
                         formula, display_name, description, type,
@@ -653,6 +1355,27 @@ edit_value <- function(model, name, state = NA, destination = NA,
   model
 }
 
+#' Remove a Value from the Model
+#'
+#' Remove one or more value rows from the model. If only \code{name} is given,
+#' all rows with that value name are removed. If \code{state} and/or
+#' \code{destination} are specified, only matching rows are removed.
+#'
+#' When the last row for a given value name is removed, references to that
+#' value are also removed from summary CSV strings. If \code{error_on_dependencies}
+#' is TRUE and the value name would be fully removed, an error of class
+#' \code{"value_has_dependencies"} is thrown instead.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the value to remove
+#' @param state Optional state to narrow removal. If NULL, all states are matched.
+#' @param destination Optional destination to narrow removal. If NULL, all
+#'   destinations are matched.
+#' @param error_on_dependencies Logical. If TRUE and the value name would be
+#'   fully removed while referenced in summaries, an error of class
+#'   \code{"value_has_dependencies"} is thrown. Default FALSE.
+#'
+#' @return The modified model object
 #' @export
 remove_value <- function(model, name, state = NULL, destination = NULL,
                           error_on_dependencies = FALSE) {
@@ -673,6 +1396,56 @@ remove_value <- function(model, name, state = NULL, destination = NULL,
 
 # --- Variable (via engine) ---------------------------------------------------
 
+#' Add Variables to Model
+#'
+#' Add one or more variables to the model. Uses NSE to capture formula expressions.
+#'
+#' **Display Names**: The `display_name` parameter is optional. If not provided, display names
+#' are automatically generated based on the variable name, strategy, and group:
+#' - No strategy/group: `"var_name"`
+#' - Strategy only: `"var_name, strategy_name"`
+#' - Group only: `"var_name, group_name"`
+#' - Both: `"var_name, strategy_name, group_name"`
+#'
+#' This auto-generation ensures unique display names for strategy/group-specific variables,
+#' which is important for DSA/PSA plots and tables.
+#'
+#' **Important**: When a variable has multiple definitions (e.g., one per strategy/group), if you
+#' provide a custom `display_name` for at least one definition, you must provide it for ALL definitions
+#' of that variable. Mixing custom and auto-generated display names for the same variable will result
+#' in a validation error **immediately** when you call `add_variable()` with the inconsistent definition.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the variable name
+#' @param formula An unquoted R expression for the variable calculation
+#' @param display_name Optional display name. If not provided, will be auto-generated
+#'   from name, strategy, and group. You can override with a custom name if desired.
+#' @param description Optional description
+#' @param strategy Optional strategy association
+#' @param group Optional group association
+#' @param source Optional source information
+#' @param sampling Optional sampling information
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", look_up(table, age = cohort_age))
+#'
+#' # Strategy-specific variables - display names auto-generated
+#' model <- model |>
+#'   add_variable("cost_med", strategy = "treatment_a", formula = 5000,
+#'                sampling = normal(5000, 500)) |>
+#'   add_variable("cost_med", strategy = "treatment_b", formula = 3000,
+#'                sampling = normal(3000, 300))
+#' # Auto-generates: "cost_med, treatment_a" and "cost_med, treatment_b"
+#'
+#' # Or provide custom display names if preferred
+#' model <- model |>
+#'   add_variable("cost_admin", display_name = "Admin Cost (Treatment A)",
+#'                strategy = "treatment_a", formula = 500) |>
+#'   add_variable("cost_admin", display_name = "Admin Cost (Treatment B)",
+#'                strategy = "treatment_b", formula = 300)
 #' @export
 add_variable <- function(model, name, formula, display_name = NULL,
                           description = NULL, strategy = "", group = "",
@@ -705,19 +1478,28 @@ add_variable <- function(model, name, formula, display_name = NULL,
 #'   `half_cycle_method`.
 #'
 #' @details
-#' `half_cycle_method` is one of `"start"`, `"end"` or
-#' `"life-table"` (default). Formulas are evaluated per cycle (in cycle k, `cycle_lag` is
-#' the start and `cycle` the end of the cycle). Cycle k's value prices time
-#' point k, and time point 0 takes cycle 1's value. At each time point the
-#' engine computes occupancy x value for residency values and arrivals x value
-#' for transitional values. These point values are allocated to cycle k as the
-#' amount at time point k-1 (`"start"`), at k (`"end"`), or the average of the
-#' two (`"life-table"`). Model start values are charged in cycle 1 with no
-#' correction. Individual values can override the method (see [add_value()]).
+#' `half_cycle_method` is one of `"start"` (default), `"end"` or
+#' `"life-table"`. It sets when values accrue in each cycle, and so both the
+#' occupancy they are charged on and when they are discounted. Formulas are
+#' evaluated per cycle (in cycle k, `cycle_lag` is the start and `cycle` the end
+#' of the cycle), and cycle k's value applies only to cycle k:
+#' \itemize{
+#'   \item `"start"`: occupancy at the start of the cycle, discounted at the
+#'     start;
+#'   \item `"end"`: occupancy at the end of the cycle, discounted at the end;
+#'   \item `"life-table"`: the average of the two, each half discounted at its
+#'     own time.
+#' }
+#' Transitional values are charged in the cycle the transitions occur under
+#' every method; the method only sets when they are discounted. Model start
+#' values are charged in cycle 1 at time 0 (discounted only by a decision tree
+#' phase). Individual values
+#' can override the method (see [add_value()]); for example, a one-off cost
+#' written as `ifelse(cycle == 1, cost, 0)` is charged in full with `"start"`,
+#' and an entry cost written with `state_cycle == 1` equals the transitional
+#' value with `"end"`.
 #'
-#' Discounting follows the same rule: each time point is discounted at its own
-#' time and the discounted amounts are allocated to cycles with the half-cycle
-#' method. `discount_method` is `"by_cycle"` (continuous time, default) or
+#' `discount_method` is `"by_cycle"` (continuous time, default) or
 #' `"by_year"` (time floored to whole years).
 #'
 #' @return The modified model.
@@ -741,11 +1523,22 @@ set_settings <- function(model, ...) {
     setting_name <- if (name %in% names(setting_map)) setting_map[name] else name
     model$settings[[setting_name]] <- dots[[name]]
   }
-  if ("n_cycles" %in% names(dots) && is.null(model$settings$timeframe_unit)) {
+  if ("half_cycle_method" %in% names(dots) &&
+      !isTRUE(model$settings$half_cycle_method %in% valid_half_cycle_methods)) {
+    stop("Invalid half_cycle_method: '", format(dots$half_cycle_method), "'. Must be one of: ",
+         paste(valid_half_cycle_methods, collapse = ", "), call. = FALSE)
+  }
+  if ("discount_method" %in% names(dots) &&
+      !isTRUE(model$settings$discount_method %in% valid_discount_methods)) {
+    stop("Invalid discount_method: '", format(dots$discount_method), "'. Must be one of: ",
+         paste(valid_discount_methods, collapse = ", "), call. = FALSE)
+  }
+  # n_cycles sets the timeframe in cycles
+  if ("n_cycles" %in% names(dots)) {
     model$settings$timeframe_unit <- "cycles"
   }
   if (is.null(model$settings$days_per_year)) model$settings$days_per_year <- 365
-  if (is.null(model$settings$half_cycle_method)) model$settings$half_cycle_method <- "life-table"
+  if (is.null(model$settings$half_cycle_method)) model$settings$half_cycle_method <- "start"
   if (is.null(model$settings$discount_cost)) model$settings$discount_cost <- 0
   if (is.null(model$settings$discount_outcomes)) model$settings$discount_outcomes <- 0
   model
@@ -753,6 +1546,28 @@ set_settings <- function(model, ...) {
 
 # --- VBP / PSA (singleton setters — not CRUD) --------------------------------
 
+#' Set VBP Configuration
+#'
+#' Configure value-based pricing (VBP) parameters on the model so they can be
+#' serialized and used as defaults by \code{run_vbp()}, \code{run_dsa()},
+#' \code{run_scenario()}, and \code{run_twsa()}.
+#'
+#' @param model An oq_model object
+#' @param price_variable Name of the variable representing the intervention's price
+#' @param intervention_strategy Name of the intervention strategy
+#' @param outcome_summary Name of the outcome summary to use
+#' @param cost_summary Name of the cost summary to use
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_vbp(
+#'     price_variable = "c_drug",
+#'     intervention_strategy = "treatment",
+#'     outcome_summary = "total_qalys",
+#'     cost_summary = "total_costs"
+#'   )
 #' @export
 set_vbp <- function(model, price_variable, intervention_strategy,
                      outcome_summary, cost_summary) {
@@ -766,9 +1581,30 @@ set_vbp <- function(model, price_variable, intervention_strategy,
   model
 }
 
+#' Remove VBP Configuration
+#'
+#' Remove the value-based pricing (VBP) configuration from the model.
+#'
+#' @param model An oq_model object
+#'
+#' @return The modified model object
 #' @export
 remove_vbp <- function(model) { model$vbp <- NULL; model }
 
+#' Set PSA Configuration
+#'
+#' Configure probabilistic sensitivity analysis (PSA) parameters on the model
+#' so they can be serialized and used as defaults by \code{run_psa()}.
+#'
+#' @param model An oq_model object
+#' @param n_sim Number of PSA simulations to run (positive integer)
+#' @param seed Random seed for reproducibility (NULL or single numeric value)
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   set_psa(n_sim = 1000, seed = 42)
 #' @export
 set_psa <- function(model, n_sim, seed = NULL) {
   if (!is.numeric(n_sim) || length(n_sim) != 1 || is.na(n_sim) || n_sim < 1 || n_sim != as.integer(n_sim))
@@ -888,6 +1724,25 @@ remove_lockfile <- function(model) { model$lockfile <- NULL; model }
 
 # --- Edit/Remove Summary (via engine) ----------------------------------------
 
+#' Edit a Summary in the Model
+#'
+#' Modify an existing summary's properties or rename it. Only the fields that
+#' are explicitly provided will be updated. If \code{new_name} is provided,
+#' all downstream references to the summary are updated (threshold analyses
+#' and VBP config).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the summary to edit
+#' @param values Optional new comma-separated string of value names
+#' @param display_name Optional new display name
+#' @param description Optional new description
+#' @param type Optional new type: "outcome" or "cost". Changing to "cost" will
+#'   clear the WTP field.
+#' @param wtp Optional new willingness-to-pay value. Cannot be set on cost summaries.
+#' @param new_name Optional new name for the summary. If provided, the summary
+#'   and all downstream references will be renamed.
+#'
+#' @return The modified model object
 #' @export
 edit_summary <- function(model, name, values, display_name, description, type, wtp, new_name) {
   match_idx <- find_in_tibble(model$summaries, "name", list(name), "Summary",
@@ -905,6 +1760,21 @@ edit_summary <- function(model, name, values, display_name, description, type, w
   entity_edit_tibble(model, .schema_summary, match_idx, updates, .callbacks_edit_summary)
 }
 
+#' Remove a Summary from the Model
+#'
+#' Remove an existing summary and optionally cascade-remove all downstream
+#' references (threshold analyses and VBP config).
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the summary to remove
+#' @param error_on_dependencies Logical. If \code{TRUE} and the summary has
+#'   downstream dependencies, an error of class \code{"summary_has_dependencies"}
+#'   is thrown instead of removing anything. The error condition contains a
+#'   \code{dependencies} field with a named list of affected components.
+#'   Default is \code{FALSE}, which silently removes the summary and all
+#'   downstream references.
+#'
+#' @return The modified model object
 #' @export
 remove_summary <- function(model, name, error_on_dependencies = FALSE) {
   match_idx <- find_in_tibble(model$summaries, "name", list(name), "Summary",
@@ -959,6 +1829,29 @@ remove_summary <- function(model, name, error_on_dependencies = FALSE) {
 
 # --- Edit/Remove Variable (via engine) ---------------------------------------
 
+#' Edit a Variable in the Model
+#'
+#' Modify an existing variable's properties. The variable is identified by its
+#' name, strategy, and group combination. Only the fields that are explicitly
+#' provided will be updated.
+#'
+#' Note: You cannot change a variable's strategy or group targeting. To change
+#' targeting, remove the variable and add it again with the new targeting.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the variable to edit
+#' @param formula An unquoted R expression for the variable calculation
+#' @param display_name Optional display name
+#' @param description Optional description
+#' @param strategy Strategy association used for lookup (default: "")
+#' @param group Group association used for lookup (default: "")
+#' @param source Optional source information
+#' @param sampling Optional sampling information
+#' @param new_name Optional new name for the variable. If provided, the
+#'   variable will be renamed. Must not collide with existing decision tree
+#'   names.
+#'
+#' @return The modified model object
 #' @export
 edit_variable <- function(model, name, formula, display_name, description,
                            strategy = "", group = "", source, sampling, new_name) {
@@ -1004,6 +1897,21 @@ edit_variable <- function(model, name, formula, display_name, description,
   entity_edit_tibble(model, .schema_variable, match_idx, updates, .cbs)
 }
 
+#' Remove a Variable from the Model
+#'
+#' Remove one or more variable definitions from the model. If only `name` is
+#' given, all rows with that variable name are removed (all strategy/group
+#' combinations). If `strategy` and/or `group` are specified, only matching
+#' rows are removed.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the variable to remove
+#' @param strategy Optional strategy to narrow removal. If NULL, all strategies
+#'   are matched.
+#' @param group Optional group to narrow removal. If NULL, all groups are
+#'   matched.
+#'
+#' @return The modified model object
 #' @export
 remove_variable <- function(model, name, strategy = NULL, group = NULL) {
   match_mask <- model$variables$name == name
@@ -1016,6 +1924,33 @@ remove_variable <- function(model, name, strategy = NULL, group = NULL) {
 
 # --- Edit/Remove DSA (via engine) --------------------------------------------
 
+#' Edit a DSA Variable Specification
+#'
+#' Modify an existing DSA variable specification. Any parameter not provided
+#' will retain its current value. Use \code{new_variable}, \code{new_strategy},
+#' and \code{new_group} to re-key the specification.
+#'
+#' @param model An oq_model object
+#' @param variable Character string naming the variable to edit
+#' @param strategy Strategy targeting used to identify the specification (default: "")
+#' @param group Group targeting used to identify the specification (default: "")
+#' @param new_variable Optional new variable name
+#' @param new_strategy Optional new strategy targeting
+#' @param new_group Optional new group targeting
+#' @param low Optional new low bound expression or numeric value
+#' @param high Optional new high bound expression or numeric value
+#' @param display_name Optional new display name
+#' @param range_label Optional new range label
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05) |>
+#'   edit_dsa_variable("p_disease", low = bc * 0.5, high = bc * 1.5)
+#' }
 #' @export
 edit_dsa_variable <- function(model, variable, strategy = "", group = "",
                                new_variable, new_strategy, new_group,
@@ -1041,6 +1976,28 @@ edit_dsa_variable <- function(model, variable, strategy = "", group = "",
   entity_edit_list(model, .schema_dsa_param, item_idx, updates)
 }
 
+#' Edit a DSA Setting Specification
+#'
+#' Modify an existing DSA setting specification. Any parameter not provided
+#' will retain its current value. Use \code{new_setting} to rename the setting.
+#'
+#' @param model An oq_model object
+#' @param setting Character string naming the setting to edit
+#' @param new_setting Optional new setting name (must be a valid setting)
+#' @param low Optional new low bound value
+#' @param high Optional new high bound value
+#' @param display_name Optional new display name
+#' @param range_label Optional new range label
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   edit_dsa_setting("discount_cost", low = 1, high = 4)
+#' }
 #' @export
 edit_dsa_setting <- function(model, setting, new_setting, low, high, display_name, range_label) {
   item_idx <- find_in_list(model$dsa_parameters, c("type", "name"),
@@ -1064,6 +2021,24 @@ edit_dsa_setting <- function(model, setting, new_setting, low, high, display_nam
   entity_edit_list(model, .schema_dsa_param, item_idx, updates)
 }
 
+#' Remove a DSA Variable Specification
+#'
+#' Remove an existing DSA variable specification from the model.
+#'
+#' @param model An oq_model object
+#' @param variable Character string naming the variable to remove
+#' @param strategy Strategy targeting used to identify the specification (default: "")
+#' @param group Group targeting used to identify the specification (default: "")
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("p_disease", 0.03) |>
+#'   add_dsa_variable("p_disease", low = 0.01, high = 0.05) |>
+#'   remove_dsa_variable("p_disease")
+#' }
 #' @export
 remove_dsa_variable <- function(model, variable, strategy = "", group = "") {
   validate_string(variable, "Variable name")
@@ -1072,6 +2047,22 @@ remove_dsa_variable <- function(model, variable, strategy = "", group = "") {
   entity_remove_list(model, .schema_dsa_param, item_idx)
 }
 
+#' Remove a DSA Setting Specification
+#'
+#' Remove an existing DSA setting specification from the model.
+#'
+#' @param model An oq_model object
+#' @param setting Character string naming the setting to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(discount_cost = 3) |>
+#'   add_dsa_setting("discount_cost", low = 0, high = 5) |>
+#'   remove_dsa_setting("discount_cost")
+#' }
 #' @export
 remove_dsa_setting <- function(model, setting) {
   validate_string(setting, "Setting name")
@@ -1082,6 +2073,31 @@ remove_dsa_setting <- function(model, setting) {
 
 # --- Edit/Remove Scenario Overrides (via engine) -----------------------------
 
+#' Edit a Scenario Variable Override
+#'
+#' Modify an existing variable override within a scenario. Any parameter not
+#' provided will retain its current value.
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario containing the override
+#' @param variable Name of the variable to edit
+#' @param strategy Strategy targeting used to identify the override (default: "")
+#' @param group Group targeting used to identify the override (default: "")
+#' @param new_variable Optional new variable name
+#' @param new_strategy Optional new strategy targeting
+#' @param new_group Optional new group targeting
+#' @param value Optional new value expression (uses NSE)
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   edit_scenario_variable("Optimistic", "efficacy", value = 0.99)
+#' }
 #' @export
 edit_scenario_variable <- function(model, scenario, variable, strategy = "", group = "",
                                     new_variable, new_strategy, new_group, value) {
@@ -1107,6 +2123,26 @@ edit_scenario_variable <- function(model, scenario, variable, strategy = "", gro
   entity_edit_nested(model, .schema_scenario, parent_idx, .schema_scenario_variable_override, child_idx, updates)
 }
 
+#' Edit a Scenario Setting Override
+#'
+#' Modify an existing setting override within a scenario.
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario containing the override
+#' @param setting Name of the setting to edit
+#' @param new_setting Optional new setting name (must be a valid setting)
+#' @param value Optional new value
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20) |>
+#'   add_scenario("Extended") |>
+#'   add_scenario_setting("Extended", "timeframe", 30) |>
+#'   edit_scenario_setting("Extended", "timeframe", value = 40)
+#' }
 #' @export
 edit_scenario_setting <- function(model, scenario, setting, new_setting, value) {
   validate_string(scenario, "Scenario name")
@@ -1125,6 +2161,26 @@ edit_scenario_setting <- function(model, scenario, setting, new_setting, value) 
   entity_edit_nested(model, .schema_scenario, parent_idx, .schema_scenario_setting_override, child_idx, updates)
 }
 
+#' Remove a Scenario Variable Override
+#'
+#' Remove an existing variable override from a scenario.
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario containing the override
+#' @param variable Name of the variable to remove
+#' @param strategy Strategy targeting used to identify the override (default: "")
+#' @param group Group targeting used to identify the override (default: "")
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_scenario("Optimistic") |>
+#'   add_scenario_variable("Optimistic", "efficacy", 0.95) |>
+#'   remove_scenario_variable("Optimistic", "efficacy")
+#' }
 #' @export
 remove_scenario_variable <- function(model, scenario, variable, strategy = "", group = "") {
   validate_string(scenario, "Scenario name")
@@ -1135,6 +2191,24 @@ remove_scenario_variable <- function(model, scenario, variable, strategy = "", g
   entity_remove_nested(model, .schema_scenario, parent_idx, .schema_scenario_variable_override, child_idx)
 }
 
+#' Remove a Scenario Setting Override
+#'
+#' Remove an existing setting override from a scenario.
+#'
+#' @param model An oq_model object
+#' @param scenario Name of the scenario containing the override
+#' @param setting Name of the setting to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20) |>
+#'   add_scenario("Extended") |>
+#'   add_scenario_setting("Extended", "timeframe", 30) |>
+#'   remove_scenario_setting("Extended", "timeframe")
+#' }
 #' @export
 remove_scenario_setting <- function(model, scenario, setting) {
   validate_string(scenario, "Scenario name")
@@ -1146,6 +2220,28 @@ remove_scenario_setting <- function(model, scenario, setting) {
 
 # --- TWSA (via engine) -------------------------------------------------------
 
+#' Add a Two-Way Sensitivity Analysis to Model
+#'
+#' Define a named two-way sensitivity analysis (2WSA) that varies two parameters
+#' simultaneously across a grid of values. Each 2WSA must have exactly two
+#' variable or setting specifications added via `add_twsa_variable()` or
+#' `add_twsa_setting()`.
+#'
+#' @param model An oq_model object
+#' @param name Unique name for the 2WSA analysis (e.g., "Cost vs Efficacy")
+#' @param description Optional description explaining what this analysis explores
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   add_twsa_variable("Cost vs Efficacy", "cost_tx",
+#'     type = "range", min = 1000, max = 3000, steps = 5) |>
+#'   add_twsa_variable("Cost vs Efficacy", "efficacy",
+#'     type = "radius", radius = 0.1, steps = 5)
+#' }
 #' @export
 add_twsa <- function(model, name, description = NULL) {
   validate_string(name, "TWSA name")
@@ -1153,6 +2249,23 @@ add_twsa <- function(model, name, description = NULL) {
   entity_add_list(model, .schema_twsa, new_item)
 }
 
+#' Edit a TWSA Analysis
+#'
+#' Modify an existing TWSA analysis name and/or description.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the TWSA to edit
+#' @param new_name Optional new name
+#' @param description Optional new description
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   edit_twsa("Cost vs Efficacy", new_name = "Price vs Effect")
+#' }
 #' @export
 edit_twsa <- function(model, name, new_name, description) {
   item_idx <- find_in_list(model$twsa_analyses, "name", list(name), "TWSA analysis")
@@ -1162,12 +2275,76 @@ edit_twsa <- function(model, name, new_name, description) {
   entity_edit_list(model, .schema_twsa, item_idx, updates)
 }
 
+#' Remove a TWSA Analysis
+#'
+#' Remove an existing TWSA analysis from the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string naming the TWSA to remove
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   remove_twsa("Cost vs Efficacy")
+#' }
 #' @export
 remove_twsa <- function(model, name) {
   item_idx <- find_in_list(model$twsa_analyses, "name", list(name), "TWSA analysis")
   entity_remove_list(model, .schema_twsa, item_idx)
 }
 
+#' Add Variable to Two-Way Sensitivity Analysis
+#'
+#' Add a variable to vary in a two-way sensitivity analysis. Each TWSA must have
+#' exactly two parameters (variables or settings). Values can be specified using
+#' three different range types:
+#'
+#' - `type = "range"`: Vary from `min` to `max` in `steps` evenly-spaced values
+#' - `type = "radius"`: Vary from `bc - radius` to `bc + radius` where `bc` is
+#'   the base case value, creating `steps * 2 + 1` values centered on the base case
+#' - `type = "custom"`: Use explicit values provided as a numeric vector
+#'
+#' @param model An oq_model object
+#' @param twsa_name Name of the TWSA analysis to add the variable to (must exist)
+#' @param variable Name of the variable to vary (must exist in model$variables)
+#' @param type Type of range specification: "range", "radius", or "custom"
+#' @param min For type="range": minimum value (can use NSE expressions)
+#' @param max For type="range": maximum value (can use NSE expressions)
+#' @param radius For type="radius": distance from base case (can use NSE)
+#' @param steps For type="range" or "radius": number of steps
+#' @param values For type="custom": numeric vector of values to use
+#' @param strategy Optional strategy name to limit the variable to specific strategy
+#' @param group Optional group name to limit the variable to specific group
+#' @param display_name Optional display name for plots and tables
+#' @param include_base_case Logical. If TRUE (default), ensures the base case
+#'   value is included in the parameter grid. If the base case value is already
+#'   present in the values, no duplicate is added.
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   add_variable("cost_tx", 1000) |>
+#'   add_variable("efficacy", 0.8) |>
+#'   add_twsa("Cost vs Efficacy") |>
+#'   # Using range type
+#'   add_twsa_variable("Cost vs Efficacy", "cost_tx",
+#'     type = "range", min = 500, max = 1500, steps = 5) |>
+#'   # Using radius type (varies around base case)
+#'   add_twsa_variable("Cost vs Efficacy", "efficacy",
+#'     type = "radius", radius = 0.1, steps = 3)
+#'
+#' # Using custom values
+#' model <- define_model("markov") |>
+#'   add_variable("discount_rate", 0.03) |>
+#'   add_twsa("Discount Analysis") |>
+#'   add_twsa_variable("Discount Analysis", "discount_rate",
+#'     type = "custom", values = c(0, 0.015, 0.03, 0.05))
+#' }
 #' @export
 add_twsa_variable <- function(model, twsa_name, variable, type,
                                min = NULL, max = NULL, radius = NULL,
@@ -1204,6 +2381,45 @@ add_twsa_variable <- function(model, twsa_name, variable, type,
   entity_add_nested(model, .schema_twsa, twsa_name, .schema_twsa_parameter, new_item)
 }
 
+#' Add Setting to Two-Way Sensitivity Analysis
+#'
+#' Add a model setting to vary in a two-way sensitivity analysis. Each TWSA must
+#' have exactly two parameters (variables or settings). Settings include parameters
+#' like discount rates, timeframe, and other global model configuration values.
+#'
+#' Values can be specified using three different range types:
+#'
+#' - `type = "range"`: Vary from `min` to `max` in `steps` evenly-spaced values
+#' - `type = "radius"`: Vary from `base - radius` to `base + radius` where `base`
+#'   is the current setting value, creating `steps * 2 + 1` values
+#' - `type = "custom"`: Use explicit values provided as a numeric vector
+#'
+#' @param model An oq_model object
+#' @param twsa_name Name of the TWSA analysis to add the setting to (must exist)
+#' @param setting Name of the setting to vary (e.g., "discount_cost", "timeframe")
+#' @param type Type of range specification: "range", "radius", or "custom"
+#' @param min For type="range": minimum value
+#' @param max For type="range": maximum value
+#' @param radius For type="radius": distance from base value
+#' @param steps For type="range" or "radius": number of steps
+#' @param values For type="custom": numeric vector of values to use
+#' @param display_name Optional display name for plots and tables
+#' @param include_base_case Logical. If TRUE (default), ensures the base case
+#'   value is included in the parameter grid. If the base case value is already
+#'   present in the values, no duplicate is added.
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' \dontrun{
+#' model <- define_model("markov") |>
+#'   set_settings(timeframe = 20, discount_cost = 3) |>
+#'   add_twsa("Time vs Discount") |>
+#'   add_twsa_setting("Time vs Discount", "timeframe",
+#'     type = "range", min = 10, max = 30, steps = 5) |>
+#'   add_twsa_setting("Time vs Discount", "discount_cost",
+#'     type = "custom", values = c(0, 1.5, 3, 5))
+#' }
 #' @export
 add_twsa_setting <- function(model, twsa_name, setting, type,
                               min = NULL, max = NULL, radius = NULL,
@@ -1226,6 +2442,30 @@ add_twsa_setting <- function(model, twsa_name, setting, type,
 
 # --- Override (via engine) ---------------------------------------------------
 
+#' Add an Override Control to a Category
+#'
+#' Define a UI override control that allows users to modify a model variable
+#' or setting at runtime. When the model is rendered in a Shiny UI, these
+#' controls will be displayed to the user.
+#'
+#' @param model An oq_model object
+#' @param category Character string naming the category to add to (must exist)
+#' @param title Character string for the display name
+#' @param name Character string for the variable or setting name to override
+#' @param type Character string: "variable" or "setting"
+#' @param input_type Character string: "numeric", "slider", "dropdown", "formula", or "timeframe"
+#' @param expression Default/initial override value as a string or unquoted expression (uses NSE)
+#' @param description Optional description text
+#' @param strategy Optional strategy name (for variable overrides only)
+#' @param group Optional group name (for variable overrides only)
+#' @param general Logical indicating if this is a system override (default: FALSE)
+#' @param min Numeric minimum (for numeric/slider input types)
+#' @param max Numeric maximum (for numeric/slider input types)
+#' @param step_size Numeric step size (for slider input type)
+#' @param options List of dropdown options (for dropdown input type).
+#'   Each option should be created with \code{\link{override_option}}.
+#'
+#' @return The modified model object
 #' @export
 add_override <- function(model, category, title, name, type = "variable",
                           input_type = "numeric", expression, description = NULL,
@@ -1265,6 +2505,16 @@ add_override <- function(model, category, title, name, type = "variable",
   entity_add_nested(model, .schema_override_category, category, .schema_override, new_item)
 }
 
+#' Edit an Override Category
+#'
+#' Modify the name or general flag of an existing override category.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the category to edit
+#' @param new_name Optional new name for the category
+#' @param general Optional logical for the general flag
+#'
+#' @return The modified model object
 #' @export
 edit_override_category <- function(model, name, new_name, general) {
   item_idx <- find_in_list(model$override_categories, "name", list(name), "Override category")
@@ -1279,12 +2529,47 @@ edit_override_category <- function(model, name, new_name, general) {
   entity_edit_list(model, .schema_override_category, item_idx, updates)
 }
 
+#' Remove an Override Category
+#'
+#' Remove an existing override category and all its overrides.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the category to remove
+#'
+#' @return The modified model object
 #' @export
 remove_override_category <- function(model, name) {
   item_idx <- find_in_list(model$override_categories, "name", list(name), "Override category")
   entity_remove_list(model, .schema_override_category, item_idx)
 }
 
+#' Edit an Override Control
+#'
+#' Modify an existing override control within a category. The override is
+#' identified by its composite key of category, type, name, strategy, and group.
+#'
+#' @param model An oq_model object
+#' @param category Character string naming the category containing the override
+#' @param type Character string: "variable" or "setting" (current type)
+#' @param name Character string for the variable or setting name (current name)
+#' @param strategy Current strategy targeting (default: "")
+#' @param group Current group targeting (default: "")
+#' @param title Optional new title
+#' @param description Optional new description
+#' @param general Optional new general flag
+#'
+#' @param expression Optional new expression (supports NSE)
+#' @param new_type Optional new type
+#' @param new_name Optional new name
+#' @param new_strategy Optional new strategy
+#' @param new_group Optional new group
+#' @param input_type Optional new input type
+#' @param min Optional new minimum value
+#' @param max Optional new maximum value
+#' @param step_size Optional new step size
+#' @param options Optional new dropdown options
+#'
+#' @return The modified model object
 #' @export
 edit_override <- function(model, category, type, name, strategy = "", group = "",
                            title, description, general, expression,
@@ -1336,11 +2621,23 @@ edit_override <- function(model, category, type, name, strategy = "", group = ""
     if (!missing(min) || !missing(max) || !missing(step_size) || !missing(options)) updates$input_config <- cfg
   }
   eff_cfg <- updates$input_config %||% ovr$input_config
-  if (!is.null(eff_cfg$min) && !is.null(eff_cfg$max) && eff_cfg$min >= eff_cfg$max) stop(sprintf("Override min (%s) must be less than max (%s)", min, max), call. = FALSE)
+  if (!is.null(eff_cfg$min) && !is.null(eff_cfg$max) && eff_cfg$min >= eff_cfg$max) stop(sprintf("Override min (%s) must be less than max (%s)", eff_cfg$min, eff_cfg$max), call. = FALSE)
   if (!is.null(eff_cfg$step_size) && eff_cfg$step_size <= 0) stop("Override step_size must be greater than 0", call. = FALSE)
   entity_edit_nested(model, .schema_override_category, parent_idx, .schema_override, child_idx, updates)
 }
 
+#' Remove an Override Control
+#'
+#' Remove an existing override control from a category.
+#'
+#' @param model An oq_model object
+#' @param category Character string naming the category containing the override
+#' @param type Character string: "variable" or "setting"
+#' @param name Character string for the variable or setting name
+#' @param strategy Strategy targeting (default: "")
+#' @param group Group targeting (default: "")
+#'
+#' @return The modified model object
 #' @export
 remove_override <- function(model, category, type, name, strategy = "", group = "") {
   parent_idx <- find_in_list(model$override_categories, "name", list(category), "Override category")
@@ -1352,6 +2649,20 @@ remove_override <- function(model, category, type, name, strategy = "", group = 
 
 # --- Table / Script (named list storage) -------------------------------------
 
+#' Add Table to Model
+#'
+#' Add a data table to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the table name
+#' @param data A data frame containing the table data
+#' @param description Optional description
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_table("costs", data.frame(state = c("A", "B"), cost = c(100, 200)))
 #' @export
 add_table <- function(model, name, data, description = NULL) {
   validate_string(name, "Table name")
@@ -1364,6 +2675,20 @@ add_table <- function(model, name, data, description = NULL) {
   model
 }
 
+#' Edit a Table in the Model
+#'
+#' Modify an existing table's data, description, or name. Only the fields that
+#' are explicitly provided will be updated.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the table to edit
+#' @param data A data frame to replace the table data with
+#' @param description Optional new description
+#' @param new_name Optional new name for the table. If provided, the table
+#'   will be renamed. Must not collide with existing decision tree or value
+#'   names.
+#'
+#' @return The modified model object
 #' @export
 edit_table <- function(model, name, data, description, new_name) {
   if (is.null(model$tables[[name]])) stop(sprintf('Table "%s" not found.', name), call. = FALSE)
@@ -1380,18 +2705,53 @@ edit_table <- function(model, name, data, description, new_name) {
   model
 }
 
+#' Remove a Table from the Model
+#'
+#' Remove an existing table from the model by name.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the table to remove
+#'
+#' @return The modified model object
 #' @export
 remove_table <- function(model, name) {
   if (is.null(model$tables[[name]])) stop(sprintf('Table "%s" not found.', name), call. = FALSE)
   model$tables[[name]] <- NULL; model
 }
 
+#' Add Script to Model
+#'
+#' Add an R script to the model.
+#'
+#' @param model An oq_model object
+#' @param name Character string for the script name
+#' @param code Character string containing the R code
+#' @param description Optional description
+#'
+#' @return The modified model object
+#'
+#' @examples
+#' model <- define_model("markov") |>
+#'   add_script("preprocess", "# Data preprocessing\nlibrary(dplyr)")
 #' @export
 add_script <- function(model, name, code, description = NULL) {
   validate_string(name, "Script name")
   model$scripts[[name]] <- list(code = code, description = description); model
 }
 
+#' Edit a Script in the Model
+#'
+#' Modify an existing script's code, description, or name. Only the fields that
+#' are explicitly provided will be updated.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the script to edit
+#' @param code Character string containing the new R code
+#' @param description Optional new description
+#' @param new_name Optional new name for the script. If provided, the script
+#'   will be renamed.
+#'
+#' @return The modified model object
 #' @export
 edit_script <- function(model, name, code, description, new_name) {
   if (is.null(model$scripts[[name]])) stop(sprintf('Script "%s" not found.', name), call. = FALSE)
@@ -1401,6 +2761,14 @@ edit_script <- function(model, name, code, description, new_name) {
   model
 }
 
+#' Remove a Script from the Model
+#'
+#' Remove an existing script from the model by name.
+#'
+#' @param model An oq_model object
+#' @param name Character string identifying the script to remove
+#'
+#' @return The modified model object
 #' @export
 remove_script <- function(model, name) {
   if (is.null(model$scripts[[name]])) stop(sprintf('Script "%s" not found.', name), call. = FALSE)
@@ -1409,6 +2777,16 @@ remove_script <- function(model, name) {
 
 # --- Utility: override_option ------------------------------------------------
 
+#' Create a Dropdown Option for Override Controls
+#'
+#' Helper function to create a dropdown option for use with
+#' \code{\link{add_override}} when \code{input_type = "dropdown"}.
+#'
+#' @param label Display text for the option
+#' @param value Actual value when selected
+#' @param is_base_case Whether this is the default option (default: FALSE)
+#'
+#' @return A list representing a dropdown option
 #' @export
 override_option <- function(label, value, is_base_case = FALSE) {
   if (!is.character(label) || length(label) != 1 || nchar(trimws(label)) == 0)
@@ -2251,12 +3629,7 @@ edit_twsa_setting <- function(model, twsa_name, setting,
       stop("new_setting must be a single character string", call. = FALSE)
     }
 
-    valid_settings <- c(
-      "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
-      "discount_cost", "discount_outcomes", "half_cycle_method",
-      "reduce_state_cycle", "days_per_year",
-      "discount_rate"
-    )
+    valid_settings <- .valid_settings
     if (!(new_setting %in% valid_settings)) {
       stop(sprintf(
         "Invalid TWSA setting name: '%s'. Valid settings: %s",

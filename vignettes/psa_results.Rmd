@@ -11,6 +11,7 @@ This vignette demonstrates how to configure, run, and visualize probabilistic se
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -249,7 +250,7 @@ The `outcome_density_plot()` function creates density plots of outcome values fr
 
 Display outcome distributions for all strategies.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -259,7 +260,7 @@ outcome_density_plot(
 
 #### Filtering to specific strategies
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -271,7 +272,7 @@ outcome_density_plot(
 
 Show outcome differences relative to a comparator.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -281,7 +282,7 @@ outcome_density_plot(
 
 #### Incremental mode (intervention perspective)
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -293,7 +294,7 @@ outcome_density_plot(
 
 Compare multiple interventions against a common comparator.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -304,7 +305,7 @@ outcome_density_plot(
 
 #### Hiding mean lines
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -315,7 +316,7 @@ outcome_density_plot(
 
 #### Undiscounted outcomes
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -328,7 +329,7 @@ outcome_density_plot(
 
 Use `groups = "all_groups"` to display results for each population subgroup separately.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -339,7 +340,7 @@ outcome_density_plot(
 
 Use `groups = "all"` to include both the overall population and all subgroups.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 outcome_density_plot(
   psa_results,
   outcome = "qalys",
@@ -354,7 +355,7 @@ The `outcome_ridgeline_plot()` function creates ridgeline plots as an alternativ
 
 #### Basic usage (absolute mode)
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, dev = "png"}
 outcome_ridgeline_plot(
   psa_results,
   outcome = "qalys",
@@ -364,7 +365,7 @@ outcome_ridgeline_plot(
 
 #### Incremental mode
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, eval = FALSE}
 outcome_ridgeline_plot(
   psa_results,
   outcome = "qalys",
@@ -374,7 +375,7 @@ outcome_ridgeline_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, eval = FALSE}
 outcome_ridgeline_plot(
   psa_results,
   outcome = "qalys",
@@ -389,7 +390,7 @@ The `cost_density_plot()` function creates density plots of cost values from PSA
 
 #### Basic usage (absolute mode)
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 cost_density_plot(
   psa_results,
   outcome = "costs",
@@ -399,7 +400,7 @@ cost_density_plot(
 
 #### Incremental mode
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 cost_density_plot(
   psa_results,
   outcome = "costs",
@@ -409,7 +410,7 @@ cost_density_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 cost_density_plot(
   psa_results,
   outcome = "costs",
@@ -424,7 +425,7 @@ The `cost_ridgeline_plot()` function creates ridgeline plots of cost distributio
 
 #### Basic usage (absolute mode)
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, dev = "png"}
 cost_ridgeline_plot(
   psa_results,
   outcome = "costs",
@@ -434,7 +435,7 @@ cost_ridgeline_plot(
 
 #### Incremental mode
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, eval = FALSE}
 cost_ridgeline_plot(
   psa_results,
   outcome = "costs",
@@ -457,7 +458,7 @@ psa_outcomes_table(
 
 #### Outcome differences relative to comparator
 
-```{r}
+```{r, eval = FALSE}
 psa_outcomes_table(
   psa_results,
   outcome = "qalys",
@@ -467,7 +468,7 @@ psa_outcomes_table(
 
 #### Undiscounted outcomes
 
-```{r}
+```{r, eval = FALSE}
 psa_outcomes_table(
   psa_results,
   outcome = "qalys",
@@ -477,7 +478,7 @@ psa_outcomes_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 psa_outcomes_table(
   psa_results,
   outcome = "qalys",
@@ -500,7 +501,7 @@ psa_costs_table(
 
 #### Differences relative to comparator
 
-```{r}
+```{r, eval = FALSE}
 psa_costs_table(
   psa_results,
   outcome = "costs",
@@ -510,7 +511,7 @@ psa_costs_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 psa_costs_table(
   psa_results,
   outcome = "costs",
@@ -536,7 +537,7 @@ psa_summary_table(
 
 #### With custom WTP thresholds for P(CE)
 
-```{r}
+```{r, eval = FALSE}
 psa_summary_table(
   psa_results,
   health_outcome = "qalys",
@@ -547,7 +548,7 @@ psa_summary_table(
 
 #### Filtering to specific strategies
 
-```{r}
+```{r, eval = FALSE}
 psa_summary_table(
   psa_results,
   health_outcome = "qalys",
@@ -558,7 +559,7 @@ psa_summary_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 psa_summary_table(
   psa_results,
   health_outcome = "qalys",
@@ -575,7 +576,7 @@ The `psa_scatter_plot()` function shows costs vs outcomes for all simulations.
 
 #### Basic usage
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -585,7 +586,7 @@ psa_scatter_plot(
 
 #### Filtering to specific strategies
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -596,7 +597,7 @@ psa_scatter_plot(
 
 #### Hiding mean points
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -609,7 +610,7 @@ psa_scatter_plot(
 
 Use `groups = "all_groups"` to display results for each population subgroup separately.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -620,7 +621,7 @@ psa_scatter_plot(
 
 Use `groups = "all"` to include both the overall population and all subgroups.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -635,7 +636,7 @@ The `pairwise_psa_scatter_plot()` function shows incremental costs and outcomes 
 
 #### Basic incremental CE plane
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 pairwise_psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -646,7 +647,7 @@ pairwise_psa_scatter_plot(
 
 #### With WTP threshold line
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 pairwise_psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -660,7 +661,7 @@ pairwise_psa_scatter_plot(
 
 Compare multiple interventions against a common comparator.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 pairwise_psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -673,7 +674,7 @@ pairwise_psa_scatter_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 pairwise_psa_scatter_plot(
   psa_results,
   health_outcome = "qalys",
@@ -700,7 +701,7 @@ ce_quadrant_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 ce_quadrant_table(
   psa_results,
   health_outcome = "qalys",
@@ -730,7 +731,7 @@ incremental_ceac_plot(
 
 #### Custom WTP range
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 incremental_ceac_plot(
   psa_results,
   health_outcome = "qalys",
@@ -742,7 +743,7 @@ incremental_ceac_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 incremental_ceac_plot(
   psa_results,
   health_outcome = "qalys",
@@ -767,7 +768,7 @@ incremental_ceac_table(
 
 #### Custom WTP thresholds
 
-```{r}
+```{r, eval = FALSE}
 incremental_ceac_table(
   psa_results,
   health_outcome = "qalys",
@@ -778,7 +779,7 @@ incremental_ceac_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 incremental_ceac_table(
   psa_results,
   health_outcome = "qalys",
@@ -804,7 +805,7 @@ pairwise_ceac_plot(
 
 #### Comparator perspective
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 pairwise_ceac_plot(
   psa_results,
   health_outcome = "qalys",
@@ -817,7 +818,7 @@ pairwise_ceac_plot(
 
 Compare multiple interventions against a common comparator.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 pairwise_ceac_plot(
   psa_results,
   health_outcome = "qalys",
@@ -844,7 +845,7 @@ pairwise_ceac_table(
 
 #### Comparator perspective
 
-```{r}
+```{r, eval = FALSE}
 pairwise_ceac_table(
   psa_results,
   health_outcome = "qalys",
@@ -855,7 +856,7 @@ pairwise_ceac_table(
 
 #### Multiple comparisons
 
-```{r}
+```{r, eval = FALSE}
 pairwise_ceac_table(
   psa_results,
   health_outcome = "qalys",
@@ -885,7 +886,7 @@ nmb_density_plot(
 
 #### Hiding mean lines
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 nmb_density_plot(
   psa_results,
   health_outcome = "qalys",
@@ -898,7 +899,7 @@ nmb_density_plot(
 
 #### Intervention mode
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 nmb_density_plot(
   psa_results,
   health_outcome = "qalys",
@@ -912,7 +913,7 @@ nmb_density_plot(
 
 Compare multiple interventions against a common comparator.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 nmb_density_plot(
   psa_results,
   health_outcome = "qalys",
@@ -925,7 +926,7 @@ nmb_density_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 nmb_density_plot(
   psa_results,
   health_outcome = "qalys",
@@ -942,7 +943,7 @@ The `nmb_ridgeline_plot()` function creates ridgeline plots of incremental NMB d
 
 #### Basic usage (comparator mode)
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, dev = "png"}
 nmb_ridgeline_plot(
   psa_results,
   health_outcome = "qalys",
@@ -954,7 +955,7 @@ nmb_ridgeline_plot(
 
 #### Multiple comparisons
 
-```{r, fig.width=9, fig.height=5}
+```{r, fig.width=9, fig.height=5, eval = FALSE}
 nmb_ridgeline_plot(
   psa_results,
   health_outcome = "qalys",
@@ -983,7 +984,7 @@ psa_nmb_table(
 
 #### Intervention perspective
 
-```{r}
+```{r, eval = FALSE}
 psa_nmb_table(
   psa_results,
   health_outcome = "qalys",
@@ -995,7 +996,7 @@ psa_nmb_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 psa_nmb_table(
   psa_results,
   health_outcome = "qalys",
@@ -1024,7 +1025,7 @@ evpi_plot(
 
 #### Custom WTP range
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 evpi_plot(
   psa_results,
   health_outcome = "qalys",
@@ -1036,7 +1037,7 @@ evpi_plot(
 
 #### Results by population subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, eval = FALSE}
 evpi_plot(
   psa_results,
   health_outcome = "qalys",
@@ -1061,7 +1062,7 @@ evpi_table(
 
 #### Results by population subgroup
 
-```{r}
+```{r, eval = FALSE}
 evpi_table(
   psa_results,
   health_outcome = "qalys",
@@ -1087,7 +1088,7 @@ psa_parameters_table(
 
 The `psa_parameter_scatter_matrix()` function creates a scatterplot matrix showing relationships between sampled parameters, including correlations, scatter plots, and density distributions.
 
-```{r, fig.width=9, fig.height=9}
+```{r, fig.width=9, fig.height=9, dev = "png"}
 psa_parameter_scatter_matrix(
   psa_results,
   variables = c("p_mild", "p_severe", "u_mild", "u_severe"),

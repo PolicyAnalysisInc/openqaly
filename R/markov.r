@@ -148,11 +148,14 @@ store_segment_diagnostics <- function(segment, trace_and_values, uneval_vars, ev
 }
 
 store_segment_traces <- function(segment, cycle_length_days, days_per_year,
-                                  collapsed, expanded) {
+                                  collapsed, expanded,
+                                  corrected_collapsed, corrected_expanded) {
   cld <- cycle_length_days
   dpy <- days_per_year
   segment$collapsed_trace <- list(add_time_variables_to_trace(collapsed, cld, dpy))
   segment$expanded_trace <- list(add_time_variables_to_trace(expanded, cld, dpy))
+  segment$corrected_collapsed_trace <- list(add_time_variables_to_trace(corrected_collapsed, cld, dpy))
+  segment$corrected_expanded_trace <- list(add_time_variables_to_trace(corrected_expanded, cld, dpy))
   segment
 }
 
@@ -245,28 +248,31 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
 
   # Core Markov engine (C++): multiplies the cohort vector by the transition
   # matrix each cycle to produce the trace (state occupancy over time) and
-  # accumulates values at each time point 0..n (time point t is priced with
-  # cycle t's value; time point 0 with cycle 1's).
+  # accumulates each cycle's values at its start and end (cycle k priced with
+  # cycle k's value), plus the corrected trace for the model's half-cycle method.
   calculated <- calculate_trace_and_values(
     expanded$init, expanded$transitions, expanded$values,
-    value_names, expanded$expanded_state_map
+    value_names, expanded$expanded_state_map, model$settings$half_cycle_method %||% "start"
   )
   tick()
 
-  # --- Post-processing: collapse, allocate, discount, store ---
+  # --- Post-processing: collapse, correct, discount, store ---
   # The trace from C++ uses expanded tunnel state names. Collapse back to
   # original state names by summing tunnel variants (e.g. sick[1]+sick[2] -> sick).
   expanded_trace <- calculated[[1]]
   collapsed_trace <- calculate_collapsed_trace(expanded_trace, expanded$expanded_state_map)
+  corrected_collapsed <- calculate_collapsed_trace(calculated$correctedTrace, expanded$expanded_state_map)
 
-  # Allocate point values to cycles (half-cycle correction) and discount them
-  # at their time points.
+  # Apply each value's half-cycle method to its start and end parts and
+  # discount each part at its own time point.
   value_parts <- list(
-    point_values = calculated$residencyPointValues + calculated$transitionalPointValues,
+    start = calculated$residencyStartValues,
+    end = calculated$residencyEndValues,
+    transitional = calculated$transitionalValues,
     model_start = expanded$model_start_values,
     dt = expanded$dt_values
   )
-  calculated[c("residencyPointValues", "transitionalPointValues", "modelStartValues")] <- NULL
+  calculated[c("residencyStartValues", "residencyEndValues", "transitionalValues", "modelStartValues")] <- NULL
   value_results <- calculate_segment_values(
     model, eval_vars, uneval_values, value_parts, collapsed_trace,
     n_cycles = time_ctx$n_cycles, cycle_length_days = time_ctx$cycle_length_days
@@ -280,7 +286,7 @@ run_segment.oq_markov <- function(segment, model, env, ...) {
     segment, calculated, uneval_vars, eval_vars, eval_states,
     policy = diagnostics_policy
   )
-  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace)
+  segment <- store_segment_traces(segment, time_ctx$cycle_length_days, time_ctx$days_per_year, collapsed_trace, expanded_trace, corrected_collapsed, calculated$correctedTrace)
   tick()
   # Compute user-defined summary totals (e.g. sum of all QALY values)
   segment <- store_segment_summaries(segment, parsed_summaries, calculated$values, calculated$values_discounted)
@@ -467,7 +473,7 @@ cycle_one_value_totals <- function(rows) {
   totals
 }
 
-calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map) {
+calculate_trace_and_values <- function(init, transitions, values, value_names, expanded_state_map, half_cycle_method = "start") {
   # Extract expanded state names from init columns (critical!)
   state_names <- colnames(init)  # These are the expanded state names
 
@@ -482,7 +488,8 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     values,
     value_names,
     state_names,
-    expanded_state_map
+    expanded_state_map,
+    half_cycle_method
   )
 
   # All processing now happens in optimized C++
@@ -492,7 +499,8 @@ calculate_trace_and_values <- function(init, transitions, values, value_names, e
     values,
     value_names,
     state_names,  # Pass expanded state names separately
-    expanded_state_map
+    expanded_state_map,
+    half_cycle_method
   )
 }
 
@@ -646,12 +654,12 @@ check_trans_markov <- function(x, state_names) {
   }
   
   # Check that formulas are not blank
-  blank_index <- which(any(x$formula == '' | is.na(x$formula)))
+  blank_index <- which(x$formula == '' | is.na(x$formula))
   if (length(blank_index) > 0) {
     plural <- if (length(blank_index) > 1) 's' else ''
     blank_names <- glue("{x$from_state[blank_index]}\u2192{x$to_state[blank_index]}")
     blank_msg <- paste(blank_names, collapse = ', ')
-    error_msg <- glue('Transitions definition contained blank formula for transitions{plural}: {blank_msg}.')
+    error_msg <- glue('Transitions definition contained blank formula for transition{plural}: {blank_msg}.')
     stop(error_msg, call. = F)
   }
   

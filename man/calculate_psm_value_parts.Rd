@@ -2,7 +2,7 @@
 % Please edit documentation in R/psm.R
 \name{calculate_psm_value_parts}
 \alias{calculate_psm_value_parts}
-\title{Calculate PSM Value Parts at Time Points}
+\title{Calculate PSM Value Parts}
 \usage{
 calculate_psm_value_parts(
   uneval_values,
@@ -16,14 +16,14 @@ calculate_psm_value_parts(
 )
 }
 \value{
-List with `point_values` ((n+1) x values matrix), `model_start` and
-  `dt` (named vectors).
+List with `start`, `end` and `transitional` (cycles x values
+  matrices), `model_start` and `dt` (named vectors).
 }
 \description{
-Evaluates PSM values per cycle and builds point values at time points 0..n:
-time point t is priced with cycle t's value and time point 0 with cycle 1's.
-Residency values give value x occupancy at each time point; transitional
-values give value x flow observed at each time point (0 at time point 0).
+Evaluates PSM values per cycle. Cycle k is priced with cycle k's value:
+residency values give value x occupancy at the start (`start`) and end
+(`end`) of the cycle; transitional values give value x the events during
+cycle k (`transitional`), charged in cycle k under every half-cycle method.
 Model start and decision tree values are cycle 1 amounts.
 }
 \keyword{internal}

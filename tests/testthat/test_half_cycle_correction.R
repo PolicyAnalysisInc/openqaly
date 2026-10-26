@@ -60,7 +60,8 @@ test_that("Half-cycle correction methods produce different results", {
 
   value_names <- c("value")
 
-  # The engine returns values at time points 0..n; each method allocates them
+  # The engine returns each cycle's values at its start and end; each method
+  # weights them
   result <- cppMarkovTransitionsAndTrace(
     transitions,
     empty_transitional,
@@ -72,11 +73,12 @@ test_that("Half-cycle correction methods produce different results", {
     n_cycles,
     -pi
   )
-  points <- result$residencyPointValues
+  parts <- list(start = result$residencyStartValues, end = result$residencyEndValues,
+                transitional = result$transitionalValues)
 
-  values_start <- openqaly:::allocate_point_values(points, "start")[, "value"]
-  values_end <- openqaly:::allocate_point_values(points, "end")[, "value"]
-  values_lifetable <- openqaly:::allocate_point_values(points, "life-table")[, "value"]
+  values_start <- openqaly:::combine_half_cycle_parts(parts, "start")[, "value"]
+  values_end <- openqaly:::combine_half_cycle_parts(parts, "end")[, "value"]
+  values_lifetable <- openqaly:::combine_half_cycle_parts(parts, "life-table")[, "value"]
 
   # All three methods should produce different results
   expect_false(all(values_start == values_end))
@@ -204,7 +206,11 @@ test_that("Life-table method implements half-cycle correction correctly", {
   # Cycle 4: average of trace[3] and trace[4] = (0+0)/2 = 0 in state 1, 1 in state 2
   # Cycle 5: average of trace[4] and trace[5] = (0+0)/2 = 0 in state 1, (1+1)/2 = 1 in state 2
 
-  values <- openqaly:::allocate_point_values(result_lifetable$residencyPointValues, "life-table")
+  values <- openqaly:::combine_half_cycle_parts(
+    list(start = result_lifetable$residencyStartValues, end = result_lifetable$residencyEndValues,
+         transitional = result_lifetable$transitionalValues),
+    "life-table"
+  )
   expect_equal(values[1, "value1"], 1)
   expect_equal(values[2, "value1"], 1)
   expect_equal(values[3, "value1"], 0.5)
@@ -218,7 +224,7 @@ test_that("Life-table method implements half-cycle correction correctly", {
   expect_equal(values[5, "value2"], 1)
 })
 
-test_that("Half-cycle method setting defaults to 'life-table' and validates input", {
+test_that("Half-cycle method setting defaults to 'start' and validates input", {
   # Test that convert_settings_from_df handles half_cycle_method correctly
 
   # Test default behavior (not specified)
@@ -227,7 +233,7 @@ test_that("Half-cycle method setting defaults to 'life-table' and validates inpu
     value = c("10", "markov", "0", "0")
   )
   settings <- convert_settings_from_df(settings_df)
-  expect_equal(settings$half_cycle_method, "life-table")
+  expect_equal(settings$half_cycle_method, "start")
 
   # Test valid values
   settings_df <- data.frame(
@@ -245,13 +251,13 @@ test_that("Half-cycle method setting defaults to 'life-table' and validates inpu
   settings <- convert_settings_from_df(settings_df)
   expect_equal(settings$half_cycle_method, "start")
 
-  # Test invalid value (should warn and default to "life-table")
+  # Test invalid value (should warn and default to "start")
   settings_df$value[2] <- "invalid"
   expect_warning(
     settings <- convert_settings_from_df(settings_df),
     "Invalid half_cycle_method"
   )
-  expect_equal(settings$half_cycle_method, "life-table")
+  expect_equal(settings$half_cycle_method, "start")
 })
 
 test_that("PSM model respects half-cycle method", {

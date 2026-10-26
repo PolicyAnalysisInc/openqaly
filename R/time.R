@@ -202,69 +202,109 @@ compute_time_context <- function(settings, dt_duration_days = 0) {
 }
 
 
-# --- Half-cycle allocation of point values ---------------------------------
+# --- Half-cycle correction and discount timing -----------------------------
 #
-# Values are evaluated at time points t = 0..n. A point value X(t) (value x
-# occupancy, or value x flow arriving at t) is allocated to cycle k = 1..n by
-# the half-cycle method:
-#   start: X(k-1)   end: X(k)   life-table: (X(k-1) + X(k)) / 2
-# The same rule is applied to discounted point values X(t) x d(t).
+# Cycle k runs from time point k-1 to k and is priced with cycle k's value at
+# both ends. For each value the engine returns, per cycle:
+#   start part: occupancy(k-1) x value(k)   end part: occupancy(k) x value(k)
+#   transitional: flow during cycle k x value(k) (same at both ends)
+# The half-cycle method weights the two ends - start (1, 0), end (0, 1),
+# life-table (1/2, 1/2) - and also sets when each end is discounted: the start
+# end at d(k-1) and the end end at d(k).
 
 valid_half_cycle_methods <- c("start", "end", "life-table")
 
-#' Allocate Point Values to Cycles
+# Allowed values of the discount_method setting
+valid_discount_methods <- c("by_cycle", "by_year")
+
+#' Half-Cycle Weights
 #'
-#' @param x A vector of length n + 1, or a matrix with n + 1 rows (time points
-#'   0..n) and one column per value.
-#' @param methods Half-cycle method: a single string, or one per column of `x`.
-#' @return A vector of length n, or a matrix with n rows (cycles 1..n).
+#' Weights of the start and end of each cycle under a half-cycle method.
+#'
+#' @param method Half-cycle method.
+#' @return Numeric vector `c(start, end)`: start (1, 0), end (0, 1),
+#'   life-table (1/2, 1/2).
 #' @keywords internal
-allocate_point_values <- function(x, methods) {
-  if (is.null(dim(x))) {
-    # Elementwise (not a matrix product) so NA at an unused time point stays unused
-    return(as.numeric(allocate_columns(matrix(x, ncol = 1), methods[1])))
-  }
-  n_cycles <- nrow(x) - 1
-  methods <- rep_len(methods, ncol(x))
-  res <- matrix(0, nrow = n_cycles, ncol = ncol(x), dimnames = list(seq_len(n_cycles), colnames(x)))
-  for (m in unique(methods)) {
-    cols <- which(methods == m)
-    res[, cols] <- allocate_columns(x[, cols, drop = FALSE], m)
+half_cycle_weights <- function(method) {
+  switch(method,
+    "start" = c(1, 0),
+    "end" = c(0, 1),
+    "life-table" = c(0.5, 0.5),
+    stop("Invalid half_cycle_method '", method, "'. Must be one of: ",
+         paste(valid_half_cycle_methods, collapse = ", "), call. = FALSE)
+  )
+}
+
+#' Cycle Amounts From Start and End Parts
+#'
+#' @param start,end Per-cycle amounts at the start and end of each cycle.
+#' @param method Half-cycle method.
+#' @param d_start,d_end Factors applied to the start and end parts (discount
+#'   factors at time points 0..n-1 and 1..n); 1 for undiscounted amounts.
+#' @return Per-cycle amounts.
+#' @keywords internal
+half_cycle_amounts <- function(start, end, method, d_start = 1, d_end = 1) {
+  w <- half_cycle_weights(method)
+  weighted_part(start, w[1], d_start) + weighted_part(end, w[2], d_end)
+}
+
+# w x amount x factor, treating a zero amount (or weight) as zero even when the
+# factor is NA (unused factor)
+weighted_part <- function(x, w, d) {
+  if (w == 0) return(rep(0, length(x)))
+  ifelse(x == 0, 0, w * x * d)
+}
+
+#' Combine Value Parts Into Cycle Values
+#'
+#' @param parts List with `start`, `end` and `transitional` (cycles x values
+#'   matrices).
+#' @param methods Half-cycle method of each value (a single string, or one per
+#'   column).
+#' @return Cycles x values matrix of undiscounted values.
+#' @keywords internal
+combine_half_cycle_parts <- function(parts, methods) {
+  start <- parts$start + parts$transitional
+  end <- parts$end + parts$transitional
+  methods <- rep_len(methods, ncol(start))
+  res <- start
+  for (j in seq_len(ncol(start))) {
+    res[, j] <- half_cycle_amounts(start[, j], end[, j], methods[[j]])
   }
   res
 }
 
-allocate_columns <- function(x, method) {
-  n_points <- nrow(x)
-  first <- x[-n_points, , drop = FALSE]
-  last <- x[-1, , drop = FALSE]
-  switch(method,
-    "end" = last,
-    "life-table" = (first + last) / 2,
-    first  # "start" default
-  )
-}
-
-point_allocation_matrix <- function(n_cycles, method) {
-  first <- cbind(diag(n_cycles), 0)
-  last <- cbind(0, diag(n_cycles))
-  switch(method,
-    "end" = last,
-    "life-table" = (first + last) / 2,
-    first  # "start" default
-  )
-}
-
 #' Half-Cycle Weights of Time Points
 #'
-#' The total weight each time point 0..n receives when point values are
-#' allocated to cycles with `method`: start 1..1, 0; end 0, 1..1;
-#' life-table 1/2, 1..1, 1/2.
+#' The total weight each time point 0..n receives under `method`:
+#' start 1..1, 0; end 0, 1..1; life-table 1/2, 1..1, 1/2.
 #'
 #' @param n_cycles Number of cycles.
 #' @param method Half-cycle method.
 #' @return A numeric vector of length n_cycles + 1.
 #' @keywords internal
 point_weights <- function(n_cycles, method) {
-  colSums(point_allocation_matrix(n_cycles, method))
+  w <- half_cycle_weights(method)
+  c(rep(w[1], n_cycles), 0) + c(0, rep(w[2], n_cycles))
+}
+
+#' Half-Cycle-Corrected Trace
+#'
+#' @param trace Trace matrix with rows for time points 0..n.
+#' @param method Half-cycle method.
+#' @return Matrix with rows for cycles 1..n: occupancy at the start of each
+#'   cycle (start), at its end (end), or the average of the two (life-table).
+#' @keywords internal
+correct_trace <- function(trace, method) {
+  n_cycles <- nrow(trace) - 1
+  half_cycle_weights(method)  # validates the method
+  first <- trace[seq_len(n_cycles), , drop = FALSE]
+  last <- trace[seq_len(n_cycles) + 1, , drop = FALSE]
+  res <- switch(method,
+    "end" = last,
+    "life-table" = (first + last) / 2,
+    first  # "start"
+  )
+  rownames(res) <- seq_len(n_cycles)
+  res
 }

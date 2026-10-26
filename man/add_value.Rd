@@ -38,8 +38,9 @@ factors (see the discounting documentation).}
 
 \item{half_cycle_method}{Optional half-cycle method for this value
 (`"start"`, `"end"` or `"life-table"`). If `NA`, the model's
-`half_cycle_method` setting applies. All rows of a value name must use the
-same setting.}
+`half_cycle_method` setting applies. It sets both the occupancy the value
+is charged on and when it is discounted; for transitional values only when
+it is discounted. All rows of a value name must use the same setting.}
 }
 \value{
 The modified model.

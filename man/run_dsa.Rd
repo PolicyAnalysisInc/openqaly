@@ -34,6 +34,9 @@ Defaults to "total_cost" from model metadata if available.}
 \code{progress(total = N)} to declare total units, then
 \code{progress(amount = K)} for each completed unit.}
 
+\item{keep_diagnostics}{Logical. If `TRUE`, keep the evaluated variables and other
+diagnostics for every run; if `FALSE` (default), only for the base case.}
+
 \item{...}{Additional arguments passed to run_segment}
 }
 \value{

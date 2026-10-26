@@ -4,8 +4,8 @@
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly model results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -280,8 +280,8 @@ incremental_ce_table <- function(results,
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly model results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param groups Group selection: "overall" (default), "all", "all_groups", or
 #'   specific group name(s)
 #' @param interventions Character vector of reference strategies for intervention

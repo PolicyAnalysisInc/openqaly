@@ -20,18 +20,27 @@ The modified model.
 Set Model Settings
 }
 \details{
-`half_cycle_method` is one of `"start"`, `"end"` or
-`"life-table"` (default). Formulas are evaluated per cycle (in cycle k, `cycle_lag` is
-the start and `cycle` the end of the cycle). Cycle k's value prices time
-point k, and time point 0 takes cycle 1's value. At each time point the
-engine computes occupancy x value for residency values and arrivals x value
-for transitional values. These point values are allocated to cycle k as the
-amount at time point k-1 (`"start"`), at k (`"end"`), or the average of the
-two (`"life-table"`). Model start values are charged in cycle 1 with no
-correction. Individual values can override the method (see [add_value()]).
+`half_cycle_method` is one of `"start"` (default), `"end"` or
+`"life-table"`. It sets when values accrue in each cycle, and so both the
+occupancy they are charged on and when they are discounted. Formulas are
+evaluated per cycle (in cycle k, `cycle_lag` is the start and `cycle` the end
+of the cycle), and cycle k's value applies only to cycle k:
+\itemize{
+  \item `"start"`: occupancy at the start of the cycle, discounted at the
+    start;
+  \item `"end"`: occupancy at the end of the cycle, discounted at the end;
+  \item `"life-table"`: the average of the two, each half discounted at its
+    own time.
+}
+Transitional values are charged in the cycle the transitions occur under
+every method; the method only sets when they are discounted. Model start
+values are charged in cycle 1 at time 0 (discounted only by a decision tree
+phase). Individual values
+can override the method (see [add_value()]); for example, a one-off cost
+written as `ifelse(cycle == 1, cost, 0)` is charged in full with `"start"`,
+and an entry cost written with `state_cycle == 1` equals the transitional
+value with `"end"`.
 
-Discounting follows the same rule: each time point is discounted at its own
-time and the discounted amounts are allocated to cycles with the half-cycle
-method. `discount_method` is `"by_cycle"` (continuous time, default) or
+`discount_method` is `"by_cycle"` (continuous time, default) or
 `"by_year"` (time floored to whole years).
 }

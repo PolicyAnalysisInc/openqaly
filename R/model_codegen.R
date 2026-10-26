@@ -665,20 +665,30 @@ generate_scripts_code <- function(model, scripts) {
 #' Generate Trees Code
 #' @keywords internal
 generate_trees_code <- function(model, trees) {
-  # Defensive check for NULL, empty, or malformed trees
-  # Trees can be either a data frame or a list
-  is_empty <- is.null(trees) ||
-    (is.data.frame(trees) && nrow(trees) == 0) ||
-    (is.list(trees) && !is.data.frame(trees) && length(trees) == 0) ||
-    (!is.data.frame(trees) && !is.list(trees))
-  if (is_empty) return(character(0))
+  # Trees are a data frame of nodes (name, node, parent, formula, tags).
+  # Anything else, or a data frame without those columns, produces no code.
+  required <- c("name", "node", "formula")
+  if (is.null(trees) || !is.data.frame(trees) || nrow(trees) == 0 ||
+      !all(required %in% names(trees))) {
+    return(character(0))
+  }
 
-  # Trees in openqaly are typically parsed into variables via decision_tree()
-  # rather than being added directly. The tree parsing happens automatically
-  # when the model is read from YAML/JSON. For now, we'll just add a comment
-  # indicating that trees are present but handled internally.
-  c("# Decision trees are parsed into variables automatically",
-    "# Tree data is embedded in the model structure")
+  quote_str <- function(x) encodeString(as.character(x), quote = '"')
+
+  code <- c("# Add decision tree nodes")
+  for (i in seq_len(nrow(trees))) {
+    row <- trees[i, ]
+    parent <- if ("parent" %in% names(trees)) row$parent else NA
+    tags <- if ("tags" %in% names(trees)) row$tags else NA
+    code <- c(code, codegen_call("add_tree_node",
+      quote_str(row$name),
+      quote_str(row$node),
+      if (!is.na(parent)) paste0("parent = ", quote_str(parent)),
+      paste0("formula = ", quote_str(row$formula)),
+      if (!is.na(tags)) paste0("tags = ", quote_str(tags))
+    ))
+  }
+  code
 }
 
 # =============================================================================
@@ -712,7 +722,9 @@ generate_dsa_code <- function(dsa_parameters) {
       # Strategy/group only for variables
       if (is_var) opt_str("strategy", param$strategy),
       if (is_var) opt_str("group", param$group),
-      opt_str("display_name", param$display_name, skip_if = dn_skip)
+      opt_str("display_name", param$display_name, skip_if = dn_skip),
+      if (!is.null(param$range_label) && !is.na(param$range_label))
+        opt_str("range_label", escape_quotes(param$range_label))
     ))
   }
 

@@ -107,6 +107,17 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
     ungroup() %>%
     select("reorder_group", "parameter_display_name", "y_base")
 
+  # Each facet gets its own block of y positions, so axis labels (looked up by
+  # position only) are unique across facets; free_y scales show each panel
+  # only its own block.
+  max_rank_y <- max(param_ranks$y_base, na.rm = TRUE)
+  if (!is.finite(max_rank_y) || max_rank_y <= 0) max_rank_y <- 1
+  param_ranks <- offset_facet_positions(param_ranks, max_rank_y, y_spacing)
+  base_case_labels <- base_case_labels %>%
+    left_join(distinct(param_ranks, .data$reorder_group, .data$facet_y_offset), by = "reorder_group") %>%
+    mutate(y_pos = .data$y_pos + ifelse(is.na(.data$facet_y_offset), 0, .data$facet_y_offset))
+  param_ranks <- select(param_ranks, "reorder_group", "parameter_display_name", "y_base")
+
   tornado_long <- tornado_long %>%
     left_join(param_ranks, by = c("reorder_group", "parameter_display_name")) %>%
     mutate(y_numeric = .data$y_base + .data$y_offset)
@@ -114,8 +125,6 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
   y_labels <- tornado_long %>%
     distinct(.data$reorder_group, .data$parameter_display_name, .data$y_base) %>%
     arrange(.data$reorder_group, .data$y_base)
-
-  max_y <- max(tornado_long$y_base)
 
   label_data <- tornado_long %>%
     mutate(
@@ -185,13 +194,8 @@ render_tornado_plot <- function(tornado_data, summary_label, facet_component = N
     ) +
     scale_x_continuous(breaks = x_breaks, limits = x_limits, labels = oq_label_fn(decimals = axis_decimals, locale = locale, abbreviate = TRUE, currency = currency)) +
     scale_y_reverse(
-      breaks = seq_len(ceiling(max_y / y_spacing)) * y_spacing,
-      labels = function(y) {
-        sapply(y, function(yval) {
-          match_row <- y_labels %>% filter(.data$y_base == yval) %>% slice(1)
-          if (nrow(match_row) > 0) match_row$parameter_display_name else ""
-        })
-      },
+      breaks = sort(unique(y_labels$y_base)),
+      labels = function(y) facet_y_labels(y, y_labels),
       expand = expansion(mult = c(0, 0), add = c(0.3, 0.7))
     ) +
     scale_fill_manual(values = c("Low" = "#F8766D", "High" = "#00BFC4")) +

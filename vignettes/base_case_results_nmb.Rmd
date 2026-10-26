@@ -11,6 +11,7 @@ This vignette demonstrates how to visualize and summarize net monetary benefit (
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -86,7 +87,7 @@ nmb_plot_bar(
 
 The `nmb_plot_line()` function displays how NMB accumulates over the model time horizon.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 nmb_plot_line(
   results,
   health_outcome = "qalys",

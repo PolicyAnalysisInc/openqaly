@@ -11,7 +11,6 @@ An R package for creating and running reproducible and transparent health econom
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://PolicyAnalysisInc.github.io/openqaly/}
   \item \url{https://github.com/PolicyAnalysisInc/openqaly}
   \item Report bugs at \url{https://github.com/PolicyAnalysisInc/openqaly/issues}
 }

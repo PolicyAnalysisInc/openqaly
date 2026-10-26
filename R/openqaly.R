@@ -86,3 +86,6 @@ tree_def_columns <- c('name', 'node', 'tags', 'parent', 'formula')
 trans_markov_cols <- c('from_state', 'to_state', 'formula')
 
 . <- NULL
+
+# Computed variable used via after_stat() in the ridgeline PSA plots.
+utils::globalVariables("ndensity")

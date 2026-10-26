@@ -11,9 +11,10 @@ This vignette demonstrates how to configure, run, and visualize scenario analysi
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>",
-  dpi = 150
+  dpi = 72
 )
 ```
 
@@ -268,7 +269,7 @@ When your model has multiple groups, you can view results by group:
 
 ### All Groups
 
-```{r, fig.width = 7, fig.height = 6}
+```{r, fig.width = 7, fig.height = 6, dev = "png"}
 scenario_outcomes_plot(results, "qalys", groups = "all")
 ```
 

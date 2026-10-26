@@ -9,6 +9,7 @@ vignette: >
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -132,7 +133,7 @@ disc_results <- run_model(discontinuation_model)
 
 ### Viewing Results
 
-```{r disc-trace, fig.width=9, fig.height=6}
+```{r disc-trace, fig.width=9, fig.height=6, dev = "png"}
 # State occupancy over time
 trace_plot_area(disc_results)
 ```

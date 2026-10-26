@@ -14,3 +14,7 @@
 ^src/.*\.tmp$
 ^.*\.tar\.gz$
 ^\.heemod$
+^LICENSE\.md$
+^readme\.html$
+^vignettes/.*\.html$
+^vignettes/.*\.R$

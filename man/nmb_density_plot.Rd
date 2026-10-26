@@ -12,7 +12,6 @@ nmb_density_plot(
   interventions = NULL,
   comparators = NULL,
   groups = "overall",
-  strategies = NULL,
   show_mean = TRUE,
   alpha = 0.4,
   title = NULL,
@@ -48,9 +47,6 @@ interventions or comparators must be provided.}
   \item \code{"all"} or \code{NULL} - All groups + overall
   \item \code{"all_groups"} - All groups without overall
 }}
-
-\item{strategies}{Character vector of strategies to include (NULL for all).
-Mutually exclusive with interventions/comparators.}
 
 \item{show_mean}{Logical. Show vertical lines at mean incremental NMB per comparison?}
 

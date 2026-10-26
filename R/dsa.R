@@ -16,13 +16,7 @@ validate_dsa_spec <- function(model) {
 
   # Validate each DSA parameter
   all_var_names <- model$variables$name
-  valid_settings <- c(
-    "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
-    "discount_cost", "discount_outcomes", "half_cycle_method",
-    "discount_method",
-    "reduce_state_cycle", "days_per_year",
-    "discount_rate"
-  )
+  valid_settings <- .valid_settings
 
   for (i in seq_along(model$dsa_parameters)) {
     param <- model$dsa_parameters[[i]]
@@ -430,6 +424,8 @@ generate_dsa_metadata_from_segments <- function(model, segments) {
 #'   \code{progress(total = N)} to declare total units, then
 #'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
+#' @param keep_diagnostics Logical. If `TRUE`, keep the evaluated variables and other
+#'   diagnostics for every run; if `FALSE` (default), only for the base case.
 #' @return Results list with segments and aggregated results (includes run_id dimension).
 #'   When VBP is enabled, also includes dsa_vbp_equations tibble with VBP equations
 #'   for each DSA run.

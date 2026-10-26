@@ -155,7 +155,8 @@ List cppMarkovTransitionsAndTrace(
     CharacterVector stateNames,
     CharacterVector valueNames,
     int nCycles,
-    double complementConstant
+    double complementConstant,
+    std::string halfCycleMethod = "start"
 ) {
   DebugPrintText("=== cppMarkovTransitionsAndTrace START ===");
   const int nValues = valueNames.size();
@@ -296,9 +297,11 @@ List cppMarkovTransitionsAndTrace(
   colnames(trace) = stateNames;
   rownames(trace) = make_cycle_rownames(0, nCycles);
 
-  // Transitional values at time points 0..nCycles: the flow observed at time
-  // point t (arrivals during cycle t) priced with cycle t's value. Row 0 is 0.
-  NumericMatrix transitionalPointValues(nCycles + 1, nValues);
+  // Transitional values per cycle: the flow during cycle k priced with cycle
+  // k's value. Not half-cycle corrected under any method.
+  NumericMatrix transitionalValueResults(nCycles, nValues);
+  colnames(transitionalValueResults) = valueNames;
+  rownames(transitionalValueResults) = make_cycle_rownames(1, nCycles);
 
   NumericMatrix uncondTransProbs(transRows, 4);
   colnames(uncondTransProbs) = CharacterVector::create("cycle", "from", "to", "value");
@@ -385,7 +388,7 @@ List cppMarkovTransitionsAndTrace(
           if (const std::vector<ValEntry>* tv = tvPtr[currentRow]) {
             for (const ValEntry& ve : *tv) {
               const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
-              transitionalPointValues(cycle, ve.valueIndex) += uncond * vv;
+              transitionalValueResults(cycle - 1, ve.valueIndex) += uncond * vv;
             }
           }
 
@@ -428,7 +431,7 @@ List cppMarkovTransitionsAndTrace(
         if (const std::vector<ValEntry>* tv = tvPtr[complementRowIndex]) {
           for (const ValEntry& ve : *tv) {
             const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
-            transitionalPointValues(cycle, ve.valueIndex) += uncond * vv;
+            transitionalValueResults(cycle - 1, ve.valueIndex) += uncond * vv;
           }
         }
 
@@ -443,27 +446,50 @@ List cppMarkovTransitionsAndTrace(
   }
 
   // ---------- Residency values ----------
-  // Values are returned at time points t = 0..nCycles; allocation to cycles
-  // (half-cycle correction) and discounting are applied in R.
-  // Residency: V(t) = sum_s trace(t, s) * value_s(t), where time point t is
-  // priced with the value of cycle t (the cycle ending at t) and time point 0
-  // with the value of cycle 1 (the cycle starting at 0).
-  NumericMatrix residencyPointValues(nCycles + 1, nValues);
-  colnames(residencyPointValues) = valueNames;
-  rownames(residencyPointValues) = make_cycle_rownames(0, nCycles);
-  for (int t = 0; t <= nCycles; ++t) {
-    NumericMatrix::Row pointTrace = trace.row(t);
+  // Cycle k is priced with cycle k's value at both of its ends:
+  //   start part: sum_s trace(k-1, s) * value_s(k)
+  //   end part:   sum_s trace(k, s)   * value_s(k)
+  // Half-cycle weights (and discounting) are applied per value in R, so a value
+  // can override the model's half-cycle method.
+  NumericMatrix residencyStartValues(nCycles, nValues);
+  colnames(residencyStartValues) = valueNames;
+  rownames(residencyStartValues) = make_cycle_rownames(1, nCycles);
+  NumericMatrix residencyEndValues(nCycles, nValues);
+  colnames(residencyEndValues) = valueNames;
+  rownames(residencyEndValues) = make_cycle_rownames(1, nCycles);
+
+  // Corrected trace: half-cycle-corrected state probabilities (nCycles x nStates)
+  // for the model's half-cycle method
+  NumericMatrix correctedTrace(nCycles, nStates);
+  colnames(correctedTrace) = stateNames;
+  rownames(correctedTrace) = make_cycle_rownames(1, nCycles);
+
+  enum { HCM_START, HCM_END, HCM_LIFE_TABLE } hcm = HCM_START;
+  if (halfCycleMethod == "end") hcm = HCM_END;
+  else if (halfCycleMethod == "life-table") hcm = HCM_LIFE_TABLE;
+
+  for (int cycle = 1; cycle <= nCycles; ++cycle) {
+    NumericMatrix::Row prevTrace = trace.row(cycle - 1);
+    NumericMatrix::Row currTrace = trace.row(cycle);
+
     for (int s = 0; s < nStates; ++s) {
+      if (hcm == HCM_END) {
+        correctedTrace(cycle - 1, s) = currTrace[s];
+      } else if (hcm == HCM_LIFE_TABLE) {
+        correctedTrace(cycle - 1, s) = 0.5 * (prevTrace[s] + currTrace[s]);
+      } else { // start
+        correctedTrace(cycle - 1, s) = prevTrace[s];
+      }
+
       if (const std::vector<ValEntry>* rv = residPtr[s]) {
         for (const ValEntry& ve : *rv) {
-          const double vv = ve.isConst ? ve.constVal : ve.series[t > 0 ? t - 1 : 0];
-          residencyPointValues(t, ve.valueIndex) += pointTrace[s] * vv;
+          const double vv = ve.isConst ? ve.constVal : ve.series[cycle - 1];
+          residencyStartValues(cycle - 1, ve.valueIndex) += prevTrace[s] * vv;
+          residencyEndValues(cycle - 1, ve.valueIndex) += currTrace[s] * vv;
         }
       }
     }
   }
-  colnames(transitionalPointValues) = valueNames;
-  rownames(transitionalPointValues) = make_cycle_rownames(0, nCycles);
 
   // ---------- Model start values (first cycle only) ----------
   NumericMatrix modelStartResults(nCycles, nValues);
@@ -478,9 +504,11 @@ List cppMarkovTransitionsAndTrace(
     Named("uncondtransprod") = uncondTransProbs,
     Named("transitions") = transitions,
     Named("errors") = transitionErrors,
-    Named("transitionalPointValues") = transitionalPointValues,
-    Named("residencyPointValues") = residencyPointValues,
-    Named("modelStartValues") = modelStartResults
+    Named("transitionalValues") = transitionalValueResults,
+    Named("residencyStartValues") = residencyStartValues,
+    Named("residencyEndValues") = residencyEndValues,
+    Named("modelStartValues") = modelStartResults,
+    Named("correctedTrace") = correctedTrace
   );
 }
 
@@ -981,7 +1009,8 @@ List cppCalculateTraceAndValues(
     DataFrame values,
     CharacterVector value_names,
     CharacterVector state_names,  // Add expanded state names parameter
-    DataFrame expanded_state_map
+    DataFrame expanded_state_map,
+    std::string half_cycle_method = "start"
 ) {
   // Extract number of cycles
   int n_cycles = 0;
@@ -1146,7 +1175,8 @@ List cppCalculateTraceAndValues(
     state_names,
     value_names,
     n_cycles,
-    -M_PI // complementConstant
+    -M_PI, // complementConstant
+    half_cycle_method
   );
 
   // Process errors and issue warnings if needed

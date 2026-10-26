@@ -51,7 +51,12 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
       }
     }
 
-    stop(glue("{context}: Formula '{formula_text}' evaluated to {type_desc}, expected numeric.{formula_hint}"),
+    formula_part <- if (!is.null(formula_text) && length(formula_text) > 0) {
+      glue(" Formula '{formula_text}'")
+    } else {
+      ""
+    }
+    stop(glue("{context}:{formula_part} evaluated to {type_desc}, expected numeric.{formula_hint}"),
          call. = FALSE)
   }
 
@@ -72,7 +77,7 @@ validate_numeric_result <- function(value, context, formula_text = NULL) {
 #' @export
 validate_cpp_inputs <- function(init, transitions, values, value_names,
                                state_names, expanded_state_map,
-                               half_cycle_method = "life-table") {
+                               half_cycle_method = "start") {
 
   # Validate init (initial state probabilities)
   if (!is.numeric(init)) {
@@ -195,7 +200,7 @@ validate_cpp_inputs <- function(init, transitions, values, value_names,
   }
 
   # Validate half_cycle_method
-  valid_methods <- c("start", "end", "life-table")
+  valid_methods <- valid_half_cycle_methods
   if (!half_cycle_method %in% valid_methods) {
     stop(glue("half_cycle_method must be one of: {paste(valid_methods, collapse=', ')}"),
          call. = FALSE)

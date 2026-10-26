@@ -15,8 +15,7 @@ point_weights(n_cycles, method)
 A numeric vector of length n_cycles + 1.
 }
 \description{
-The total weight each time point 0..n receives when point values are
-allocated to cycles with `method`: start 1..1, 0; end 0, 1..1;
-life-table 1/2, 1..1, 1/2.
+The total weight each time point 0..n receives under `method`:
+start 1..1, 0; end 0, 1..1; life-table 1/2, 1..1, 1/2.
 }
 \keyword{internal}

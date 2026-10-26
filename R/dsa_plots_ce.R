@@ -408,6 +408,14 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     ) %>%
     ungroup()
 
+  # Each facet gets its own block of y positions. Axis labels are looked up by
+  # y position only (a scale's label function is not told which panel it is
+  # labelling), so positions must be unique across facets; free_y scales then
+  # show each panel only its own block.
+  max_rank_y <- max(tornado_long$y_base, na.rm = TRUE)
+  if (!is.finite(max_rank_y) || max_rank_y <= 0) max_rank_y <- 1
+  tornado_long <- offset_facet_positions(tornado_long, max_rank_y, y_spacing)
+
   asterisk_result <- assign_facet_asterisks(tornado_long, facet_metadata, y_spacing)
   tornado_long <- asterisk_result$tornado_long
   facet_metadata <- asterisk_result$facet_metadata
@@ -461,10 +469,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
     distinct(.data$reorder_group, .data$parameter_display_name, .data$y_base) %>%
     arrange(.data$reorder_group, .data$y_base)
 
-  max_y <- max(tornado_long$y_base, na.rm = TRUE)
-  if (!is.finite(max_y) || max_y <= 0) {
-    max_y <- 1
-  }
+  # Largest position within a facet (before facet offsets)
+  max_y <- max_rank_y
 
   standard_bars <- tornado_long %>% filter(.data$show_bar, .data$bar_type == "standard")
   to_zero_bars <- tornado_long %>% filter(.data$show_bar, .data$bar_type == "to_zero")
@@ -477,8 +483,9 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
   base_case_labels <- facet_metadata %>%
     filter(.data$base_class != "identical") %>%
     select("strategy", "group", "base_display_value", "base_label", "base_class") %>%
+    left_join(facet_y_offsets(tornado_long), by = c("strategy", "group")) %>%
     mutate(
-      y_pos = 0.5 * y_spacing,
+      y_pos = 0.5 * y_spacing + ifelse(is.na(.data$facet_y_offset), 0, .data$facet_y_offset),
       near_left_edge = .data$base_display_value < dominated_position * 0.15,
       label_hjust = case_when(
         .data$base_class == "dominated" ~ 1.1,
@@ -710,13 +717,8 @@ render_dsa_ce_tornado_plot <- function(tornado_data, facet_metadata, dominated_p
       expand = expansion(mult = c(0, 0), add = c(0, 0))
     ) +
     scale_y_reverse(
-      breaks = seq_len(ceiling(max_y / y_spacing)) * y_spacing,
-      labels = function(y) {
-        sapply(y, function(yval) {
-          match_row <- y_labels %>% filter(.data$y_base == yval) %>% slice(1)
-          if (nrow(match_row) > 0) match_row$parameter_display_name else ""
-        })
-      },
+      breaks = sort(unique(y_labels$y_base)),
+      labels = function(y) facet_y_labels(y, y_labels),
       expand = expansion(mult = c(0, 0), add = c(0.3, 0.7))
     )
 
@@ -890,4 +892,34 @@ dsa_ce_plot <- function(results,
     )
 
   render_dsa_ce_tornado_plot(tornado_data, facet_metadata)
+}
+
+# Offset each facet's y positions so they are unique across facets. Facets are
+# numbered in reorder_group order; the gap leaves room for footnote lanes.
+offset_facet_positions <- function(tornado_long, max_rank_y, y_spacing) {
+  if (nrow(tornado_long) == 0) {
+    tornado_long$facet_y_offset <- numeric(0)
+    return(tornado_long)
+  }
+  block <- max_rank_y + 100 * y_spacing
+  facet_index <- as.integer(factor(tornado_long$reorder_group))
+  tornado_long$facet_y_offset <- (facet_index - 1) * block
+  tornado_long$y_base <- tornado_long$y_base + tornado_long$facet_y_offset
+  tornado_long
+}
+
+# Facet y offset for each strategy and group
+facet_y_offsets <- function(tornado_long) {
+  tornado_long %>%
+    distinct(.data$strategy, .data$group, .data$facet_y_offset)
+}
+
+# Axis labels for y positions: the parameter at that position (positions are
+# unique across facets)
+facet_y_labels <- function(y, y_labels) {
+  vapply(y, function(yval) {
+    if (is.na(yval)) return("")
+    hit <- which(abs(y_labels$y_base - yval) < 1e-8)
+    if (length(hit) > 0) as.character(y_labels$parameter_display_name[hit[1]]) else ""
+  }, character(1))
 }

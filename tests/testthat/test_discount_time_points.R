@@ -192,10 +192,12 @@ test_that("by_year floors each time point to whole years", {
   expect_equal(unname(tv$values_discounted[, "c"]), 1.05^-floor((1:24) * cl_years), tolerance = 1e-10)
 })
 
-test_that("segments no longer store corrected traces", {
+test_that("segments store corrected traces for the model's half-cycle method", {
   result <- run_model(custom_psm_discount_model("life-table"))
-  expect_false(any(c("corrected_collapsed_trace", "corrected_expanded_trace") %in% names(result$segments)))
-  expect_null(result$segments$trace_and_values[[1]]$correctedTrace)
+  expect_true(all(c("corrected_collapsed_trace", "corrected_expanded_trace") %in% names(result$segments)))
+  # alive(t) = 0.9^t; life-table averages the start and end of each cycle
+  expect_equal(as.numeric(result$segments$corrected_collapsed_trace[[1]][["alive"]]),
+               (0.9^(0:2) + 0.9^(1:3)) / 2)
 })
 
 # --- Per-value half-cycle method ---------------------------------------------

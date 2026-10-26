@@ -26,6 +26,9 @@ the value stored in \code{model$psa$seed} (set via \code{\link{set_psa}}).}
 \code{progress(total = N)} to declare total units, then
 \code{progress(amount = K)} for each completed unit.}
 
+\item{keep_diagnostics}{Logical. If `TRUE`, keep the evaluated variables and other
+diagnostics for every simulation; if `FALSE` (default), keep none.}
+
 \item{...}{Additional arguments passed to run_segment}
 }
 \value{

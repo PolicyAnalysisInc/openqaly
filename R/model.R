@@ -12,6 +12,8 @@
 #'   \code{progress(total = N)} to declare total units, then
 #'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
+#' @param keep_diagnostics Logical. If `TRUE`, keep the evaluated variables and other
+#'   diagnostics for every simulation; if `FALSE` (default), keep none.
 #' @return Results list with segments and aggregated results (includes simulation dimension)
 #' @export
 run_psa <- function(model, n_sim = NULL, seed = NULL, progress = NULL, keep_diagnostics = FALSE, ...) {
@@ -497,7 +499,7 @@ aggregate_strategy_segments <- function(strat_segments, parsed_model) {
   }
 
   # Resolve complement (C) weights
-  complement_mask <- strat_segments$weight == -pi
+  complement_mask <- !is.na(strat_segments$weight) & strat_segments$weight == -pi
   if (any(complement_mask)) {
     if (sum(complement_mask) > 1) {
       stop(glue("Only one group may use complement (C) for weight in strategy '{strat}'."), call. = FALSE)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/discounting.R
 \name{calculate_segment_values}
 \alias{calculate_segment_values}
-\title{Allocate and Discount Segment Values}
+\title{Correct and Discount Segment Values}
 \usage{
 calculate_segment_values(
   model,
@@ -21,8 +21,9 @@ calculate_segment_values(
 
 \item{uneval_values}{Unevaluated values (with type and discounting_override).}
 
-\item{value_parts}{List with `point_values` ((n+1) x values matrix),
-`model_start` and `dt` (named vectors of cycle 1 totals).}
+\item{value_parts}{List with `start`, `end` and `transitional` (cycles x
+values matrices) and `model_start` and `dt` (named vectors of cycle 1
+totals).}
 
 \item{trace_matrix}{Collapsed trace (rows = time points 0..n).}
 
@@ -34,10 +35,14 @@ calculate_segment_values(
 List with `values` and `values_discounted` (n x values matrices).
 }
 \description{
-Allocates point values (time points 0..n) to cycles with each value's
-half-cycle method and discounts each time point at its own time:
-discounted = allocate(point values x d) + model start x d(0) + decision tree
-values (not discounted). Values with a `discounting_override` use the
-override result instead of d (see [evaluate_discounting_override()]).
+Combines each value's start and end parts with its half-cycle method and
+discounts each part at its own time point. The half-cycle method sets both:
+start uses the start of each cycle, discounted at d(k-1); end the end,
+discounted at d(k); life-table half of each, each discounted at its own
+time. Transitional values are charged in the cycle they occur under every
+method and discounted with the same weights. Model start values are charged
+in cycle 1 at d(0); decision tree values are not discounted. Values with a
+`discounting_override` use the override result instead of d (see
+[evaluate_discounting_override()]).
 }
 \keyword{internal}

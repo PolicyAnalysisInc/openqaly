@@ -11,6 +11,7 @@ This vignette covers how to configure sampling distributions for probabilistic s
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -261,7 +262,7 @@ Use `psa_parameter_scatter_matrix()` to verify that the sampled parameters exhib
 
 The Dirichlet distribution ensures the three transition probabilities from the stable state sum to 1. The scatter matrix shows the negative correlations induced by this constraint.
 
-```{r scatter_dirichlet, fig.width=9, fig.height=9}
+```{r scatter_dirichlet, fig.width=9, fig.height=9, dev = "png"}
 psa_parameter_scatter_matrix(
   psa_results,
   variables = c("p_stable_stable", "p_stable_progressed", "p_stable_dead_extra"),
@@ -273,7 +274,7 @@ psa_parameter_scatter_matrix(
 
 The scatter matrix confirms the correlation structure specified by the covariance table.
 
-```{r scatter_mvnormal, fig.width=9, fig.height=9}
+```{r scatter_mvnormal, fig.width=9, fig.height=9, eval = FALSE}
 psa_parameter_scatter_matrix(
   psa_results,
   variables = c("u_stable", "u_treatment", "u_benefit"),
@@ -285,7 +286,7 @@ psa_parameter_scatter_matrix(
 
 Since `novel_efficacy` targets the "novel" strategy, these correlations only appear for that strategy.
 
-```{r scatter_strategy, fig.width=9, fig.height=9}
+```{r scatter_strategy, fig.width=9, fig.height=9, eval = FALSE}
 psa_parameter_scatter_matrix(
   psa_results,
   variables = c("efficacy_response", "efficacy_duration", "efficacy_qol"),

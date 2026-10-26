@@ -123,69 +123,78 @@ analyze_twsa_vbp_results <- function(segments, aggregated, vbp_spec, twsa_metada
   all_strategies <- unique(aggregated$strategy)
   comparators <- setdiff(all_strategies, intervention)
 
-  # Get unique groups
-  all_groups <- unique(aggregated$group)
+  # Equations come from the aggregated results ("_aggregated") and, for each
+  # group, from the segment results, as for DSA VBP
+  sources <- list(list(data = aggregated, groups = unique(aggregated$group),
+                       extract = extract_summary_values))
+  if (!is.null(segments) && nrow(segments) > 0 && "group" %in% names(segments)) {
+    sources[[2]] <- list(data = segments,
+                         groups = setdiff(unique(segments$group), unique(aggregated$group)),
+                         extract = extract_segment_summary_values)
+  }
 
   # Get unique run_ids from metadata
   run_ids <- unique(twsa_metadata$run_id)
 
   equations <- list()
 
-  for (rid in run_ids) {
-    for (comparator in comparators) {
-      for (grp in all_groups) {
-        # Extract intervention data for this run_id and group
-        intervention_data <- aggregated %>%
-          filter(
-            .data$run_id == rid,
-            .data$group == grp,
-            .data$strategy == intervention
-          ) %>%
-          arrange(.data$vbp_price_level)
+  for (src in sources) {
+    for (rid in run_ids) {
+      for (comparator in comparators) {
+        for (grp in src$groups) {
+          # Extract intervention data for this run_id and group
+          intervention_data <- src$data %>%
+            filter(
+              .data$run_id == rid,
+              .data$group == grp,
+              .data$strategy == intervention
+            ) %>%
+            arrange(.data$vbp_price_level)
 
-        # Extract comparator data for this run_id and group
-        comparator_data <- aggregated %>%
-          filter(
-            .data$run_id == rid,
-            .data$group == grp,
-            .data$strategy == comparator
-          ) %>%
-          arrange(.data$vbp_price_level)
+          # Extract comparator data for this run_id and group
+          comparator_data <- src$data %>%
+            filter(
+              .data$run_id == rid,
+              .data$group == grp,
+              .data$strategy == comparator
+            ) %>%
+            arrange(.data$vbp_price_level)
 
-        # Need data for all 3 price levels for both strategies
-        if (nrow(intervention_data) < 3 || nrow(comparator_data) < 3) next
+          # Need data for all 3 price levels for both strategies
+          if (nrow(intervention_data) < 3 || nrow(comparator_data) < 3) next
 
-        # Extract costs and outcomes using shared helper function
-        int_costs <- extract_summary_values(intervention_data, cost_summary)
-        comp_costs <- extract_summary_values(comparator_data, cost_summary)
-        int_outcomes <- extract_summary_values(intervention_data, outcome_summary)
-        comp_outcomes <- extract_summary_values(comparator_data, outcome_summary)
+          # Extract costs and outcomes
+          int_costs <- src$extract(intervention_data, cost_summary)
+          comp_costs <- src$extract(comparator_data, cost_summary)
+          int_outcomes <- src$extract(intervention_data, outcome_summary)
+          comp_outcomes <- src$extract(comparator_data, outcome_summary)
 
-        # Calculate incremental values
-        delta_costs <- int_costs - comp_costs
-        delta_outcomes <- int_outcomes - comp_outcomes
+          # Calculate incremental values
+          delta_costs <- int_costs - comp_costs
+          delta_outcomes <- int_outcomes - comp_outcomes
 
-        # Calculate VBP equation using shared function
-        equation <- tryCatch({
-          calculate_vbp_equation(
-            delta_costs = delta_costs,
-            delta_outcomes = delta_outcomes,
-            price_values = price_values,
-            intervention = intervention,
+          # Calculate VBP equation using shared function
+          equation <- tryCatch({
+            calculate_vbp_equation(
+              delta_costs = delta_costs,
+              delta_outcomes = delta_outcomes,
+              price_values = price_values,
+              intervention = intervention,
+              comparator = comparator,
+              context = sprintf("in group %s, run_id %d", grp, rid)
+            )
+          }, error = function(e) {
+            list(vbp_slope = NA_real_, vbp_intercept = NA_real_)
+          })
+
+          equations[[length(equations) + 1]] <- tibble(
+            run_id = rid,
             comparator = comparator,
-            context = sprintf("in group %s, run_id %d", grp, rid)
+            group = grp,
+            vbp_slope = equation$vbp_slope,
+            vbp_intercept = equation$vbp_intercept
           )
-        }, error = function(e) {
-          list(vbp_slope = NA_real_, vbp_intercept = NA_real_)
-        })
-
-        equations[[length(equations) + 1]] <- tibble(
-          run_id = rid,
-          comparator = comparator,
-          group = grp,
-          vbp_slope = equation$vbp_slope,
-          vbp_intercept = equation$vbp_intercept
-        )
+        }
       }
     }
   }

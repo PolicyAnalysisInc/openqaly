@@ -1,7 +1,6 @@
-#' Internal CE DSA Utilities
-#'
-#' Shared helpers for DSA cost-effectiveness plots and tables.
-NULL
+# Internal CE DSA Utilities
+#
+# Shared helpers for DSA cost-effectiveness plots and tables.
 
 #' Classify Base Case ICER
 #'
@@ -292,9 +291,7 @@ calculate_displayable_range <- function(low_icer, base_icer, high_icer,
     return(0)
   }
 
-  range_val <- max(displayable_values) - min(displayable_values)
-  if (range_val == 0) return(1)
-  range_val
+  max(displayable_values) - min(displayable_values)
 }
 
 #' Assign Asterisks Per Facet for DSA CE Plot

@@ -16,12 +16,7 @@ validate_scenario_spec <- function(model) {
   }
 
   # Valid setting names (same as DSA)
-  valid_settings <- c(
-    "timeframe", "timeframe_unit", "cycle_length", "cycle_length_unit",
-    "discount_cost", "discount_outcomes", "half_cycle_method",
-    "reduce_state_cycle", "days_per_year",
-    "discount_rate"
-  )
+  valid_settings <- .valid_settings
 
   all_var_names <- model$variables$name
 
@@ -257,6 +252,8 @@ generate_scenario_metadata <- function(model, segments) {
 #'   \code{progress(total = N)} to declare total units, then
 #'   \code{progress(amount = K)} for each completed unit.
 #' @param ... Additional arguments passed to run_segment
+#' @param keep_diagnostics Logical. If `TRUE`, keep the evaluated variables and other
+#'   diagnostics for every run; if `FALSE` (default), only for the base case.
 #' @return Results list with segments and aggregated results (includes scenario_id dimension).
 #'   When VBP is enabled, also includes scenario_vbp_equations tibble with VBP equations
 #'   for each scenario.

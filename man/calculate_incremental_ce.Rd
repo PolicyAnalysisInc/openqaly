@@ -47,10 +47,18 @@ cost-effectiveness frontier. Follows a 6-step process: (1) sort by cost,
 \details{
 The function implements sequential ICER analysis:
 \itemize{
-  \item Strategies are sorted by increasing cost
-  \item Dominated strategies (more costly, less effective) are identified
-  \item Extended dominance is detected (ICER higher than next strategy's ICER)
-  \item Final deltas are always vs. the previous strategy on the frontier
+  \item Strategies are sorted by increasing cost (and, at equal cost, by
+    decreasing outcome)
+  \item A strategy is strictly dominated when a strategy that is no more
+    costly is at least as effective. Of two identical strategies, the first
+    remains.
+  \item The frontier starts at the cheapest non-dominated strategy and
+    repeatedly moves to the strategy with the lowest ICER against the
+    current frontier strategy (on a tie, the cheapest), so collinear
+    strategies stay on the frontier
+  \item Non-dominated strategies that are not on the frontier are
+    extendedly dominated
+  \item Deltas are vs. the last frontier strategy before each strategy
 }
 
 When \code{group = NULL}, analysis is performed separately for each group and aggregated results.

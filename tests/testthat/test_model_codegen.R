@@ -849,18 +849,34 @@ test_that("generate_trees_code returns empty for unknown format", {
   expect_equal(length(code), 0)
 })
 
-test_that("generate_trees_code returns comment for non-empty data.frame trees", {
+test_that("generate_trees_code returns empty for a data.frame without tree columns", {
   trees_df <- data.frame(node = "root", value = 1)
   code <- openqaly:::generate_trees_code(list(), trees_df)
-
-  expect_true(any(grepl("Decision trees are parsed", code)))
+  expect_equal(length(code), 0)
 })
 
-test_that("generate_trees_code returns comment for non-empty list trees", {
+test_that("generate_trees_code returns empty for non-empty list trees", {
   trees_list <- list(tree1 = list(node = "root"))
   code <- openqaly:::generate_trees_code(list(), trees_list)
+  expect_equal(length(code), 0)
+})
 
-  expect_true(any(grepl("Decision trees are parsed", code)))
+test_that("generate_trees_code emits one add_tree_node() per node, parents and quotes intact", {
+  trees_df <- data.frame(
+    name = c("t", "t"),
+    node = c("root", "leaf"),
+    parent = c(NA, "root"),
+    formula = c("1", 'ifelse(x == "a", 0.2, 0.8)'),
+    tags = c(NA, "chance"),
+    stringsAsFactors = FALSE
+  )
+  code <- openqaly:::generate_trees_code(list(), trees_df)
+  node_lines <- grep("add_tree_node(", code, fixed = TRUE, value = TRUE)
+  expect_length(node_lines, 2)
+  expect_false(grepl("parent", node_lines[1]))
+  expect_match(node_lines[2], 'parent = "root"', fixed = TRUE)
+  expect_match(node_lines[2], 'tags = "chance"', fixed = TRUE)
+  expect_match(node_lines[2], 'formula = "ifelse(x == \\"a\\", 0.2, 0.8)"', fixed = TRUE)
 })
 
 # =============================================================================

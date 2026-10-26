@@ -55,19 +55,19 @@ convert_settings_from_df <- function(settings_df) {
     val <- settings[["half_cycle_method"]]
     if (is.character(val)) {
       val_lower <- tolower(val)
-      if (val_lower %in% c("start", "end", "life-table")) {
+      if (val_lower %in% valid_half_cycle_methods) {
         settings[["half_cycle_method"]] <- val_lower
       } else {
-        warning(glue("Invalid half_cycle_method: {val} - must be 'start', 'end', or 'life-table'. Defaulting to 'life-table'"))
-        settings[["half_cycle_method"]] <- "life-table"
+        warning(glue("Invalid half_cycle_method: {val} - must be 'start', 'end', or 'life-table'. Defaulting to 'start'"))
+        settings[["half_cycle_method"]] <- "start"
       }
     } else {
-      warning(glue("half_cycle_method must be a string, got: {class(val)} - defaulting to 'life-table'"))
-      settings[["half_cycle_method"]] <- "life-table"
+      warning(glue("half_cycle_method must be a string, got: {class(val)} - defaulting to 'start'"))
+      settings[["half_cycle_method"]] <- "start"
     }
   } else {
-    # Default to "life-table" if not specified
-    settings[["half_cycle_method"]] <- "life-table"
+    # Default to "start" if not specified (maintains backward compatibility)
+    settings[["half_cycle_method"]] <- "start"
   }
 
   # Handle discount_method setting
@@ -75,7 +75,7 @@ convert_settings_from_df <- function(settings_df) {
     val <- settings[["discount_method"]]
     if (is.character(val)) {
       val_lower <- tolower(val)
-      if (val_lower %in% c("by_cycle", "by_year")) {
+      if (val_lower %in% valid_discount_methods) {
         settings[["discount_method"]] <- val_lower
       } else {
         warning(glue("Invalid discount_method: {val} - must be 'by_cycle' or 'by_year'. Defaulting to 'by_cycle'"))

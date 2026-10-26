@@ -77,6 +77,10 @@ incremental_ceac_plot <- function(results,
   if ("wtp" %in% names(results) && "probability" %in% names(results)) {
     # Pre-calculated CEAC data
     ceac_data <- results
+    if (!is.null(strategies)) {
+      ceac_data <- ceac_data %>%
+        filter(.data$strategy %in% strategies)
+    }
   } else {
     # Model results - calculate CEAC
     if (is.null(health_outcome) || is.null(cost_outcome)) {
@@ -95,14 +99,6 @@ incremental_ceac_plot <- function(results,
       groups = groups,
       strategies = strategies
     )
-  }
-
-  # Filter strategies if specified
-  if (!is.null(strategies)) {
-    # Validate strategies exist using helper
-    check_strategies_exist(strategies, results$metadata)
-    ceac_data <- ceac_data %>%
-      filter(.data$strategy %in% strategies)
   }
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -951,8 +947,6 @@ evpi_plot <- function(results,
 #' cost-effectiveness status when a WTP threshold is provided.
 #'
 #' @inheritParams pairwise_ceac_plot
-#' @param strategies Character vector of strategies to include (NULL for all).
-#'   Mutually exclusive with interventions/comparators.
 #' @param wtp Numeric WTP threshold for cost-effectiveness evaluation. When provided,
 #'   points are colored by cost-effectiveness status and a WTP threshold line is drawn.
 #'   Default is NULL (no coloring or threshold line)
@@ -1046,7 +1040,6 @@ pairwise_psa_scatter_plot <- function(results,
                                       comparators = NULL,
                                       wtp = NULL,
                                       groups = "overall",
-                                      strategies = NULL,
                                       alpha = 0.3,
                                       title = NULL,
                                       xlab = NULL,
@@ -1060,11 +1053,6 @@ pairwise_psa_scatter_plot <- function(results,
   locale <- get_results_locale(results)
 
   # 1. Parameter Validation
-  # Validate strategies is mutually exclusive with interventions/comparators
-  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
-    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
-         "Use interventions/comparators vectors to specify exact comparisons.")
-  }
 
   # Validate that at least one of interventions or comparators is provided
   if (is.null(interventions) && is.null(comparators)) {
@@ -1077,8 +1065,7 @@ pairwise_psa_scatter_plot <- function(results,
     results,
     outcome_summary = health_outcome,
     cost_summary = cost_outcome,
-    groups = groups,
-    strategies = strategies
+    groups = groups
   )
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -1371,8 +1358,6 @@ psa_density_x_scale <- function(x, include = NULL, n = 4) {
 #'     \item \code{"all"} or \code{NULL} - All groups + overall
 #'     \item \code{"all_groups"} - All groups without overall
 #'   }
-#' @param strategies Character vector of strategies to include (NULL for all).
-#'   Mutually exclusive with interventions/comparators.
 #' @param show_mean Logical. Show vertical lines at mean incremental NMB per comparison?
 #' @param alpha Transparency for density fill (default: 0.4)
 #' @param title Optional plot title
@@ -1428,7 +1413,6 @@ nmb_density_plot <- function(results,
                              interventions = NULL,
                              comparators = NULL,
                              groups = "overall",
-                             strategies = NULL,
                              show_mean = TRUE,
                              alpha = 0.4,
                              title = NULL,
@@ -1440,11 +1424,6 @@ nmb_density_plot <- function(results,
   # Get locale for formatting
   locale <- get_results_locale(results)
 
-  # Validate that strategies is mutually exclusive with interventions/comparators
-  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
-    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
-         "Use interventions/comparators vectors to specify exact comparisons.")
-  }
 
   # Require at least one of interventions or comparators
   if (is.null(interventions) && is.null(comparators)) {
@@ -1457,8 +1436,7 @@ nmb_density_plot <- function(results,
     results,
     outcome_summary = health_outcome,
     cost_summary = cost_outcome,
-    groups = groups,
-    strategies = strategies
+    groups = groups
   )
 
   # Apply consistent group ordering (Overall first, then model order)
@@ -2244,7 +2222,6 @@ nmb_ridgeline_plot <- function(results,
                                 interventions = NULL,
                                 comparators = NULL,
                                 groups = "overall",
-                                strategies = NULL,
                                 show_mean = TRUE,
                                 alpha = 0.4,
                                 scale = 3,
@@ -2258,10 +2235,6 @@ nmb_ridgeline_plot <- function(results,
 
   locale <- get_results_locale(results)
 
-  if (!is.null(strategies) && (!is.null(interventions) || !is.null(comparators))) {
-    stop("'strategies' parameter cannot be used with 'interventions' or 'comparators'. ",
-         "Use interventions/comparators vectors to specify exact comparisons.")
-  }
 
   if (is.null(interventions) && is.null(comparators)) {
     stop("At least one of 'interventions' or 'comparators' must be provided. ",
@@ -2272,8 +2245,7 @@ nmb_ridgeline_plot <- function(results,
     results,
     outcome_summary = health_outcome,
     cost_summary = cost_outcome,
-    groups = groups,
-    strategies = strategies
+    groups = groups
   )
 
   group_levels <- get_group_order(unique(psa_data$group), results$metadata)

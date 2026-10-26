@@ -32,8 +32,9 @@ Vector of n_cycles + 1 discount factors, for time points 0..n_cycles
 \description{
 Calculate discount factors at each time point t = 0..n using
 1/(1+r)^tau(t), where tau(t) is the time in years from the start of the
-model: t times the cycle length in years, plus `offset_years`. Values are
-discounted at their time points and then allocated to cycles with the
-half-cycle method, so time point 0 has a discount factor of 1 (no
-discounting) when there is no offset.
+model: t times the cycle length in years, plus `offset_years`. The
+half-cycle method sets which time points a cycle's amount is discounted at:
+its start (time point k-1), its end (time point k), or half at each
+(life-table). Time point 0 has a discount factor of 1 (no discounting) when
+there is no offset.
 }

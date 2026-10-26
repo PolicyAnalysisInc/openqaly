@@ -11,9 +11,10 @@ This vignette demonstrates how to configure, run, and visualize deterministic se
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>",
-  dpi = 150
+  dpi = 72
 )
 ```
 
@@ -167,7 +168,7 @@ dsa_outcomes_plot(
 
 #### Filtering to specific strategies
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=6, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -179,7 +180,7 @@ dsa_outcomes_plot(
 
 Use `interventions` and `comparators` to show incremental differences.
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -190,7 +191,7 @@ dsa_outcomes_plot(
 
 #### Hiding parameter values in labels
 
-```{r, fig.width=7, fig.height=7}
+```{r, fig.width=7, fig.height=7, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -202,7 +203,7 @@ dsa_outcomes_plot(
 
 Use `top_n` to limit the tornado plot to the most impactful parameters. This is useful for models with many DSA parameters.
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -214,7 +215,7 @@ dsa_outcomes_plot(
 
 By default, parameters with no impact are excluded. Set `drop_zero_impact = FALSE` to include them.
 
-```{r, fig.width=7, fig.height=7}
+```{r, fig.width=7, fig.height=7, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -224,7 +225,7 @@ dsa_outcomes_plot(
 
 #### Using discounted values
 
-```{r, fig.width=7, fig.height=7}
+```{r, fig.width=7, fig.height=7, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -236,7 +237,7 @@ dsa_outcomes_plot(
 
 Use `groups = 'all_groups'` to display results for each population subgroup separately.
 
-```{r, fig.width=12, fig.height=10}
+```{r, fig.width=12, fig.height=10, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -248,7 +249,7 @@ dsa_outcomes_plot(
 
 Use `groups = 'all'` to display results for each subgroup plus the overall population.
 
-```{r, fig.width=16, fig.height=12}
+```{r, fig.width=16, fig.height=12, eval = FALSE}
 dsa_outcomes_plot(
   dsa_results,
   outcome = "qalys",
@@ -291,7 +292,7 @@ dsa_costs_plot(
 
 #### Filtering to specific strategies
 
-```{r, fig.width=7, fig.height=6}
+```{r, fig.width=7, fig.height=6, eval = FALSE}
 dsa_costs_plot(
   dsa_results,
   outcome = "costs",
@@ -301,7 +302,7 @@ dsa_costs_plot(
 
 #### Intervention vs comparator
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_costs_plot(
   dsa_results,
   outcome = "costs",
@@ -312,7 +313,7 @@ dsa_costs_plot(
 
 #### Showing only the top N parameters
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_costs_plot(
   dsa_results,
   outcome = "costs",
@@ -337,7 +338,7 @@ dsa_nmb_plot(
 
 #### Comparator perspective
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -348,7 +349,7 @@ dsa_nmb_plot(
 
 #### Specific intervention vs comparator
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -360,7 +361,7 @@ dsa_nmb_plot(
 
 #### Custom WTP override
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -372,7 +373,7 @@ dsa_nmb_plot(
 
 #### Showing only the top N parameters
 
-```{r, fig.width=7, fig.height=4}
+```{r, fig.width=7, fig.height=4, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -384,7 +385,7 @@ dsa_nmb_plot(
 
 #### By subgroup
 
-```{r, fig.width=12, fig.height=6}
+```{r, fig.width=12, fig.height=6, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -396,7 +397,7 @@ dsa_nmb_plot(
 
 #### All groups with overall
 
-```{r, fig.width=12, fig.height=10}
+```{r, fig.width=12, fig.height=10, eval = FALSE}
 dsa_nmb_plot(
   dsa_results,
   health_outcome = "qalys",
@@ -423,7 +424,7 @@ dsa_outcomes_table(
 
 #### Filtering to specific strategies
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -433,7 +434,7 @@ dsa_outcomes_table(
 
 #### Intervention perspective
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -443,7 +444,7 @@ dsa_outcomes_table(
 
 #### Comparator perspective
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -453,7 +454,7 @@ dsa_outcomes_table(
 
 #### Custom decimal places
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "costs",
@@ -465,7 +466,7 @@ dsa_outcomes_table(
 
 Use `top_n` to limit the table to the most impactful parameters.
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -477,7 +478,7 @@ dsa_outcomes_table(
 
 Use `show_parameter_values = TRUE` to append input range values to parameter labels, matching the tornado plot label format. When a parameter has a custom `range_label`, it is used instead of auto-generated values.
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -487,7 +488,7 @@ dsa_outcomes_table(
 
 #### Using discounted values
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -497,7 +498,7 @@ dsa_outcomes_table(
 
 #### By subgroup
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -507,7 +508,7 @@ dsa_outcomes_table(
 
 #### All groups with overall
 
-```{r}
+```{r, eval = FALSE}
 dsa_outcomes_table(
   dsa_results,
   outcome = "qalys",
@@ -530,7 +531,7 @@ dsa_costs_table(
 
 #### Filtering to specific strategies
 
-```{r}
+```{r, eval = FALSE}
 dsa_costs_table(
   dsa_results,
   outcome = "costs",
@@ -540,7 +541,7 @@ dsa_costs_table(
 
 #### Comparator perspective
 
-```{r}
+```{r, eval = FALSE}
 dsa_costs_table(
   dsa_results,
   outcome = "costs",
@@ -565,7 +566,7 @@ dsa_nmb_table(
 
 #### Comparator perspective
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -576,7 +577,7 @@ dsa_nmb_table(
 
 #### Specific intervention vs comparator
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -588,7 +589,7 @@ dsa_nmb_table(
 
 #### Custom WTP override
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -600,7 +601,7 @@ dsa_nmb_table(
 
 #### Showing only the top N parameters
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -612,7 +613,7 @@ dsa_nmb_table(
 
 #### By subgroup
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -624,7 +625,7 @@ dsa_nmb_table(
 
 #### All groups with overall
 
-```{r}
+```{r, eval = FALSE}
 dsa_nmb_table(
   dsa_results,
   health_outcome = "qalys",
@@ -657,7 +658,7 @@ The plot handles special ICER cases:
 
 #### Showing only the top N parameters
 
-```{r, fig.width=7, fig.height=4}
+```{r, fig.width=7, fig.height=4, eval = FALSE}
 dsa_ce_plot(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -686,7 +687,7 @@ dsa_ce_table(
 
 #### Showing only the top N parameters
 
-```{r}
+```{r, eval = FALSE}
 dsa_ce_table(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -701,7 +702,7 @@ dsa_ce_table(
 
 Use `groups = 'all_groups'` to display CE results for each population subgroup separately.
 
-```{r, fig.width=12, fig.height=8}
+```{r, fig.width=12, fig.height=8, eval = FALSE}
 dsa_ce_plot(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -716,7 +717,7 @@ dsa_ce_plot(
 
 Use `groups = 'all'` to display results for each subgroup plus the overall population.
 
-```{r, fig.width=16, fig.height=10}
+```{r, fig.width=16, fig.height=10, eval = FALSE}
 dsa_ce_plot(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -729,7 +730,7 @@ dsa_ce_plot(
 
 #### CE Table by subgroup
 
-```{r}
+```{r, eval = FALSE}
 dsa_ce_table(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -742,7 +743,7 @@ dsa_ce_table(
 
 #### CE Table with all groups including overall
 
-```{r}
+```{r, eval = FALSE}
 dsa_ce_table(
   dsa_ce_results,
   health_outcome = "qalys",
@@ -814,7 +815,7 @@ dsa_vbp_plot(dsa_vbp_results)
 
 Use `comparators = "overall"` to show only the "All Comparators" aggregate (minimum VBP across all comparators):
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   comparators = "overall"
@@ -825,7 +826,7 @@ dsa_vbp_plot(
 
 Use `comparators = "all_comparators"` to show each individual comparator without the aggregate:
 
-```{r, fig.width=10, fig.height=8}
+```{r, fig.width=10, fig.height=8, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   comparators = "all_comparators"
@@ -836,7 +837,7 @@ dsa_vbp_plot(
 
 Specify a comparator name to show only that comparison:
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   comparators = "seritinib"
@@ -847,7 +848,7 @@ dsa_vbp_plot(
 
 You can specify a different WTP threshold using the `wtp` parameter:
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   wtp = 150000,
@@ -857,7 +858,7 @@ dsa_vbp_plot(
 
 #### Hiding parameter values in labels
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=7, fig.height=5, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   comparators = "seritinib",
@@ -867,7 +868,7 @@ dsa_vbp_plot(
 
 #### All comparators by subgroup
 
-```{r, fig.width=20, fig.height=12}
+```{r, fig.width=20, fig.height=12, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   groups = "all_groups"
@@ -876,7 +877,7 @@ dsa_vbp_plot(
 
 #### All comparators with all groups
 
-```{r, fig.width=20, fig.height=12}
+```{r, fig.width=20, fig.height=12, eval = FALSE}
 dsa_vbp_plot(
   dsa_vbp_results,
   groups = "all"
@@ -897,7 +898,7 @@ dsa_vbp_table(dsa_vbp_results)
 
 #### Aggregate only
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   comparators = "overall"
@@ -906,7 +907,7 @@ dsa_vbp_table(
 
 #### Individual comparators only (no aggregate)
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   comparators = "all_comparators"
@@ -915,7 +916,7 @@ dsa_vbp_table(
 
 #### Single comparator
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   comparators = "seritinib"
@@ -924,7 +925,7 @@ dsa_vbp_table(
 
 #### Overriding the WTP threshold
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   wtp = 150000,
@@ -934,7 +935,7 @@ dsa_vbp_table(
 
 #### All comparators by subgroup
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   groups = "all_groups"
@@ -943,7 +944,7 @@ dsa_vbp_table(
 
 #### All comparators with all groups
 
-```{r}
+```{r, eval = FALSE}
 dsa_vbp_table(
   dsa_vbp_results,
   groups = "all"

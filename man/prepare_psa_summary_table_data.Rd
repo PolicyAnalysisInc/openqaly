@@ -20,6 +20,10 @@ prepare_psa_summary_table_data(
 \arguments{
 \item{results}{A openqaly PSA results object}
 
+\item{outcome_summary}{Name of the health outcome}
+
+\item{cost_summary}{Name of the cost outcome}
+
 \item{pce_wtp}{Numeric vector of WTP thresholds for P(CE) rows}
 
 \item{groups}{Group selection:
@@ -39,10 +43,6 @@ prepare_psa_summary_table_data(
 \item{cost_decimals}{Number of decimal places for costs}
 
 \item{font_size}{Font size for rendering}
-
-\item{health_outcome}{Name of the health outcome}
-
-\item{cost_outcome}{Name of the cost outcome}
 }
 \value{
 List with prepared data and metadata for render_table()

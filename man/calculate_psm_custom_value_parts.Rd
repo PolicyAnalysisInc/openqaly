@@ -2,7 +2,7 @@
 % Please edit documentation in R/psm_custom.R
 \name{calculate_psm_custom_value_parts}
 \alias{calculate_psm_custom_value_parts}
-\title{Calculate Custom PSM Value Parts at Time Points}
+\title{Calculate Custom PSM Value Parts}
 \usage{
 calculate_psm_custom_value_parts(
   uneval_values,
@@ -14,13 +14,13 @@ calculate_psm_custom_value_parts(
 )
 }
 \value{
-List with `point_values` ((n+1) x values matrix), `model_start` and
-  `dt` (named vectors).
+List with `start`, `end` and `transitional` (cycles x values
+  matrices), `model_start` and `dt` (named vectors).
 }
 \description{
-Residency values give value x occupancy at each time point 0..n (time point t
-priced with cycle t's value, time point 0 with cycle 1's); model start and
+Residency values give value x occupancy at the start (`start`) and end
+(`end`) of each cycle, priced with that cycle's value; model start and
 decision tree values are cycle 1 amounts. Transitional values are not
-supported.
+supported (`transitional` is all zero).
 }
 \keyword{internal}

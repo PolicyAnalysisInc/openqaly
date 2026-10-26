@@ -4,7 +4,7 @@
 #' @param dcost   numeric vector of cost differences (intervention - comparator)
 #' @param deffect numeric vector of outcome differences (intervention - comparator)
 #' @return An object of class "icer" (numeric under the hood) with this encoding:
-#'   - More costly & more effective  :  +ICER (ΔC/ΔE)
+#'   - More costly & more effective  :  +ICER (dC/dE)
 #'   - Less costly & less effective  :  -ICER (negative whose opposite is ICER of comparator vs intervention)
 #'   - Dominant (less costly, more effective OR same cost & more effective OR less costly & same effect): 0
 #'   - Dominated (more costly, less effective OR ties that imply dominance against): Inf
@@ -150,10 +150,18 @@ print.icer <- function(x, digits = 3, big.mark = ",", ...) {
 #' @details
 #' The function implements sequential ICER analysis:
 #' \itemize{
-#'   \item Strategies are sorted by increasing cost
-#'   \item Dominated strategies (more costly, less effective) are identified
-#'   \item Extended dominance is detected (ICER higher than next strategy's ICER)
-#'   \item Final deltas are always vs. the previous strategy on the frontier
+#'   \item Strategies are sorted by increasing cost (and, at equal cost, by
+#'     decreasing outcome)
+#'   \item A strategy is strictly dominated when a strategy that is no more
+#'     costly is at least as effective. Of two identical strategies, the first
+#'     remains.
+#'   \item The frontier starts at the cheapest non-dominated strategy and
+#'     repeatedly moves to the strategy with the lowest ICER against the
+#'     current frontier strategy (on a tie, the cheapest), so collinear
+#'     strategies stay on the frontier
+#'   \item Non-dominated strategies that are not on the frontier are
+#'     extendedly dominated
+#'   \item Deltas are vs. the last frontier strategy before each strategy
 #' }
 #'
 #' When \code{group = NULL}, analysis is performed separately for each group and aggregated results.
@@ -210,9 +218,10 @@ calculate_incremental_ce <- function(results,
     group_by(.data$group) %>%
     group_split() %>%
     lapply(function(grp_data) {
-      # Step 1: Sort by cost
+      # Sort by cost, then by outcome descending, so that of two equally
+      # costly strategies the more effective one comes first
       grp_data <- grp_data %>%
-        arrange(.data$cost, .data$outcome)
+        arrange(.data$cost, desc(.data$outcome))
 
       n_strategies <- nrow(grp_data)
 
@@ -231,81 +240,48 @@ calculate_incremental_ce <- function(results,
         return(grp_data)
       }
 
-      # First strategy is always on the frontier with NA deltas
-      grp_data$on_frontier[1] <- TRUE
-      grp_data$dcost[1] <- NA_real_
-      grp_data$doutcome[1] <- NA_real_
-      grp_data$icer[1] <- NA_real_
-      grp_data$comparator[1] <- NA_character_
+      # Strict dominance: some strategy that is no more costly (earlier in the
+      # sort) is at least as effective. Of two identical strategies, the first
+      # one remains.
+      best_before <- c(-Inf, cummax(grp_data$outcome)[-n_strategies])
+      grp_data$strictly_dominated <- grp_data$outcome <= best_before
 
-      if (n_strategies == 1) {
-        # Create combined dominated column for consistency
-        grp_data$dominated <- grp_data$strictly_dominated | grp_data$extendedly_dominated
-        return(grp_data)
+      # Walk the efficiency frontier: start at the cheapest non-dominated
+      # strategy and repeatedly step to the remaining non-dominated strategy
+      # with the lowest ICER against the current frontier point (on a tie, the
+      # cheapest). Collinear strategies therefore stay on the frontier.
+      candidates <- which(!grp_data$strictly_dominated)
+      current <- candidates[1]
+      frontier <- current
+      repeat {
+        later <- candidates[candidates > current]
+        if (length(later) == 0) break
+        ratios <- (grp_data$cost[later] - grp_data$cost[current]) /
+          (grp_data$outcome[later] - grp_data$outcome[current])
+        current <- later[which.min(ratios)]
+        frontier <- c(frontier, current)
       }
+      grp_data$on_frontier[frontier] <- TRUE
+      grp_data$extendedly_dominated <- !grp_data$strictly_dominated & !grp_data$on_frontier
 
-      # Steps 2-3: Calculate incrementals and identify dominated strategies
-      frontier_idx <- 1
-
-      for (i in 2:n_strategies) {
-        # Calculate vs. last frontier strategy
-        prev_idx <- frontier_idx
+      # Incrementals of every strategy except the first frontier strategy are
+      # against the last frontier strategy before it
+      for (i in setdiff(seq_len(n_strategies), frontier[1])) {
+        prev_frontier <- frontier[frontier < i]
+        if (length(prev_frontier) == 0) next
+        prev_idx <- max(prev_frontier)
         grp_data$dcost[i] <- grp_data$cost[i] - grp_data$cost[prev_idx]
         grp_data$doutcome[i] <- grp_data$outcome[i] - grp_data$outcome[prev_idx]
-        grp_data$comparator[i] <- grp_data$strategy[prev_idx]
-
-        # Calculate ICER
         grp_data$icer[i] <- icer(grp_data$dcost[i], grp_data$doutcome[i])
-
-        # Check for dominance (more costly and less/equal effective)
-        if (grp_data$dcost[i] >= 0 && grp_data$doutcome[i] <= 0) {
-          grp_data$strictly_dominated[i] <- TRUE
-          # Keep comparisons vs. last frontier strategy
-        } else {
-          # Not dominated, add to frontier
-          grp_data$on_frontier[i] <- TRUE
-          frontier_idx <- i
-        }
+        grp_data$comparator[i] <- grp_data$strategy[prev_idx]
       }
-
-      # Step 4-5: Detect extended dominance
-      # Extended dominance: ICER[i] > ICER[j] where j > i on the frontier
-      frontier_indices <- which(grp_data$on_frontier)
-
-      if (length(frontier_indices) > 2) {
-        # Check each frontier strategy (except first and last)
-        for (idx in 2:(length(frontier_indices) - 1)) {
-          i <- frontier_indices[idx]
-          j <- frontier_indices[idx + 1]
-
-          # If current ICER > next ICER, current is extended dominated
-          if (!is.na(grp_data$icer[i]) && !is.na(grp_data$icer[j]) &&
-              is.finite(grp_data$icer[i]) && is.finite(grp_data$icer[j]) &&
-              grp_data$icer[i] > grp_data$icer[j]) {
-            grp_data$extendedly_dominated[i] <- TRUE
-            grp_data$on_frontier[i] <- FALSE
-          }
-        }
-
-        # Step 6: Recalculate ICERs after extended dominance removal
-        frontier_indices <- which(grp_data$on_frontier)
-
-        for (idx in 2:length(frontier_indices)) {
-          i <- frontier_indices[idx]
-          prev_i <- frontier_indices[idx - 1]
-
-          # Recalculate vs. previous frontier strategy
-          grp_data$dcost[i] <- grp_data$cost[i] - grp_data$cost[prev_i]
-          grp_data$doutcome[i] <- grp_data$outcome[i] - grp_data$outcome[prev_i]
-          grp_data$icer[i] <- icer(grp_data$dcost[i], grp_data$doutcome[i])
-          grp_data$comparator[i] <- grp_data$strategy[prev_i]
-        }
-      }
+      grp_data$icer[frontier[1]] <- NA_real_
 
       # Create combined dominated column
       grp_data$dominated <- grp_data$strictly_dominated | grp_data$extendedly_dominated
 
-      grp_data
+      # Return rows ordered by cost, then outcome
+      grp_data %>% arrange(.data$cost, .data$outcome)
     })
 
   # Combine results from all groups
@@ -333,6 +309,8 @@ calculate_incremental_ce <- function(results,
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with comparators.
 #' @param comparators Character vector of reference strategies for comparator perspective (e.g., "control").
 #'   If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.
+#' @param health_outcome,cost_outcome Alternative names for `outcome_summary` and
+#'   `cost_summary`, used when those are not given.
 #'
 #' @return A tibble with columns:
 #'   \item{group}{Group name (using display_name)}

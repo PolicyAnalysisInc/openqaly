@@ -848,14 +848,20 @@ calculate_nmb <- function(results,
     stop("At least one of 'interventions' or 'comparators' must be provided")
   }
 
-  # Get outcome and cost summaries (always discounted for CE analysis)
+  # Strategies may be given by technical or display name; work with technical
+  # names and map to display names only for the output
+  interventions <- resolve_strategy_names(interventions, results$metadata)
+  comparators <- resolve_strategy_names(comparators, results$metadata)
+
+  # Get outcome and cost summaries (always discounted for CE analysis), with
+  # technical strategy and group names
   outcome_data <- get_summaries(
     results,
     groups = groups,
     summaries = outcome_summary,
     value_type = "outcome",
     discounted = TRUE,
-    use_display_names = use_display_names
+    use_display_names = FALSE
   )
 
   cost_data <- get_summaries(
@@ -864,11 +870,11 @@ calculate_nmb <- function(results,
     summaries = cost_summary,
     value_type = "cost",
     discounted = TRUE,
-    use_display_names = use_display_names
+    use_display_names = FALSE
   )
 
   # Aggregate outcome and cost by strategy and group (sum across value components)
-  # NOTE: outcome_data and cost_data have technical names in strategy column
+  # outcome_data and cost_data have technical names in the strategy column
   outcome_agg <- outcome_data %>%
     group_by(.data$strategy, .data$group) %>%
     summarize(outcome_total = sum(.data$amount, na.rm = TRUE), .groups = 'drop')
@@ -1077,4 +1083,22 @@ calculate_nmb <- function(results,
   }
 
   as_tibble(nmb_results)
+}
+
+# Technical names of strategies given by technical or display name. Names that
+# match neither are an error. NULL stays NULL.
+resolve_strategy_names <- function(strategies, metadata) {
+  if (is.null(strategies) || is.null(metadata) || is.null(metadata$strategies)) {
+    return(strategies)
+  }
+  meta <- metadata$strategies
+  vapply(strategies, function(s) {
+    if (s %in% meta$name) return(s)
+    if ("display_name" %in% colnames(meta)) {
+      idx <- match(s, meta$display_name)
+      if (!is.na(idx)) return(meta$name[idx])
+    }
+    stop(sprintf("Strategy '%s' not found. Available strategies: %s",
+                 s, paste(meta$name, collapse = ", ")), call. = FALSE)
+  }, character(1), USE.NAMES = FALSE)
 }

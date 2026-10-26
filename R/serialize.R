@@ -60,11 +60,9 @@ prepare_segments_for_json <- function(segments) {
 convert_oq_formulas <- function(obj) {
   if (inherits(obj, "oq_formula")) {
     as.character(obj)
-  } else if (is.list(obj)) {
-    # Recursively convert lists
-    lapply(obj, convert_oq_formulas)
   } else if (is.data.frame(obj)) {
-    # Convert formulas in dataframe columns
+    # Convert formulas in dataframe columns (checked before is.list(), since a
+    # data frame is also a list)
     obj[] <- lapply(obj, function(col) {
       if (is.list(col)) {
         lapply(col, convert_oq_formulas)
@@ -73,6 +71,9 @@ convert_oq_formulas <- function(obj) {
       }
     })
     obj
+  } else if (is.list(obj)) {
+    # Recursively convert lists
+    lapply(obj, convert_oq_formulas)
   } else {
     obj
   }

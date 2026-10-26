@@ -12,7 +12,6 @@ pairwise_psa_scatter_plot(
   comparators = NULL,
   wtp = NULL,
   groups = "overall",
-  strategies = NULL,
   alpha = 0.3,
   title = NULL,
   xlab = NULL,
@@ -45,9 +44,6 @@ Default is NULL (no coloring or threshold line)}
 \item{groups}{Group selection: "overall" (default) uses overall/aggregated results,
 "all" includes overall + all groups, "all_groups" includes all groups without overall,
 specific group name(s) filter to those groups (triggers faceting by group)}
-
-\item{strategies}{Character vector of strategies to include (NULL for all).
-Mutually exclusive with interventions/comparators.}
 
 \item{alpha}{Transparency of scatter points (0-1). Default is 0.3}
 

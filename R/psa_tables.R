@@ -4,8 +4,8 @@
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
 #' @param groups Group selection:
 #'   \itemize{
@@ -115,7 +115,7 @@ prepare_incremental_ceac_table_data <- function(results,
 
       # Add group's strategy columns
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, startsWith(colnames(pivot_data), paste0(grp, "_")), drop = FALSE]
+      grp_cols <- group_columns(pivot_data, grp, strategies_display)
       result_cols <- cbind(result_cols, grp_cols)
     }
   } else {
@@ -286,8 +286,8 @@ incremental_ceac_table <- function(results,
 #' Creates a transposed table with strategies as columns and statistics as rows.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param pce_wtp Numeric vector of WTP thresholds for P(CE) rows
 #' @param groups Group selection:
 #'   \itemize{
@@ -773,8 +773,8 @@ psa_summary_table <- function(results,
 #' a table. Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param interventions Reference strategies for comparison (intervention perspective).
 #' @param comparators Reference strategies for comparison (comparator perspective).
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as columns
@@ -885,7 +885,7 @@ prepare_pairwise_ceac_table_data <- function(results,
 
       # Add group's comparison columns
       grp <- groups_display[i]
-      grp_cols <- pivot_data[, startsWith(colnames(pivot_data), paste0(grp, "_")), drop = FALSE]
+      grp_cols <- group_columns(pivot_data, grp, comparisons_display)
       result_cols <- cbind(result_cols, grp_cols)
     }
   } else {
@@ -1071,8 +1071,8 @@ pairwise_ceac_table <- function(results,
 #' Extracts data preparation logic to enable multi-backend support.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param wtp_thresholds Numeric vector of WTP thresholds to show as rows
 #' @param groups Group selection:
 #'   \itemize{
@@ -1299,8 +1299,8 @@ evpi_table <- function(results,
 #' falling into each quadrant relative to a comparator strategy.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param comparator Name of the comparator strategy
 #' @param groups Group selection
 #' @param strategies Character vector of strategies to include (NULL for all)
@@ -2285,8 +2285,8 @@ psa_costs_table <- function(results,
 #' and statistics as rows.
 #'
 #' @param results A openqaly PSA results object
-#' @param health_outcome Name of the health outcome
-#' @param cost_outcome Name of the cost outcome
+#' @param outcome_summary Name of the health outcome
+#' @param cost_summary Name of the cost outcome
 #' @param wtp Willingness-to-pay threshold
 #' @param groups Group selection:
 #'   \itemize{
@@ -2740,4 +2740,18 @@ psa_nmb_table <- function(results,
 
   # Render using specified backend
   render_table(prepared, format = table_format)
+}
+
+# A group's "<group>_<key>" columns from a pivoted table, in the order of keys
+# (so each column sits under its own header). Exact names, so group "X" does
+# not pick up columns of group "X_Y"; a key with no column for this group gives
+# an empty column.
+group_columns <- function(pivot_data, grp, keys) {
+  cols <- paste0(grp, "_", keys)
+  out <- lapply(cols, function(col) {
+    if (col %in% colnames(pivot_data)) pivot_data[[col]] else rep("", nrow(pivot_data))
+  })
+  out <- as.data.frame(out, stringsAsFactors = FALSE, check.names = FALSE)
+  colnames(out) <- cols
+  out
 }

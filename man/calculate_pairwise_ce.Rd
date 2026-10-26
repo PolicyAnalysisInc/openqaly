@@ -29,6 +29,9 @@ If provided, shows intervention - comparator comparisons. Mutually exclusive wit
 
 \item{comparators}{Character vector of reference strategies for comparator perspective (e.g., "control").
 If provided, shows intervention - comparator comparisons. Mutually exclusive with interventions.}
+
+\item{health_outcome, cost_outcome}{Alternative names for `outcome_summary` and
+`cost_summary`, used when those are not given.}
 }
 \value{
 A tibble with columns:

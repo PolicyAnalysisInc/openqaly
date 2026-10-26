@@ -1,0 +1,237 @@
+{
+ "settings": [
+  {
+   "setting": "model_type",
+   "value": "markov"
+  },
+  {
+   "setting": "days_per_year",
+   "value": "365"
+  },
+  {
+   "setting": "half_cycle_method",
+   "value": "end"
+  },
+  {
+   "setting": "discount_cost",
+   "value": "3"
+  },
+  {
+   "setting": "discount_outcomes",
+   "value": "3"
+  },
+  {
+   "setting": "discount_method",
+   "value": "by_cycle"
+  },
+  {
+   "setting": "reduce_state_cycle",
+   "value": "FALSE"
+  },
+  {
+   "setting": "timeframe",
+   "value": "5"
+  },
+  {
+   "setting": "timeframe_unit",
+   "value": "years"
+  },
+  {
+   "setting": "cycle_length",
+   "value": "1"
+  },
+  {
+   "setting": "cycle_length_unit",
+   "value": "years"
+  }
+ ],
+ "strategies": [
+  {
+   "name": "s1",
+   "display_name": "s1",
+   "description": "s1",
+   "enabled": 1
+  }
+ ],
+ "groups": [],
+ "states": [
+  {
+   "name": "A",
+   "initial_probability": "1",
+   "display_name": "A",
+   "description": "A",
+   "state_group": null,
+   "share_state_time": false,
+   "state_cycle_limit": 1,
+   "state_cycle_limit_unit": "cycles"
+  },
+  {
+   "name": "B",
+   "initial_probability": "0",
+   "display_name": "B",
+   "description": "B",
+   "state_group": null,
+   "share_state_time": false,
+   "state_cycle_limit": 3,
+   "state_cycle_limit_unit": "cycles"
+  },
+  {
+   "name": "D",
+   "initial_probability": "0",
+   "display_name": "D",
+   "description": "D",
+   "state_group": null,
+   "share_state_time": false,
+   "state_cycle_limit": 1,
+   "state_cycle_limit_unit": "cycles"
+  }
+ ],
+ "transitions": [
+  {
+   "from_state": "A",
+   "to_state": "B",
+   "formula": "0.2"
+  },
+  {
+   "from_state": "A",
+   "to_state": "D",
+   "formula": "0.1"
+  },
+  {
+   "from_state": "A",
+   "to_state": "A",
+   "formula": "C"
+  },
+  {
+   "from_state": "B",
+   "to_state": "D",
+   "formula": "0.3"
+  },
+  {
+   "from_state": "B",
+   "to_state": "B",
+   "formula": "C"
+  },
+  {
+   "from_state": "D",
+   "to_state": "D",
+   "formula": "1"
+  }
+ ],
+ "values": [
+  {
+   "name": "r_const",
+   "formula": "100",
+   "state": "A",
+   "destination": null,
+   "display_name": "r_const",
+   "description": "r_const",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "r_c1",
+   "formula": "ifelse(cycle == 1, 1000, 0)",
+   "state": "A",
+   "destination": null,
+   "display_name": "r_c1",
+   "description": "r_c1",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "r_first3",
+   "formula": "ifelse(cycle <= 3, 500, 0)",
+   "state": "A",
+   "destination": null,
+   "display_name": "r_first3",
+   "description": "r_first3",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "r_cyc",
+   "formula": "10 * cycle",
+   "state": "A",
+   "destination": null,
+   "display_name": "r_cyc",
+   "description": "r_cyc",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "t_AB",
+   "formula": "1000",
+   "state": "A",
+   "destination": "B",
+   "display_name": "t_AB",
+   "description": "t_AB",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "t_BD",
+   "formula": "200",
+   "state": "B",
+   "destination": "D",
+   "display_name": "t_BD",
+   "description": "t_BD",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "r_tun",
+   "formula": "ifelse(state_cycle <= 2, 300, 0)",
+   "state": "B",
+   "destination": null,
+   "display_name": "r_tun",
+   "description": "r_tun",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "ms",
+   "formula": "777",
+   "state": null,
+   "destination": null,
+   "display_name": "ms",
+   "description": "ms",
+   "type": "cost",
+   "discounting_override": null
+  },
+  {
+   "name": "ly",
+   "formula": "cycle_length_years",
+   "state": "A",
+   "destination": null,
+   "display_name": "ly",
+   "description": "ly",
+   "type": "outcome",
+   "discounting_override": null
+  },
+  {
+   "name": "lyB",
+   "formula": "cycle_length_years",
+   "state": "B",
+   "destination": null,
+   "display_name": "lyB",
+   "description": "lyB",
+   "type": "outcome",
+   "discounting_override": null
+  }
+ ],
+ "summaries": [
+  {
+   "name": "costs",
+   "values": "r_const,r_c1,r_first3,r_cyc,t_AB,t_BD,r_tun,ms",
+   "display_name": "costs",
+   "description": "costs",
+   "type": "cost",
+   "wtp": null
+  }
+ ],
+ "variables": [],
+ "tables": [],
+ "scripts": [],
+ "multivariate_sampling": []
+}

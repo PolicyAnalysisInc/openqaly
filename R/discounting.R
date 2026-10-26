@@ -2,10 +2,11 @@
 #'
 #' Calculate discount factors at each time point t = 0..n using
 #' 1/(1+r)^tau(t), where tau(t) is the time in years from the start of the
-#' model: t times the cycle length in years, plus `offset_years`. Values are
-#' discounted at their time points and then allocated to cycles with the
-#' half-cycle method, so time point 0 has a discount factor of 1 (no
-#' discounting) when there is no offset.
+#' model: t times the cycle length in years, plus `offset_years`. The
+#' half-cycle method sets which time points a cycle's amount is discounted at:
+#' its start (time point k-1), its end (time point k), or half at each
+#' (life-table). Time point 0 has a discount factor of 1 (no discounting) when
+#' there is no offset.
 #'
 #' @param n_cycles Number of cycles
 #' @param discount_rate Annual discount rate as a percentage (e.g., 3.5 for 3.5\%)
@@ -26,10 +27,9 @@ calculate_discount_factors <- function(n_cycles, discount_rate, cycle_length_yea
   }
 
   # Validate discount_method
-  valid_methods <- c("by_cycle", "by_year")
-  if (!discount_method %in% valid_methods) {
+  if (!discount_method %in% valid_discount_methods) {
     stop("Invalid discount_method: '", discount_method, "'. Must be one of: ",
-         paste(valid_methods, collapse = ", "))
+         paste(valid_discount_methods, collapse = ", "))
   }
 
   time_years <- discount_times(n_cycles, cycle_length_years, offset_years)
@@ -46,82 +46,6 @@ calculate_discount_factors <- function(n_cycles, discount_rate, cycle_length_yea
 # Time in years of each time point 0..n, including the decision tree offset
 discount_times <- function(n_cycles, cycle_length_years, offset_years = 0) {
   (0:n_cycles) * cycle_length_years + offset_years
-}
-
-#' Apply Discounting to Values Matrix
-#'
-#' Applies discount factors to a values matrix based on value types.
-#' Values identified as costs use the cost discount rate, while
-#' outcomes use the outcomes discount rate.
-#'
-#' @param values_matrix Matrix or data frame of undiscounted values
-#' @param discount_factors_cost Vector of discount factors for costs
-#' @param discount_factors_outcomes Vector of discount factors for outcomes
-#' @param types Named vector indicating type ("cost" or "outcome") for each value
-#' @param skip Character vector of value names to skip (leave undiscounted). Default is empty.
-#'
-#' @return Matrix or data frame with discounted values
-#' @export
-apply_discounting <- function(values_matrix,
-                             discount_factors_cost,
-                             discount_factors_outcomes,
-                             types,
-                             skip = character(0)) {
-
-  # Handle case where values_matrix is a data frame
-  if (is.data.frame(values_matrix)) {
-    values_matrix <- as.matrix(values_matrix)
-    was_df <- TRUE
-  } else {
-    was_df <- FALSE
-  }
-
-  # Get dimensions
-  n_cycles <- nrow(values_matrix)
-  value_names <- colnames(values_matrix)
-
-  # Create result matrix
-  discounted_matrix <- values_matrix
-
-  # Apply discounting column by column based on value type
-  for (i in seq_along(value_names)) {
-    value_name <- value_names[i]
-
-    if (value_name %in% skip) next
-
-    # Determine which discount factors to use
-    if (!is.null(types) && value_name %in% names(types)) {
-      type <- types[value_name]
-    } else {
-      # Default to outcome if type not specified
-      type <- "outcome"
-    }
-
-    # Apply appropriate discount factors
-    if (type == "cost") {
-      discount_factors <- discount_factors_cost
-    } else {
-      discount_factors <- discount_factors_outcomes
-    }
-
-    # Ensure discount factors match the number of cycles
-    if (length(discount_factors) >= n_cycles) {
-      discounted_matrix[, i] <- values_matrix[, i] * discount_factors[seq_len(n_cycles)]
-    } else {
-      warning(paste("Discount factors length", length(discount_factors),
-                   "is less than number of cycles", n_cycles))
-      # Use available factors and pad with 1s
-      factors_to_use <- c(discount_factors, rep(1, n_cycles - length(discount_factors)))
-      discounted_matrix[, i] <- values_matrix[, i] * factors_to_use
-    }
-  }
-
-  # Convert back to data frame if input was data frame
-  if (was_df) {
-    discounted_matrix <- as.data.frame(discounted_matrix)
-  }
-
-  discounted_matrix
 }
 
 #' Evaluate a Discounting Override Formula
@@ -254,19 +178,24 @@ get_value_half_cycle_methods <- function(model, value_names) {
   value_half_cycle_methods(model$values, value_names, model$settings$half_cycle_method)
 }
 
-#' Allocate and Discount Segment Values
+#' Correct and Discount Segment Values
 #'
-#' Allocates point values (time points 0..n) to cycles with each value's
-#' half-cycle method and discounts each time point at its own time:
-#' discounted = allocate(point values x d) + model start x d(0) + decision tree
-#' values (not discounted). Values with a `discounting_override` use the
-#' override result instead of d (see [evaluate_discounting_override()]).
+#' Combines each value's start and end parts with its half-cycle method and
+#' discounts each part at its own time point. The half-cycle method sets both:
+#' start uses the start of each cycle, discounted at d(k-1); end the end,
+#' discounted at d(k); life-table half of each, each discounted at its own
+#' time. Transitional values are charged in the cycle they occur under every
+#' method and discounted with the same weights. Model start values are charged
+#' in cycle 1 at d(0); decision tree values are not discounted. Values with a
+#' `discounting_override` use the override result instead of d (see
+#' [evaluate_discounting_override()]).
 #'
 #' @param model The model.
 #' @param eval_vars Evaluated namespace.
 #' @param uneval_values Unevaluated values (with type and discounting_override).
-#' @param value_parts List with `point_values` ((n+1) x values matrix),
-#'   `model_start` and `dt` (named vectors of cycle 1 totals).
+#' @param value_parts List with `start`, `end` and `transitional` (cycles x
+#'   values matrices) and `model_start` and `dt` (named vectors of cycle 1
+#'   totals).
 #' @param trace_matrix Collapsed trace (rows = time points 0..n).
 #' @param n_cycles Number of cycles.
 #' @param cycle_length_days Cycle length in days.
@@ -275,8 +204,7 @@ get_value_half_cycle_methods <- function(model, value_names) {
 #' @keywords internal
 calculate_segment_values <- function(model, eval_vars, uneval_values, value_parts,
                                      trace_matrix, n_cycles, cycle_length_days) {
-  point_values <- value_parts$point_values
-  value_names <- colnames(point_values)
+  value_names <- colnames(value_parts$start)
   n_points <- n_cycles + 1
   methods <- get_value_half_cycle_methods(model, value_names)
 
@@ -288,7 +216,7 @@ calculate_segment_values <- function(model, eval_vars, uneval_values, value_part
   dt_part[names(dt)] <- dt
 
   # Undiscounted values
-  values <- allocate_point_values(point_values, methods)
+  values <- combine_half_cycle_parts(value_parts, methods)
   values[1, ] <- values[1, ] + start_part + dt_part
 
   # Discount factors at time points
@@ -310,7 +238,6 @@ calculate_segment_values <- function(model, eval_vars, uneval_values, value_part
   for (v_name in value_names) {
     v_type <- if (v_name %in% names(type_mapping) && identical(type_mapping[[v_name]], "cost")) "cost" else "outcome"
     d <- factors[[v_type]]
-    x <- point_values[, v_name]
     override <- overrides[v_name]
 
     if (!is.na(override)) {
@@ -328,8 +255,11 @@ calculate_segment_values <- function(model, eval_vars, uneval_values, value_part
       dt_factor <- 1
     }
 
-    disc_points <- ifelse(x == 0, 0, x * d)
-    disc <- allocate_point_values(disc_points, methods[[v_name]])
+    trans <- value_parts$transitional[, v_name]
+    disc <- half_cycle_amounts(
+      value_parts$start[, v_name] + trans, value_parts$end[, v_name] + trans,
+      methods[[v_name]], d_start = d[-n_points], d_end = d[-1]
+    )
     disc[1] <- disc[1] + scale_nonzero(start_part[[v_name]], d[1]) +
       scale_nonzero(dt_part[[v_name]], dt_factor)
     values_discounted[, v_name] <- disc

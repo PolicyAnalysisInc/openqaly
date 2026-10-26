@@ -11,6 +11,7 @@ This vignette demonstrates how to visualize and summarize Markov trace results u
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
+  dev = "svglite",
   collapse = TRUE,
   comment = "#>"
 )
@@ -34,7 +35,7 @@ The following examples demonstrate stacked area charts for trace visualization.
 
 #### Basic usage
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 trace_plot_area(results)
 ```
 
@@ -42,7 +43,7 @@ trace_plot_area(results)
 
 Use `groups = 'all_groups'` to display results for each population subgroup separately.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 trace_plot_area(
   results,
   groups = 'all_groups'
@@ -53,7 +54,7 @@ trace_plot_area(
 
 Use the `strategies` argument to include only selected strategies.
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 trace_plot_area(
   results,
   strategies = 'chemo'
@@ -70,7 +71,7 @@ trace_plot_line(results)
 
 #### By subgroup
 
-```{r, fig.width=9, fig.height=6}
+```{r, fig.width=9, fig.height=6, dev = "png"}
 trace_plot_line(
   results,
   groups = 'all_groups'

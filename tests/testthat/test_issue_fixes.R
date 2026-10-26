@@ -126,7 +126,7 @@ test_that("a state_cycle_limit counts state cycles 1..L exactly, then 'more than
       add_value("first", "1000 * (state_cycle == 1)", state = "sick", type = "cost") |>
       add_value("entry", 1000, state = "well", destination = "sick", type = "cost")
   }
-  # Arrivals into sick at time points 1..5: 0.5, 0.25, 0.125, 0.0625, 0.03125
+  # Arrivals into sick during cycles 1..5: 0.5, 0.25, 0.125, 0.0625, 0.03125
   v2 <- get_values(run_model(model_for(2)), format = "wide", discounted = FALSE)
   expect_equal(v2$first_two, c(500, 750, 375, 187.5, 93.75))
   v1 <- get_values(run_model(model_for(1)), format = "wide", discounted = FALSE)
@@ -135,7 +135,7 @@ test_that("a state_cycle_limit counts state cycles 1..L exactly, then 'more than
 
 test_that("a state that uses state time keeps its tunnels", {
   v <- get_values(run_model(sick_tunnel_model(3)), format = "wide", discounted = FALSE)$x
-  # start: arrivals in their first two cycles in sick, priced at time points 0..3
+  # start: arrivals in their first two cycles in sick, counted at the start of cycles 1..4
   expect_equal(v, c(0, 500, 600, 300))
 })
 
